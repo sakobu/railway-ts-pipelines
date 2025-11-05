@@ -1,8 +1,43 @@
 # @railway-ts/pipelines
 
+[![npm version](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) [![Build Status](https://github.com/sakobu/railway-ts-pipelines/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-pipelines/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Bundle Size](https://img.shields.io/bundlephobia/minzip/@railway-ts/pipelines)](https://bundlephobia.com/package/@railway-ts/pipelines) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-pipelines)](https://codecov.io/gh/sakobu/railway-ts-pipelines)
+
 **Make failure boring. Make data flow.**
 
 A type-safe toolkit for TypeScript implementing railway-oriented programming. Build robust data pipelines with zero classes, zero exceptions, and zero `any`. Model uncertainty with `Option` and `Result`, validate once at boundaries, and let errors flow naturally through your code.
+
+---
+
+## Table of Contents
+
+### Getting Started
+
+- [The Problem: Error Handling is Messy](#the-problem-error-handling-is-messy)
+- [The Solution: Railway-Oriented Programming](#the-solution-railway-oriented-programming)
+- [Installation](#installation)
+- [Running the Examples](#running-the-examples)
+
+### Core Concepts
+
+- [The Building Blocks](#the-building-blocks)
+  - [Option: Handle Absence as Data](#option-handle-absence-as-data)
+  - [Result: Railway-Oriented Error Handling](#result-railway-oriented-error-handling)
+  - [Schema: Parse, Don't Validate](#schema-parse-dont-validate)
+  - [Composition: Build Complex Pipelines](#composition-build-complex-pipelines)
+
+### Practical Guides
+
+- [Import Strategy](#import-strategy)
+- [Quick Reference](#quick-reference)
+
+### Decision Guides
+
+- [Is This Right For You?](#is-this-right-for-you)
+
+### Reference
+
+- [Next Steps](#next-steps)
+- [Further Reading](#further-reading)
 
 ---
 
@@ -93,42 +128,35 @@ unknown input -> validate -> Result<T, E> -> transform -> compute -> Result<U, E
 
 ---
 
-## Installation & Quick Start
+## Installation
 
 ```bash
 bun add @railway-ts/pipelines
-# or npm, pnpm, yarn
+# or npm install @railway-ts/pipelines
 ```
 
-### Your First Pipeline
+**New to the library?** Check out the **[Getting Started Guide](GETTING_STARTED.md)** for a step-by-step tutorial with complete examples.
 
-```typescript
-import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, match, andThen } from '@railway-ts/pipelines/result';
-import { validate, object, required, chain, parseNumber, min, formatErrors } from '@railway-ts/pipelines/schema';
+---
 
-// 1. Define schema (validates + transforms unknown → typed data)
-const schema = object({
-  x: required(chain(parseNumber(), min(0))),
-  y: required(chain(parseNumber(), min(1))),
-});
+## Running the Examples
 
-// 2. Build pipeline (validate → transform → compute)
-async function compute(input: unknown) {
-  const result = await pipe(
-    validate(input, schema), // unknown → Result<{x: number, y: number}, Error[]>
-    (r) => andThen(r, ({ x, y }) => ok(x / y)), // stays on rails
-  );
+The library includes 12+ runnable examples covering Option, Result, Schema validation, Composition patterns, and complete real-world pipelines.
 
-  // 3. Branch once at the end
-  return match(result, {
-    ok: (value) => ({ valid: true, data: value }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
-  });
-}
+```bash
+# Clone and explore
+git clone https://github.com/sakobu/railway-ts-pipelines.git
+cd railway-ts-pipelines
+bun install
+
+# Run all examples
+bun run examples/index.ts
+
+# Or run specific categories
+bun run examples/complete-pipelines/async-launch.ts  # Rocket launch decision system
 ```
 
-**Key insight**: After validation, you never check for errors again. The railway pattern propagates them automatically.
+**See the full guide**: **[Running the Examples ->](GETTING_STARTED.md#running-the-examples)** with all commands and what each demonstrates.
 
 ---
 
@@ -266,7 +294,7 @@ function process(input: any) {
 
 // GOOD: Railway-ts parse into guaranteed-valid types
 const ageValidator = chain(parseNumber(), min(18));
-// Validator<unknown, number> - transforms unknown → number
+// Validator<unknown, number> - transforms unknown -> number
 
 const result = validate(input.age, ageValidator);
 // result: Result<number, ValidationError[]>
@@ -305,9 +333,9 @@ import {
 } from '@railway-ts/pipelines/schema';
 
 // Primitive validators
-const name = string(); // unknown → Result<string, Error[]>
-const age = number(); // unknown → Result<number, Error[]>
-const active = boolean(); // unknown → Result<boolean, Error[]>
+const name = string(); // unknown -> Result<string, Error[]>
+const age = number(); // unknown -> Result<number, Error[]>
+const active = boolean(); // unknown -> Result<boolean, Error[]>
 
 // Object schema
 const userSchema = object({
@@ -576,95 +604,64 @@ tupledAdd([5, 3]); // 8
 
 ---
 
-## See It In Action: Complete Pipeline
+## Quick Reference
 
-Here's a real-world example that ties everything together - a rocket launch decision system:
+### When to Use What
+
+| Scenario                    | Use               | Why                                   |
+| --------------------------- | ----------------- | ------------------------------------- |
+| Value might be absent       | `Option<T>`       | Absence is normal, not exceptional    |
+| Operation can fail          | `Result<T, E>`    | Need to communicate why it failed     |
+| Validating untrusted input  | Schema validators | Parse into guaranteed-valid types     |
+| Building data flows         | `pipe`, `flow`    | Compose transformations left-to-right |
+| Multi-step async operations | `andThen`         | Chain async Results without nesting   |
+
+### Common Patterns
+
+**Boundary Validation**
 
 ```typescript
-import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, err, match, andThen, fromPromise, type Result } from '@railway-ts/pipelines/result';
-import {
-  validate,
-  object,
-  required,
-  chain,
-  parseNumber,
-  min,
-  max,
-  stringEnum,
-  formatErrors,
-  type InferSchemaType,
-  type ValidationError,
-} from '@railway-ts/pipelines/schema';
-
-// Step 1: Define schema at boundary
-const launchSchema = object({
-  vehicleType: required(stringEnum(['falcon9', 'atlas5'] as const)),
-  payload: required(chain(parseNumber(), min(1000), max(25_000))),
-  latitude: required(chain(parseNumber(), min(-90), max(90))),
-  longitude: required(chain(parseNumber(), min(-180), max(180))),
-});
-
-type LaunchParams = InferSchemaType<typeof launchSchema>;
-
-// Step 2: Pure business logic (works with validated types)
-const fetchWeather = async (
-  params: LaunchParams,
-): Promise<Result<{ params: LaunchParams; weather: any }, ValidationError[]>> => {
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.append('latitude', params.latitude.toString());
-  url.searchParams.append('longitude', params.longitude.toString());
-  url.searchParams.append('current', 'wind_speed_10m,wind_gusts_10m');
-
-  const result = await fromPromise(fetch(url.toString()).then((r) => r.json()));
-
-  return match(result, {
-    ok: (data) => ok({ params, weather: data.current }),
-    err: (e) => err([{ path: ['weather_api'], message: String(e) }]),
-  });
-};
-
-const assessLaunch = async (context: {
-  params: LaunchParams;
-  weather: any;
-}): Promise<Result<{ recommendation: 'GO' | 'NO GO'; reason: string }, ValidationError[]>> => {
-  const limits = { falcon9: 15, atlas5: 12 };
-  const maxWind = limits[context.params.vehicleType];
-  const actual = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
-  const go = actual <= maxWind;
-
-  return ok({
-    recommendation: go ? 'GO' : 'NO GO',
-    reason: go ? 'Conditions nominal' : 'Wind exceeds limits',
-  });
-};
-
-// Step 3: Compose pipeline (validate → fetch → assess)
-async function evaluateLaunch(input: unknown) {
-  const result = await pipe(
-    validate(input, launchSchema), // Boundary: unknown → Result<LaunchParams, Error[]>
-    (r) => andThen(r, fetchWeather), // Async: fetch weather data
-    (r) => andThen(r, assessLaunch), // Async: assess conditions
-  );
-
-  // Step 4: Branch once at the end
-  return match(result, {
-    ok: (decision) => ({ valid: true, data: decision }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
-  });
-}
+// unknown -> Result<T, E>
+const result = validate(untrustedInput, schema);
 ```
 
-**Notice what's happening:**
+**Transform on Success Path**
 
-- Validation at the boundary converts `unknown` to typed data
-- No try/catch blocks anywhere
-- No manual error checking between steps
-- Errors from any step (validation, network, business logic) propagate automatically
-- TypeScript tracks types through the entire pipeline
-- Branch once at the end with pattern matching
+```typescript
+// Stay on the rails
+const transformed = andThen(result, (data) => processData(data));
+```
 
-**See more examples**: [`examples/complete-pipelines/`](examples/complete-pipelines/)
+**Branch at the End**
+
+```typescript
+// Handle both paths once
+match(result, {
+  ok: (data) => handleSuccess(data),
+  err: (errors) => handleErrors(errors),
+});
+```
+
+**Compose Reusable Pipelines**
+
+```typescript
+// Build function pipelines
+const process = flow(
+  (input) => validate(input, schema),
+  (r) => andThen(r, fetchData),
+  (r) => andThen(r, transform),
+);
+```
+
+**Combine Multiple Values**
+
+```typescript
+// All-or-nothing with Option
+const combined = combineOption([some(1), some(2), some(3)]); // Some([1,2,3])
+
+// Fail-fast with Result
+const results = combineResult([ok(1), ok(2), ok(3)]); // Ok([1,2,3])
+```
 
 ---
 

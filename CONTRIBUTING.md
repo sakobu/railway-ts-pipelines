@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing! This guide will help you get started with development.
 
+**New to the library?** Check out the [Getting Started Guide](GETTING_STARTED.md) to learn the basics before diving into development.
+
 ---
 
 ## Prerequisites
