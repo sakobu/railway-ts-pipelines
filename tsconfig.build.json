@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Let the build emit .d.ts only (tsup handles JS via esbuild)
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": true,
+
+    // Output structure
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // Keep bundler-friendly module settings
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+
+    // Stricter for build
+    "allowJs": false,
+    "stripInternal": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts", "tests/**", "examples/**", "scripts/**", "coverage/**", "dist/**", "node_modules/**"]
+}
