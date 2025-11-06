@@ -34,9 +34,7 @@
     }
   },
   "files": [
-    "dist",
-    "README.md",
-    "examples"
+    "dist"
   ],
   "scripts": {
     "build": "bunx tsup",

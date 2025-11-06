@@ -360,7 +360,3 @@ Want to contribute? Check out:
 ---
 
 **Happy pipeline building!**
-
-```
-
-```
