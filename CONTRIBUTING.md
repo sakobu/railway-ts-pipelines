@@ -17,12 +17,14 @@ Thank you for your interest in contributing! This guide will help you get starte
 ## Development Setup
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/sakobu/railway-ts-pipelines.git
    cd railway-ts-pipelines
    ```
 
 2. **Install dependencies**
+
    ```bash
    bun install
    ```
@@ -37,23 +39,27 @@ Thank you for your interest in contributing! This guide will help you get starte
 ## Development Commands
 
 ### Type Checking
+
 ```bash
 bun run typecheck          # Type check without emitting files
 ```
 
 ### Linting
+
 ```bash
 bun run lint               # Lint the codebase
 bun run lint:fix           # Auto-fix linting issues
 ```
 
 ### Formatting
+
 ```bash
 bun run format             # Format code with Prettier
 bun run format:check       # Check formatting without changes
 ```
 
 ### Testing
+
 ```bash
 bun test                           # Run all tests
 bun test --watch                   # Watch mode
@@ -64,6 +70,7 @@ bun test --only                    # Run only tests marked with .only
 ```
 
 ### Building
+
 ```bash
 bun run build              # Build library
 bun run dev                # Build in watch mode
@@ -71,6 +78,7 @@ bun run build:watch        # Alias for dev
 ```
 
 ### Pre-publish Checks
+
 ```bash
 bun run check              # Run typecheck + lint + test
 bun run prepublishOnly     # Full check + build (runs before publish)
@@ -147,11 +155,7 @@ docs/                 # Additional documentation
 All composition functions must use `this: void`:
 
 ```typescript
-export function myFunction<A, B>(
-  this: void,
-  input: A,
-  transform: (this: void, a: A) => B,
-): B {
+export function myFunction<A, B>(this: void, input: A, transform: (this: void, a: A) => B): B {
   return transform(input);
 }
 ```
@@ -162,7 +166,7 @@ This ensures referential transparency and composability.
 
 Include comprehensive JSDoc for all public functions:
 
-```typescript
+````typescript
 /**
  * Maps a function over the value inside an Option.
  *
@@ -186,13 +190,10 @@ Include comprehensive JSDoc for all public functions:
  * // result is none
  * ```
  */
-export function map<T, U>(
-  option: Option<T>,
-  fn: (value: T) => U,
-): Option<U> {
+export function map<T, U>(option: Option<T>, fn: (value: T) => U): Option<U> {
   return option.some ? some(fn(option.value)) : none();
 }
-```
+````
 
 ---
 
@@ -241,15 +242,16 @@ The library uses **tsup** for bundling with multiple entry points:
 
 ### Entry Points
 
-- Main: `src/index.ts` → `dist/index.{mjs,cjs}`
-- Option: `src/option/index.ts` → `dist/option/index.{mjs,cjs}`
-- Result: `src/result/index.ts` → `dist/result/index.{mjs,cjs}`
-- Composition: `src/composition/index.ts` → `dist/composition/index.{mjs,cjs}`
-- Schema: `src/schema/index.ts` → `dist/schema/index.{mjs,cjs}`
+- Main: `src/index.ts` -> `dist/index.{mjs,cjs}`
+- Option: `src/option/index.ts` -> `dist/option/index.{mjs,cjs}`
+- Result: `src/result/index.ts` -> `dist/result/index.{mjs,cjs}`
+- Composition: `src/composition/index.ts` -> `dist/composition/index.{mjs,cjs}`
+- Schema: `src/schema/index.ts` -> `dist/schema/index.{mjs,cjs}`
 
 ### Output Formats
 
 Each entry point generates:
+
 - **ESM** (`.mjs`) for modern bundlers and Node.js
 - **CJS** (`.cjs`) for legacy compatibility
 - **TypeScript declarations** (`.d.ts`) with source maps
@@ -257,6 +259,7 @@ Each entry point generates:
 ### Tree-Shaking
 
 The library is configured for optimal tree-shaking:
+
 - `sideEffects: false` in `package.json`
 - Subpath imports for granular imports
 - Pure functions with no side effects
@@ -278,6 +281,7 @@ Fixes #123
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -287,6 +291,7 @@ Fixes #123
 - `chore`: Tooling/build changes
 
 **Examples:**
+
 ```
 feat(result): add mapErr function for transforming error values
 fix(schema): correct type inference for nested optional fields
@@ -305,6 +310,7 @@ test(option): add tests for combine() with mixed Some/None
 3. **Add tests** for any new functionality
 
 4. **Run the full check**:
+
    ```bash
    bun run check
    ```

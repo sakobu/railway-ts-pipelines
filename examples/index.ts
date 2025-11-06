@@ -6,6 +6,7 @@ export * from './composition/tupled-basics';
 export * from './composition/advanced-composition';
 export * from './schema/basic';
 export * from './schema/union';
+export * from './schema/tuple';
 export * from './complete-pipelines/hill-clohessy-wiltshire';
 export * from './complete-pipelines/hohmann-transfer';
 export * from './complete-pipelines/async';
@@ -38,6 +39,7 @@ SCHEMA / VALIDATION EXAMPLES:
 - Basic schema (required fields, type checks)
 - Nested objects (validating structured data)
 - Unions and enums (discriminated unions, string enums)
+- Tuples (heterogeneous and homogeneous tuples)
 
 COMPLETE PIPELINES:
 - Hill-Clohessy-Wiltshire (spacecraft relative motion)

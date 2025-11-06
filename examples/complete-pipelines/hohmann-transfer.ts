@@ -47,7 +47,7 @@ const altitude = chain(
   number(),
   finite(),
   min(160, 'Must be above 160 km (atmospheric drag)'),
-  max(100_000, 'Altitude too high for Earth-centered Hohmann (≤100,000 km)'),
+  max(100_000, 'Altitude too high for Earth-centered Hohmann (<=100,000 km)'),
 );
 
 // Input schema validation - validate ONCE at the boundary

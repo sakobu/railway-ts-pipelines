@@ -116,6 +116,9 @@ bun run examples/schema/basic.ts
 
 # Union types & enums - discriminated unions
 bun run examples/schema/union.ts
+
+# Tuple validation - fixed-length arrays with type safety
+bun run examples/schema/tuple.ts
 ```
 
 #### Composition Patterns
@@ -149,13 +152,13 @@ bun run examples/complete-pipelines/hill-clohessy-wiltshire.ts
 
 ### What Each Category Demonstrates
 
-| Category               | What You'll Learn                                                         |
-| ---------------------- | ------------------------------------------------------------------------- |
-| **Option**             | Safe nullable handling, configuration defaults, optional values in arrays |
-| **Result**             | Explicit error handling, JSON parsing safety, operation chaining          |
-| **Schema**             | Validation + transformation, type inference, nested object validation     |
-| **Composition**        | Function piping, currying for partial application, data flow patterns     |
-| **Complete Pipelines** | End-to-end: validation -> API calls -> computation -> decision making     |
+| Category               | What You'll Learn                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| **Option**             | Safe nullable handling, configuration defaults, optional values in arrays            |
+| **Result**             | Explicit error handling, JSON parsing safety, operation chaining                     |
+| **Schema**             | Validation + transformation, type inference, nested objects, tuples, union types     |
+| **Composition**        | Function piping, currying for partial application, data flow patterns                |
+| **Complete Pipelines** | End-to-end: validation -> API calls -> computation -> decision making                |
 
 **Pro tip:** Start with `examples/complete-pipelines/async.ts` to see the full pattern in action, then explore the building blocks.
 

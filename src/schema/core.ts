@@ -31,17 +31,21 @@ type RemoveUndefined<T> = T extends undefined ? never : T;
 
 type ProcessType<T> = T extends AtomicType
   ? T
-  : T extends Array<infer U>
-    ? Array<ProcessType<U>>
-    : T extends object
-      ? {
-          [K in keyof T as undefined extends T[K] ? never : K]: ProcessType<T[K]>;
-        } & {
-          [K in keyof T as undefined extends T[K] ? K : never]?: ProcessType<RemoveUndefined<T[K]>>;
-        } extends infer O
-        ? { [K in keyof O]: O[K] }
-        : never
-      : T;
+  : T extends readonly [unknown, ...unknown[]]
+    ? { [K in keyof T]: ProcessType<T[K]> }
+    : T extends [unknown, ...unknown[]]
+      ? { [K in keyof T]: ProcessType<T[K]> }
+      : T extends Array<infer U>
+        ? Array<ProcessType<U>>
+        : T extends object
+          ? {
+              [K in keyof T as undefined extends T[K] ? never : K]: ProcessType<T[K]>;
+            } & {
+              [K in keyof T as undefined extends T[K] ? K : never]?: ProcessType<RemoveUndefined<T[K]>>;
+            } extends infer O
+            ? { [K in keyof O]: O[K] }
+            : never
+          : T;
 
 // Infer the output type of a validator or schema
 type InferType<V> = V extends Validator<unknown, infer O> ? O : never;

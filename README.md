@@ -469,6 +469,55 @@ type Shape = InferSchemaType<typeof shapeSchema>;
 // { type: 'circle', radius: number } | { type: 'rectangle', width: number, height: number }
 ```
 
+#### Tuple Validators
+
+Validate fixed-length arrays with type-safe element validation.
+
+```typescript
+import { tuple, tupleOf, chain, number, string, boolean, min, max, integer } from '@railway-ts/pipelines/schema';
+
+// Heterogeneous tuple - different types per position
+const userRecord = tuple([
+  string(),                        // position 0: string
+  chain(number(), integer(), min(0)), // position 1: non-negative integer
+  boolean(),                       // position 2: boolean
+]);
+
+type UserRecord = InferSchemaType<typeof userRecord>;
+// [string, number, boolean]
+
+validate(['user123', 25, true], userRecord);  // ok(['user123', 25, true])
+validate(['user123', -5, true], userRecord);  // err - age must be >= 0
+
+// Homogeneous tuple - same type repeated N times
+const vector3 = tupleOf(number(), 3);  // exactly 3 numbers
+
+type Vector3 = InferSchemaType<typeof vector3>;
+// [number, number, number]
+
+validate([1.5, 2.3, 3.7], vector3);  // ok([1.5, 2.3, 3.7])
+validate([1, 2], vector3);           // err - expected length 3, got 2
+
+// With constraints
+const rgbColor = tupleOf(
+  chain(number(), integer(), min(0), max(255)),
+  3
+);
+
+validate([255, 128, 64], rgbColor);  // ok([255, 128, 64])
+validate([255, 300, 0], rgbColor);   // err - 300 exceeds max of 255
+
+// Geographic coordinates [latitude, longitude]
+const coordinate = tuple([
+  chain(number(), min(-90), max(90)),    // latitude
+  chain(number(), min(-180), max(180)),  // longitude
+]);
+
+validate([37.7749, -122.4194], coordinate);  // ok - San Francisco
+```
+
+**Use cases:** Coordinates, RGB colors, version numbers, matrix rows, vectors, any fixed-length structured data.
+
 #### Complete Schema Example
 
 ```typescript
@@ -761,6 +810,7 @@ Working examples organized by category:
 - **Schema**: [`examples/schema/`](examples/schema/)
   - [`basic.ts`](examples/schema/basic.ts) - Basic validators
   - [`union.ts`](examples/schema/union.ts) - Union types
+  - [`tuple.ts`](examples/schema/tuple.ts) - Tuple validation
 - **Composition**: [`examples/composition/`](examples/composition/)
   - [`advanced-composition.ts`](examples/composition/advanced-composition.ts)
   - [`curry-basics.ts`](examples/composition/curry-basics.ts)

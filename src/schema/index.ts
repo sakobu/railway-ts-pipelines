@@ -7,6 +7,7 @@
 export * from './core';
 export * from './utils';
 export * from './array';
+export * from './tuple';
 export * from './number';
 export * from './string';
 export * from './parsers';
