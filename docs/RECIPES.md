@@ -1,30 +1,38 @@
-# Recipes
-
-Common patterns for real-world use.
+# Common Patterns
 
 ## Point-Free Composition
 
-Eliminate wrapper lambdas in pipelines with curried helpers.
+**This is why you're reading this document.**
 
-### The Pattern
+Eliminate wrapper lambdas in pipelines with curried helpers. These aren't in the core API to keep it minimal, but the pattern is essential for clean code.
+
+### The Problem
 
 ```typescript
-// Instead of this:
+// Ugly: repetitive wrapper lambdas
 const result = pipe(
   ok(5),
   (r) => map(r, (x) => x * 2),
   (r) => map(r, (x) => x + 1),
+  (r) => flatMap(r, (x) => divide(x, 3)),
 );
+```
 
-// Write this:
+### The Solution
+
+```typescript
+// Clean: point-free composition
 const result = pipe(
   ok(5),
   mapWith((x) => x * 2),
   mapWith((x) => x + 1),
+  flatMapWith((x) => divide(x, 3)),
 );
 ```
 
 ### Result Helpers
+
+Copy these into your codebase:
 
 ```typescript
 import { map, flatMap, mapErr, filter, tap, tapErr } from '@railway-ts/pipelines/result';
@@ -88,7 +96,7 @@ const tapWith =
     tap(option, fn);
 ```
 
-### Usage Example
+### Usage
 
 ```typescript
 import { flow } from '@railway-ts/pipelines/composition';
@@ -102,6 +110,10 @@ const processData = flow(
   mapWith(enrichData),
 );
 ```
+
+**Why not in the library?** Keeping the API minimal. These are trivial to add to your codebase when you need them. Documentation makes them discoverable without bloating the core.
+
+---
 
 ## Error Accumulation
 
@@ -126,9 +138,11 @@ match(validateFields(input), {
 });
 ```
 
-## Async Pipeline Patterns
+---
 
-### Sequential Async Steps
+## Async Patterns
+
+### Sequential Steps
 
 ```typescript
 import { andThen } from '@railway-ts/pipelines/result';
@@ -156,11 +170,13 @@ const process = async (input: unknown) =>
   await pipe(
     validate(input, schema), // sync
     (r) => map(r, enrichData), // sync
-    (r) => andThen(r, fetchFromDatabase), // async
-    (r) => map(r, transformResult), // sync
-    (r) => andThen(r, saveToDatabase), // async
+    (r) => andThen(r, fetchDB), // async
+    (r) => map(r, transform), // sync
+    (r) => andThen(r, saveDB), // async
   );
 ```
+
+---
 
 ## Converting Legacy Code
 
@@ -214,7 +230,9 @@ const user = safeFindUser('123');
 // Option<User>
 ```
 
-## Validation Pipeline Patterns
+---
+
+## Validation Patterns
 
 ### Multi-Step Validation
 
@@ -236,9 +254,8 @@ const validateConditionally = (input: unknown) => {
   return flatMap(baseResult, (data) => {
     if (data.type === 'premium') {
       return validate(data, premiumSchema);
-    } else {
-      return ok(data);
     }
+    return ok(data);
   });
 };
 ```
@@ -249,13 +266,15 @@ const validateConditionally = (input: unknown) => {
 const validateAndLog = flow(
   (input: unknown) => validate(input, schema),
   (r) => tap(r, (data) => logger.info('Validated:', data)),
-  (r) => tapErr(r, (errors) => logger.error('Validation failed:', errors)),
+  (r) => tapErr(r, (errors) => logger.error('Failed:', errors)),
 );
 ```
 
-## Type Narrowing Patterns
+---
 
-### Custom Type Guards with Results
+## Type Narrowing
+
+### Custom Type Guards
 
 ```typescript
 const isPositive = (n: number): Result<number, string> => (n > 0 ? ok(n) : err('Must be positive'));
@@ -294,14 +313,16 @@ match(result, {
   ok: (shape) => {
     // TypeScript knows shape.type is 'circle' | 'rectangle'
     if (shape.type === 'circle') {
-      return Math.PI * shape.radius ** 2; // radius exists
+      return Math.PI * shape.radius ** 2;
     } else {
-      return shape.width * shape.height; // width and height exist
+      return shape.width * shape.height;
     }
   },
   err: (errors) => 0,
 });
 ```
+
+---
 
 ## Combining Multiple Data Sources
 
@@ -334,14 +355,18 @@ match(data, {
 });
 ```
 
-## Building Reusable Validators
+---
+
+## Reusable Validators
 
 ```typescript
 import { chain, string, pattern } from '@railway-ts/pipelines/schema';
 
 // Reusable validators
 const email = () => chain(string(), pattern(/^[^@]+@[^@]+\.[^@]+$/));
+
 const phoneUS = () => chain(string(), pattern(/^\d{3}-\d{3}-\d{4}$/));
+
 const zipCode = () => chain(string(), pattern(/^\d{5}$/));
 
 // Compose into larger schemas
@@ -351,6 +376,8 @@ const contactSchema = object({
   zip: required(zipCode()),
 });
 ```
+
+---
 
 ## Testing Pipelines
 

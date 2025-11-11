@@ -2,13 +2,19 @@
 
 [![npm version](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) [![Build Status](https://github.com/sakobu/railway-ts-pipelines/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-pipelines/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Bundle Size](https://img.shields.io/bundlephobia/minzip/@railway-ts/pipelines)](https://bundlephobia.com/package/@railway-ts/pipelines) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-pipelines)](https://codecov.io/gh/sakobu/railway-ts-pipelines)
 
-Railway-oriented programming for TypeScript. `Option<T>` for nullable values, `Result<T, E>` for operations that can fail, schema validators that parse untrusted data into typed values, and composition utilities for building pipelines.
+Railway-oriented programming for TypeScript. Result and Option types that don't suck.
+
+**Design philosophy:** Small, focused API surface. Practical over academic. No fp-ts complexity, no Effect-TS kitchen sink.
+
+## Install
 
 ```bash
-bun add @railway-ts/pipelines
+bun add @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-## Quick Example
+Requires TypeScript 5.0+ and Node.js 18+.
+
+## Quick Start
 
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
@@ -30,37 +36,60 @@ async function compute(input: unknown) {
 }
 ```
 
-## Core Types
+**The pattern:** Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
 
-### Option<T>
+## Documentation
 
-Handle nullable values explicitly.
+→ **[Getting Started](GETTING_STARTED.md)** - Your first pipeline  
+→ **[Recipes](docs/RECIPES.md)** - Common patterns (point-free composition, async, validation)  
+→ **[Advanced](docs/ADVANCED.md)** - Symbol branding, tuple preservation, type inference  
+→ **[Examples](examples/)** - Working code you can run
+
+## Why This Library
+
+**Focused scope:** Result, Option, validation, composition. That's it. No monads seminar.
+
+**Practical:** Eliminates boilerplate for real patterns. Documentation shows you how, doesn't make it part of the API.
+
+**Type-safe:** Symbol branding prevents duck typing bugs. Tuple preservation means no type casts.
+
+**Railway-oriented:** Errors propagate automatically. Write happy path code, handle errors once at the end.
+
+## API Reference
+
+### Option
+
+Handle nullable values without `if (x != null)` everywhere.
 
 ```typescript
-import { some, none, map, unwrapOr } from '@railway-ts/pipelines/option';
+import { some, none, map, flatMap, match } from '@railway-ts/pipelines/option';
 
-const value = some(42);
-const empty = none<number>();
+const user = some({ name: 'Alice', age: 25 });
+const name = pipe(user, (o) => map(o, (u) => u.name));
 
-map(value, (x) => x * 2); // some(84)
-map(empty, (x) => x * 2); // none()
-
-unwrapOr(value, 0); // 42
-unwrapOr(empty, 0); // 0
+match(name, {
+  some: (n) => console.log(n),
+  none: () => console.log('No user'),
+});
 ```
 
-**Functions:** `some`, `none`, `isSome`, `isNone`, `map`, `flatMap`, `filter`, `unwrap`, `unwrapOr`, `unwrapOrElse`, `combine`, `match`, `tap`, `fromNullable`, `mapToResult`
+**Core:** `some`, `none`, `isSome`, `isNone`  
+**Transform:** `map`, `flatMap`, `bimap`, `filter`, `tap`  
+**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
+**Combine:** `combine`  
+**Convert:** `fromNullable`, `mapToResult`  
+**Branch:** `match`
 
-### Result<T, E>
+### Result
 
-Explicit error handling without exceptions.
+Explicit error handling. No exceptions, no try-catch pyramids.
 
 ```typescript
 import { ok, err, map, flatMap, match } from '@railway-ts/pipelines/result';
 
 const divide = (a: number, b: number) => (b === 0 ? err('div by zero') : ok(a / b));
 
-const result = pipe(divide(10, 2), (r) => map(r, (x) => x * 3)); // ok(15)
+const result = pipe(divide(10, 2), (r) => map(r, (x) => x * 3));
 
 match(result, {
   ok: (value) => console.log(value),
@@ -68,11 +97,17 @@ match(result, {
 });
 ```
 
-**Functions:** `ok`, `err`, `isOk`, `isErr`, `map`, `mapErr`, `flatMap`, `filter`, `unwrap`, `unwrapOr`, `unwrapOrElse`, `combine`, `combineAll`, `match`, `tap`, `tapErr`, `fromTry`, `fromPromise`, `toPromise`, `andThen`, `mapToOption`
+**Core:** `ok`, `err`, `isOk`, `isErr`  
+**Transform:** `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr`  
+**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
+**Combine:** `combine`, `combineAll`  
+**Convert:** `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption`  
+**Async:** `andThen`  
+**Branch:** `match`
 
-### Schema Validation
+### Schema
 
-Parse untrusted data into typed values.
+Parse untrusted data into typed values. Accumulates all validation errors.
 
 ```typescript
 import {
@@ -85,6 +120,7 @@ import {
   parseNumber,
   min,
   max,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 const userSchema = object({
@@ -100,11 +136,20 @@ const result = validate(input, userSchema);
 // Result<User, ValidationError[]>
 ```
 
-**Validators:** `string`, `number`, `boolean`, `date`, `parseNumber`, `parseInt`, `parseFloat`, `parseJSON`, `object`, `array`, `tuple`, `tupleOf`, `union`, `discriminatedUnion`, `required`, `optional`, `nullable`, `chain`, `min`, `max`, `minLength`, `maxLength`, `pattern`, `email`, `url`, `stringEnum`, `numberEnum`
+**Primitives:** `string`, `number`, `boolean`, `date`, `bigint`  
+**Parsers:** `parseNumber`, `parseInt`, `parseFloat`, `parseJSON`, `parseString`, `parseBigInt`, `parseBool`, `parseDate`, `parseISODate`, `parseURL`, `parseEnum`  
+**Structures:** `object`, `array`, `tuple`, `tupleOf`  
+**Unions:** `union`, `discriminatedUnion`, `literal`  
+**Modifiers:** `required`, `optional`, `nullable`, `emptyAsOptional`  
+**String Constraints:** `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber`  
+**Number Constraints:** `min`, `max`, `integer`, `finite`, `between`  
+**Enums:** `stringEnum`, `numberEnum`  
+**Combinators:** `chain`, `transform`, `refine`, `matches`  
+**Utilities:** `validate`, `formatErrors`, `InferSchemaType`, `Validator`, `ValidationError`
 
 ### Composition
 
-Build pipelines with `pipe` and `flow`.
+Build pipelines. No nested function calls.
 
 ```typescript
 import { pipe, flow, curry } from '@railway-ts/pipelines/composition';
@@ -121,15 +166,14 @@ const process = flow(
   (x: number) => x * 2,
   (x) => x + 1,
 );
-
 process(5); // 11
 ```
 
 **Functions:** `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled`
 
-## Import Strategy
+## Import Patterns
 
-Use subpath imports for tree-shaking:
+### Subpath imports (recommended for tree-shaking)
 
 ```typescript
 import { some, none, map } from '@railway-ts/pipelines/option';
@@ -138,20 +182,17 @@ import { pipe, flow } from '@railway-ts/pipelines/composition';
 import { string, number, validate } from '@railway-ts/pipelines/schema';
 ```
 
-Or import from root (functions get type suffixes):
+### Root imports (adds type suffixes)
 
 ```typescript
 import { mapOption, mapResult, pipe, ok, validate } from '@railway-ts/pipelines';
 ```
 
-## Documentation
-
-- [Getting Started](GETTING_STARTED.md) - Installation and first pipeline
-- [Recipes](docs/RECIPES.md) - Common patterns and techniques
-- [Advanced](docs/ADVANCED.md) - Implementation details
-- [Examples](examples/) - Working code examples
+Functions that exist in both Result and Option get suffixes when imported from root: `mapResult`, `mapOption`, etc. Result-only functions stay unsuffixed: `mapErr`, `andThen`.
 
 ## Examples
+
+Clone and run:
 
 ```bash
 git clone https://github.com/sakobu/railway-ts-pipelines.git
@@ -160,22 +201,19 @@ bun install
 bun run examples/index.ts
 ```
 
-**Categories:**
+**What's in there:**
 
-- `examples/option/` - Safe nullable handling
-- `examples/result/` - Error handling patterns
-- `examples/schema/` - Validation examples
-- `examples/composition/` - Function composition
-- `examples/complete-pipelines/` - Real-world pipelines
+- `option/` - Nullable handling patterns
+- `result/` - Error handling patterns
+- `schema/` - Validation (basic, unions, tuples)
+- `composition/` - Function composition techniques
+- `complete-pipelines/` - Full examples with validation + async + logic
 
-## API Reference
+Start with `examples/complete-pipelines/async-launch.ts` for a real-world pattern.
 
-Full docs in source files:
+## Contributing
 
-- Option: [`src/option/option.ts`](src/option/option.ts)
-- Result: [`src/result/result.ts`](src/result/result.ts)
-- Schema: [`src/schema/`](src/schema/)
-- Composition: [`src/composition/`](src/composition/)
+[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
