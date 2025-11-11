@@ -177,7 +177,7 @@ export type InferSchemaType<V> = ProcessType<InferType<V>>;
 const schema = object({
   name: required(string()),
   age: optional(chain(parseNumber(), min(18))),
-  email: nullable(chain(string(), email())),
+  email: union([chain(string(), email()), nullable()]),
 });
 
 type User = InferSchemaType<typeof schema>;
