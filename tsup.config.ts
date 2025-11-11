@@ -13,7 +13,9 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  treeshake: true,
+  treeshake: {
+    preset: 'smallest',
+  },
   outDir: 'dist',
   outExtension: ({ format }) => ({
     js: format === 'esm' ? '.mjs' : '.cjs',
