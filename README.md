@@ -19,21 +19,33 @@ Requires TypeScript 5.0+ and Node.js 18+.
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
 import { ok, match, andThen } from '@railway-ts/pipelines/result';
-import { validate, object, required, chain, parseNumber, min } from '@railway-ts/pipelines/schema';
+import {
+  validate,
+  object,
+  required,
+  chain,
+  parseNumber,
+  min,
+  formatErrors,
+  type ValidationError,
+  type ValidationResult,
+} from '@railway-ts/pipelines/schema';
 
 const schema = object({
   x: required(chain(parseNumber(), min(0))),
   y: required(chain(parseNumber(), min(1))),
 });
 
-async function compute(input: unknown) {
+async function compute(input: unknown): Promise<ValidationResult<number>> {
   const result = await pipe(validate(input, schema), (r) => andThen(r, ({ x, y }) => ok(x / y)));
 
-  return match(result, {
-    ok: (value) => ({ success: true, value }),
-    err: (errors) => ({ success: false, errors }),
+  return match<number, ValidationError[], ValidationResult<number>>(result, {
+    ok: (value) => ({ valid: true, data: value }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
   });
 }
+
+await compute({ x: 10, y: 2 }).then(console.log); // { valid: true, data: 5 }
 ```
 
 **The pattern:** Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
@@ -62,7 +74,8 @@ async function compute(input: unknown) {
 Handle nullable values without `if (x != null)` everywhere.
 
 ```typescript
-import { some, none, map, flatMap, match } from '@railway-ts/pipelines/option';
+import { pipe } from '@railway-ts/pipelines/composition';
+import { some, map, match } from '@railway-ts/pipelines/option';
 
 const user = some({ name: 'Alice', age: 25 });
 const name = pipe(user, (o) => map(o, (u) => u.name));
@@ -70,7 +83,7 @@ const name = pipe(user, (o) => map(o, (u) => u.name));
 match(name, {
   some: (n) => console.log(n),
   none: () => console.log('No user'),
-});
+}); // Output: Alice
 ```
 
 **Core:** `some`, `none`, `isSome`, `isNone`  
@@ -85,7 +98,8 @@ match(name, {
 Explicit error handling. No exceptions, no try-catch pyramids.
 
 ```typescript
-import { ok, err, map, flatMap, match } from '@railway-ts/pipelines/result';
+import { pipe } from '@railway-ts/pipelines/composition';
+import { ok, err, map, match } from '@railway-ts/pipelines/result';
 
 const divide = (a: number, b: number) => (b === 0 ? err('div by zero') : ok(a / b));
 
@@ -94,7 +108,7 @@ const result = pipe(divide(10, 2), (r) => map(r, (x) => x * 3));
 match(result, {
   ok: (value) => console.log(value),
   err: (error) => console.error(error),
-});
+}); // Output: 15
 ```
 
 **Core:** `ok`, `err`, `isOk`, `isErr`  

@@ -25,7 +25,7 @@ Or import from root (functions get type suffixes):
 import { mapOption, mapResult, pipe, ok } from '@railway-ts/pipelines';
 ```
 
-When importing from root, shared functions like `map` become `mapOption` and `mapResult`. Result-only functions like `mapErr` stay unsuffixed.
+When importing from root, shared functions like `map` become `mapOption` and `mapResult`. Result-only functions like `mapErr` stay as-is.
 
 ## Your First Pipeline
 
@@ -34,7 +34,17 @@ Build a pipeline that validates input, transforms it, and handles errors.
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
 import { ok, match, andThen } from '@railway-ts/pipelines/result';
-import { validate, object, required, chain, parseNumber, min } from '@railway-ts/pipelines/schema';
+import {
+  validate,
+  object,
+  required,
+  chain,
+  parseNumber,
+  min,
+  formatErrors,
+  type ValidationError,
+  type ValidationResult,
+} from '@railway-ts/pipelines/schema';
 
 // 1. Define schema
 const schema = object({
@@ -43,20 +53,20 @@ const schema = object({
 });
 
 // 2. Build pipeline
-async function compute(input: unknown) {
+async function compute(input: unknown): Promise<ValidationResult<number>> {
   const result = await pipe(validate(input, schema), (r) => andThen(r, ({ x, y }) => ok(x / y)));
 
-  return match(result, {
+  return match<number, ValidationError[], ValidationResult<number>>(result, {
     ok: (value) => ({ valid: true, data: value }),
-    err: (errors) => ({ valid: false, errors }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
   });
 }
 
 // 3. Use it
-await compute({ x: '10', y: '2' });
+await compute({ x: '10', y: '2' }).then(console.log);
 // { valid: true, data: 5 }
 
-await compute({ x: '-5', y: '0' });
+await compute({ x: '-5', y: '0' }).then(console.log);
 // { valid: false, errors: [...] }
 ```
 
@@ -68,9 +78,9 @@ Validate launch parameters, fetch weather data, make GO/NO-GO decision.
 
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, err, match, andThen, fromPromise, type Result } from '@railway-ts/pipelines/result';
+import { err, fromPromise, match, ok, andThen, type Result } from '@railway-ts/pipelines/result';
 import {
-  validate,
+  formatErrors,
   object,
   required,
   chain,
@@ -78,75 +88,113 @@ import {
   min,
   max,
   stringEnum,
-  type InferSchemaType,
+  parseDate,
+  validate,
   type ValidationError,
+  type ValidationResult,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
-// Define schema
+// Schema
 const launchSchema = object({
   vehicleType: required(stringEnum(['falcon9', 'atlas5'] as const)),
   payload: required(chain(parseNumber(), min(1000), max(25_000))),
   latitude: required(chain(parseNumber(), min(-90), max(90))),
   longitude: required(chain(parseNumber(), min(-180), max(180))),
+  windowStart: required(parseDate()),
 });
 
 type LaunchParams = InferSchemaType<typeof launchSchema>;
+type VehicleType = LaunchParams['vehicleType'];
 
-// Fetch weather data
-const fetchWeather = async (params: LaunchParams): Promise<Result<any, ValidationError[]>> => {
+// Weather API types
+type WeatherData = {
+  wind_speed_10m: number;
+  wind_direction_10m: number;
+  wind_gusts_10m: number;
+};
+
+type LaunchContext = {
+  params: LaunchParams;
+  weather: WeatherData;
+};
+
+type LaunchDecision = {
+  windSpeed: number;
+  windGusts: number;
+  maxAllowed: number;
+  recommendation: 'GO' | 'NO GO';
+  reason: string;
+};
+
+// Helper for API responses
+const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
+
+// Fetch weather and combine with params
+const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.append('latitude', params.latitude.toString());
   url.searchParams.append('longitude', params.longitude.toString());
-  url.searchParams.append('current', 'wind_speed_10m,wind_gusts_10m');
+  url.searchParams.append('current', 'wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+  url.searchParams.append('wind_speed_unit', 'ms');
 
-  const result = await fromPromise(fetch(url.toString()).then((r) => r.json()));
+  const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
 
   return match(result, {
     ok: (data) => ok({ params, weather: data.current }),
-    err: (e) => err([{ path: ['weather_api'], message: String(e) }]),
+    err: (msg) => err([{ path: ['weather_api'], message: String(msg) }]),
   });
 };
 
-// Make launch decision
-const assessLaunch = async (context: any): Promise<Result<any, ValidationError[]>> => {
-  const limits = { falcon9: 15, atlas5: 12 };
-  const maxWind = limits[context.params.vehicleType];
-  const actual = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
+// Calculate wind loads and decision
+const assessLaunchConditions = async (context: LaunchContext): Promise<Result<LaunchDecision, ValidationError[]>> => {
+  const windLimits: Record<VehicleType, number> = {
+    falcon9: 15,
+    atlas5: 12,
+  };
 
-  return ok({
-    recommendation: actual <= maxWind ? 'GO' : 'NO GO',
-    reason: actual <= maxWind ? `Wind ${actual} m/s within limits` : `Wind ${actual} m/s exceeds ${maxWind} m/s`,
-  });
+  const maxWind = windLimits[context.params.vehicleType];
+  const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
+  const isGo = actualMaxWind <= maxWind;
+
+  const decision: LaunchDecision = {
+    windSpeed: context.weather.wind_speed_10m,
+    windGusts: context.weather.wind_gusts_10m,
+    maxAllowed: maxWind,
+    recommendation: isGo ? 'GO' : 'NO GO',
+    reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
+  };
+
+  return ok(decision);
 };
 
-// Build pipeline
-const launchDecision = async (input: unknown) => {
+// Main pipeline
+const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
+  const validationResult = validate(input, launchSchema);
+
   const result = await pipe(
-    validate(input, launchSchema),
-    (r) => andThen(r, fetchWeather),
-    (r) => andThen(r, assessLaunch),
+    validationResult,
+    (r) => andThen(r, fetchWeatherWithParams),
+    (r) => andThen(r, assessLaunchConditions),
   );
 
-  return match(result, {
-    ok: (decision) => decision,
-    err: (errors) => ({
-      recommendation: 'SCRUB',
-      reason: 'Validation failed',
-      errors,
-    }),
+  return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
+    ok: (decision) => ({ valid: true, data: decision }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
   });
 };
 
 // Usage
-const decision = await launchDecision({
+const result = await evaluateLaunch({
   vehicleType: 'falcon9',
-  payload: 15000,
+  payload: 1000,
   latitude: 28.5721,
-  longitude: -80.649,
+  longitude: -80.648,
+  windowStart: new Date('2025-01-01'),
 });
 
-console.log(decision);
-// { recommendation: 'GO', reason: 'Wind 8.2 m/s within limits' }
+console.log(result);
+// { valid: true, data: { windSpeed: 7.2, windGusts: 9.1, maxAllowed: 15, recommendation: 'GO', reason: 'Conditions nominal' } }
 ```
 
 **The pattern:**
