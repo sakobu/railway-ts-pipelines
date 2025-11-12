@@ -709,6 +709,32 @@ describe('arrayHelpersFactory', () => {
 
       expect(initial).toEqual([{ id: 1 }, { id: 2 }]);
     });
+
+    test('no-op when swapping with undefined array slots (sparse array)', () => {
+      const sparse: TestItem[] = [{ id: 1 }, { id: 3 }];
+      sparse[5] = { id: 6 }; // Create sparse array
+      const setFieldValue = mock(() => {});
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers(
+        'items',
+        sparse,
+        setFieldValue,
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps
+      );
+
+      // Try to swap with an undefined slot
+      helpers.swap(0, 2);
+
+      // Should not have called setFieldValue because index 2 is undefined
+      expect(setFieldValue).not.toHaveBeenCalled();
+    });
   });
 
   describe('replace', () => {
@@ -1118,6 +1144,83 @@ describe('arrayHelpersFactory', () => {
       expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'items[0].name');
       expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'items[1].name');
       expect(mockGetFieldProps).toHaveBeenNthCalledWith(3, 'items[2].name');
+    });
+
+    test('field props methods work with deeply nested objects', () => {
+      type Member = { email: string; phone: string };
+      type Team = { name: string; members: Member[] };
+      const mockGetFieldProps = mock(
+        (_field: string): NativeFieldProps => ({
+          id: 'test',
+          name: 'test',
+          value: '',
+          onChange: () => {},
+          onBlur: () => {},
+        })
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Team, 'name' | 'members'>(
+        'teams',
+        [
+          {
+            name: 'Engineering',
+            members: [{ email: 'a@example.com', phone: '123' }],
+          },
+        ],
+        () => {},
+        mockGetFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps
+      );
+
+      helpers.getFieldProps(0, 'name');
+      helpers.getFieldProps(1, 'members');
+
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'teams[0].name');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'teams[1].members');
+    });
+
+    test('getRadioGroupOptionProps with number values', () => {
+      type Item = { priority: number };
+      const mockGetRadioGroupOptionProps = mock(
+        (
+          _field: string,
+          _optionValue: string | number
+        ): NativeRadioGroupOptionProps => ({
+          id: 'test',
+          name: 'test',
+          value: 'test',
+          checked: false,
+          onChange: () => {},
+          onBlur: () => {},
+        })
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'priority'>(
+        'items',
+        [{ priority: 1 }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mockGetRadioGroupOptionProps
+      );
+
+      helpers.getRadioGroupOptionProps(0, 'priority', 5);
+
+      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith(
+        'items[0].priority',
+        5
+      );
     });
   });
 

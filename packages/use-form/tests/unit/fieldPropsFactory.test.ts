@@ -106,6 +106,22 @@ describe('fieldPropsFactory', () => {
       expect(props.value).toBe('2024-03-15');
     });
 
+    test('converts invalid Date to empty string', () => {
+      const handleChange = mock(() => {});
+      const handleBlur = mock(() => {});
+      const invalidDate = new Date('invalid');
+      const formValues = { birthDate: invalidDate };
+
+      const props = createNativeFieldProps(
+        'birthDate',
+        formValues,
+        handleChange,
+        handleBlur
+      );
+
+      expect(props.value).toBe('');
+    });
+
     test('converts complex objects to JSON string', () => {
       const handleChange = mock(() => {});
       const handleBlur = mock(() => {});
@@ -1039,6 +1055,33 @@ describe('fieldPropsFactory', () => {
       props.onBlur();
 
       expect(handleBlur).toHaveBeenCalledWith('interests', true);
+    });
+
+    test('handles mixed-type arrays with boolean values', () => {
+      const handleChange = mock(() => {});
+      const handleBlur = mock(() => {});
+      // Mixed type array - this is technically type-unsafe but tests runtime behavior
+      const formValues = { flags: [true, 'yes', 1] as unknown as string[] };
+
+      const propsYes = createCheckboxGroupOptionProps(
+        'flags',
+        'yes',
+        formValues,
+        handleChange,
+        handleBlur
+      );
+
+      const propsNo = createCheckboxGroupOptionProps(
+        'flags',
+        'no',
+        formValues,
+        handleChange,
+        handleBlur
+      );
+
+      // String coercion should find 'yes' in the array
+      expect(propsYes.checked).toBe(true);
+      expect(propsNo.checked).toBe(false);
     });
   });
 

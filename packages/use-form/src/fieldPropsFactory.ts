@@ -65,7 +65,9 @@ export const createNativeFieldProps = (
       : typeof raw === 'string' || typeof raw === 'number'
         ? raw
         : raw instanceof Date
-          ? raw.toISOString().split('T')[0]
+          ? isNaN(raw.getTime())
+            ? ''
+            : raw.toISOString().split('T')[0]
           : JSON.stringify(raw)
   ) as string | number;
 

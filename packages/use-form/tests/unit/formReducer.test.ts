@@ -384,4 +384,17 @@ describe('formReducer', () => {
       expect(result.touched.email).toBe(true);
     });
   });
+
+  describe('default case', () => {
+    test('returns current state for unknown action', () => {
+      const next = formReducer(
+        initialState,
+        // @ts-expect-error testing unknown action branch
+        { type: 'UNKNOWN_ACTION' },
+        initialValues
+      );
+
+      expect(next).toBe(initialState);
+    });
+  });
 });

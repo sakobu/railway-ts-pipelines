@@ -251,6 +251,23 @@ describe('useForm', () => {
 
       expect(result.current.serverErrors).toEqual({});
     });
+
+    test('calls preventDefault when event is provided', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      const preventDefault = mock(() => {});
+      const fakeEvent = { preventDefault } as unknown as React.FormEvent;
+
+      await act(async () => {
+        await result.current.handleSubmit(fakeEvent);
+      });
+
+      expect(preventDefault).toHaveBeenCalled();
+    });
   });
 
   describe('resetForm', () => {
@@ -442,6 +459,382 @@ describe('useForm', () => {
       expect(props.checked).toBe(true);
       expect(typeof props.onChange).toBe('function');
       expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getSelectFieldProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { country: 'US' },
+        })
+      );
+
+      const props = result.current.getSelectFieldProps('country');
+
+      expect(props.id).toBe('field-country');
+      expect(props.name).toBe('country');
+      expect(props.value).toBe('US');
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getSwitchProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { darkMode: false },
+        })
+      );
+
+      const props = result.current.getSwitchProps('darkMode');
+
+      expect(props.id).toBe('field-darkMode');
+      expect(props.name).toBe('darkMode');
+      expect(props.checked).toBe(false);
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getSliderProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { volume: 50 },
+        })
+      );
+
+      const props = result.current.getSliderProps('volume');
+
+      expect(props.id).toBe('field-volume');
+      expect(props.name).toBe('volume');
+      expect(props.type).toBe('range');
+      expect(props.value).toBe(50);
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getCheckboxGroupOptionProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { interests: ['sports'] },
+        })
+      );
+
+      const props = result.current.getCheckboxGroupOptionProps(
+        'interests',
+        'sports'
+      );
+
+      expect(props.id).toBe('field-interests-sports');
+      expect(props.name).toBe('interests');
+      expect(props.value).toBe('sports');
+      expect(props.checked).toBe(true);
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getFileFieldProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { avatar: null },
+        })
+      );
+
+      const props = result.current.getFileFieldProps('avatar');
+
+      expect(props.id).toBe('field-avatar');
+      expect(props.name).toBe('avatar');
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+
+    test('getRadioGroupOptionProps returns correct props', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { contactMethod: 'email' },
+        })
+      );
+
+      const props = result.current.getRadioGroupOptionProps(
+        'contactMethod',
+        'email'
+      );
+
+      expect(props.id).toBe('field-contactMethod-email');
+      expect(props.name).toBe('contactMethod');
+      expect(props.value).toBe('email');
+      expect(props.checked).toBe(true);
+      expect(typeof props.onChange).toBe('function');
+      expect(typeof props.onBlur).toBe('function');
+    });
+  });
+
+  describe('resetForm', () => {
+    test('validates on reset when validationMode is mount', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+          validationMode: 'mount',
+        })
+      );
+
+      // Modify the form to valid values
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'john@example.com');
+        result.current.setFieldValue('age', 25);
+      });
+
+      expect(result.current.values.name).toBe('John');
+
+      // Reset
+      act(() => {
+        result.current.resetForm();
+      });
+
+      // Should validate on reset and show errors for initial values
+      expect(result.current.errors.name).toBe('Name is required');
+      expect(result.current.errors.email).toBe('Email is required');
+    });
+  });
+
+  describe('handleSubmit error handling', () => {
+    test('catches and logs errors thrown in onSubmit', async () => {
+      const consoleErrorSpy = mock(() => {});
+      const originalConsoleError = console.error;
+      console.error = consoleErrorSpy;
+
+      const onSubmit = mock((_values: UserForm) => {
+        throw new Error('Network error');
+      });
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Form submission error:',
+        expect.any(Error)
+      );
+
+      console.error = originalConsoleError;
+    });
+
+    test('handles submit without onSubmit callback', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      // Should return validated data
+      expect(submitResult).toEqual({
+        name: 'John',
+        email: 'john@example.com',
+        age: 25,
+      });
+    });
+  });
+
+  describe('array helpers', () => {
+    test('arrayHelpers push adds item to array', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: [] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+
+      act(() => {
+        // @ts-expect-error - Type inference limitation in test
+        helpers.push('first');
+      });
+
+      expect(result.current.values.items).toEqual(['first']);
+    });
+
+    test('arrayHelpers remove deletes item from array', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: ['first', 'second', 'third'] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+
+      act(() => {
+        helpers.remove(1);
+      });
+
+      expect(result.current.values.items).toEqual(['first', 'third']);
+    });
+
+    test('arrayHelpers swap exchanges two items', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: ['a', 'b', 'c'] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+
+      act(() => {
+        helpers.swap(0, 2);
+      });
+
+      expect(result.current.values.items).toEqual(['c', 'b', 'a']);
+    });
+
+    test('arrayHelpers replace updates item at index', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: ['a', 'b', 'c'] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+
+      act(() => {
+        // @ts-expect-error - Type inference limitation in test
+        helpers.replace(1, 'updated');
+      });
+
+      expect(result.current.values.items).toEqual(['a', 'updated', 'c']);
+    });
+
+    test('arrayHelpers insert adds item at index', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: ['a', 'c'] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+
+      act(() => {
+        // @ts-expect-error - Type inference limitation in test
+        helpers.insert(1, 'b');
+      });
+
+      expect(result.current.values.items).toEqual(['a', 'b', 'c']);
+    });
+
+    test('arrayHelpers getFieldProps returns props for array item field', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            contacts: [{ name: 'John', email: 'john@example.com' }],
+          },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('contacts');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getFieldProps(0, 'name');
+
+      expect(props.name).toBe('contacts[0].name');
+      expect(props.value).toBe('John');
+    });
+
+    test('arrayHelpers getSelectFieldProps returns props for array item select', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { items: [{ category: 'electronics' }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getSelectFieldProps(0, 'category');
+
+      expect(props.name).toBe('items[0].category');
+      expect(props.value).toBe('electronics');
+    });
+
+    test('arrayHelpers getSliderProps returns props for array item slider', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { settings: [{ volume: 75 }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('settings');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getSliderProps(0, 'volume');
+
+      expect(props.name).toBe('settings[0].volume');
+      expect(props.value).toBe(75);
+      expect(props.type).toBe('range');
+    });
+
+    test('arrayHelpers getCheckboxProps returns props for array item checkbox', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { settings: [{ enabled: true }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('settings');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getCheckboxProps(0, 'enabled');
+
+      expect(props.name).toBe('settings[0].enabled');
+      expect(props.checked).toBe(true);
+    });
+
+    test('arrayHelpers getSwitchProps returns props for array item switch', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { features: [{ active: false }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('features');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getSwitchProps(0, 'active');
+
+      expect(props.name).toBe('features[0].active');
+      expect(props.checked).toBe(false);
+    });
+
+    test('arrayHelpers getFileFieldProps returns props for array item file input', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { uploads: [{ file: null }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('uploads');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getFileFieldProps(0, 'file');
+
+      expect(props.name).toBe('uploads[0].file');
+    });
+
+    test('arrayHelpers getRadioGroupOptionProps returns props for array item radio', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { preferences: [{ size: 'medium' }] },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('preferences');
+      // @ts-expect-error - Type inference limitation in test
+      const props = helpers.getRadioGroupOptionProps(0, 'size', 'medium');
+
+      expect(props.name).toBe('preferences[0].size');
+      expect(props.value).toBe('medium');
+      expect(props.checked).toBe(true);
     });
   });
 });
