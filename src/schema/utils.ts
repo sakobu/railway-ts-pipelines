@@ -505,7 +505,11 @@ export function refine<T>(
  * @see chain - For composing multiple validators including refineAt
  * @see object - The schema type that refineAt is typically chained after
  */
-export function refineAt<T>(targetPath: string | string[], predicate: (value: T) => boolean, message: string) {
+export function refineAt<T>(
+  targetPath: string | string[],
+  predicate: (value: T) => boolean,
+  message: string,
+): Validator<T, T> {
   return (value: T, parentPath: string[] = []) => {
     if (!predicate(value)) {
       const fieldPath = Array.isArray(targetPath) ? targetPath : [targetPath];
