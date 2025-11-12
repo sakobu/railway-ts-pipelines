@@ -14,6 +14,7 @@ export default [
       '*.config.js',
       '*.config.ts',
       'tests/**',
+      'scripts/**',
     ],
   },
 

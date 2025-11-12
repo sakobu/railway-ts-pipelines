@@ -7,6 +7,8 @@ try {
   throw new Error(`Missing ${LCOV_PATH}`);
 }
 
+export {};
+
 let ok = true;
 let currentFile = '';
 let lf = 0;
