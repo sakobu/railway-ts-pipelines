@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import { ok, err, isOk, isErr } from '@/result';
 import { object, required, string as stringSchema, number as numberSchema } from '@/schema';
-import { chain, validate, formatErrors, transform, refine, validateAndFormatResult } from '@/schema/utils';
+import { chain, validate, formatErrors, transform, refine, refineAt, validateAndFormatResult } from '@/schema/utils';
 
 import type { Validator, ValidationError } from '@/schema/core';
 
@@ -418,6 +418,185 @@ describe('utils - refine', () => {
     if (isErr(result)) {
       expect(result.error[0]?.path).toEqual(['items', '0', 'value']);
       expect(result.error[0]?.message).toBe('Must be even');
+    }
+  });
+});
+
+describe('utils - refineAt', () => {
+  test('should pass when predicate returns true with string path', () => {
+    interface Data {
+      value: number;
+      min: number;
+    }
+    const validator = refineAt<Data>('value', (data) => data.value >= data.min, 'Value must be at least min');
+    const result = validator({ value: 10, min: 5 });
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toEqual({ value: 10, min: 5 });
+    }
+  });
+
+  test('should fail when predicate returns false with string path', () => {
+    interface Data {
+      value: number;
+      min: number;
+    }
+    const validator = refineAt<Data>('value', (data) => data.value >= data.min, 'Value must be at least min');
+    const result = validator({ value: 3, min: 5 });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.path).toEqual(['value']);
+      expect(result.error[0]?.message).toBe('Value must be at least min');
+    }
+  });
+
+  test('should work with array path', () => {
+    interface Data {
+      nested: { field: string };
+    }
+    const validator = refineAt<Data>(
+      ['nested', 'field'],
+      (data) => data.nested.field.length > 0,
+      'Field cannot be empty',
+    );
+    const result = validator({ nested: { field: '' } });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.path).toEqual(['nested', 'field']);
+      expect(result.error[0]?.message).toBe('Field cannot be empty');
+    }
+  });
+
+  test('should preserve parent path when provided', () => {
+    interface Data {
+      value: number;
+    }
+    const validator = refineAt<Data>('value', (data) => data.value > 0, 'Value must be positive');
+    const result = validator({ value: -5 }, ['user', 'settings']);
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.path).toEqual(['user', 'settings', 'value']);
+      expect(result.error[0]?.message).toBe('Value must be positive');
+    }
+  });
+
+  test('should combine parent path with array targetPath', () => {
+    interface Data {
+      config: { timeout: number };
+    }
+    const validator = refineAt<Data>(['config', 'timeout'], (data) => data.config.timeout < 1000, 'Timeout too high');
+    const result = validator({ config: { timeout: 2000 } }, ['server']);
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.path).toEqual(['server', 'config', 'timeout']);
+      expect(result.error[0]?.message).toBe('Timeout too high');
+    }
+  });
+
+  test('should work with formatErrors for proper error display', () => {
+    interface Data {
+      value: number;
+      max: number;
+    }
+    const validator = refineAt<Data>('value', (data) => data.value <= data.max, 'Value must be at most max');
+    const result = validator({ value: 100, max: 50 });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      const formatted = formatErrors(result.error);
+      expect(formatted).toEqual({
+        value: 'Value must be at most max',
+      });
+    }
+  });
+
+  test('should work with nested formatErrors paths', () => {
+    interface Data {
+      settings: { limit: number };
+    }
+    const validator = refineAt<Data>(
+      ['settings', 'limit'],
+      (data) => data.settings.limit > 0,
+      'Limit must be positive',
+    );
+    const result = validator({ settings: { limit: 0 } }, ['config']);
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      const formatted = formatErrors(result.error);
+      expect(formatted).toEqual({
+        'config.settings.limit': 'Limit must be positive',
+      });
+    }
+  });
+
+  test('should handle cross-field validation in object schemas', () => {
+    interface RangeData {
+      min: number;
+      max: number;
+    }
+    const validator = refineAt<RangeData>('max', (data) => data.max > data.min, 'Max must be greater than min');
+
+    // Valid case
+    const validResult = validator({ min: 10, max: 20 });
+    expect(isOk(validResult)).toBe(true);
+
+    // Invalid case
+    const invalidResult = validator({ min: 20, max: 10 });
+    expect(isErr(invalidResult)).toBe(true);
+    if (isErr(invalidResult)) {
+      expect(invalidResult.error[0]?.path).toEqual(['max']);
+      expect(invalidResult.error[0]?.message).toBe('Max must be greater than min');
+    }
+  });
+
+  test('should work in chains with object validators', () => {
+    interface FormData {
+      password: string;
+      confirmPassword: string;
+    }
+
+    const formSchema = chain(
+      object({
+        password: required(stringSchema()),
+        confirmPassword: required(stringSchema()),
+      }),
+      refineAt<FormData>('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
+    );
+
+    // Valid case
+    const validData = { password: 'secret123', confirmPassword: 'secret123' };
+    const validResult = formSchema(validData);
+    expect(isOk(validResult)).toBe(true);
+
+    // Invalid case
+    const invalidData = { password: 'secret123', confirmPassword: 'different' };
+    const invalidResult = formSchema(invalidData);
+    expect(isErr(invalidResult)).toBe(true);
+    if (isErr(invalidResult)) {
+      expect(invalidResult.error[0]?.path).toEqual(['confirmPassword']);
+      expect(invalidResult.error[0]?.message).toBe('Passwords must match');
+    }
+  });
+
+  test('error path should be an array, not a string', () => {
+    interface Data {
+      field: string;
+    }
+    const validator = refineAt<Data>('field', (data) => data.field.length > 0, 'Field required');
+    const result = validator({ field: '' });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      const path = result.error[0]?.path;
+      // Critical: path must be an array for formatErrors to work
+      expect(Array.isArray(path)).toBe(true);
+      expect(path).toEqual(['field']);
     }
   });
 });

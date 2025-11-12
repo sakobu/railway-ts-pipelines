@@ -393,3 +393,124 @@ export function refine<T>(
     return ok(value);
   };
 }
+
+/**
+ * Creates a validator that targets a specific field path with custom validation logic
+ * operating on the entire object. Used for cross-field validation where one field's
+ * validity depends on other fields (e.g., password confirmation, date ranges,
+ * conditional required fields).
+ *
+ * Unlike `refine` which validates a single field in isolation, `refineAt` receives
+ * the entire parent object and can attach the error to a specific nested field path.
+ * This is essential for validation logic that needs to compare multiple fields.
+ *
+ * **When to use `refineAt`:**
+ * - Password confirmation matching
+ * - Date range validation (start date < end date)
+ * - Conditional required fields (field A required only if field B has value X)
+ * - Cross-field business logic (e.g., discount codes valid for specific products)
+ *
+ * **When NOT to use `refineAt`:**
+ * - Single field validation - use `refine` instead
+ * - Simple type constraints - use built-in validators like `minLength`, `email`, etc.
+ *
+ * @template T - The type of the parent object being validated
+ *
+ * @param targetPath - The field path where the error should be attached.
+ *                     Can be a string like "confirmPassword" or an array like ["address", "zipCode"].
+ *                     Supports dot notation for nested fields (e.g., "user.email").
+ *
+ * @param predicate - Validation function that receives the entire parent object.
+ *                    Returns `true` if validation passes, `false` if it fails.
+ *                    Has access to all sibling fields for cross-field logic.
+ *
+ * @param message - Error message to display when validation fails.
+ *                  Should clearly describe what the user needs to fix.
+ *
+ * @returns A validator function that can be used with `chain` at the object level.
+ *          The validator merges with `parentPath` to work correctly in nested schemas.
+ *
+ * @example
+ * // Password confirmation
+ * const validator = chain(
+ *   object({
+ *     password: required(string()),
+ *     confirmPassword: required(string()),
+ *   }),
+ *   refineAt(
+ *     "confirmPassword",
+ *     (data) => data.password === data.confirmPassword,
+ *     "Passwords must match"
+ *   )
+ * );
+ *
+ * @example
+ * // Date range validation
+ * const bookingValidator = chain(
+ *   object({
+ *     checkIn: required(parseDate()),
+ *     checkOut: required(parseDate()),
+ *   }),
+ *   refineAt(
+ *     "checkOut",
+ *     (data) => data.checkOut > data.checkIn,
+ *     "Check-out date must be after check-in date"
+ *   )
+ * );
+ *
+ * @example
+ * // Conditional required field
+ * const accountValidator = chain(
+ *   object({
+ *     accountType: required(stringEnum(["personal", "business"])),
+ *     taxId: optional(string()),
+ *   }),
+ *   refineAt(
+ *     "taxId",
+ *     (data) => data.accountType === "personal" || !!data.taxId,
+ *     "Tax ID is required for business accounts"
+ *   )
+ * );
+ *
+ * @example
+ * // Nested field validation with array path
+ * const validator = chain(
+ *   object({
+ *     address: object({
+ *       country: required(string()),
+ *       state: optional(string()),
+ *     }),
+ *   }),
+ *   refineAt(
+ *     ["address", "state"],
+ *     (data) => data.address.country !== "US" || !!data.address.state,
+ *     "State is required for US addresses"
+ *   )
+ * );
+ *
+ * @example
+ * // Multiple cross-field validations
+ * const rangeValidator = chain(
+ *   object({
+ *     min: required(parseNumber()),
+ *     max: required(parseNumber()),
+ *     value: required(parseNumber()),
+ *   }),
+ *   refineAt("max", (data) => data.max > data.min, "Max must be greater than min"),
+ *   refineAt("value", (data) => data.value >= data.min, "Value must be at least min"),
+ *   refineAt("value", (data) => data.value <= data.max, "Value must be at most max")
+ * );
+ *
+ * @see refine - For single-field validation without cross-field dependencies
+ * @see chain - For composing multiple validators including refineAt
+ * @see object - The schema type that refineAt is typically chained after
+ */
+export function refineAt<T>(targetPath: string | string[], predicate: (value: T) => boolean, message: string) {
+  return (value: T, parentPath: string[] = []) => {
+    if (!predicate(value)) {
+      const fieldPath = Array.isArray(targetPath) ? targetPath : [targetPath];
+      return err([{ path: [...parentPath, ...fieldPath], message }]);
+    }
+    return ok(value);
+  };
+}
