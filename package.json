@@ -1,8 +1,10 @@
 {
   "name": "@railway-ts/pipelines",
   "version": "0.1.6",
-  "description": "Functional programming abstractions for TypeScript: Build robust data pipelines with schema validation, Option, Result, and railway-oriented programming.",
+  "description": "Railway-oriented pipelines for TypeScript: a lightweight fp‑style Result/Option and schema layer for handling errors and validating boundaries.",
   "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -61,14 +63,23 @@
     "check": "bun run typecheck && bun run lint && bun run test"
   },
   "keywords": [
-    "typescript",
-    "functional",
-    "option",
-    "result",
     "railway",
-    "monads",
-    "schema",
-    "pipeline"
+    "railway-oriented",
+    "pipeline",
+    "pipelines",
+    "error-handling",
+    "result",
+    "option",
+    "functional-programming",
+    "fp-ts",
+    "effect-ts",
+    "composition",
+    "pipe",
+    "flow",
+    "typescript",
+    "schema-validation",
+    "validation",
+    "runtime-validation"
   ],
   "repository": "github:sakobu/railway-ts-pipelines",
   "homepage": "https://github.com/sakobu/railway-ts-pipelines#readme",
