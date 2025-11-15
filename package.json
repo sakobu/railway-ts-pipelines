@@ -1,6 +1,6 @@
 {
   "name": "@railway-ts/pipelines",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Railway-oriented pipelines for TypeScript: a lightweight fp‑style Result/Option and schema layer for handling errors and validating boundaries.",
   "type": "module",
   "main": "./dist/index.mjs",
