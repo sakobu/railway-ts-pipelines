@@ -38,23 +38,24 @@ import {
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
-const loginValidator = object({
+const loginSchema = object({
   email: required(chain(string(), nonEmpty('Email is required'), email())),
   password: required(chain(string(), nonEmpty('Password is required'))),
 });
 
-type LoginForm = InferSchemaType<typeof loginValidator>;
+type LoginFormSchema = InferSchemaType<typeof loginSchema>;
 
-function LoginForm() {
-  const form = useForm<LoginForm>(loginValidator, {
+export function LoginForm() {
+  const form = useForm<LoginFormSchema>(loginSchema, {
     initialValues: { email: '', password: '' },
     onSubmit: async (values) => {
       console.log('Login:', values);
+      return new Promise((resolve) => setTimeout(resolve, 1000));
     },
   });
 
   return (
-    <form onSubmit={form.handleSubmit}>
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input type="email" {...form.getFieldProps('email')} />
       {form.touched.email && form.errors.email && (
         <span>{form.errors.email}</span>
@@ -72,6 +73,12 @@ function LoginForm() {
   );
 }
 ```
+
+## Playground
+
+Try the example live on StackBlitz:
+
+https://stackblitz.com/edit/vitejs-vite-c3zpmon9?embed=1&file=src%2FApp.tsx
 
 ## Documentation
 
