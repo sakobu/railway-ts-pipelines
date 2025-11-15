@@ -3,8 +3,6 @@
   "version": "0.1.5",
   "description": "Functional programming abstractions for TypeScript: Build robust data pipelines with schema validation, Option, Result, and railway-oriented programming.",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -39,7 +37,7 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=18"
+    "node": ">=16"
   },
   "scripts": {
     "build": "bunx tsup",
