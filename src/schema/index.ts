@@ -1,5 +1,5 @@
 /**
- * Schema validationfunctions for functional programming
+ * Schema validation functions for functional programming
  *
  * @module schema
  */

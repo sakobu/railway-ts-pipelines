@@ -1,7 +1,7 @@
 {
   "name": "@railway-ts/pipelines",
   "version": "0.1.7",
-  "description": "Railway-oriented pipelines for TypeScript: a lightweight fp‑style Result/Option and schema layer for handling errors and validating boundaries.",
+  "description": "Railway-oriented pipelines for TypeScript: a lightweight fp-style Result/Option and schema layer for handling errors and validating boundaries.",
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -39,7 +39,7 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "scripts": {
     "build": "bunx tsup",

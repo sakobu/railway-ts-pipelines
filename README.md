@@ -52,10 +52,10 @@ await compute({ x: 10, y: 2 }).then(console.log); // { valid: true, data: 5 }
 
 ## Documentation
 
-→ **[Getting Started](GETTING_STARTED.md)** - Your first pipeline  
-→ **[Recipes](docs/RECIPES.md)** - Common patterns (point-free composition, async, validation)  
-→ **[Advanced](docs/ADVANCED.md)** - Symbol branding, tuple preservation, type inference  
-→ **[Examples](examples/)** - Working code you can run
+-> **[Getting Started](GETTING_STARTED.md)** - Your first pipeline  
+-> **[Recipes](docs/RECIPES.md)** - Common patterns (point-free composition, async, validation)  
+-> **[Advanced](docs/ADVANCED.md)** - Symbol branding, tuple preservation, type inference  
+-> **[Examples](examples/)** - Working code you can run
 
 ## Why This Library
 
@@ -202,7 +202,7 @@ import { string, number, validate } from '@railway-ts/pipelines/schema';
 import { mapOption, mapResult, pipe, ok, validate } from '@railway-ts/pipelines';
 ```
 
-Functions that exist in both Result and Option get suffixes when imported from root: `mapResult`, `mapOption`, etc. Result-only functions stay unsuffixed: `mapErr`, `andThen`.
+Functions that exist in both Result and Option get suffixes when imported from root: `mapResult`, `mapOption`, etc. Result-only functions stay un-suffixed: `mapErr`, `andThen`.
 
 ## Examples
 
