@@ -1,5 +1,5 @@
-import { pipe } from '@/composition';
-import { err, fromPromise, match, ok, andThen, type Result } from '@/result';
+import { pipeAsync } from '@/composition';
+import { err, flatMapWith, fromPromise, match, ok, type Result } from '@/result';
 import {
   formatErrors,
   object,
@@ -73,11 +73,7 @@ const addTimestamp = async (post: PostInput): Promise<Result<EnrichedPost, Valid
 const validateAndCreate = async (input: unknown) => {
   const validationResult = validate(input, createPostSchema);
 
-  const result = await pipe(
-    validationResult,
-    (r) => andThen(r, createPost),
-    (r) => andThen(r, addTimestamp),
-  );
+  const result = await pipeAsync(validationResult, flatMapWith(createPost), flatMapWith(addTimestamp));
 
   return match<EnrichedPost, ValidationError[], ValidationResult<EnrichedPost>>(result, {
     ok: (post) => ({ valid: true, data: post }),
@@ -89,11 +85,7 @@ const validateAndCreate = async (input: unknown) => {
 const validateAndCreateWithApiFailure = async (input: unknown) => {
   const validationResult = validate(input, createPostSchema);
 
-  const result = await pipe(
-    validationResult,
-    (r) => andThen(r, createPostFailing),
-    (r) => andThen(r, addTimestamp),
-  );
+  const result = await pipeAsync(validationResult, flatMapWith(createPostFailing), flatMapWith(addTimestamp));
 
   return match<EnrichedPost, ValidationError[], ValidationResult<EnrichedPost>>(result, {
     ok: (post) => ({ valid: true, data: post }),
@@ -101,12 +93,19 @@ const validateAndCreateWithApiFailure = async (input: unknown) => {
   });
 };
 
-// Usage
+// === validateAndCreate: Valid Input ===
+console.log('=== validateAndCreate: Valid Input ===');
+
 const validInput = {
   title: 'Hello World',
   body: 'This is my first post content',
   userId: '1',
 };
+
+console.log(await validateAndCreate(validInput));
+
+// === validateAndCreate: Invalid Input ===
+console.log('\n=== validateAndCreate: Invalid Input ===');
 
 const invalidInput = {
   title: 'Hi',
@@ -114,6 +113,9 @@ const invalidInput = {
   userId: '0',
 };
 
-console.log('Valid:', await validateAndCreate(validInput));
-console.log('Invalid:', await validateAndCreate(invalidInput));
-console.log('API Fail:', await validateAndCreateWithApiFailure(validInput));
+console.log(await validateAndCreate(invalidInput));
+
+// === validateAndCreate: API Failure ===
+console.log('\n=== validateAndCreate: API Failure ===');
+
+console.log(await validateAndCreateWithApiFailure(validInput));

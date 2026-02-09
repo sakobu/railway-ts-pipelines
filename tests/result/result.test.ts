@@ -26,7 +26,6 @@ import {
   fromPromise,
   fromPromiseWithError,
   toPromise,
-  andThen,
 } from '@/result';
 
 describe('Result', () => {
@@ -768,103 +767,6 @@ describe('Result', () => {
       const error = new Error('Something went wrong');
       const result = err(error);
       expect(toPromise(result)).rejects.toBe(error);
-    });
-  });
-
-  describe('andThen function', () => {
-    test('chains async operations with Ok results', async () => {
-      const result = await andThen(ok(2), async (n) => ok(n * 3));
-
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toBe(6);
-      }
-    });
-
-    test('works with Promise<Result> input', async () => {
-      const promiseResult = Promise.resolve(ok(5));
-      const result = await andThen(promiseResult, async (n) => ok(n + 10));
-
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toBe(15);
-      }
-    });
-
-    test('propagates errors without calling step function', async () => {
-      const errorResult: Result<number, string> = err('initial error');
-      let stepCalled = false;
-
-      const result = await andThen(errorResult, async (n) => {
-        stepCalled = true;
-        return ok(n * 2);
-      });
-
-      expect(stepCalled).toBe(false);
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error).toBe('initial error');
-      }
-    });
-
-    test('works with synchronous step functions', async () => {
-      const result = await andThen(ok(10), (n) => ok(n.toString()));
-
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toBe('10');
-      }
-    });
-
-    test('chains multiple async operations', async () => {
-      const result = await andThen(
-        andThen(ok(2), async (n) => ok(n * 3)),
-        async (n) => ok(n + 4),
-      );
-
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toBe(10); // (2 * 3) + 4 = 10
-      }
-    });
-
-    test('handles async step that returns an error', async () => {
-      const result = await andThen(ok(5), async (n) => {
-        if (n > 3) {
-          return err('number too large');
-        }
-        return ok(n * 2);
-      });
-
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error).toBe('number too large');
-      }
-    });
-
-    test('works with different value types through the chain', async () => {
-      const result = await andThen(
-        andThen(ok('42'), async (str) => ok(Number.parseInt(str))),
-        async (num) => ok({ value: num, doubled: num * 2 }),
-      );
-
-      expect(isOk(result)).toBe(true);
-      if (isOk(result)) {
-        expect(result.value).toEqual({ value: 42, doubled: 84 });
-      }
-    });
-
-    test('handles Promise rejection in step function', async () => {
-      const result = await andThen(ok(5), async () => {
-        // Simulate an async operation that might fail
-        const promiseResult = await fromPromise(Promise.reject(new Error('async operation failed')));
-        return promiseResult;
-      });
-
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error).toBe('async operation failed');
-      }
     });
   });
 

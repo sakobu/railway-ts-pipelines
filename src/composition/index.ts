@@ -5,8 +5,11 @@
  */
 
 // Re-export utility functions
+export * from './types';
 export * from './pipe';
 export * from './flow';
+export * from './pipe-async';
+export * from './flow-async';
 export * from './curry';
 export * from './uncurry';
 export * from './tupled';

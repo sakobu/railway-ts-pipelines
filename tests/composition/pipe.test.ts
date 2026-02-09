@@ -2,26 +2,28 @@ import { describe, test, expect } from 'bun:test';
 
 import { pipe } from '@/composition';
 import {
-  ok,
-  err,
-  isOk,
-  isErr,
   some,
   none,
   isSome,
   isNone,
-  mapOption,
-  mapResult,
-  flatMapOption,
-  flatMapResult,
-  unwrapOption,
-  unwrapResult,
-  filterOption,
-  filterResult,
-  tapOption,
-  tapResult,
+  map as mapOption,
+  flatMap as flatMapOption,
+  unwrap as unwrapOption,
+  filter as filterOption,
+  tap as tapOption,
+} from '@/option';
+import {
+  ok,
+  err,
+  isOk,
+  isErr,
+  map as mapResult,
+  flatMap as flatMapResult,
+  unwrap as unwrapResult,
+  filter as filterResult,
+  tap as tapResult,
   fromPromise,
-} from '@/index';
+} from '@/result';
 
 describe('pipe', () => {
   test('should pipe values through functions', () => {

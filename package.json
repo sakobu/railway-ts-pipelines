@@ -3,15 +3,7 @@
   "version": "0.1.7",
   "description": "Railway-oriented pipelines for TypeScript: a lightweight fp-style Result/Option and schema layer for handling errors and validating boundaries.",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    },
     "./option": {
       "types": "./dist/option/index.d.ts",
       "import": "./dist/option/index.mjs",

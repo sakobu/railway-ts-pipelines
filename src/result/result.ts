@@ -1,5 +1,9 @@
 import { none, some, type Option } from '@/option';
 
+import type { MaybeAsync } from '@/composition';
+
+// ─── Types & Constructors ───────────────────────────────────
+
 /**
  * Symbol used to identify Result objects.
  *
@@ -60,6 +64,8 @@ export function err<E>(error: E): Result<never, E> {
   return { ok: false, error, [RESULT_BRAND]: 'error' };
 }
 
+// ─── Type Guards ────────────────────────────────────────────
+
 /**
  * Type guard that checks if a Result is an Ok variant containing a value.
  *
@@ -106,6 +112,8 @@ export function isErr<T, E>(
   return !result.ok;
 }
 
+// ─── Transformations ────────────────────────────────────────
+
 /**
  * Maps the value inside a Result using a transformation function.
  *
@@ -122,21 +130,6 @@ export function map<T, E, U>(result: Result<T, E>, fn: (value: T) => U): Result<
 }
 
 /**
- * Maps the error inside a Result using a transformation function.
- *
- * @example
- * const result: Result<number, string> = err("error");
- * const transformed: Result<number, Error> = mapErr(result, (err) => new Error(err));
- *
- * @param result - The Result to transform
- * @param fn - The function to apply to the contained error
- * @returns A new Result containing the transformed error, or the original value if the input was ok
- */
-export function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Result<T, F> {
-  return result.ok ? result : err(fn(result.error));
-}
-
-/**
  * Maps the value inside a Result using a transformation function that returns a Result.
  *
  * @example
@@ -149,6 +142,21 @@ export function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Resu
  */
 export function flatMap<T, E, U>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E> {
   return result.ok ? fn(result.value) : result;
+}
+
+/**
+ * Maps the error inside a Result using a transformation function.
+ *
+ * @example
+ * const result: Result<number, string> = err("error");
+ * const transformed: Result<number, Error> = mapErr(result, (err) => new Error(err));
+ *
+ * @param result - The Result to transform
+ * @param fn - The function to apply to the contained error
+ * @returns A new Result containing the transformed error, or the original value if the input was ok
+ */
+export function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Result<T, F> {
+  return result.ok ? result : err(fn(result.error));
 }
 
 /**
@@ -195,6 +203,110 @@ export function bimap<T, E, U, F>(result: Result<T, E>, okFn: (value: T) => U, e
 export function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E> {
   return result.ok && predicate(result.value) ? result : err(error);
 }
+
+// ─── Side Effects ───────────────────────────────────────────
+
+/**
+ * Executes a callback with the value if the Result is Ok, without changing the Result.
+ * Useful for side effects like logging while maintaining a processing chain.
+ *
+ * @example
+ * const finalResult = pipe(
+ *   ok(123),
+ *   r => map(r, x => x * 2),
+ *   r => tap(r, x => console.log(`Value: ${x}`)), // Logs but doesn't change the Result
+ *   r => filter(r, x => x > 200, "Value too small")
+ * );
+ *
+ * @param result - The Result to tap into
+ * @param fn - The function to execute with the value if Ok
+ * @returns The original Result unchanged
+ */
+export function tap<T, E>(result: Result<T, E>, fn: (value: T) => void): Result<T, E> {
+  if (isOk(result)) {
+    const callback = fn;
+    callback(result.value);
+  }
+  return result;
+}
+
+/**
+ * Executes a callback with the error if the Result is an Error, without changing the Result.
+ * Useful for side effects like logging while maintaining a processing chain.
+ *
+ * @example
+ * const finalResult = pipe(
+ *   err("something went wrong"),
+ *   r => tapErr(r, e => console.error(`Error: ${e}`)), // Logs but doesn't change the Result
+ *   r => mapErr(r, e => new Error(e))
+ * );
+ *
+ * @param result - The Result to tap into
+ * @param fn - The function to execute with the error if Error
+ * @returns The original Result unchanged
+ */
+export function tapErr<T, E>(result: Result<T, E>, fn: (error: E) => void): Result<T, E> {
+  if (isErr(result)) {
+    const callback = fn;
+    callback(result.error);
+  }
+  return result;
+}
+
+// ─── Error Recovery ─────────────────────────────────────────
+
+/**
+ * Recovers from an Err by applying `fn` to the error value. Returns the original Ok unchanged.
+ * This is the error-channel equivalent of `flatMap`.
+ *
+ * @example
+ * const result: Result<number, string> = err("not found");
+ * const recovered = orElse(result, (e) => ok(e.length)); // ok(9)
+ *
+ * const okResult: Result<number, string> = ok(42);
+ * const kept = orElse(okResult, (e) => ok(e.length)); // ok(42)
+ *
+ * @param result - The Result to recover from
+ * @param fn - A function that receives the Err value and returns a fallback Result
+ * @returns The original Ok, or the Result of applying fn to the error
+ */
+export function orElse<T, E>(result: Result<T, E>, fn: (error: E) => Result<T, E>): Result<T, E> {
+  return result.ok ? result : fn(result.error);
+}
+
+// ─── Pattern Matching ───────────────────────────────────────
+
+/**
+ * Pattern matches on a Result to handle both Ok and Error cases.
+ *
+ * @example
+ * const result = ok(42);
+ * const message = match(result, {
+ *   ok: (value) => `Got value: ${value}`,
+ *   err: (error) => `Got error: ${error}`
+ * }); // "Got value: 42"
+ *
+ * @param result - The Result to match against
+ * @param patterns - An object containing handler functions for Ok and Error cases
+ * @returns The result of calling the appropriate handler function
+ */
+export function match<T, E, R>(
+  result: Result<T, E>,
+  patterns: {
+    ok: (value: T) => R;
+    err: (error: E) => R;
+  },
+): R {
+  if (isOk(result)) {
+    const okFn = patterns.ok;
+    return okFn(result.value);
+  } else {
+    const errFn = patterns.err;
+    return errFn(result.error);
+  }
+}
+
+// ─── Unwrap ─────────────────────────────────────────────────
 
 /**
  * Unwraps the value inside a Result, throwing an error if the Result is an error.
@@ -258,6 +370,8 @@ export function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T): T {
 export function unwrapOrElse<T, E>(result: Result<T, E>, defaultFn: () => T): T {
   return result.ok ? result.value : defaultFn();
 }
+
+// ─── Combining ──────────────────────────────────────────────
 
 /**
  * Combines an array of Results into a single Result containing an array of values.
@@ -458,82 +572,7 @@ export function combineAll<T, E>(results: readonly Result<T, E>[]): Result<T[], 
   return errors.length > 0 ? err(errors) : ok(values);
 }
 
-/**
- * Pattern matches on a Result to handle both Ok and Error cases.
- *
- * @example
- * const result = ok(42);
- * const message = match(result, {
- *   ok: (value) => `Got value: ${value}`,
- *   err: (error) => `Got error: ${error}`
- * }); // "Got value: 42"
- *
- * @param result - The Result to match against
- * @param patterns - An object containing handler functions for Ok and Error cases
- * @returns The result of calling the appropriate handler function
- */
-export function match<T, E, R>(
-  result: Result<T, E>,
-  patterns: {
-    ok: (value: T) => R;
-    err: (error: E) => R;
-  },
-): R {
-  if (isOk(result)) {
-    const okFn = patterns.ok;
-    return okFn(result.value);
-  } else {
-    const errFn = patterns.err;
-    return errFn(result.error);
-  }
-}
-
-/**
- * Executes a callback with the value if the Result is Ok, without changing the Result.
- * Useful for side effects like logging while maintaining a processing chain.
- *
- * @example
- * const finalResult = pipe(
- *   ok(123),
- *   r => map(r, x => x * 2),
- *   r => tap(r, x => console.log(`Value: ${x}`)), // Logs but doesn't change the Result
- *   r => filter(r, x => x > 200, "Value too small")
- * );
- *
- * @param result - The Result to tap into
- * @param fn - The function to execute with the value if Ok
- * @returns The original Result unchanged
- */
-export function tap<T, E>(result: Result<T, E>, fn: (value: T) => void): Result<T, E> {
-  if (isOk(result)) {
-    const callback = fn;
-    callback(result.value);
-  }
-  return result;
-}
-
-/**
- * Executes a callback with the error if the Result is an Error, without changing the Result.
- * Useful for side effects like logging while maintaining a processing chain.
- *
- * @example
- * const finalResult = pipe(
- *   err("something went wrong"),
- *   r => tapErr(r, e => console.error(`Error: ${e}`)), // Logs but doesn't change the Result
- *   r => mapErr(r, e => new Error(e))
- * );
- *
- * @param result - The Result to tap into
- * @param fn - The function to execute with the error if Error
- * @returns The original Result unchanged
- */
-export function tapErr<T, E>(result: Result<T, E>, fn: (error: E) => void): Result<T, E> {
-  if (isErr(result)) {
-    const callback = fn;
-    callback(result.error);
-  }
-  return result;
-}
+// ─── Conversions ────────────────────────────────────────────
 
 /**
  * Converts a Result to an Option.
@@ -670,50 +709,191 @@ export function toPromise<T, E>(result: Result<T, E>): Promise<T> {
   return result.ok ? Promise.resolve(result.value) : Promise.reject(result.error);
 }
 
+// ─── Curried / Point-Free ───────────────────────────────────
+
 /**
- * Chains an asynchronous operation that returns a Result.
- *
- * @remarks
- * This function is the async counterpart to {@link flatMap}. It accepts either
- * a `Result` or a `Promise<Result>` and a step function that may be synchronous
- * or asynchronous, but must return a `Result` (or `Promise<Result>`). If the
- * input is an Ok, the step is invoked and awaited; if the input is an Err, the
- * same error is returned and the step is not called.
- *
- * This design keeps your core pipeline synchronous in structure while enabling
- * async effects at the boundaries (e.g., database, HTTP) without nested flows.
+ * Curried version of `map`. Returns a function that transforms the Ok value using `fn`,
+ * passing through any Err unchanged.
  *
  * @example
- * // Using with a Result input and async step
- * const r1 = await andThen(ok(2 as const), async (n) => ok(n * 3)); // Ok(6)
+ * const double = mapWith((n: number) => n * 2);
  *
- * @example
- * // Using with a Promise<Result> input (e.g., previous async step)
- * const r2 = await andThen(fromPromise(Promise.resolve(2)), async (n) => ok(n * 3)); // Ok(6)
+ * const result: Result<number, string> = ok(5);
+ * const doubled: Result<number, string> = double(result); // ok(10)
  *
- * @example
- * // Skips step on Err
- * const r3 = await andThen(err<number, string>("boom"), async (n) => ok(n * 3)); // Err("boom")
+ * const errResult: Result<number, string> = err("fail");
+ * const stillErr: Result<number, string> = double(errResult); // err("fail")
  *
- * @param input - A Result or Promise<Result> to chain from
- * @param fn - A function invoked when input is Ok; may be sync or async but returns a Result
- * @returns A Promise that resolves to a Result of the chained operation
+ * // Point-free in a pipe
+ * const result2 = pipe(ok(3), mapWith((n: number) => n + 1)); // ok(4)
+ *
+ * @param fn - The function to apply to the Ok value
+ * @returns A function that takes a Result and returns a new Result with the Ok value transformed
  */
-export function andThen<T, E, U>(
-  input: Result<T, E>,
-  fn: (value: T) => Result<U, E> | Promise<Result<U, E>>,
-): Promise<Result<U, E>>;
-export function andThen<T, E, U>(
-  input: Promise<Result<T, E>>,
-  fn: (value: T) => Result<U, E> | Promise<Result<U, E>>,
-): Promise<Result<U, E>>;
-export async function andThen<T, E, U>(
-  input: Result<T, E> | Promise<Result<T, E>>,
-  fn: (value: T) => Result<U, E> | Promise<Result<U, E>>,
-): Promise<Result<U, E>> {
-  const settled = await input;
-  if (settled.ok) {
-    return await fn(settled.value);
-  }
-  return err(settled.error);
+export function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) => Result<U, E> {
+  return (result) => map(result, fn);
+}
+
+/**
+ * Curried version of `flatMap`. Returns a function that chains on an Ok value using `fn`,
+ * passing through any Err unchanged. Supports both sync and async step functions.
+ *
+ * @example
+ * const toStr = flatMapWith((n: number) => ok(n.toString()));
+ *
+ * const result: Result<number, string> = ok(5);
+ * const chained: Result<string, string> = toStr(result); // ok("5")
+ *
+ * const errResult: Result<number, string> = err("fail");
+ * const stillErr: Result<string, string> = toStr(errResult); // err("fail")
+ *
+ * // Async step function in a pipe
+ * const fetchUser = flatMapWith(async (id: number) => {
+ *   const user = await getUser(id);
+ *   return user ? ok(user) : err("not found" as const);
+ * });
+ *
+ * @param fn - The function to apply to the Ok value, returning a Result or Promise<Result>
+ * @returns A function that takes a Result and returns a (possibly async) Result
+ */
+export function flatMapWith<T, U, E>(
+  fn: (value: T) => Promise<Result<U, E>>,
+): (result: Result<T, E>) => Promise<Result<U, E>>;
+export function flatMapWith<T, U, E>(fn: (value: T) => Result<U, E>): (result: Result<T, E>) => Result<U, E>;
+export function flatMapWith<T, U, E>(
+  fn: (value: T) => MaybeAsync<Result<U, E>>,
+): (result: Result<T, E>) => MaybeAsync<Result<U, E>> {
+  return (result: Result<T, E>) => {
+    if (!result.ok) return result;
+    return fn(result.value);
+  };
+}
+
+/**
+ * Curried version of `mapErr`. Returns a function that transforms the Err value using `fn`,
+ * passing through any Ok unchanged.
+ *
+ * @example
+ * const wrapError = mapErrWith((msg: string) => new Error(msg));
+ *
+ * const result: Result<number, string> = err("fail");
+ * const wrapped: Result<number, Error> = wrapError(result); // err(Error("fail"))
+ *
+ * const okResult: Result<number, string> = ok(42);
+ * const stillOk: Result<number, Error> = wrapError(okResult); // ok(42)
+ *
+ * // Point-free in a pipe
+ * const result2 = pipe(err("oops"), mapErrWith((s: string) => s.toUpperCase())); // err("OOPS")
+ *
+ * @param fn - The function to apply to the Err value
+ * @returns A function that takes a Result and returns a new Result with the Err value transformed
+ */
+export function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>) => Result<T, F> {
+  return (result) => mapErr(result, fn);
+}
+
+/**
+ * Curried version of `filter`. Returns a function that keeps an Ok value matching the predicate,
+ * or returns the provided error if the predicate fails.
+ *
+ * @example
+ * const isPositive = filterWith((n: number) => n > 0, "must be positive");
+ *
+ * const result: Result<number, string> = ok(5);
+ * const filtered: Result<number, string> = isPositive(result); // ok(5)
+ *
+ * const zero: Result<number, string> = ok(-1);
+ * const failed: Result<number, string> = isPositive(zero); // err("must be positive")
+ *
+ * // Point-free in a pipe
+ * const result2 = pipe(ok(10), filterWith((n: number) => n < 100, "too large")); // ok(10)
+ *
+ * @param predicate - A function that determines if the Ok value should be kept
+ * @param error - The error to return if the predicate fails
+ * @returns A function that takes a Result and returns the original Result or an Err
+ */
+export function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (result: Result<T, E>) => Result<T, E> {
+  return (result) => filter(result, predicate, error);
+}
+
+/**
+ * Curried version of `tap`. Returns a function that performs a side effect on the Ok value
+ * without changing the Result. Err values pass through untouched. Supports both sync and async
+ * side effects.
+ *
+ * @example
+ * const log = tapWith((n: number) => console.log("value:", n));
+ *
+ * const result: Result<number, string> = ok(5);
+ * const same: Result<number, string> = log(result); // logs "value: 5", returns ok(5)
+ *
+ * const errResult: Result<number, string> = err("fail");
+ * const stillErr: Result<number, string> = log(errResult); // no log, returns err("fail")
+ *
+ * // Async side effect in a pipe
+ * const audit = tapWith(async (user: User) => {
+ *   await saveAuditLog(user.id);
+ * });
+ *
+ * @param fn - The side-effect function to execute on the Ok value
+ * @returns A function that takes a Result, performs the side effect if Ok, and returns the original Result
+ */
+export function tapWith<T, E>(fn: (value: T) => Promise<void>): (result: Result<T, E>) => Promise<Result<T, E>>;
+export function tapWith<T, E>(fn: (value: T) => void): (result: Result<T, E>) => Result<T, E>;
+export function tapWith<T, E>(fn: (value: T) => MaybeAsync<void>): (result: Result<T, E>) => MaybeAsync<Result<T, E>> {
+  return (result: Result<T, E>) => {
+    if (!result.ok) return result;
+    const out = fn(result.value);
+    if (out instanceof Promise) return out.then(() => result);
+    return result;
+  };
+}
+
+/**
+ * Curried version of `tapErr`. Returns a function that performs a side effect on the Err value
+ * without changing the Result. Ok values pass through untouched.
+ *
+ * @example
+ * const logErr = tapErrWith((msg: string) => console.error("error:", msg));
+ *
+ * const errResult: Result<number, string> = err("fail");
+ * const same: Result<number, string> = logErr(errResult); // logs "error: fail", returns err("fail")
+ *
+ * const okResult: Result<number, string> = ok(42);
+ * const stillOk: Result<number, string> = logErr(okResult); // no log, returns ok(42)
+ *
+ * // Point-free in a pipe
+ * const result = pipe(err("oops"), tapErrWith((e: string) => reportError(e)));
+ *
+ * @param fn - The side-effect function to execute on the Err value
+ * @returns A function that takes a Result, performs the side effect if Err, and returns the original Result
+ */
+export function tapErrWith<E>(fn: (error: E) => void): <T>(result: Result<T, E>) => Result<T, E> {
+  return (result) => tapErr(result, fn);
+}
+
+/**
+ * Curried version of `orElse`. Recovers from an Err by applying `fn` to the error value;
+ * passes through Ok unchanged.
+ *
+ * @example
+ * const recover = orElseWith((msg: string) => ok(msg.length));
+ *
+ * const errResult: Result<number, string> = err("fail");
+ * const recovered: Result<number, string> = recover(errResult); // ok(4)
+ *
+ * const okResult: Result<number, string> = ok(42);
+ * const kept: Result<number, string> = recover(okResult); // ok(42)
+ *
+ * // Point-free in a pipe — recover using the error
+ * const result = pipe(
+ *   err("not found"),
+ *   orElseWith((e: string) => ok(`recovered from: ${e}`) as Result<string, string>)
+ * ); // ok("recovered from: not found")
+ *
+ * @param fn - A function that receives the Err value and returns a fallback Result
+ * @returns A function that takes a Result and returns either the original Ok or the result of calling fn
+ */
+export function orElseWith<T, E>(fn: (error: E) => Result<T, E>): (result: Result<T, E>) => Result<T, E> {
+  return (result) => orElse(result, fn);
 }

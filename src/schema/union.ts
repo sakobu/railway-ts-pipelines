@@ -1,41 +1,20 @@
-import { err, isErr, isOk, ok, type Result } from '../result';
+import { err, isOk, type Result } from '../result';
 
-import type { ValidationError, Validator } from './core';
+import type { MaybeAsyncValidator, ValidatorMapOutput, ValidationError, Validator } from './core';
 
 /**
- * Creates a validator that checks if a value matches any of the provided validators
- * Returns the result of the first successful validator, or all errors if all validators fail
- *
- * @template I - Common input type for all validators
- * @template O1, O2, ..., On - Output types for each validator
- * @param {Array<Validator<I, any>>} validators - Array of validators to try in order
- * @param {Object} [options] - Configuration options
- * @param {boolean} [options.collectAllErrors=true] - Whether to collect errors from all validators
- * @param {string} [options.errorPrefix] - Optional prefix for each error message
- * @returns {Validator<I, O1 | O2 | ... | On>} A validator that succeeds if any of the provided validators succeed
+ * Create a validator that checks if a value matches any of the provided validators.
+ * Returns the result of the first successful validator, or all errors if none match.
  *
  * @example
- * // Define multiple possible schemas for a message
- * const textMessageSchema = object({
- *   type: required(stringEnum(["text"])),
- *   content: required(string())
- * });
+ * const validate = union([string(), number()]);
+ * validate('hello'); // ok("hello")
+ * validate(42);      // ok(42)
+ * validate(true);    // err([...all errors...])
  *
- * const imageMessageSchema = object({
- *   type: required(stringEnum(["image"])),
- *   url: required(string()),
- *   caption: optional(string())
- * });
- *
- * // Create a union validator for messages
- * const messageValidator = union([textMessageSchema, imageMessageSchema]);
- *
- * // Infer the message type from the schema
- * type Message = InferSchemaType<typeof messageValidator>;
- * // Equivalent to: type Message = { type: "text", content: string } | { type: "image", url: string, caption?: string }
- *
- * // Usage
- * const result = validate(messageData, messageValidator);
+ * @param validators - Array of validators to try in order
+ * @param options - Configuration options
+ * @returns A validator that succeeds if any of the provided validators succeed
  */
 export function union<I>(
   validators: [],
@@ -52,6 +31,13 @@ export function union<I, O1>(
     errorPrefix?: string;
   },
 ): Validator<I, O1>;
+export function union<I, O1>(
+  validators: [MaybeAsyncValidator<I, O1>],
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O1>;
 
 export function union<I, O1, O2>(
   validators: [Validator<I, O1>, Validator<I, O2>],
@@ -60,6 +46,13 @@ export function union<I, O1, O2>(
     errorPrefix?: string;
   },
 ): Validator<I, O1 | O2>;
+export function union<I, O1, O2>(
+  validators: [MaybeAsyncValidator<I, O1>, MaybeAsyncValidator<I, O2>],
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O1 | O2>;
 
 export function union<I, O1, O2, O3>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>],
@@ -68,6 +61,13 @@ export function union<I, O1, O2, O3>(
     errorPrefix?: string;
   },
 ): Validator<I, O1 | O2 | O3>;
+export function union<I, O1, O2, O3>(
+  validators: [MaybeAsyncValidator<I, O1>, MaybeAsyncValidator<I, O2>, MaybeAsyncValidator<I, O3>],
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O1 | O2 | O3>;
 
 export function union<I, O1, O2, O3, O4>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>, Validator<I, O4>],
@@ -76,6 +76,18 @@ export function union<I, O1, O2, O3, O4>(
     errorPrefix?: string;
   },
 ): Validator<I, O1 | O2 | O3 | O4>;
+export function union<I, O1, O2, O3, O4>(
+  validators: [
+    MaybeAsyncValidator<I, O1>,
+    MaybeAsyncValidator<I, O2>,
+    MaybeAsyncValidator<I, O3>,
+    MaybeAsyncValidator<I, O4>,
+  ],
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O1 | O2 | O3 | O4>;
 
 export function union<I, O1, O2, O3, O4, O5>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>, Validator<I, O4>, Validator<I, O5>],
@@ -84,6 +96,19 @@ export function union<I, O1, O2, O3, O4, O5>(
     errorPrefix?: string;
   },
 ): Validator<I, O1 | O2 | O3 | O4 | O5>;
+export function union<I, O1, O2, O3, O4, O5>(
+  validators: [
+    MaybeAsyncValidator<I, O1>,
+    MaybeAsyncValidator<I, O2>,
+    MaybeAsyncValidator<I, O3>,
+    MaybeAsyncValidator<I, O4>,
+    MaybeAsyncValidator<I, O5>,
+  ],
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O1 | O2 | O3 | O4 | O5>;
 
 export function union<I, O>(
   validators: Array<Validator<I, O>>,
@@ -91,8 +116,31 @@ export function union<I, O>(
     collectAllErrors?: boolean;
     errorPrefix?: string;
   },
-): Validator<I, O> {
+): Validator<I, O>;
+export function union<I, O>(
+  validators: Array<MaybeAsyncValidator<I, O>>,
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O>;
+
+export function union<I, O>(
+  validators: Array<MaybeAsyncValidator<I, O>>,
+  options?: {
+    collectAllErrors?: boolean;
+    errorPrefix?: string;
+  },
+): MaybeAsyncValidator<I, O> {
   const { collectAllErrors = true, errorPrefix } = options || {};
+
+  const buildError = (allErrors: ValidationError[][]) =>
+    err(
+      allErrors.flat().map((error) => ({
+        path: error.path,
+        message: errorPrefix ? `${errorPrefix}: ${error.message}` : error.message,
+      })),
+    );
 
   return (value, parentPath = []) => {
     if (validators.length === 0) {
@@ -102,8 +150,29 @@ export function union<I, O>(
     const allErrors: ValidationError[][] = [];
 
     // Try each validator in order
-    for (const validator of validators) {
-      const result = validator(value, parentPath);
+    for (let i = 0; i < validators.length; i++) {
+      // eslint-disable-next-line security/detect-object-injection -- numeric index over own array
+      const result = validators[i]!(value, parentPath);
+
+      if (result instanceof Promise) {
+        // Switch to async path: await this result, then continue sequentially
+        return (async () => {
+          const asyncResult = await result;
+          if (isOk(asyncResult)) return asyncResult;
+          allErrors.push(asyncResult.error);
+          if (!collectAllErrors) return buildError(allErrors);
+
+          // Continue with remaining validators sequentially
+          for (let j = i + 1; j < validators.length; j++) {
+            // eslint-disable-next-line security/detect-object-injection -- numeric index over own array
+            const r = await validators[j]!(value, parentPath);
+            if (isOk(r)) return r;
+            allErrors.push(r.error);
+            if (!collectAllErrors) break;
+          }
+          return buildError(allErrors);
+        })();
+      }
 
       if (isOk(result)) {
         // Return the first successful result
@@ -120,49 +189,42 @@ export function union<I, O>(
     }
 
     // If all validators failed, combine all errors
-    const combinedErrors = allErrors.flat().map((error) => ({
-      path: error.path,
-      message: errorPrefix ? `${errorPrefix}: ${error.message}` : error.message,
-    }));
-
-    return err(combinedErrors);
+    return buildError(allErrors);
   };
 }
 
 /**
- * Creates a discriminated union validator that selects the validator based on
- * a discriminant field's value
- *
- * @template T - The expected output type of the validator
- * @param {string} discriminantField - The name of the field to use as discriminant
- * @param {Record<string, Validator<unknown, unknown>>} validatorMap - Map of discriminant values to validators
- * @param {string} [fallbackMessage] - Message to use when the discriminant value is not found
- * @returns {Validator<unknown, T>} A validator that selects the appropriate schema based on the discriminant
+ * Create a discriminated union validator that selects the validator based on
+ * a discriminant field's value.
  *
  * @example
- * // Define schemas for different message types
- * const textMessageSchema = object({
- *   type: required(stringEnum(["text"])),
- *   content: required(string())
+ * const validate = discriminatedUnion('type', {
+ *   text: object({ type: required(literal('text')), content: required(string()) }),
+ *   image: object({ type: required(literal('image')), url: required(string()) }),
  * });
+ * validate({ type: 'text', content: 'hello' }); // ok(...)
+ * validate({ type: 'unknown' });                 // err(...)
  *
- * const imageMessageSchema = object({
- *   type: required(stringEnum(["image"])),
- *   url: required(string()),
- *   caption: optional(string())
- * });
- *
- * // Create a discriminated union validator using the 'type' field
- * const messageValidator = discriminatedUnion<Message>('type', {
- *   text: textMessageSchema,
- *   image: imageMessageSchema
- * });
+ * @param discriminantField - The name of the field to use as discriminant
+ * @param validatorMap - Map of discriminant values to validators
+ * @param fallbackMessage - Message when the discriminant value is not found
+ * @returns A validator that selects the appropriate schema based on the discriminant
  */
-export function discriminatedUnion<T>(
+export function discriminatedUnion<const M extends Record<string, Validator<unknown, unknown>>>(
   discriminantField: string,
-  validatorMap: Record<string, Validator<unknown, unknown>>,
+  validatorMap: M,
+  fallbackMessage?: string,
+): Validator<unknown, ValidatorMapOutput<M>>;
+export function discriminatedUnion<const M extends Record<string, MaybeAsyncValidator<unknown, unknown>>>(
+  discriminantField: string,
+  validatorMap: M,
+  fallbackMessage?: string,
+): MaybeAsyncValidator<unknown, ValidatorMapOutput<M>>;
+export function discriminatedUnion<const M extends Record<string, MaybeAsyncValidator<unknown, unknown>>>(
+  discriminantField: string,
+  validatorMap: M,
   fallbackMessage: string = `Invalid discriminant value for '${discriminantField}'`,
-): Validator<unknown, T> {
+): MaybeAsyncValidator<unknown, ValidatorMapOutput<M>> {
   return (value, parentPath = []) => {
     // Ensure value is an object
     if (value === null || typeof value !== 'object') {
@@ -170,7 +232,7 @@ export function discriminatedUnion<T>(
     }
 
     // Extract the discriminant value
-    // eslint-disable-next-line security/detect-object-injection
+    // eslint-disable-next-line security/detect-object-injection -- discriminantField is a schema-defined string literal
     const discriminantValue = (value as Record<string, unknown>)[discriminantField];
 
     // Ensure discriminant value exists and is a string
@@ -184,7 +246,7 @@ export function discriminatedUnion<T>(
     }
 
     // Get the validator for this discriminant value
-    // eslint-disable-next-line security/detect-object-injection
+    // eslint-disable-next-line security/detect-object-injection -- lookup against schema-defined validatorMap keys
     const validator = validatorMap[discriminantValue];
 
     // If no validator is found for this discriminant value, return an error
@@ -197,65 +259,12 @@ export function discriminatedUnion<T>(
       ]);
     }
 
-    // Apply the selected validator and cast the result to the expected type
-    return validator(value, parentPath) as Result<T, ValidationError[]>;
-  };
-}
-
-/**
- * Combines a common fields validator with a discriminated union validator
- * This allows you to validate fields that are common across all variants
- * of a discriminated union
- *
- * @template C - Type of common fields
- * @template S - Type of the specific variant fields
- * @param {Validator<unknown, C>} commonSchema - Validator for common fields
- * @param {Validator<unknown, S>} specificSchema - Discriminated union validator
- * @returns {Validator<unknown, C & S>} A validator that validates both common and specific fields
- *
- * @example
- * // Define common fields for all maneuvers
- * const commonFieldsSchema = object({
- *   startEpoch: required(parseDate()),
- *   endEpoch: required(parseDate())
- * });
- *
- * // Create a discriminated union for specific maneuver types
- * const maneuverTypeSchema = discriminatedUnion('type', {
- *   'manual_burn': manualBurnSchema,
- *   'inclination_change': inclinationChangeSchema
- * });
- *
- * // Combine common fields with type-specific fields
- * const completeManeuverSchema = withCommonFields(
- *   commonFieldsSchema,
- *   maneuverTypeSchema
- * );
- */
-
-export function withCommonFields<C, S>(
-  commonSchema: Validator<unknown, C>,
-  specificSchema: Validator<unknown, S>,
-): Validator<unknown, C & S> {
-  return (value, path = []) => {
-    // First validate common fields
-    const commonResult = commonSchema(value, path);
-    if (isErr(commonResult)) {
-      return commonResult;
+    // SAFETY: ValidatorMapOutput<M> is derived from the validators in M, so the
+    // cast is sound — the runtime result is always one of the branch output types.
+    const result = validator(value, parentPath);
+    if (result instanceof Promise) {
+      return result.then((r) => r as Result<ValidatorMapOutput<M>, ValidationError[]>);
     }
-
-    // Then validate specific fields
-    const specificResult = specificSchema(value, path);
-    if (isErr(specificResult)) {
-      return specificResult;
-    }
-
-    // Combine the validated results
-    const combinedValue = {
-      ...commonResult.value,
-      ...specificResult.value,
-    } as C & S;
-
-    return ok(combinedValue);
+    return result as Result<ValidatorMapOutput<M>, ValidationError[]>;
   };
 }

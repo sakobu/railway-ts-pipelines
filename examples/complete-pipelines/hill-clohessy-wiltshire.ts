@@ -162,10 +162,10 @@ const result = match<PropagatedState, ValidationError[], ValidationResult<Propag
   }),
 });
 
-console.log('**********************************************');
-console.log('ISS Rendezvous Scenario (after 5 minutes):');
+// === flow + validate: ISS Rendezvous ===
+console.log('=== flow + validate: ISS Rendezvous ===');
+
 console.log(result);
-console.log('**********************************************');
 
 // Example: Calculate drift over time - using point-free pipeline composition
 const calculateTrajectory = (state: RelativeState) => {
@@ -212,7 +212,7 @@ const drift = match<DriftPoint[], ValidationError[], ValidationResult<DriftPoint
   }),
 });
 
-console.log('\n**********************************************');
-console.log('Free drift from 10m radial offset:');
+// === flow + validate: Free Drift Analysis ===
+console.log('\n=== flow + validate: Free Drift Analysis ===');
+
 console.log(drift);
-console.log('**********************************************');

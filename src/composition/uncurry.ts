@@ -1,4 +1,4 @@
-type UnknownFunction = (...params: unknown[]) => unknown;
+import type { UnknownFunction } from './types';
 
 /**
  * Uncurries a curried unary function chain back into a multi-argument function.

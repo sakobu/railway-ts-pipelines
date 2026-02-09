@@ -1,4 +1,4 @@
-type UnknownFunction = (...params: unknown[]) => unknown;
+import type { UnknownFunction } from './types';
 
 /**
  * Creates a new function that is the composition of the provided functions, applied from left to right.

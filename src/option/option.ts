@@ -1,5 +1,9 @@
 import { type Result, ok, err } from '@/result';
 
+import type { MaybeAsync } from '@/composition';
+
+// ─── Types & Constructors ───────────────────────────────────
+
 /**
  * Symbol used to identify Option objects.
  *
@@ -51,14 +55,14 @@ export function some<T>(value: T): Option<T> {
  *
  * @returns An Option containing nothing
  */
-export function none(): Option<never>;
-export function none<T>(): Option<T>;
-export function none<T>(): Option<T> {
+export function none<T = never>(): Option<T> {
   return {
     some: false,
     [OPTION_BRAND]: 'none',
   };
 }
+
+// ─── Type Guards ────────────────────────────────────────────
 
 /**
  * Type guard that checks if an Option is a Some variant containing a value.
@@ -100,6 +104,8 @@ export function isNone<T>(option: Option<T>): option is {
 } {
   return !option.some;
 }
+
+// ─── Transformations ────────────────────────────────────────
 
 /**
  * Maps the value inside an Option using a transformation function.
@@ -167,6 +173,72 @@ export function filter<T>(option: Option<T>, predicate: (value: T) => boolean): 
   return option.some && predicate(option.value) ? option : none();
 }
 
+// ─── Side Effects ───────────────────────────────────────────
+
+/**
+ * Executes a callback with the value if the Option is Some, without changing the Option.
+ * Useful for side effects like logging while maintaining a processing chain.
+ *
+ * @example
+ * const result = pipe(
+ *   some(123),
+ *   opt => map(opt, x => x * 2),
+ *   opt => tap(opt, x => console.log(`Value: ${x}`)), // Logs but doesn't change the Option
+ *   opt => filter(opt, x => x > 200)
+ * );
+ *
+ * @param option - The Option to tap into
+ * @param fn - The function to execute with the value if Some
+ * @returns The original Option unchanged
+ */
+export function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T> {
+  if (isSome(option)) {
+    const callback = fn;
+    callback(option.value);
+  }
+  return option;
+}
+
+// ─── Pattern Matching ───────────────────────────────────────
+
+/**
+ * Pattern matches on an Option to handle both Some and None cases.
+ *
+ * @example
+ * const option = some(42);
+ * const result = match(option, {
+ *   some: (value) => `Got value: ${value}`,
+ *   none: () => "Got nothing"
+ * }); // "Got value: 42"
+ *
+ * const empty = none<number>();
+ * const result2 = match(empty, {
+ *   some: (value) => `Got value: ${value}`,
+ *   none: () => "Got nothing"
+ * }); // "Got nothing"
+ *
+ * @param option - The Option to match against
+ * @param patterns - An object containing handler functions for Some and None cases
+ * @returns The result of calling the appropriate handler function
+ */
+export function match<T, R>(
+  option: Option<T>,
+  patterns: {
+    some: (value: T) => R;
+    none: () => R;
+  },
+): R {
+  if (isSome(option)) {
+    const someFn = patterns.some;
+    return someFn(option.value);
+  } else {
+    const noneFn = patterns.none;
+    return noneFn();
+  }
+}
+
+// ─── Unwrap ─────────────────────────────────────────────────
+
 /**
  * Unwraps the value inside an Option, throwing an error if the Option is none.
  *
@@ -221,19 +293,7 @@ export function unwrapOrElse<T>(option: Option<T>, defaultFn: () => T): T {
   return option.some ? option.value : defaultFn();
 }
 
-/**
- * Creates an Option from a nullable value.
- *
- * @example
- * const option = fromNullable(123); // some(123)
- * const option = fromNullable(null); // none()
- *
- * @param value - The value to wrap in the Some variant
- * @returns An Option containing the value (Some) if the value is not null or undefined, or None if the value is null or undefined
- */
-export const fromNullable = <T>(value: T | null | undefined): Option<T> => {
-  return value === null || value === undefined ? none() : some(value);
-};
+// ─── Combining ──────────────────────────────────────────────
 
 /**
  * Combines an array of Options into a single Option containing an array of values.
@@ -309,65 +369,21 @@ export function combine<T>(options: readonly Option<T>[]): Option<T[]> {
   return some(values);
 }
 
-/**
- * Pattern matches on an Option to handle both Some and None cases.
- *
- * @example
- * const option = some(42);
- * const result = match(option, {
- *   some: (value) => `Got value: ${value}`,
- *   none: () => "Got nothing"
- * }); // "Got value: 42"
- *
- * const empty = none<number>();
- * const result2 = match(empty, {
- *   some: (value) => `Got value: ${value}`,
- *   none: () => "Got nothing"
- * }); // "Got nothing"
- *
- * @param option - The Option to match against
- * @param patterns - An object containing handler functions for Some and None cases
- * @returns The result of calling the appropriate handler function
- */
-export function match<T, R>(
-  option: Option<T>,
-  patterns: {
-    some: (value: T) => R;
-    none: () => R;
-  },
-): R {
-  if (isSome(option)) {
-    const someFn = patterns.some;
-    return someFn(option.value);
-  } else {
-    const noneFn = patterns.none;
-    return noneFn();
-  }
-}
+// ─── Conversions ────────────────────────────────────────────
 
 /**
- * Executes a callback with the value if the Option is Some, without changing the Option.
- * Useful for side effects like logging while maintaining a processing chain.
+ * Creates an Option from a nullable value.
  *
  * @example
- * const result = pipe(
- *   some(123),
- *   opt => map(opt, x => x * 2),
- *   opt => tap(opt, x => console.log(`Value: ${x}`)), // Logs but doesn't change the Option
- *   opt => filter(opt, x => x > 200)
- * );
+ * const option = fromNullable(123); // some(123)
+ * const option = fromNullable(null); // none()
  *
- * @param option - The Option to tap into
- * @param fn - The function to execute with the value if Some
- * @returns The original Option unchanged
+ * @param value - The value to wrap in the Some variant
+ * @returns An Option containing the value (Some) if the value is not null or undefined, or None if the value is null or undefined
  */
-export function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T> {
-  if (isSome(option)) {
-    const callback = fn;
-    callback(option.value);
-  }
-  return option;
-}
+export const fromNullable = <T>(value: T | null | undefined): Option<T> => {
+  return value === null || value === undefined ? none() : some(value);
+};
 
 /**
  * Converts an Option to a Result.
@@ -388,4 +404,121 @@ export function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T> {
  */
 export function mapToResult<T, E>(option: Option<T>, error: E): Result<T, E> {
   return option.some ? ok(option.value) : err(error);
+}
+
+// ─── Curried / Point-Free ───────────────────────────────────
+
+/**
+ * Curried version of `map`. Returns a function that transforms the Some value using `fn`,
+ * passing through None unchanged.
+ *
+ * @example
+ * const double = mapWith((n: number) => n * 2);
+ *
+ * const option: Option<number> = some(5);
+ * const doubled: Option<number> = double(option); // some(10)
+ *
+ * const empty: Option<number> = none();
+ * const stillNone: Option<number> = double(empty); // none()
+ *
+ * // Point-free in a pipe
+ * const result = pipe(some(3), mapWith((n: number) => n + 1)); // some(4)
+ *
+ * @param fn - The function to apply to the Some value
+ * @returns A function that takes an Option and returns a new Option with the Some value transformed
+ */
+export function mapWith<T, U>(fn: (value: T) => U): (option: Option<T>) => Option<U> {
+  return (option) => map(option, fn);
+}
+
+/**
+ * Curried version of `flatMap`. Returns a function that chains on a Some value using `fn`,
+ * passing through None unchanged. Supports both sync and async step functions.
+ *
+ * @example
+ * const safeParse = flatMapWith((s: string) => {
+ *   const n = parseInt(s, 10);
+ *   return isNaN(n) ? none() : some(n);
+ * });
+ *
+ * const option: Option<string> = some("42");
+ * const parsed: Option<number> = safeParse(option); // some(42)
+ *
+ * const empty: Option<string> = none();
+ * const stillNone: Option<number> = safeParse(empty); // none()
+ *
+ * // Async step function in a pipe
+ * const fetchProfile = flatMapWith(async (id: number) => {
+ *   const profile = await getProfile(id);
+ *   return profile ? some(profile) : none();
+ * });
+ *
+ * @param fn - The function to apply to the Some value, returning an Option or Promise<Option>
+ * @returns A function that takes an Option and returns a (possibly async) Option
+ */
+export function flatMapWith<T, U>(fn: (value: T) => Promise<Option<U>>): (option: Option<T>) => Promise<Option<U>>;
+export function flatMapWith<T, U>(fn: (value: T) => Option<U>): (option: Option<T>) => Option<U>;
+export function flatMapWith<T, U>(
+  fn: (value: T) => MaybeAsync<Option<U>>,
+): (option: Option<T>) => MaybeAsync<Option<U>> {
+  return (option: Option<T>) => {
+    if (!option.some) return option;
+    return fn(option.value);
+  };
+}
+
+/**
+ * Curried version of `filter`. Returns a function that keeps a Some value matching the predicate,
+ * or returns None if the predicate fails.
+ *
+ * @example
+ * const isPositive = filterWith((n: number) => n > 0);
+ *
+ * const option: Option<number> = some(5);
+ * const filtered: Option<number> = isPositive(option); // some(5)
+ *
+ * const negative: Option<number> = some(-1);
+ * const gone: Option<number> = isPositive(negative); // none()
+ *
+ * // Point-free in a pipe
+ * const result = pipe(some(10), filterWith((n: number) => n < 100)); // some(10)
+ *
+ * @param predicate - A function that determines if the Some value should be kept
+ * @returns A function that takes an Option and returns the original Option or None
+ */
+export function filterWith<T>(predicate: (value: T) => boolean): (option: Option<T>) => Option<T> {
+  return (option) => filter(option, predicate);
+}
+
+/**
+ * Curried version of `tap`. Returns a function that performs a side effect on the Some value
+ * without changing the Option. None values pass through untouched. Supports both sync and async
+ * side effects.
+ *
+ * @example
+ * const log = tapWith((n: number) => console.log("value:", n));
+ *
+ * const option: Option<number> = some(5);
+ * const same: Option<number> = log(option); // logs "value: 5", returns some(5)
+ *
+ * const empty: Option<number> = none();
+ * const stillNone: Option<number> = log(empty); // no log, returns none()
+ *
+ * // Async side effect in a pipe
+ * const audit = tapWith(async (user: User) => {
+ *   await saveAuditLog(user.id);
+ * });
+ *
+ * @param fn - The side-effect function to execute on the Some value
+ * @returns A function that takes an Option, performs the side effect if Some, and returns the original Option
+ */
+export function tapWith<T>(fn: (value: T) => Promise<void>): (option: Option<T>) => Promise<Option<T>>;
+export function tapWith<T>(fn: (value: T) => void): (option: Option<T>) => Option<T>;
+export function tapWith<T>(fn: (value: T) => MaybeAsync<void>): (option: Option<T>) => MaybeAsync<Option<T>> {
+  return (option: Option<T>) => {
+    if (!option.some) return option;
+    const out = fn(option.value);
+    if (out instanceof Promise) return out.then(() => option);
+    return option;
+  };
 }

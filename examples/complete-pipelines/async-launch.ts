@@ -1,5 +1,5 @@
-import { pipe } from '@/composition';
-import { err, fromPromise, match, ok, andThen, type Result } from '@/result';
+import { pipeAsync } from '@/composition';
+import { err, flatMapWith, fromPromise, match, ok, type Result } from '@/result';
 import {
   formatErrors,
   object,
@@ -93,10 +93,10 @@ const assessLaunchConditions = async (context: LaunchContext): Promise<Result<La
 const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
   const validationResult = validate(input, launchSchema);
 
-  const result = await pipe(
+  const result = await pipeAsync(
     validationResult,
-    (r) => andThen(r, fetchWeatherWithParams),
-    (r) => andThen(r, assessLaunchConditions),
+    flatMapWith(fetchWeatherWithParams),
+    flatMapWith(assessLaunchConditions),
   );
 
   return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
@@ -105,7 +105,9 @@ const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDe
   });
 };
 
-// Usage
+// === evaluateLaunch: Nominal Conditions ===
+console.log('=== evaluateLaunch: Nominal Conditions ===');
+
 const result = await evaluateLaunch({
   vehicleType: 'falcon9',
   payload: 1000,
@@ -116,7 +118,9 @@ const result = await evaluateLaunch({
 
 console.log(result);
 
-// Coordinate for a windy region so the launch will fail
+// === evaluateLaunch: Windy Conditions ===
+console.log('\n=== evaluateLaunch: Windy Conditions ===');
+
 const gabrielleTest = await evaluateLaunch({
   vehicleType: 'atlas5', // or "falcon9" - both will fail
   payload: 5000,

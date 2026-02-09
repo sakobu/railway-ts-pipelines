@@ -1,4 +1,4 @@
-type UnknownFunction = (...params: unknown[]) => unknown;
+import type { UnknownFunction } from './types';
 
 /**
  * Curries a multi-parameter function into a sequence of unary functions.
@@ -26,11 +26,11 @@ type UnknownFunction = (...params: unknown[]) => unknown;
  *
  * @example
  * // With Result validators
- * import { ok, err, flatMapResult, type Result } from "@/index";
+ * import { ok, err, flatMap, type Result } from "@/result";
  * const between = (min: number, max: number, n: number): Result<number, string> =>
  *   n >= min && n <= max ? ok(n) : err(`Value must be between ${min} and ${max}`);
  * const validateAge = curry(between)(0)(120);
- * pipe(ok(25), (r) => flatMapResult(r, validateAge)); // ok(25)
+ * pipe(ok(25), (r) => flatMap(r, validateAge)); // ok(25)
  *
  * @param fn - The multi-argument function to transform into a unary curried chain
  * @returns A curried function that takes one argument at each application step

@@ -100,16 +100,9 @@ const fuelAlertSchema = object({
   estimatedEndurance: required(chain(parseNumber(), between(0, 24))),
 });
 
-// === Type Definitions ===
-type EngineAlert = InferSchemaType<typeof engineAlertSchema>;
-type HydraulicAlert = InferSchemaType<typeof hydraulicAlertSchema>;
-type ElectricalAlert = InferSchemaType<typeof electricalAlertSchema>;
-type FuelAlert = InferSchemaType<typeof fuelAlertSchema>;
-
-type AlertTypes = EngineAlert | HydraulicAlert | ElectricalAlert | FuelAlert;
-
 // === Create Discriminated Union ===
-const completeAlertSchema = discriminatedUnion<AlertTypes>('type', {
+// Output type is inferred from the validator map — no manual type parameter needed.
+const completeAlertSchema = discriminatedUnion('type', {
   [ALERT_TYPES.ENGINE]: engineAlertSchema,
   [ALERT_TYPES.HYDRAULIC]: hydraulicAlertSchema,
   [ALERT_TYPES.ELECTRICAL]: electricalAlertSchema,
@@ -259,43 +252,42 @@ const processValidation = (data: unknown) => {
   });
 };
 
-// === Process and Log Results ===
+// === discriminatedUnion: Valid Alerts ===
+console.log('=== discriminatedUnion: Valid Alerts ===');
 
-console.log('=== Aircraft System Alert Validation Examples ===\n');
-
-console.log('--- Valid Engine Alert ---');
 const validEngineResult = processValidation(validEngineAlert);
 console.log(validEngineResult);
 
-console.log('--- Valid Hydraulic Alert ---');
 const validHydraulicResult = processValidation(validHydraulicAlert);
 console.log(validHydraulicResult);
 
-console.log('--- Invalid: Bad Aircraft ID Pattern ---');
+// === discriminatedUnion: Validation Errors ===
+console.log('\n=== discriminatedUnion: Validation Errors ===');
+
 const invalidPatternResult = processValidation(invalidAircraftIdPattern);
 console.log(invalidPatternResult);
 
-console.log('--- Invalid: Engine Number Out of Range ---');
 const invalidEngineResult = processValidation(invalidEngineNumber);
 console.log(invalidEngineResult);
 
-console.log('--- Invalid: Fuel Quantity Exceeds Limit ---');
 const invalidFuelResult = processValidation(invalidFuelQuantity);
 console.log(invalidFuelResult);
 
-console.log('--- Invalid: Unknown Alert Type ---');
+// === discriminatedUnion: Structural Errors ===
+console.log('\n=== discriminatedUnion: Structural Errors ===');
+
 const invalidTypeResult = processValidation(invalidAlertType);
 console.log(invalidTypeResult);
 
-console.log('--- Invalid: Missing Common Field (timestamp) ---');
 const missingFieldResult = processValidation(missingCommonField);
 console.log(missingFieldResult);
 
-console.log('--- Security Test: Extra Fields Injection ---');
+// === discriminatedUnion: Extra Fields Rejection ===
+console.log('\n=== discriminatedUnion: Extra Fields Rejection ===');
+
 const injectionResult = processValidation(extraFieldsInjection);
-// After your processValidation call
-console.log('--- Prototype Pollution Check ---');
+console.log(injectionResult);
+
 console.log("Does a fresh object have 'injected'? ->", ({} as any).injected); // undefined
 console.log("Does Object.prototype have 'injected'? ->", (Object.prototype as any).injected); // undefined
-console.log(injectionResult);
 console.log('Note: Extra fields should be rejected in strict mode');

@@ -3,27 +3,15 @@ import { err, ok } from '../result';
 import type { Validator } from './core';
 
 /**
- * Creates a validator that ensures a value is a boolean.
- *
- * @param {string} [message='Must be a boolean'] - Custom error message
- * @returns {Validator<unknown, boolean>} A validator that checks if a value is a boolean
+ * Create a validator that ensures a value is a boolean.
  *
  * @example
- * // Validate that a value is a boolean
- * const boolValidator = boolean();
- * const result = boolValidator(true);
- * // If valid: { ok: true, value: true, [RESULT_BRAND]: 'ok' }
+ * const validate = boolean();
+ * validate(true);           // ok(true)
+ * validate('not a boolean'); // err([{ path: [], message: 'Must be a boolean' }])
  *
- * @example
- * // With invalid input
- * const result = boolean()('not a boolean');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a boolean' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const featureSchema = object({
- *   isEnabled: required(boolean())
- * });
+ * @param message - Custom error message
+ * @returns A validator that checks if a value is a boolean
  */
 export function boolean(message: string = 'Must be a boolean'): Validator<unknown, boolean> {
   return (value, path = []) => {
@@ -35,29 +23,16 @@ export function boolean(message: string = 'Must be a boolean'): Validator<unknow
 }
 
 /**
- * Creates a validator that ensures a boolean value matches the expected value.
- *
- * @param {boolean} expected - The expected boolean value
- * @param {string} [message] - Custom error message (defaults to 'Value must be {expected}')
- * @returns {Validator<boolean>} A validator that confirms the value matches the expected boolean
+ * Create a validator that ensures a boolean matches the expected value.
  *
  * @example
- * // Validate that a feature is enabled (true)
- * const enabledValidator = matches(true);
- * const result = enabledValidator(true);
- * // If valid: { ok: true, value: true, [RESULT_BRAND]: 'ok' }
+ * const validate = matches(true);
+ * validate(true);  // ok(true)
+ * validate(false); // err([{ path: [], message: 'Value must be true' }])
  *
- * @example
- * // With custom message
- * const disabledValidator = matches(false, 'The option must be turned off');
- * const result = disabledValidator(true);
- * // If invalid: { ok: false, error: [{ path: [], message: 'The option must be turned off' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const featureSchema = object({
- *   isEnabled: required(matches(true, 'This feature must be enabled'))
- * });
+ * @param expected - The expected boolean value
+ * @param message - Custom error message
+ * @returns A validator that confirms the value matches the expected boolean
  */
 export function matches(expected: boolean, message: string = `Value must be ${expected}`): Validator<boolean> {
   return (value, path = []) => {

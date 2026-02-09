@@ -2,22 +2,24 @@ import { describe, test, expect } from 'bun:test';
 
 import { curry, uncurry, pipe } from '@/composition';
 import {
-  ok,
-  err,
-  isOk,
-  isErr,
   some,
   none,
   isSome,
   isNone,
-  mapOption,
-  mapResult,
-  mapErrorResult,
-  flatMapOption,
-  flatMapResult,
-  unwrapOption,
-  unwrapResult,
-} from '@/index';
+  map as mapOption,
+  flatMap as flatMapOption,
+  unwrap as unwrapOption,
+} from '@/option';
+import {
+  ok,
+  err,
+  isOk,
+  isErr,
+  map as mapResult,
+  mapErr as mapErrorResult,
+  flatMap as flatMapResult,
+  unwrap as unwrapResult,
+} from '@/result';
 
 describe('uncurry', () => {
   test('should uncurry a 2-arity curried function', () => {

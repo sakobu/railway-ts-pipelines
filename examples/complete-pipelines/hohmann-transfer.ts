@@ -133,7 +133,8 @@ const transferResult = match<TransferDetails, ValidationError[], ValidationResul
   }),
 });
 
-console.log('--- Valid Transfer ---\n');
+// === flow + validate: LEO to GEO Transfer ===
+console.log('=== flow + validate: LEO to GEO Transfer ===');
 
 console.log(JSON.stringify(transferResult, null, 2));
 
@@ -154,6 +155,7 @@ const invalidTransferResult = match<TransferDetails, ValidationError[], Validati
   },
 );
 
-console.log('--- Invalid Transfer ---\n');
+// === flow + validate: Invalid Altitude ===
+console.log('\n=== flow + validate: Invalid Altitude ===');
 
 console.log(JSON.stringify(invalidTransferResult, null, 2));

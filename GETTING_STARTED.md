@@ -19,21 +19,13 @@ import { pipe, flow } from '@railway-ts/pipelines/composition';
 import { validate, object, required } from '@railway-ts/pipelines/schema';
 ```
 
-Or import from root (functions get type suffixes):
-
-```typescript
-import { mapOption, mapResult, pipe, ok } from '@railway-ts/pipelines';
-```
-
-When importing from root, shared functions like `map` become `mapOption` and `mapResult`. Result-only functions like `mapErr` stay as-is.
-
 ## Your First Pipeline
 
 Build a pipeline that validates input, transforms it, and handles errors.
 
 ```typescript
-import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, match, andThen } from '@railway-ts/pipelines/result';
+import { pipeAsync } from '@railway-ts/pipelines/composition';
+import { ok, match, flatMapWith } from '@railway-ts/pipelines/result';
 import {
   validate,
   object,
@@ -54,7 +46,10 @@ const schema = object({
 
 // 2. Build pipeline
 async function compute(input: unknown): Promise<ValidationResult<number>> {
-  const result = await pipe(validate(input, schema), (r) => andThen(r, ({ x, y }) => ok(x / y)));
+  const result = await pipeAsync(
+    validate(input, schema),
+    flatMapWith(({ x, y }) => ok(x / y)),
+  );
 
   return match<number, ValidationError[], ValidationResult<number>>(result, {
     ok: (value) => ({ valid: true, data: value }),
@@ -77,8 +72,8 @@ await compute({ x: '-5', y: '0' }).then(console.log);
 Validate launch parameters, fetch weather data, make GO/NO-GO decision.
 
 ```typescript
-import { pipe } from '@railway-ts/pipelines/composition';
-import { err, fromPromise, match, ok, andThen, type Result } from '@railway-ts/pipelines/result';
+import { pipeAsync } from '@railway-ts/pipelines/composition';
+import { err, fromPromise, match, ok, flatMapWith, type Result } from '@railway-ts/pipelines/result';
 import {
   formatErrors,
   object,
@@ -172,10 +167,10 @@ const assessLaunchConditions = async (context: LaunchContext): Promise<Result<La
 const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
   const validationResult = validate(input, launchSchema);
 
-  const result = await pipe(
+  const result = await pipeAsync(
     validationResult,
-    (r) => andThen(r, fetchWeatherWithParams),
-    (r) => andThen(r, assessLaunchConditions),
+    flatMapWith(fetchWeatherWithParams),
+    flatMapWith(assessLaunchConditions),
   );
 
   return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
@@ -200,7 +195,7 @@ console.log(result);
 **The pattern:**
 
 1. Validate at boundary with schema
-2. Chain async operations with `andThen`
+2. Chain async operations with `pipeAsync` + `flatMapWith`
 3. Pure business logic functions
 4. Branch once at the end with `match`
 

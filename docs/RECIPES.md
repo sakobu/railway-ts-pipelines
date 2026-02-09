@@ -4,7 +4,7 @@
 
 **This is why you're reading this document.**
 
-Eliminate wrapper lambdas in pipelines with curried helpers. These aren't in the core API to keep it minimal, but the pattern is essential for clean code.
+Eliminate wrapper lambdas in pipelines with curried helpers. These are exported from both the `result` and `option` modules.
 
 ### The Problem
 
@@ -32,74 +32,21 @@ const result = pipe(
 
 ### Result Helpers
 
-Copy these into your codebase:
-
 ```typescript
-import { map, flatMap, mapErr, filter, tap, tapErr } from '@railway-ts/pipelines/result';
-import type { Result } from '@railway-ts/pipelines/result';
-
-const mapWith =
-  <T, U>(fn: (value: T) => U) =>
-  <E>(result: Result<T, E>): Result<U, E> =>
-    map(result, fn);
-
-const flatMapWith =
-  <T, U, E>(fn: (value: T) => Result<U, E>) =>
-  (result: Result<T, E>): Result<U, E> =>
-    flatMap(result, fn);
-
-const mapErrWith =
-  <E, F>(fn: (error: E) => F) =>
-  <T>(result: Result<T, E>): Result<T, F> =>
-    mapErr(result, fn);
-
-const filterWith =
-  <T, E>(predicate: (value: T) => boolean, error: E) =>
-  (result: Result<T, E>): Result<T, E> =>
-    filter(result, predicate, error);
-
-const tapWith =
-  <T>(fn: (value: T) => void) =>
-  <E>(result: Result<T, E>): Result<T, E> =>
-    tap(result, fn);
-
-const tapErrWith =
-  <E>(fn: (error: E) => void) =>
-  <T>(result: Result<T, E>): Result<T, E> =>
-    tapErr(result, fn);
+import { mapWith, flatMapWith, mapErrWith, filterWith, tapWith, tapErrWith } from '@railway-ts/pipelines/result';
 ```
 
 ### Option Helpers
 
 ```typescript
-import { map, flatMap, filter, tap } from '@railway-ts/pipelines/option';
-import type { Option } from '@railway-ts/pipelines/option';
-
-const mapWith =
-  <T, U>(fn: (value: T) => U) =>
-  (option: Option<T>): Option<U> =>
-    map(option, fn);
-
-const flatMapWith =
-  <T, U>(fn: (value: T) => Option<U>) =>
-  (option: Option<T>): Option<U> =>
-    flatMap(option, fn);
-
-const filterWith =
-  <T>(predicate: (value: T) => boolean) =>
-  (option: Option<T>): Option<T> =>
-    filter(option, predicate);
-
-const tapWith =
-  <T>(fn: (value: T) => void) =>
-  (option: Option<T>): Option<T> =>
-    tap(option, fn);
+import { mapWith, flatMapWith, filterWith, tapWith } from '@railway-ts/pipelines/option';
 ```
 
 ### Usage
 
 ```typescript
 import { flow } from '@railway-ts/pipelines/composition';
+import { mapWith, flatMapWith, tapWith } from '@railway-ts/pipelines/result';
 import { validate } from '@railway-ts/pipelines/schema';
 
 const processData = flow(
@@ -110,8 +57,6 @@ const processData = flow(
   mapWith(enrichData),
 );
 ```
-
-**Why not in the library?** Keeping the API minimal. These are trivial to add to your codebase when you need them. Documentation makes them discoverable without bloating the core.
 
 ---
 
@@ -145,15 +90,15 @@ match(validateFields(input), {
 ### Sequential Steps
 
 ```typescript
-import { andThen } from '@railway-ts/pipelines/result';
-import { pipe } from '@railway-ts/pipelines/composition';
+import { flatMapWith } from '@railway-ts/pipelines/result';
+import { pipeAsync } from '@railway-ts/pipelines/composition';
 
 const processOrder = async (input: unknown) => {
-  const result = await pipe(
+  const result = await pipeAsync(
     validate(input, orderSchema),
-    (r) => andThen(r, validateInventory),
-    (r) => andThen(r, chargePayment),
-    (r) => andThen(r, createShipment),
+    flatMapWith(validateInventory),
+    flatMapWith(chargePayment),
+    flatMapWith(createShipment),
   );
 
   return match(result, {
@@ -167,12 +112,12 @@ const processOrder = async (input: unknown) => {
 
 ```typescript
 const process = async (input: unknown) =>
-  await pipe(
+  await pipeAsync(
     validate(input, schema), // sync
-    (r) => map(r, enrichData), // sync
-    (r) => andThen(r, fetchDB), // async
-    (r) => map(r, transform), // sync
-    (r) => andThen(r, saveDB), // async
+    mapWith(enrichData), // sync
+    flatMapWith(fetchDB), // async
+    mapWith(transform), // sync
+    flatMapWith(saveDB), // async
   );
 ```
 

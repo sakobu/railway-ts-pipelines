@@ -1,25 +1,14 @@
-import {
-  pipe,
-  some,
-  none,
-  ok,
-  err,
-  mapToResult,
-  mapToOption,
-  matchResult,
-  matchOption,
-  fromNullableOption,
-} from '@/index';
+import { pipe } from '@/composition';
+import { fromNullable, mapToResult, match as matchOption, none, some } from '@/option';
+import { err, mapToOption, match as matchResult, ok } from '@/result';
 
-// Example 1: Option -> Result (Add error context)
-console.log('=== Option -> Result: Adding Error Context ===');
+// === mapToResult: Option to Result ===
+console.log('=== mapToResult: Option to Result ===');
 
-// Problem: Option loses error information
 type Users = Partial<Record<string, string>>;
 const users: Users = { '1': 'Alice', '2': 'Bob' };
-const findUser = (id: string) => fromNullableOption(users[id]);
+const findUser = (id: string) => fromNullable(users[id]);
 
-// Solution: Convert to Result to provide specific error info
 const getUserWithError = (id: string) => {
   const userOption = findUser(id);
   return mapToResult(userOption, `User with ID ${id} not found`);
@@ -38,16 +27,14 @@ matchResult(missing, {
   err: (error) => console.log(`Error: ${error}`),
 }); // "Error: User with ID 3 not found"
 
-// Example 2: Result -> Option (Drop error details)
-console.log('\n=== Result -> Option: Simplify to Success/Failure ===');
+// === mapToOption: Result to Option ===
+console.log('\n=== mapToOption: Result to Option ===');
 
-// Problem: Sometimes you only care if something worked, not why it failed
 function parseNumber(input: string) {
   const num = Number(input);
   return isNaN(num) ? err('Not a valid number') : ok(num);
 }
 
-// Solution: Convert Result to Option when error details don't matter
 const tryParseNumber = (input: string) => mapToOption(parseNumber(input));
 
 const validNum = tryParseNumber('42');
@@ -63,18 +50,16 @@ matchOption(invalidNum, {
   none: () => console.log('Failed to parse'),
 }); // "Failed to parse"
 
-// Example 3: Mixed Workflow
+// === Mixed Workflow: Option + Result ===
 console.log('\n=== Mixed Workflow: Option + Result ===');
 
 const config = { apiKey: 'secret123' };
 const getApiKey = () => (config.apiKey ? some(config.apiKey) : none<string>());
 
 function makeApiCall(apiKey: string) {
-  // Simulate API call that might fail
   return apiKey === 'secret123' ? ok('API response data') : err('Invalid API key');
 }
 
-// Workflow: Option (config lookup) -> Result (API call with error details)
 const apiResult = pipe(
   getApiKey(),
   (keyOption) => mapToResult(keyOption, 'API key not configured'),
@@ -90,7 +75,6 @@ matchResult(apiResult, {
   err: (error) => console.log(`API Error: ${error}`),
 }); // "API Success: API response data"
 
-// Test with missing config
 const missingConfig = { apiKey: undefined as string | undefined };
 const getApiKey2 = () => (missingConfig.apiKey ? some(missingConfig.apiKey) : none<string>());
 

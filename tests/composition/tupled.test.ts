@@ -3,25 +3,27 @@ import { describe, test, expect } from 'bun:test';
 import { tupled, pipe, curry, uncurry } from '@/composition';
 import {
   type Option,
+  some,
+  none,
+  isSome,
+  isNone,
+  map as mapOption,
+  flatMap as flatMapOption,
+  unwrap as unwrapOption,
+  combine as combineOption,
+} from '@/option';
+import {
   type Result,
   ok,
   err,
   isOk,
   isErr,
-  some,
-  none,
-  isSome,
-  isNone,
-  mapOption,
-  mapResult,
-  flatMapOption,
-  flatMapResult,
-  unwrapOption,
-  unwrapResult,
-  combineOption,
-  combineResult,
+  map as mapResult,
+  flatMap as flatMapResult,
+  unwrap as unwrapResult,
+  combine as combineResult,
   fromTryWithError,
-} from '@/index';
+} from '@/result';
 
 describe('tupled', () => {
   describe('basic functionality', () => {

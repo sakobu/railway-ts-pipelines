@@ -142,7 +142,13 @@ export default [
       'prefer-const': 'warn',
       'import/order': 'warn',
       'no-console': 'off',
-      '@typescript-eslint/no-unused-vars': 'warn',
+    },
+  },
+
+  // Global: ignore underscore-prefixed unused args (standard convention)
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
 ];

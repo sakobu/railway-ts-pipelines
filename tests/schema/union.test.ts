@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
-import { union, discriminatedUnion, withCommonFields, object, required, type Validator } from '@/index';
 import { isErr, isOk, ok, err } from '@/result';
+import { union, discriminatedUnion, object, required, type Validator, type MaybeAsyncValidator } from '@/schema';
 
 const stringValidator: Validator<unknown, string> = (value) => {
   if (typeof value !== 'string') {
@@ -124,6 +124,113 @@ describe('union validator', () => {
   });
 });
 
+describe('union async validator', () => {
+  const asyncStringValidator: MaybeAsyncValidator<unknown, string> = async (value) => {
+    if (typeof value !== 'string') {
+      return err([{ path: [], message: 'Expected a string (async)' }]);
+    }
+    return ok(value);
+  };
+
+  const asyncNumberValidator: MaybeAsyncValidator<unknown, number> = async (value) => {
+    if (typeof value !== 'number') {
+      return err([{ path: [], message: 'Expected a number (async)' }]);
+    }
+    return ok(value);
+  };
+
+  test('async validator succeeds (first match)', async () => {
+    const validator = union([asyncStringValidator, asyncNumberValidator]);
+    const result = await validator('hello');
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toBe('hello');
+    }
+  });
+
+  test('all async validators fail — collects errors', async () => {
+    const validator = union([asyncStringValidator, asyncNumberValidator]);
+    const result = await validator({});
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.length).toBe(2);
+      expect(result.error[0]!.message).toBe('Expected a string (async)');
+      expect(result.error[1]!.message).toBe('Expected a number (async)');
+    }
+  });
+
+  test('mixed sync/async — sync tried first, falls through to async', async () => {
+    const validator = union([stringValidator, asyncNumberValidator]);
+    const result = await validator(42);
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toBe(42);
+    }
+  });
+
+  test('mixed sync/async — sync succeeds, returns sync Result (not Promise)', () => {
+    const validator = union([stringValidator, asyncNumberValidator]);
+    const result = validator('hello');
+
+    // Sync validator matched first, so result is NOT a Promise
+    expect(result instanceof Promise).toBe(false);
+    // MaybeAsyncValidator return type includes Promise, but we verified it's sync above
+    expect(isOk(result as Awaited<typeof result>)).toBe(true);
+  });
+
+  test('all sync validators — returns Result, NOT Promise', () => {
+    const validator = union([stringValidator, numberValidator]);
+    const result = validator('hello');
+
+    expect(result instanceof Promise).toBe(false);
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toBe('hello');
+    }
+  });
+
+  test('collectAllErrors: false with async — stops after first failure', async () => {
+    const validator = union([asyncStringValidator, asyncNumberValidator], { collectAllErrors: false });
+    const result = await validator({});
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.length).toBe(1);
+      expect(result.error[0]!.message).toBe('Expected a string (async)');
+    }
+  });
+
+  test('errorPrefix with async errors', async () => {
+    const validator = union([asyncStringValidator], { errorPrefix: 'Async union' });
+    const result = await validator(42);
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]!.message).toBe('Async union: Expected a string (async)');
+    }
+  });
+
+  test('async validators maintain path information', async () => {
+    const pathAwareAsync: MaybeAsyncValidator<unknown, string> = async (value, path = []) => {
+      if (typeof value !== 'string') {
+        return err([{ path, message: 'Expected a string' }]);
+      }
+      return ok(value);
+    };
+
+    const validator = union([pathAwareAsync]);
+    const result = await validator(42, ['field']);
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]!.path).toEqual(['field']);
+    }
+  });
+});
+
 describe('discriminatedUnion validator', () => {
   const textSchema = object({
     type: required(stringValidator),
@@ -136,7 +243,7 @@ describe('discriminatedUnion validator', () => {
   });
 
   test('should validate with the correct schema based on discriminant', () => {
-    const validator = discriminatedUnion<any>('type', {
+    const validator = discriminatedUnion('type', {
       text: textSchema,
       image: imageSchema,
     });
@@ -155,7 +262,7 @@ describe('discriminatedUnion validator', () => {
   });
 
   test('should fail with unknown discriminant value', () => {
-    const validator = discriminatedUnion<any>('type', {
+    const validator = discriminatedUnion('type', {
       text: textSchema,
       image: imageSchema,
     });
@@ -169,7 +276,7 @@ describe('discriminatedUnion validator', () => {
   });
 
   test('should fail with missing discriminant field', () => {
-    const validator = discriminatedUnion<any>('type', {
+    const validator = discriminatedUnion('type', {
       text: textSchema,
       image: imageSchema,
     });
@@ -183,7 +290,7 @@ describe('discriminatedUnion validator', () => {
   });
 
   test('should fail with non-object value', () => {
-    const validator = discriminatedUnion<any>('type', {
+    const validator = discriminatedUnion('type', {
       text: textSchema,
       image: imageSchema,
     });
@@ -198,7 +305,7 @@ describe('discriminatedUnion validator', () => {
 
   test('should use custom fallback message', () => {
     const customMessage = 'Unknown message type';
-    const validator = discriminatedUnion<any>(
+    const validator = discriminatedUnion(
       'type',
       {
         text: textSchema,
@@ -216,7 +323,7 @@ describe('discriminatedUnion validator', () => {
   });
 
   test('should maintain path information', () => {
-    const validator = discriminatedUnion<any>('type', {
+    const validator = discriminatedUnion('type', {
       text: textSchema,
       image: imageSchema,
     });
@@ -227,119 +334,6 @@ describe('discriminatedUnion validator', () => {
     if (isErr(result)) {
       const error = result.error[0] || { path: [], message: '' };
       expect(error.path).toEqual(['messages', '0', 'type']);
-    }
-  });
-});
-
-describe('withCommonFields validator', () => {
-  test('should validate both common and specific fields', () => {
-    // Create very simple validators for testing that match the actual behavior
-    const simpleCommonSchema: Validator<unknown, { id: string }> = (value) => {
-      if (typeof value !== 'object' || value === null) {
-        return err([{ path: [], message: 'Expected an object' }]);
-      }
-      const obj = value as Record<string, unknown>;
-      if (typeof obj['id'] !== 'string') {
-        return err([{ path: [], message: 'Expected id to be a string' }]);
-      }
-      return ok({ id: obj['id'] as string });
-    };
-
-    const simpleSpecificSchema: Validator<unknown, { name: string }> = (value) => {
-      if (typeof value !== 'object' || value === null) {
-        return err([{ path: [], message: 'Expected an object' }]);
-      }
-      const obj = value as Record<string, unknown>;
-      if (typeof obj['name'] !== 'string') {
-        return err([{ path: [], message: 'Expected name to be a string' }]);
-      }
-      return ok({ name: obj['name'] as string });
-    };
-
-    const validator = withCommonFields(simpleCommonSchema, simpleSpecificSchema);
-    const input = { id: '123', name: 'John' };
-
-    const result = validator(input);
-
-    expect(isOk(result)).toBe(true);
-    if (isOk(result)) {
-      expect(result.value).toEqual({ id: '123', name: 'John' });
-    }
-  });
-
-  test('should maintain path information', () => {
-    // Create very simple validators that handle paths correctly
-    const pathAwareCommonSchema: Validator<unknown, { id: string }> = (value, path = []) => {
-      if (typeof value !== 'object' || value === null) {
-        return err([{ path, message: 'Expected an object' }]);
-      }
-      const obj = value as Record<string, unknown>;
-      if (typeof obj['id'] !== 'string') {
-        return err([{ path, message: 'Expected id to be a string' }]);
-      }
-      return ok({ id: obj['id'] as string });
-    };
-
-    const pathAwareSpecificSchema: Validator<unknown, { name: string }> = (value) => {
-      if (typeof value !== 'object' || value === null) {
-        return err([{ path: [], message: 'Expected an object' }]);
-      }
-      const obj = value as Record<string, unknown>;
-      if (typeof obj['name'] !== 'string') {
-        return err([{ path: [], message: 'Expected name to be a string' }]);
-      }
-      return ok({ name: obj['name'] as string });
-    };
-
-    const validator = withCommonFields(pathAwareCommonSchema, pathAwareSpecificSchema);
-
-    const input = { id: 123, name: 'John' }; // id should be a string
-    const result = validator(input, ['user', 'data']);
-
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      const error = result.error[0] || { path: [], message: '' };
-      expect(error.path).toEqual(['user', 'data']);
-    }
-  });
-
-  test('should fail when common schema validation fails', () => {
-    const failingCommonSchema: Validator<unknown, { id: string }> = (_, path = []) => {
-      return err([{ path, message: 'Common schema validation failed' }]);
-    };
-
-    const specificSchema: Validator<unknown, { name: string }> = () => {
-      return ok({ name: 'test' });
-    };
-
-    const validator = withCommonFields(failingCommonSchema, specificSchema);
-    const input = { id: '123', name: 'John' };
-
-    const result = validator(input);
-
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      expect(result.error[0]?.message).toBe('Common schema validation failed');
-    }
-  });
-
-  test('should fail when specific schema validation fails', () => {
-    const commonSchema: Validator<unknown, { id: string }> = () => {
-      return ok({ id: '123' });
-    };
-
-    const failingSpecificSchema: Validator<unknown, { name: string }> = (_, path = []) => {
-      return err([{ path, message: 'Specific schema validation failed' }]);
-    };
-
-    const validator = withCommonFields(commonSchema, failingSpecificSchema);
-    const input = { id: '123', name: 'John' };
-
-    const result = validator(input);
-
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      expect(result.error[0]?.message).toBe('Specific schema validation failed');
     }
   });
 });

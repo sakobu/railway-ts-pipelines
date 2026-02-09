@@ -1,12 +1,8 @@
-/* eslint-disable security/detect-object-injection */
+/* eslint-disable security/detect-object-injection -- keys from Object.entries() on schema-defined fields, always safe */
 import { err, isOk, ok, type Result } from '../result';
 
 /**
  * Represents a validation error with path information and a message.
- *
- * @typedef {Object} ValidationError
- * @property {string[]} path - The path to the field that failed validation
- * @property {string} message - The error message describing the validation failure
  */
 export type ValidationError = {
   path: string[];
@@ -14,16 +10,44 @@ export type ValidationError = {
 };
 
 /**
- * A validator function that checks if a value meets certain criteria.
+ * A synchronous validator function that checks if a value meets certain criteria.
  *
- * @template I - The input type to validate
- * @template O - The output type (defaults to the input type if not specified)
- * @callback Validator
- * @param {I} value - The value to validate
- * @param {string[]} [path=[]] - The path to the current value (used for nested objects)
- * @returns {Result<O, ValidationError[]>} A Result containing either the validated value or validation errors
+ * @param value - The value to validate
+ * @param path - The path to the current value (used for nested objects)
+ * @returns A Result containing either the validated value or validation errors
  */
 export type Validator<I, O = I> = (value: I, path?: string[]) => Result<O, ValidationError[]>;
+
+/**
+ * An asynchronous validator function that always returns a Promise.
+ *
+ * @param value - The value to validate
+ * @param path - The path to the current value (used for nested objects)
+ * @returns A Promise resolving to a Result
+ */
+export type AsyncValidator<I, O = I> = (value: I, path?: string[]) => Promise<Result<O, ValidationError[]>>;
+
+/**
+ * A validator function that may return either a synchronous Result or a Promise.
+ * Use this type when a validator accepts both sync and async validators
+ * (e.g., in `object()` schemas that mix sync and async field validators).
+ *
+ * @param value - The value to validate
+ * @param path - The path to the current value (used for nested objects)
+ * @returns A Result or Promise of Result
+ */
+export type MaybeAsyncValidator<I, O = I> = (
+  value: I,
+  path?: string[],
+) => Result<O, ValidationError[]> | Promise<Result<O, ValidationError[]>>;
+
+/**
+ * Extracts the union of output types from a validator map.
+ * Used by {@link discriminatedUnion} to infer the output type from the map's validators.
+ */
+export type ValidatorMapOutput<M extends Record<string, MaybeAsyncValidator<unknown, unknown>>> = {
+  [K in keyof M]: M[K] extends MaybeAsyncValidator<unknown, infer O> ? O : never;
+}[keyof M];
 
 type AtomicType = string | number | boolean | Date | null | undefined | bigint;
 
@@ -48,78 +72,67 @@ type ProcessType<T> = T extends AtomicType
           : T;
 
 // Infer the output type of a validator or schema
-type InferType<V> = V extends Validator<unknown, infer O> ? O : never;
+type InferType<V> =
+  V extends Validator<unknown, infer O>
+    ? O
+    : V extends AsyncValidator<unknown, infer O>
+      ? O
+      : V extends MaybeAsyncValidator<unknown, infer O>
+        ? O
+        : never;
 
-// Combines inference, processing, and flattening
 /**
- * Infers the output type of a validator or schema after processing.
- * This is useful for getting the TypeScript type that a validator will produce.
- *
- * @template V - The validator or schema to infer the type from
+ * Infer the output type of a validator or schema after processing.
+ * Useful for getting the TypeScript type that a validator will produce.
  */
 export type InferSchemaType<V> = ProcessType<InferType<V>>;
 
 /**
- * Represents a validation schema where each key maps to a validator for that field.
- *
- * @template T - The shape of the object being validated
+ * A validation schema where each key maps to a synchronous validator for that field.
  */
-export type Schema<T = Record<string, unknown>> = {
+export type SyncSchema<T = Record<string, unknown>> = {
   [K in keyof T]: Validator<unknown, T[K]>;
 };
 
 /**
+ * A validation schema that accepts both sync and async validators.
+ * Use {@link SyncSchema} when all validators are synchronous to preserve sync return types.
+ */
+export type Schema<T = Record<string, unknown>> = {
+  [K in keyof T]: MaybeAsyncValidator<unknown, T[K]>;
+};
+
+/**
  * The result of a validation operation.
- *
- * @template T - The type of the validated data
- * @property {boolean} valid - Whether the validation was successful
- * @property {T} [data] - The validated data (only present if validation was successful)
- * @property {Record<string, string>} [errors] - Object mapping field paths to error messages (only present if validation failed)
  */
 export type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: Record<string, string> };
 
 /**
- * Creates a validator for objects based on a schema.
- *
- * @template T - The shape of the object being validated
- * @param {Schema<T>} schema - An object where each key contains a validator for that property
- * @param {{ strict?: boolean }} [options={ strict: true }] - Options object
- * @param {boolean} [options.strict=true] - If true, rejects objects with properties not in the schema
- * @returns {Validator<unknown, T>} A validator that validates objects against the schema
+ * Create a validator for objects based on a schema.
  *
  * @example
- * // Define a user schema
  * const userSchema = object({
  *   name: required(string()),
  *   age: required(chain(parseNumber(), min(18))),
- *   email: required(email())
  * });
+ * userSchema({ name: 'John', age: 25 }); // ok({ name: "John", age: 25 })
  *
- * @example
- * // Validate an object against the schema
- * const userData = { name: 'John', age: 25, email: 'john@example.com' };
- * const result = userSchema(userData);
- * // If valid: { ok: true, value: { name: 'John', age: 25, email: 'john@example.com' }, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With validation errors
- * const invalidUser = { name: 'John', age: 15, email: 'not-an-email' };
- * const result = userSchema(invalidUser);
- * // If invalid: { ok: false, error: [
- * //   { path: ['age'], message: 'Must be at least 18' },
- * //   { path: ['email'], message: 'Invalid email format' }
- * // ], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Non-strict mode (allows extra fields)
- * const lenientSchema = object({ name: required(string()) }, { strict: false });
- * const result = lenientSchema({ name: 'John', extraField: 'value' });
- * // If valid: { ok: true, value: { name: 'John', extraField: 'value' }, [RESULT_BRAND]: 'ok' }
+ * @param schema - An object where each key contains a validator for that property
+ * @param options - Options object. `strict` (default true) rejects extra properties
+ * @returns A validator that validates objects against the schema
  */
+export function object<T extends Record<string, unknown>>(
+  schema: SyncSchema<T>,
+  options?: { strict?: boolean },
+): Validator<unknown, T>;
+export function object<T extends Record<string, unknown>>(
+  schema: Schema<T>,
+  options?: { strict?: boolean },
+): MaybeAsyncValidator<unknown, T>;
 export function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
   { strict = true }: { strict?: boolean } = {},
-): Validator<unknown, T> {
+): MaybeAsyncValidator<unknown, T> {
   return (obj, parentPath = []) => {
     if (obj === null || typeof obj !== 'object') {
       return err([{ path: parentPath, message: 'Expected an object' }]);
@@ -141,6 +154,8 @@ export function object<T extends Record<string, unknown>>(
       }
     }
 
+    const pendingResults: Promise<void>[] = [];
+
     for (const key in schema) {
       if (!Object.prototype.hasOwnProperty.call(schema, key)) continue;
 
@@ -152,53 +167,56 @@ export function object<T extends Record<string, unknown>>(
 
       const result = validator(value, fieldPath);
 
-      if (isOk(result)) {
+      if (result instanceof Promise) {
+        pendingResults.push(
+          result.then((r) => {
+            if (isOk(r)) {
+              validatedObj[key] = r.value;
+            } else {
+              allErrors.push(...r.error);
+            }
+          }),
+        );
+      } else if (isOk(result)) {
         validatedObj[key] = result.value;
       } else {
         allErrors.push(...result.error);
       }
     }
 
-    if (allErrors.length > 0) {
-      return err(allErrors);
+    if (pendingResults.length > 0) {
+      return Promise.all(pendingResults).then(() => {
+        if (allErrors.length > 0) return err(allErrors);
+        return ok(validatedObj as T);
+      });
     }
 
+    if (allErrors.length > 0) return err(allErrors);
     return ok(validatedObj as T);
   };
 }
 
 /**
- * Creates a validator that requires a value to be defined (not null or undefined)
- * before applying the underlying validator.
- *
- * @template I - The input type of the underlying validator
- * @template O - The output type of the underlying validator
- * @param {Validator<I, O>} validator - The validator to apply if the value is defined
- * @param {string} [message='Field is required'] - Error message when value is null or undefined
- * @returns {Validator<I | undefined | null, O>} A validator that checks the value is defined
+ * Create a validator that requires a value to be defined (not null or undefined).
  *
  * @example
- * // Basic required field
- * const nameValidator = required(string());
- * const result = nameValidator(undefined);
- * // If invalid: { ok: false, error: [{ path: [], message: 'Field is required' }], [RESULT_BRAND]: 'error' }
+ * const validate = required(string());
+ * validate('hello');   // ok("hello")
+ * validate(undefined); // err([{ path: [], message: 'Field is required' }])
  *
- * @example
- * // With custom error message
- * const emailValidator = required(email(), 'Email address is required');
- *
- * @example
- * // Used in an object schema
- * const userSchema = object({
- *   name: required(string()),             // Required field
- *   email: required(email()),             // Required email
- *   phone: optional(parsePhoneNumber())   // Optional field
- * });
+ * @param validator - The validator to apply if the value is defined
+ * @param message - Error message when value is null or undefined
+ * @returns A validator that checks the value is defined
  */
+export function required<I, O>(validator: Validator<I, O>, message?: string): Validator<I | undefined | null, O>;
 export function required<I, O>(
-  validator: Validator<I, O>,
+  validator: MaybeAsyncValidator<I, O>,
+  message?: string,
+): MaybeAsyncValidator<I | undefined | null, O>;
+export function required<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
   message: string = 'Field is required',
-): Validator<I | undefined | null, O> {
+): MaybeAsyncValidator<I | undefined | null, O> {
   return (value, path = []) => {
     if (value === undefined || value === null) {
       return err([{ path, message }]);
@@ -208,36 +226,24 @@ export function required<I, O>(
 }
 
 /**
- * Creates a validator that makes a field optional.
- * If the value is null or undefined, validation passes and returns undefined.
- * Otherwise, applies the underlying validator.
- *
- * @template I - The input type of the underlying validator
- * @template O - The output type of the underlying validator
- * @param {Validator<I, O>} validator - The validator to apply if the value is defined
- * @returns {Validator<I | undefined | null, O | undefined>} A validator that allows undefined values
+ * Create a validator that makes a field optional.
+ * Returns undefined for null/undefined values, otherwise applies the validator.
  *
  * @example
- * // Basic optional field
- * const profileValidator = optional(string());
- * const result = profileValidator(undefined);
- * // If valid: { ok: true, value: undefined, [RESULT_BRAND]: 'ok' }
+ * const validate = optional(string());
+ * validate(undefined); // ok(undefined)
+ * validate('hello');   // ok("hello")
  *
- * @example
- * // With defined value
- * const result = optional(number())(42);
- * // If valid: { ok: true, value: 42, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Used in an object schema
- * const userSchema = object({
- *   name: required(string()),             // Required field
- *   email: required(email()),             // Required email
- *   phone: optional(parsePhoneNumber()),   // Optional field
- *   bio: optional(chain(string(), maxLength(500)))  // Optional with extra validation
- * });
+ * @param validator - The validator to apply if the value is defined
+ * @returns A validator that allows undefined values
  */
-export function optional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined> {
+export function optional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
+export function optional<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+): MaybeAsyncValidator<I | undefined | null, O | undefined>;
+export function optional<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+): MaybeAsyncValidator<I | undefined | null, O | undefined> {
   return (value, path = []) => {
     if (value === undefined || value === null) {
       // eslint-disable-next-line unicorn/no-useless-undefined
@@ -248,36 +254,15 @@ export function optional<I, O>(validator: Validator<I, O>): Validator<I | undefi
 }
 
 /**
- * Creates a validator that only accepts null values
- *
- * @param {string} [message="Must be null"] - Custom error message when the value is not null
- * @returns {Validator<unknown, null>} A validator that ensures the value is exactly null
+ * Create a validator that only accepts null values.
  *
  * @example
- * // Field that must be explicitly null
- * const resetField = nullable();
+ * const validate = nullable();
+ * validate(null);        // ok(null)
+ * validate('some value'); // err([{ path: [], message: 'Must be null' }])
  *
- * @example
- * // With valid null value
- * const validator = nullable();
- * const result = validator(null);
- * // If valid: { ok: true, value: null, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input (not null)
- * const result = nullable()("some value");
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be null' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // With custom error message
- * const nullOnlyField = nullable("This field must be null");
- *
- * @example
- * // Used in an object schema for nullable fields
- * const userSchema = object({
- *   deletedAt: nullable(),
- *   resetToken: nullable("Reset token must be null when not in use")
- * });
+ * @param message - Custom error message
+ * @returns A validator that ensures the value is exactly null
  */
 export function nullable(message: string = 'Must be null'): Validator<unknown, null> {
   return (value, path = []) => {
@@ -290,51 +275,25 @@ export function nullable(message: string = 'Must be null'): Validator<unknown, n
 }
 
 /**
- * Creates a validator that treats empty strings, empty arrays, and empty objects as optional
- *
- * @template I - Input type for the validator
- * @template O - Output type for the validator
- * @param {Validator<I, O>} validator - The validator to apply if the value is not empty
- * @returns {Validator<I | undefined | null, O | undefined>} A validator that treats empty strings, empty arrays, and empty objects as optional
+ * Create a validator that treats empty strings, empty arrays, and empty objects as optional.
  *
  * @example
- * // Optional bio field that treats empty string as undefined
- * const userSchema = object({
- *   username: required(string()),
- *   bio: emptyAsOptional(chain(string(), maxLength(500)))
+ * const schema = object({
+ *   bio: emptyAsOptional(chain(string(), maxLength(500))),
  * });
+ * schema({ bio: '' });      // ok({ bio: undefined })
+ * schema({ bio: 'Hello' }); // ok({ bio: "Hello" })
  *
- * const result1 = validate({ username: "john", bio: "" }, userSchema);
- * // If valid: { ok: true, value: { username: "john", bio: undefined }, [RESULT_BRAND]: 'ok' }
- *
- * const result2 = validate({ username: "john", bio: "My bio" }, userSchema);
- * // If valid: { ok: true, value: { username: "john", bio: "My bio" }, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Optional tags array that treats empty array as undefined
- * const postSchema = object({
- *   title: required(string()),
- *   tags: emptyAsOptional(array(string()))
- * });
- *
- * const result = validate({ title: "My Post", tags: [] }, postSchema);
- * // If valid: { ok: true, value: { title: "My Post", tags: undefined }, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Optional nested address object that treats empty object as undefined
- * const profileSchema = object({
- *   name: required(string()),
- *   address: emptyAsOptional(object({
- *     street: required(string()),
- *     city: required(string()),
- *     zipCode: required(string())
- *   }))
- * });
- *
- * const result = validate({ name: "Alice", address: {} }, profileSchema);
- * // If valid: { ok: true, value: { name: "Alice", address: undefined }, [RESULT_BRAND]: 'ok' }
+ * @param validator - The validator to apply if the value is not empty
+ * @returns A validator that treats empty values as undefined
  */
-export function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined> {
+export function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
+export function emptyAsOptional<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+): MaybeAsyncValidator<I | undefined | null, O | undefined>;
+export function emptyAsOptional<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+): MaybeAsyncValidator<I | undefined | null, O | undefined> {
   return (value, path = []) => {
     // Handle empty strings, empty arrays, etc.
     if (
@@ -352,41 +311,16 @@ export function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I |
 }
 
 /**
- * Creates a validator that checks if a value exactly matches the expected literal value
- *
- * @template T - Type of the literal value
- * @param {T} expectedValue - The exact value that should be matched
- * @param {string} [message] - Custom error message when validation fails
- * @returns {Validator<unknown, T>} A validator that checks if the value matches the literal
+ * Create a validator that checks if a value exactly matches the expected literal.
  *
  * @example
- * // Validate a specific string literal
- * const statusValidator = literal('active');
- * const result = statusValidator('active');
- * // If valid: { ok: true, value: 'active', [RESULT_BRAND]: 'ok' }
+ * const validate = literal('active');
+ * validate('active');    // ok("active")
+ * validate('completed'); // err([{ path: [], message: "Value must be 'active'" }])
  *
- * @example
- * // With invalid input
- * const result = literal('pending')('completed');
- * // If invalid: { ok: false, error: [{ path: [], message: "Value must be 'pending'" }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // With custom error message
- * const envValidator = literal('production', 'Environment must be production');
- *
- * @example
- * // With number literal
- * const versionValidator = literal(42);
- * const result = versionValidator(42);
- * // If valid: { ok: true, value: 42, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Used in an object schema for type discrimination
- * const userSchema = object({
- *   type: required(literal('user')),
- *   name: required(string()),
- *   role: required(literal('admin'))
- * });
+ * @param expectedValue - The exact value that should be matched
+ * @param message - Custom error message
+ * @returns A validator that checks if the value matches the literal
  */
 export function literal<T>(
   expectedValue: T,

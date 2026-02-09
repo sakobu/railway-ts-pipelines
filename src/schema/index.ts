@@ -16,3 +16,4 @@ export * from './boolean';
 export * from './union';
 export * from './enum';
 export * from './bigint';
+export * from './standard';

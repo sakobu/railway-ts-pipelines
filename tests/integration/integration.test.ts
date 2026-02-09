@@ -1,19 +1,17 @@
 import { describe, test, expect } from 'bun:test';
 
 import { pipe } from '@/composition';
+import { type Option, fromNullable as fromNullableOption, mapToResult } from '@/option';
 import {
   ok,
   err,
   isOk,
   isErr,
-  mapToResult,
-  fromNullableOption,
-  mapErrorResult,
-  flatMapResult,
+  mapErr as mapErrorResult,
+  flatMap as flatMapResult,
   fromTry,
-  type Option,
   type Result,
-} from '@/index';
+} from '@/result';
 
 describe('Railway-TS Integration', () => {
   test('user authentication flow combining Option and Result', () => {

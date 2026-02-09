@@ -1,12 +1,16 @@
 /* eslint-disable unicorn/no-array-reduce */
 import { isErr, ok, err, type Result, match } from '../result';
 
-import type { ValidationError, ValidationResult, Validator } from './core';
+import type { AsyncValidator, MaybeAsyncValidator, ValidationError, ValidationResult, Validator } from './core';
 
 /**
- * Combines multiple validators into a single validator, applying them in sequence (left to right).
- * Each validator's result is passed to the next validator in the chain.
- * The sequence stops and returns an error if any validator in the chain fails.
+ * The key used in formatted error objects for root-level validation errors (i.e. errors with an empty path).
+ */
+export const ROOT_ERROR_KEY = '_root';
+
+/**
+ * Combine multiple validators into a single validator, applying them in sequence.
+ * Each validator's output feeds into the next. Short-circuits on first error.
  */
 export function chain<A, B>(v1: Validator<A, B>): Validator<A, B>;
 export function chain<A, B, C>(v1: Validator<A, B>, v2: Validator<B, C>): Validator<A, C>;
@@ -76,50 +80,16 @@ export function chain<A, B, C, D, E, F, G, H, I, J, K>(
 ): Validator<A, K>;
 
 /**
- * Implementation of chain that combines multiple validators into a single validator,
- * applying them in sequence (left to right).
- *
- * @template A - The input type for the first validator
- * @template B - The output type of the first validator and input type for the second validator (if any)
- * @template C, D, E, F, G, H, I, J, K - Types for subsequent validators in the chain
- *
- * @param {...Validator[]} validators - A list of validators to compose
- * @returns {Validator<unknown, unknown>} A combined validator that applies all validators in sequence
+ * Combine multiple validators into a single validator, applying them in sequence.
+ * Each validator's output feeds into the next. Short-circuits on first error.
  *
  * @example
- * // Basic composition of string validators
- * const passwordValidator = chain(
- *   string(),
- *   nonEmpty(),
- *   minLength(8)
- * );
+ * const validate = chain(string(), nonEmpty(), minLength(8));
+ * validate('password123'); // ok("password123")
+ * validate('abc');         // err([{ path: [], message: 'Must be at least 8 characters' }])
  *
- * const result = passwordValidator('password123');
- * // If valid: { ok: true, value: 'password123', [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Chain validators with type conversion
- * const ageValidator = chain(
- *   parseString(),  // Converts to string
- *   nonEmpty(),     // Ensures not empty
- *   parseNumber()   // Converts to number
- * );
- *
- * const result = ageValidator('25');
- * // If valid: { ok: true, value: 25, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Validation fails at first error
- * const result = chain(string(), minLength(5))('abc');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be at least 5 characters' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const userSchema = object({
- *   name: required(string()),
- *   email: required(chain(string(), email())),
- *   age: required(chain(parseString(), parseNumber(), min(18)))
- * });
+ * @param validators - A list of validators to compose
+ * @returns A combined validator that applies all validators in sequence
  */
 export function chain(...validators: Validator<unknown, unknown>[]): Validator<unknown, unknown> {
   return (value, path = []) => {
@@ -137,36 +107,114 @@ export function chain(...validators: Validator<unknown, unknown>[]): Validator<u
 }
 
 /**
- * Validates a value against a validator.
- * This is a simple utility function that directly applies a validator to a value.
- *
- * @template T - The expected output type of the validator
- * @param {unknown} value - The value to validate
- * @param {Validator<unknown, T>} validator - The validator to apply to the value
- * @returns {Result<T, ValidationError[]>} A Result containing either the validated value or validation errors
+ * Combine multiple validators (sync or async) into a single async validator.
+ * Each validator's output feeds into the next. Short-circuits on first error.
+ * This is the async counterpart of {@link chain}.
  *
  * @example
- * // Validate a simple value
- * const numberValidator = chain(parseNumber(), min(5));
- * const result = validate(10, numberValidator);
- * // If valid: { ok: true, value: 10, [RESULT_BRAND]: 'ok' }
+ * const validate = chainAsync(
+ *   string(),
+ *   email(),
+ *   refineAsync(async (e) => !(await db.users.exists({ email: e })), 'Taken')
+ * );
+ * const result = await validate('new@example.com'); // ok("new@example.com")
+ *
+ * @param validators - A list of sync or async validators to compose
+ * @returns A combined async validator that applies all validators in sequence
+ */
+export function chainAsync<A, B>(v1: MaybeAsyncValidator<A, B>): AsyncValidator<A, B>;
+export function chainAsync<A, B, C>(v1: MaybeAsyncValidator<A, B>, v2: MaybeAsyncValidator<B, C>): AsyncValidator<A, C>;
+export function chainAsync<A, B, C, D>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+): AsyncValidator<A, D>;
+export function chainAsync<A, B, C, D, E>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+): AsyncValidator<A, E>;
+export function chainAsync<A, B, C, D, E, F>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+): AsyncValidator<A, F>;
+export function chainAsync<A, B, C, D, E, F, G>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+  v6: MaybeAsyncValidator<F, G>,
+): AsyncValidator<A, G>;
+export function chainAsync<A, B, C, D, E, F, G, H>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+  v6: MaybeAsyncValidator<F, G>,
+  v7: MaybeAsyncValidator<G, H>,
+): AsyncValidator<A, H>;
+export function chainAsync<A, B, C, D, E, F, G, H, I>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+  v6: MaybeAsyncValidator<F, G>,
+  v7: MaybeAsyncValidator<G, H>,
+  v8: MaybeAsyncValidator<H, I>,
+): AsyncValidator<A, I>;
+export function chainAsync<A, B, C, D, E, F, G, H, I, J>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+  v6: MaybeAsyncValidator<F, G>,
+  v7: MaybeAsyncValidator<G, H>,
+  v8: MaybeAsyncValidator<H, I>,
+  v9: MaybeAsyncValidator<I, J>,
+): AsyncValidator<A, J>;
+export function chainAsync<A, B, C, D, E, F, G, H, I, J, K>(
+  v1: MaybeAsyncValidator<A, B>,
+  v2: MaybeAsyncValidator<B, C>,
+  v3: MaybeAsyncValidator<C, D>,
+  v4: MaybeAsyncValidator<D, E>,
+  v5: MaybeAsyncValidator<E, F>,
+  v6: MaybeAsyncValidator<F, G>,
+  v7: MaybeAsyncValidator<G, H>,
+  v8: MaybeAsyncValidator<H, I>,
+  v9: MaybeAsyncValidator<I, J>,
+  v10: MaybeAsyncValidator<J, K>,
+): AsyncValidator<A, K>;
+export function chainAsync(...validators: MaybeAsyncValidator<unknown, unknown>[]): AsyncValidator<unknown, unknown> {
+  return async (value, path = []) => {
+    let current = value;
+    for (const validator of validators) {
+      const result = await validator(current, path);
+      if (isErr(result)) return result;
+      current = result.value;
+    }
+    return ok(current);
+  };
+}
+
+/**
+ * Validate a value against a validator.
  *
  * @example
- * // Validation with errors
- * const result = validate('hello', number());
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a number' }], [RESULT_BRAND]: 'error' }
+ * const result = validate(10, chain(number(), min(5)));
+ * // ok(10)
  *
- * @example
- * // Check the result
- * const result = validate(userInput, userSchema);
- * if (isErr(result)) {
- *   // Handle validation errors
- *   const formattedErrors = formatErrors(result.error);
- *   displayErrors(formattedErrors);
- * } else {
- *   // Use the validated data
- *   saveUser(result.value);
- * }
+ * @param value - The value to validate
+ * @param validator - The validator to apply
+ * @param path - Optional base path for error reporting
+ * @returns A Result containing either the validated value or validation errors
  */
 export function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
 export function validate<T>(
@@ -176,42 +224,34 @@ export function validate<T>(
 ): Result<T, ValidationError[]>;
 export function validate<T>(
   value: unknown,
-  validator: Validator<unknown, T>,
+  validator: MaybeAsyncValidator<unknown, T>,
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
+export function validate<T>(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, T>,
+  path: string[],
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
+export function validate<T>(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, T>,
   path: string[] = [],
-): Result<T, ValidationError[]> {
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> {
   return validator(value, path);
 }
 
 /**
- * Formats validation errors into a more user-friendly object structure.
- * Converts array paths to a dot notation string format, suitable for form libraries or error displays.
- *
- * @param {ValidationError[]} errors - The array of validation errors to format
- * @returns {Record<string, string>} An object mapping paths to error messages
+ * Format validation errors into a user-friendly object.
+ * Converts array paths to dot/bracket notation strings.
  *
  * @example
- * // Simple errors
- * const result = validate(data, schema);
- * if (isErr(result)) {
- *   const formatted = formatErrors(result.error);
- *   // { name: 'Name is required', 'address.zipCode': 'Invalid ZIP code' }
- * }
+ * formatErrors([
+ *   { path: ['name'], message: 'Required' },
+ *   { path: ['items', '1'], message: 'Must be a number' },
+ * ]);
+ * // { name: 'Required', 'items[1]': 'Must be a number' }
  *
- * @example
- * // Formatting errors with array indices
- * const schema = object({
- *   items: array(number())
- * });
- * const result = validate({ items: [1, 'two', 3] }, schema);
- * if (isErr(result)) {
- *   const formatted = formatErrors(result.error);
- *   // { 'items[1]': 'Must be a number' }
- * }
- *
- * @example
- * // Using formatted errors with a form library
- * const formErrors = formatErrors(validationErrors);
- * form.setErrors(formErrors);
+ * @param errors - The array of validation errors to format
+ * @returns An object mapping paths to error messages
  */
 export function formatErrors(errors: ValidationError[]): Record<string, string> {
   return errors.reduce(
@@ -224,8 +264,8 @@ export function formatErrors(errors: ValidationError[]): Record<string, string> 
         }
       }, '');
 
-      // eslint-disable-next-line security/detect-object-injection
-      acc[formattedPath] = error.message;
+      // eslint-disable-next-line security/detect-object-injection -- formattedPath is constructed from our own ValidationError paths
+      acc[formattedPath || ROOT_ERROR_KEY] = error.message;
       return acc;
     },
     {} as Record<string, string>,
@@ -233,67 +273,36 @@ export function formatErrors(errors: ValidationError[]): Record<string, string> 
 }
 
 /**
- * Validates input and returns a formatted ValidationResult in one call.
- * Convenience function that combines validate() + formatErrors() + match() into a single operation.
- *
- * This is a shorthand for the common pattern of validating input and immediately formatting
- * errors into a simple Record<string, string> format, typically used for API responses or
- * client-facing error messages.
- *
- * @template T - The expected output type after successful validation
- * @param {unknown} input - The untrusted input to validate
- * @param {Validator<unknown, T>} schema - The validator/schema to validate against
- * @returns {ValidationResult<T>} An object with either { valid: true, data: T } or { valid: false, errors: Record<string, string> }
+ * Validate input and return a formatted ValidationResult in one call.
+ * Combines validate() + formatErrors() + match() into a single operation.
  *
  * @example
- * // Basic usage - replaces manual validation + formatting
- * const userSchema = object({
- *   email: required(chain(string(), email())),
- *   age: required(chain(parseNumber(), min(18)))
- * });
- *
  * const result = validateAndFormatResult(input, userSchema);
- * // If valid: { valid: true, data: { email: "user@example.com", age: 25 } }
- * // If invalid: { valid: false, errors: { email: "Invalid email", age: "Must be at least 18" } }
+ * // { valid: true, data: { email: "user@example.com", age: 25 } }
+ * // or { valid: false, errors: { email: "Invalid email", age: "Must be at least 18" } }
  *
- * @example
- * // API endpoint usage
- * async function registerUser(req: Request) {
- *   const result = validateAndFormatResult(req.body, registrationSchema);
- *
- *   if (!result.valid) {
- *     return res.status(400).json({ errors: result.errors });
- *   }
- *
- *   const user = await createUser(result.data);
- *   return res.json({ user });
- * }
- *
- * @example
- * // Replaces this manual pattern:
- * // const validationResult = validate(input, schema);
- * // const output = match(validationResult, {
- * //   ok: (data) => ({ valid: true, data }),
- * //   err: (errors) => ({ valid: false, errors: formatErrors(errors) })
- * // });
- *
- * // With this one-liner:
- * const output = validateAndFormatResult(input, schema);
- *
- * @example
- * // Type-safe destructuring
- * const { valid, data, errors } = validateAndFormatResult(input, schema);
- *
- * if (valid) {
- *   // TypeScript knows 'data' exists here
- *   console.log(data.email);
- * } else {
- *   // TypeScript knows 'errors' exists here
- *   console.log(errors.email);
- * }
+ * @param input - The untrusted input to validate
+ * @param schema - The validator/schema to validate against
+ * @returns An object with either `{ valid: true, data }` or `{ valid: false, errors }`
  */
-export function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>): ValidationResult<T> {
-  const result = validate(input, schema);
+export function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>): ValidationResult<T>;
+export function validateAndFormatResult<T>(
+  input: unknown,
+  schema: MaybeAsyncValidator<unknown, T>,
+): ValidationResult<T> | Promise<ValidationResult<T>>;
+export function validateAndFormatResult<T>(
+  input: unknown,
+  schema: MaybeAsyncValidator<unknown, T>,
+): ValidationResult<T> | Promise<ValidationResult<T>> {
+  const result = schema(input);
+  if (result instanceof Promise) {
+    return result.then((r) =>
+      match<T, ValidationError[], ValidationResult<T>>(r, {
+        ok: (data) => ({ valid: true, data }),
+        err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+      }),
+    );
+  }
   return match<T, ValidationError[], ValidationResult<T>>(result, {
     ok: (data) => ({ valid: true, data }),
     err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
@@ -301,86 +310,31 @@ export function validateAndFormatResult<T>(input: unknown, schema: Validator<unk
 }
 
 /**
- * Creates a validator that transforms a value during validation
- *
- * IMPORTANT: The transformer function must be pure and not throw exceptions.
- * This validator always succeeds and returns the transformed value.
- * For transformations that might fail, use proper validators or chain with validation:
- *
- * @template I - The input type
- * @template O - The output type after transformation
- * @param {(value: I) => O} transformer - A pure function that transforms the input value
- * @returns {Validator<I, O>} A validator that applies the transformation
+ * Create a validator that transforms a value during validation.
+ * The transformer function must be pure and not throw exceptions.
  *
  * @example
- * // Safe transformation after validation
- * const normalizeEmail = chain(
- *   string(),
- *   email(),
- *   transform(s => s.toLowerCase())  // Safe because we know it's a valid email string
- * );
+ * const normalize = chain(string(), email(), transform(s => s.toLowerCase()));
+ * normalize('User@Example.COM'); // ok("user@example.com")
  *
- * @example
- * // Transform for normalization
- * const trimmedString = chain(
- *   string(),
- *   transform(s => s.trim())
- * );
- *
- * @example
- * // Type conversion
- * const numberToString = transform<number, string>(n => n.toString());
- *
- * @example
- * // DON'T use for risky transformations:
- * // transform(s => JSON.parse(s))  // Could throw!
- * // Instead use: parseJSON()  // Handles errors properly
+ * @param transformer - A pure function that transforms the input value
+ * @returns A validator that applies the transformation
  */
 export function transform<I, O>(transformer: (value: I) => O): Validator<I, O> {
   return (value) => ok(transformer(value));
 }
 
 /**
- * Creates a validator that refines a value with a custom predicate
- * Useful for adding custom validation logic that can't be expressed with existing validators
- *
- * @template T - The type of the value being refined
- * @param {(value: T) => boolean} predicate - A function that returns true if the value is valid
- * @param {string} [message='Custom validation failed'] - The error message to return if validation fails
- * @returns {Validator<T, T>} A validator that checks the predicate
+ * Create a validator that refines a value with a custom predicate.
  *
  * @example
- * // Check if a number is even
- * const isEven = refine<number>(
- *   n => n % 2 === 0,
- *   "Must be an even number"
- * );
+ * const isEven = refine<number>(n => n % 2 === 0, 'Must be even');
+ * isEven(4); // ok(4)
+ * isEven(3); // err([{ path: [], message: 'Must be even' }])
  *
- * @example
- * // Complex business logic
- * const validPassword = chain(
- *   string(),
- *   minLength(8),
- *   refine(
- *     password => /[A-Z]/.test(password) && /[0-9]/.test(password),
- *     "Password must contain at least one uppercase letter and one number"
- *   )
- * );
- *
- * @example
- * // Cross-field validation (when used with object schemas)
- * const dateRange = refine<{ start: Date; end: Date }>(
- *   ({ start, end }) => start <= end,
- *   "Start date must be before or equal to end date"
- * );
- *
- * @example
- * // Multiple refinements
- * const positiveEven = chain(
- *   number(),
- *   refine(n => n > 0, "Must be positive"),
- *   refine(n => n % 2 === 0, "Must be even")
- * );
+ * @param predicate - A function that returns true if the value is valid
+ * @param message - The error message if validation fails
+ * @returns A validator that checks the predicate
  */
 export function refine<T>(
   predicate: (value: T) => boolean,
@@ -395,115 +349,47 @@ export function refine<T>(
 }
 
 /**
- * Creates a validator that targets a specific field path with custom validation logic
- * operating on the entire object. Used for cross-field validation where one field's
- * validity depends on other fields (e.g., password confirmation, date ranges,
- * conditional required fields).
- *
- * Unlike `refine` which validates a single field in isolation, `refineAt` receives
- * the entire parent object and can attach the error to a specific nested field path.
- * This is essential for validation logic that needs to compare multiple fields.
- *
- * **When to use `refineAt`:**
- * - Password confirmation matching
- * - Date range validation (start date < end date)
- * - Conditional required fields (field A required only if field B has value X)
- * - Cross-field business logic (e.g., discount codes valid for specific products)
- *
- * **When NOT to use `refineAt`:**
- * - Single field validation - use `refine` instead
- * - Simple type constraints - use built-in validators like `minLength`, `email`, etc.
- *
- * @template T - The type of the parent object being validated
- *
- * @param targetPath - The field path where the error should be attached.
- *                     Can be a string like "confirmPassword" or an array like ["address", "zipCode"].
- *                     Supports dot notation for nested fields (e.g., "user.email").
- *
- * @param predicate - Validation function that receives the entire parent object.
- *                    Returns `true` if validation passes, `false` if it fails.
- *                    Has access to all sibling fields for cross-field logic.
- *
- * @param message - Error message to display when validation fails.
- *                  Should clearly describe what the user needs to fix.
- *
- * @returns A validator function that can be used with `chain` at the object level.
- *          The validator merges with `parentPath` to work correctly in nested schemas.
+ * Create an async validator that refines a value with an asynchronous predicate.
+ * This is the async counterpart of {@link refine}.
  *
  * @example
- * // Password confirmation
- * const validator = chain(
- *   object({
- *     password: required(string()),
- *     confirmPassword: required(string()),
- *   }),
- *   refineAt(
- *     "confirmPassword",
- *     (data) => data.password === data.confirmPassword,
- *     "Passwords must match"
- *   )
+ * const unique = refineAsync<string>(
+ *   async (name) => !(await db.users.exists({ name })),
+ *   'Already taken'
  * );
  *
- * @example
- * // Date range validation
- * const bookingValidator = chain(
- *   object({
- *     checkIn: required(parseDate()),
- *     checkOut: required(parseDate()),
- *   }),
- *   refineAt(
- *     "checkOut",
- *     (data) => data.checkOut > data.checkIn,
- *     "Check-out date must be after check-in date"
- *   )
- * );
+ * @param predicate - An async function returning true if the value is valid
+ * @param message - The error message if validation fails
+ * @returns An async validator that checks the predicate
+ */
+export function refineAsync<T>(
+  predicate: (value: T) => Promise<boolean>,
+  message: string = 'Custom validation failed',
+): AsyncValidator<T, T> {
+  return async (value, path = []) => {
+    if (!(await predicate(value))) {
+      return err([{ path, message }]);
+    }
+    return ok(value);
+  };
+}
+
+/**
+ * Create a validator that targets a specific field path with cross-field validation.
+ * Unlike `refine`, receives the entire parent object and attaches errors to a specific field.
  *
  * @example
- * // Conditional required field
- * const accountValidator = chain(
- *   object({
- *     accountType: required(stringEnum(["personal", "business"])),
- *     taxId: optional(string()),
- *   }),
- *   refineAt(
- *     "taxId",
- *     (data) => data.accountType === "personal" || !!data.taxId,
- *     "Tax ID is required for business accounts"
- *   )
+ * const validate = chain(
+ *   object({ password: required(string()), confirm: required(string()) }),
+ *   refineAt('confirm', (d) => d.password === d.confirm, 'Passwords must match')
  * );
  *
- * @example
- * // Nested field validation with array path
- * const validator = chain(
- *   object({
- *     address: object({
- *       country: required(string()),
- *       state: optional(string()),
- *     }),
- *   }),
- *   refineAt(
- *     ["address", "state"],
- *     (data) => data.address.country !== "US" || !!data.address.state,
- *     "State is required for US addresses"
- *   )
- * );
- *
- * @example
- * // Multiple cross-field validations
- * const rangeValidator = chain(
- *   object({
- *     min: required(parseNumber()),
- *     max: required(parseNumber()),
- *     value: required(parseNumber()),
- *   }),
- *   refineAt("max", (data) => data.max > data.min, "Max must be greater than min"),
- *   refineAt("value", (data) => data.value >= data.min, "Value must be at least min"),
- *   refineAt("value", (data) => data.value <= data.max, "Value must be at most max")
- * );
+ * @param targetPath - The field path where the error should be attached
+ * @param predicate - Validation function that receives the entire parent object
+ * @param message - Error message when validation fails
+ * @returns A validator for cross-field validation
  *
  * @see refine - For single-field validation without cross-field dependencies
- * @see chain - For composing multiple validators including refineAt
- * @see object - The schema type that refineAt is typically chained after
  */
 export function refineAt<T>(
   targetPath: string | string[],
@@ -512,6 +398,41 @@ export function refineAt<T>(
 ): Validator<T, T> {
   return (value: T, parentPath: string[] = []) => {
     if (!predicate(value)) {
+      const fieldPath = Array.isArray(targetPath) ? targetPath : [targetPath];
+      return err([{ path: [...parentPath, ...fieldPath], message }]);
+    }
+    return ok(value);
+  };
+}
+
+/**
+ * Create an async validator that targets a specific field path with cross-field validation.
+ * This is the async counterpart of {@link refineAt}.
+ *
+ * @example
+ * const validate = chainAsync(
+ *   object({ username: required(string()), email: required(email()) }),
+ *   refineAtAsync(
+ *     'username',
+ *     async (d) => !(await db.users.exists({ username: d.username })),
+ *     'Username taken'
+ *   )
+ * );
+ *
+ * @param targetPath - The field path where the error should be attached
+ * @param predicate - An async function that receives the entire parent object
+ * @param message - Error message when validation fails
+ * @returns An async validator for cross-field validation
+ *
+ * @see refineAt - For synchronous cross-field validation
+ */
+export function refineAtAsync<T>(
+  targetPath: string | string[],
+  predicate: (value: T) => Promise<boolean>,
+  message: string,
+): AsyncValidator<T, T> {
+  return async (value: T, parentPath: string[] = []) => {
+    if (!(await predicate(value))) {
       const fieldPath = Array.isArray(targetPath) ? targetPath : [targetPath];
       return err([{ path: [...parentPath, ...fieldPath], message }]);
     }

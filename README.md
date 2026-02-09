@@ -17,8 +17,8 @@ Requires TypeScript 5.0+ and Node.js 18+.
 ## Quick Start
 
 ```typescript
-import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, match, andThen } from '@railway-ts/pipelines/result';
+import { pipeAsync } from '@railway-ts/pipelines/composition';
+import { ok, match, flatMapWith } from '@railway-ts/pipelines/result';
 import {
   validate,
   object,
@@ -37,7 +37,10 @@ const schema = object({
 });
 
 async function compute(input: unknown): Promise<ValidationResult<number>> {
-  const result = await pipe(validate(input, schema), (r) => andThen(r, ({ x, y }) => ok(x / y)));
+  const result = await pipeAsync(
+    validate(input, schema),
+    flatMapWith(({ x, y }) => ok(x / y)),
+  );
 
   return match<number, ValidationError[], ValidationResult<number>>(result, {
     ok: (value) => ({ valid: true, data: value }),
@@ -75,10 +78,13 @@ Handle nullable values without `if (x != null)` everywhere.
 
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
-import { some, map, match } from '@railway-ts/pipelines/option';
+import { some, mapWith, match } from '@railway-ts/pipelines/option';
 
 const user = some({ name: 'Alice', age: 25 });
-const name = pipe(user, (o) => map(o, (u) => u.name));
+const name = pipe(
+  user,
+  mapWith((u) => u.name),
+);
 
 match(name, {
   some: (n) => console.log(n),
@@ -88,6 +94,7 @@ match(name, {
 
 **Core:** `some`, `none`, `isSome`, `isNone`  
 **Transform:** `map`, `flatMap`, `bimap`, `filter`, `tap`  
+**Curried:** `mapWith`, `flatMapWith`, `filterWith`, `tapWith`  
 **Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
 **Combine:** `combine`  
 **Convert:** `fromNullable`, `mapToResult`  
@@ -99,11 +106,14 @@ Explicit error handling. No exceptions, no try-catch pyramids.
 
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
-import { ok, err, map, match } from '@railway-ts/pipelines/result';
+import { ok, err, mapWith, match } from '@railway-ts/pipelines/result';
 
 const divide = (a: number, b: number) => (b === 0 ? err('div by zero') : ok(a / b));
 
-const result = pipe(divide(10, 2), (r) => map(r, (x) => x * 3));
+const result = pipe(
+  divide(10, 2),
+  mapWith((x) => x * 3),
+);
 
 match(result, {
   ok: (value) => console.log(value),
@@ -113,10 +123,11 @@ match(result, {
 
 **Core:** `ok`, `err`, `isOk`, `isErr`  
 **Transform:** `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr`  
+**Curried:** `mapWith`, `flatMapWith`, `mapErrWith`, `filterWith`, `tapWith`, `tapErrWith`  
+**Recovery:** `orElse`, `orElseWith`  
 **Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
 **Combine:** `combine`, `combineAll`  
 **Convert:** `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption`  
-**Async:** `andThen`  
 **Branch:** `match`
 
 ### Schema
@@ -158,15 +169,18 @@ const result = validate(input, userSchema);
 **String Constraints:** `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber`  
 **Number Constraints:** `min`, `max`, `integer`, `finite`, `between`  
 **Enums:** `stringEnum`, `numberEnum`  
+**Array Constraints:** `minItems`, `maxItems`, `notEmpty`, `unique`  
 **Combinators:** `chain`, `transform`, `refine`, `matches`  
-**Utilities:** `validate`, `formatErrors`, `InferSchemaType`, `Validator`, `ValidationError`
+**Cross-field:** `refineAt`, `refineAtAsync`  
+**Async:** `chainAsync`, `refineAsync`, `refineAtAsync`
+**Utilities:** `validate`, `formatErrors`, `InferSchemaType`, `Validator`, `AsyncValidator`, `MaybeAsyncValidator`, `ValidationError`, `ValidationResult`
 
 ### Composition
 
 Build pipelines. No nested function calls.
 
 ```typescript
-import { pipe, flow, curry } from '@railway-ts/pipelines/composition';
+import { pipe, flow, pipeAsync, flowAsync } from '@railway-ts/pipelines/composition';
 
 // Immediate execution
 const result = pipe(
@@ -175,34 +189,34 @@ const result = pipe(
   (x) => x + 1,
 ); // 11
 
-// Build reusable pipeline
+// Reusable pipeline
 const process = flow(
   (x: number) => x * 2,
   (x) => x + 1,
 );
 process(5); // 11
+
+// Async pipeline (awaits each step)
+const data = await pipeAsync(userId, fetchUser, validateUser, enrichProfile);
+
+// Reusable async pipeline
+const processOrder = flowAsync(validateOrder, chargePayment, createShipment);
+await processOrder(orderInput);
 ```
 
-**Functions:** `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled`
+**Sync:** `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled`  
+**Async:** `pipeAsync`, `flowAsync`
 
 ## Import Patterns
 
 ### Subpath imports (recommended for tree-shaking)
 
 ```typescript
-import { some, none, map } from '@railway-ts/pipelines/option';
-import { ok, err, flatMap } from '@railway-ts/pipelines/result';
-import { pipe, flow } from '@railway-ts/pipelines/composition';
+import { some, none, map, mapWith } from '@railway-ts/pipelines/option';
+import { ok, err, flatMap, flatMapWith } from '@railway-ts/pipelines/result';
+import { pipe, flow, pipeAsync, flowAsync } from '@railway-ts/pipelines/composition';
 import { string, number, validate } from '@railway-ts/pipelines/schema';
 ```
-
-### Root imports (adds type suffixes)
-
-```typescript
-import { mapOption, mapResult, pipe, ok, validate } from '@railway-ts/pipelines';
-```
-
-Functions that exist in both Result and Option get suffixes when imported from root: `mapResult`, `mapOption`, etc. Result-only functions stay un-suffixed: `mapErr`, `andThen`.
 
 ## Examples
 
@@ -217,10 +231,10 @@ bun run examples/index.ts
 
 **What's in there:**
 
-- `option/` - Nullable handling patterns
-- `result/` - Error handling patterns
-- `schema/` - Validation (basic, unions, tuples)
-- `composition/` - Function composition techniques
+- `option/` - Nullable handling patterns, curried helpers
+- `result/` - Error handling patterns, curried helpers, recovery
+- `schema/` - Validation (basic, unions, tuples, async validation)
+- `composition/` - Function composition (sync and async)
 - `complete-pipelines/` - Full examples with validation + async + logic
 
 Start with `examples/complete-pipelines/async-launch.ts` for a real-world pattern.

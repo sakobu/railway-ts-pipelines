@@ -3,33 +3,17 @@ import { err, fromTry, mapErr, ok } from '../result';
 import type { Validator } from './core';
 
 /**
- * Creates a validator that parses input into a number.
+ * Create a validator that parses input into a number.
  * Accepts both numbers and string representations of numbers.
  *
- * @param {string} [message='Must be a valid number'] - Custom error message
- * @returns {Validator<unknown, number>} A validator that parses and validates numbers
- *
  * @example
- * // Parse a string into a number
- * const ageValidator = parseNumber();
- * const result = ageValidator('25');
- * // If valid: { ok: true, value: 25, [RESULT_BRAND]: 'ok' }
+ * const validate = parseNumber();
+ * validate('25');           // ok(25)
+ * validate(42);             // ok(42)
+ * validate('not a number'); // err([{ path: [], message: 'Must be a valid number' }])
  *
- * @example
- * // Already a number
- * const result = parseNumber()(42);
- * // If valid: { ok: true, value: 42, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input
- * const result = parseNumber()('not a number');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid number' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const userSchema = object({
- *   age: required(parseNumber('Age must be a valid number'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates numbers
  */
 export function parseNumber(message: string = 'Must be a valid number'): Validator<unknown, number> {
   return (value, path = []) => {
@@ -54,27 +38,17 @@ export function parseNumber(message: string = 'Must be a valid number'): Validat
 }
 
 /**
- * Creates a validator that parses input into a BigInt
- * Accepts BigInt, strings, and numbers that can be converted to BigInt
- *
- * @param {string} [message='Must be a valid BigInt'] - Custom error message
- * @returns {Validator<unknown, bigint>} A validator that parses and validates BigInt values
+ * Create a validator that parses input into a BigInt.
+ * Accepts BigInt values, strings, and integer numbers.
  *
  * @example
- * // Parse string to BigInt
- * const validator = parseBigInt();
- * const result = validator("9007199254740993");
- * // If valid: { ok: true, value: 9007199254740993n, [RESULT_BRAND]: 'ok' }
+ * const validate = parseBigInt();
+ * validate("9007199254740993"); // ok(9007199254740993n)
+ * validate(123n);               // ok(123n)
+ * validate(42);                 // ok(42n)
  *
- * @example
- * // Already a BigInt
- * const result = parseBigInt()(123n);
- * // If valid: { ok: true, value: 123n, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // From number (must be integer)
- * const result = parseBigInt()(42);
- * // If valid: { ok: true, value: 42n, [RESULT_BRAND]: 'ok' }
+ * @param message - Custom error message
+ * @returns A validator that parses and validates BigInt values
  */
 export function parseBigInt(message: string = 'Must be a valid BigInt'): Validator<unknown, bigint> {
   return (value, path = []) => {
@@ -108,37 +82,18 @@ export function parseBigInt(message: string = 'Must be a valid BigInt'): Validat
 }
 
 /**
- * Creates a validator that parses input into enum values
- * Handles string/number to enum conversions with flexible matching
- *
- * @template T - The enum object type
- * @param {T} enumObject - The enum object to parse values into
- * @param {string} [message] - Custom error message
- * @returns {Validator<unknown, T[keyof T]>} A validator that parses to enum values
+ * Create a validator that parses input into enum values.
+ * Handles string/number to enum conversions with flexible matching.
  *
  * @example
- * // String enum
- * enum Status {
- *   Pending = "PENDING",
- *   Approved = "APPROVED"
- * }
+ * enum Status { Pending = "PENDING", Approved = "APPROVED" }
+ * const validate = parseEnum(Status);
+ * validate("PENDING");  // ok("PENDING")
+ * validate("pending");  // ok("PENDING") — case-insensitive key match
  *
- * const parser = parseEnum(Status);
- * const result = parser("PENDING");
- * // If valid: { ok: true, value: "PENDING", [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // Case-insensitive key matching
- * const result = parser("pending"); // Matches Status.Pending
- *
- * @example
- * // Numeric enum
- * enum Priority {
- *   Low = 0,
- *   High = 1
- * }
- * const parser = parseEnum(Priority);
- * const result = parser("0"); // Parses to Priority.Low
+ * @param enumObject - The enum object to parse values into
+ * @param message - Custom error message
+ * @returns A validator that parses to enum values
  */
 export function parseEnum<T extends Record<string, string | number>>(
   enumObject: T,
@@ -189,39 +144,17 @@ export function parseEnum<T extends Record<string, string | number>>(
 }
 
 /**
- * Creates a validator that parses input into a Date object.
- * Accepts Date objects, strings that can be parsed as dates, and numeric timestamps.
- *
- * @param {string} [message='Must be a valid date'] - Custom error message
- * @returns {Validator<unknown, Date>} A validator that parses and validates dates
+ * Create a validator that parses input into a Date object.
+ * Accepts Date objects, date strings, and numeric timestamps.
  *
  * @example
- * // Parse a string into a Date
- * const birthdateValidator = parseDate();
- * const result = birthdateValidator('1990-05-15');
- * // If valid: { ok: true, value: Date(1990-05-15), [RESULT_BRAND]: 'ok' }
+ * const validate = parseDate();
+ * validate('1990-05-15');    // ok(Date)
+ * validate(1621036800000);   // ok(Date)
+ * validate('not a date');    // err([{ path: [], message: 'Must be a valid date' }])
  *
- * @example
- * // Already a Date object
- * const today = new Date();
- * const result = parseDate()(today);
- * // If valid: { ok: true, value: today, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With timestamp
- * const result = parseDate()(1621036800000); // May 15, 2021
- * // If valid: { ok: true, value: Date(2021-05-15), [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input
- * const result = parseDate()('not a date');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid date' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const eventSchema = object({
- *   eventDate: required(parseDate('Event date must be valid'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates dates
  */
 export function parseDate(message: string = 'Must be a valid date'): Validator<unknown, Date> {
   return (value, path = []) => {
@@ -248,42 +181,18 @@ export function parseDate(message: string = 'Must be a valid date'): Validator<u
 }
 
 /**
- * Creates a validator that parses input into a boolean.
+ * Create a validator that parses input into a boolean.
  * Accepts booleans, 0/1, and strings like 'true'/'false', 'yes'/'no'.
  *
- * @param {string} [message='Must be a valid boolean value'] - Custom error message
- * @returns {Validator<unknown, boolean>} A validator that parses and validates booleans
- *
  * @example
- * // Parse a string into a boolean
- * const consentValidator = parseBool();
- * const result = consentValidator('yes');
- * // If valid: { ok: true, value: true, [RESULT_BRAND]: 'ok' }
+ * const validate = parseBool();
+ * validate('yes');   // ok(true)
+ * validate('false'); // ok(false)
+ * validate(1);       // ok(true)
+ * validate('maybe'); // err([{ path: [], message: 'Must be a valid boolean value' }])
  *
- * @example
- * // Various truthy values
- * parseBool()('true');   // { ok: true, value: true }
- * parseBool()('yes');    // { ok: true, value: true }
- * parseBool()('1');      // { ok: true, value: true }
- * parseBool()(1);        // { ok: true, value: true }
- *
- * @example
- * // Various falsy values
- * parseBool()('false');  // { ok: true, value: false }
- * parseBool()('no');     // { ok: true, value: false }
- * parseBool()('0');      // { ok: true, value: false }
- * parseBool()(0);        // { ok: true, value: false }
- *
- * @example
- * // With invalid input
- * const result = parseBool()('maybe');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid boolean value' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const userSchema = object({
- *   hasAcceptedTerms: required(parseBool('Please indicate whether you accept the terms'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates booleans
  */
 export function parseBool(message: string = 'Must be a valid boolean value'): Validator<unknown, boolean> {
   return (value, path = []) => {
@@ -311,33 +220,17 @@ export function parseBool(message: string = 'Must be a valid boolean value'): Va
 }
 
 /**
- * Creates a validator that parses input into a string.
- * Accepts strings and any value that can be converted to a string, except null and undefined.
- *
- * @param {string} [message='Must be convertible to string'] - Custom error message
- * @returns {Validator<unknown, string>} A validator that parses and validates strings
+ * Create a validator that parses input into a string.
+ * Accepts strings and any value convertible to string, except null and undefined.
  *
  * @example
- * // Convert a number to string
- * const codeValidator = parseString();
- * const result = codeValidator(12345);
- * // If valid: { ok: true, value: '12345', [RESULT_BRAND]: 'ok' }
+ * const validate = parseString();
+ * validate(12345);   // ok("12345")
+ * validate('hello'); // ok("hello")
+ * validate(null);    // err([{ path: [], message: 'Must be convertible to string' }])
  *
- * @example
- * // Already a string
- * const result = parseString()('hello');
- * // If valid: { ok: true, value: 'hello', [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input
- * const result = parseString()(null);
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be convertible to string' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const productSchema = object({
- *   sku: required(parseString('Product SKU is required'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates strings
  */
 export function parseString(message: string = 'Must be convertible to string'): Validator<unknown, string> {
   return (value, path = []) => {
@@ -354,33 +247,17 @@ export function parseString(message: string = 'Must be convertible to string'): 
 }
 
 /**
- * Creates a validator that parses JSON strings into objects.
- * Accepts JSON strings or already parsed objects.
- *
- * @param {string} [message='Must be valid JSON'] - Custom error message
- * @returns {Validator<unknown, unknown>} A validator that parses and validates JSON
+ * Create a validator that parses JSON strings into objects.
+ * Accepts JSON strings or already-parsed objects.
  *
  * @example
- * // Parse a JSON string
- * const configValidator = parseJSON();
- * const result = configValidator('{"name":"John","age":30}');
- * // If valid: { ok: true, value: {name: 'John', age: 30}, [RESULT_BRAND]: 'ok' }
+ * const validate = parseJSON();
+ * validate('{"name":"John"}'); // ok({ name: "John" })
+ * validate({ name: 'John' }); // ok({ name: "John" })
+ * validate('{invalid}');       // err([{ path: [], message: 'Must be valid JSON' }])
  *
- * @example
- * // Already an object
- * const result = parseJSON()({name: 'John', age: 30});
- * // If valid: { ok: true, value: {name: 'John', age: 30}, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input
- * const result = parseJSON()('{name: John}'); // Invalid JSON syntax
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be valid JSON' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const configSchema = object({
- *   settings: required(parseJSON('Settings must be valid JSON'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates JSON
  */
 export function parseJSON(message: string = 'Must be valid JSON'): Validator<unknown, unknown> {
   return (value, path = []) => {
@@ -400,33 +277,17 @@ export function parseJSON(message: string = 'Must be valid JSON'): Validator<unk
 }
 
 /**
- * Creates a validator that parses ISO format date strings (YYYY-MM-DD) into Date objects.
+ * Create a validator that parses ISO date strings (YYYY-MM-DD) into Date objects.
  * Performs strict validation of the date format and validity.
  *
- * @param {string} [message='Must be a valid ISO date string'] - Custom error message
- * @returns {Validator<unknown, Date>} A validator that parses and validates ISO date strings
- *
  * @example
- * // Parse an ISO date string
- * const birthdateValidator = parseISODate();
- * const result = birthdateValidator('2021-05-15');
- * // If valid: { ok: true, value: Date(2021-05-15), [RESULT_BRAND]: 'ok' }
+ * const validate = parseISODate();
+ * validate('2021-05-15'); // ok(Date)
+ * validate('15/05/2021'); // err([{ path: [], message: 'Must be a valid ISO date string' }])
+ * validate('2021-02-30'); // err(...) — invalid calendar date
  *
- * @example
- * // With invalid format
- * const result = parseISODate()('15/05/2021');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid ISO date string' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // With invalid date
- * const result = parseISODate()('2021-02-30'); // February doesn't have 30 days
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid ISO date string' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const eventSchema = object({
- *   startDate: required(parseISODate('Start date must be in YYYY-MM-DD format'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates ISO date strings
  */
 export function parseISODate(message: string = 'Must be a valid ISO date string'): Validator<unknown, Date> {
   return (value, path = []) => {
@@ -457,33 +318,15 @@ export function parseISODate(message: string = 'Must be a valid ISO date string'
 }
 
 /**
- * Creates a validator that parses string URLs into URL objects.
- * Validates that the URL is properly formatted and can be parsed.
- *
- * @param {string} [message='Must be a valid URL'] - Custom error message
- * @returns {Validator<unknown, URL>} A validator that parses and validates URLs
+ * Create a validator that parses string URLs into URL objects.
  *
  * @example
- * // Parse a URL string
- * const websiteValidator = parseURL();
- * const result = websiteValidator('https://example.com');
- * // If valid: { ok: true, value: URL { href: 'https://example.com/', ... }, [RESULT_BRAND]: 'ok' }
+ * const validate = parseURL();
+ * validate('https://example.com'); // ok(URL)
+ * validate('not-a-url');           // err([{ path: [], message: 'Must be a valid URL' }])
  *
- * @example
- * // With protocol and path
- * const result = parseURL()('https://example.com/path?query=value');
- * // If valid: { ok: true, value: URL { href: 'https://example.com/path?query=value', ... }, [RESULT_BRAND]: 'ok' }
- *
- * @example
- * // With invalid input
- * const result = parseURL()('not-a-url');
- * // If invalid: { ok: false, error: [{ path: [], message: 'Must be a valid URL' }], [RESULT_BRAND]: 'error' }
- *
- * @example
- * // Used in an object schema
- * const profileSchema = object({
- *   website: optional(parseURL('Website must be a valid URL'))
- * });
+ * @param message - Custom error message
+ * @returns A validator that parses and validates URLs
  */
 export function parseURL(message: string = 'Must be a valid URL'): Validator<unknown, URL> {
   return (value, path = []) => {

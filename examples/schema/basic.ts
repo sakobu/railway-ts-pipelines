@@ -66,13 +66,14 @@ export const userSchema = object({
   contacts: optional(array(stringEnum(['email', 'phone']))),
 });
 
-// Using validateAndFormatResult - one-liner convenience function
-const valid = validateAndFormatResult(validInput, userSchema);
+// === validateAndFormatResult: Valid Input ===
+console.log('=== validateAndFormatResult: Valid Input ===');
 
-console.log('--- Valid User ---\n');
+const valid = validateAndFormatResult(validInput, userSchema);
 console.log(valid);
 
-const invalid = validateAndFormatResult(invalidInput, userSchema);
+// === validateAndFormatResult: Invalid Input ===
+console.log('\n=== validateAndFormatResult: Invalid Input ===');
 
-console.log('--- Invalid User ---\n');
+const invalid = validateAndFormatResult(invalidInput, userSchema);
 console.log(invalid);

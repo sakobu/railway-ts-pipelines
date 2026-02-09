@@ -170,7 +170,7 @@ describe('utils - formatErrors', () => {
 
     const formatted = formatErrors(errors);
     expect(formatted).toEqual({
-      '': 'General error',
+      _root: 'General error',
     });
   });
 

@@ -1,4 +1,4 @@
-type UnknownFunction = (...params: unknown[]) => unknown;
+import type { UnknownFunction } from './types';
 
 /**
  * Transforms a multi-argument function into one that accepts a single tuple argument.

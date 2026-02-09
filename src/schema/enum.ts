@@ -3,42 +3,24 @@ import { err, ok } from '../result';
 import type { Validator } from './core';
 
 /**
- * Creates a validator for TypeScript enum values
- * Works with both string and numeric enums
- *
- * @template T - The enum object type
- * @param {T} enumObject - The enum object to validate against
- * @param {string} [message] - Custom error message when the value is not a valid enum value
- * @param {T[keyof T][]} [excludedValues] - Invalid values which to be excluded from the enum
- * @returns {Validator<unknown, T[keyof T]>} A validator that ensures the value is a valid enum value
+ * Create a validator for TypeScript enum values.
+ * Works with both string and numeric enums.
  *
  * @example
- * // Define an enum
- * enum Status {
- *   Pending = "PENDING",
- *   Approved = "APPROVED",
- *   Rejected = "REJECTED"
- * }
- *
- * // Create validator for the enum
- * const statusValidator = enumValue(Status);
- *
- * @example
- * // With numeric enum
- * enum Priority {
- *   Low = 0,
- *   Medium = 1,
- *   High = 2
- * }
- * const priorityValidator = enumValue(Priority);
- * const result = priorityValidator(1);
- * // If valid: { ok: true, value: 1, [RESULT_BRAND]: 'ok' }
+ * enum Status { Pending = "PENDING", Approved = "APPROVED" }
+ * const validate = enumValue(Status);
+ * validate("PENDING"); // ok("PENDING")
+ * validate("INVALID"); // err([{ path: [], message: 'Value must be one of: PENDING, APPROVED' }])
  *
  * @example
  * // With excluded values
- * const activeStatusValidator = enumValue(Status, "Status not allowed", ["REJECTED"]);
- * const result = activeStatusValidator("REJECTED");
- * // If invalid: { ok: false, error: [{ path: [], message: 'Status not allowed' }], [RESULT_BRAND]: 'error' }
+ * const validate = enumValue(Status, "Not allowed", [Status.Pending]);
+ * validate("PENDING"); // err(...)
+ *
+ * @param enumObject - The enum object to validate against
+ * @param message - Custom error message
+ * @param excludedValues - Values to exclude from the valid set
+ * @returns A validator that ensures the value is a valid enum value
  */
 export function enumValue<T extends Record<string, string | number>>(
   enumObject: T,
