@@ -10,7 +10,7 @@ type EnrichedUser = User & { permissions: string[] };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchUser = async (userId: number): Promise<Result<User, string>> => {
+const fetchUser = async (userId: number) => {
   await delay(10);
   const users: Record<number, User> = {
     1: { id: 1, name: 'Alice', role: 'admin' },
@@ -20,13 +20,13 @@ const fetchUser = async (userId: number): Promise<Result<User, string>> => {
   return user ? ok(user) : err(`User ${userId} not found`);
 };
 
-const validateUser = async (result: Result<User, string>): Promise<Result<User, string>> => {
+const validateUser = async (result: Result<User, string>) => {
   if (!result.ok) return result;
   await delay(10);
   return result.value.name.length > 0 ? ok(result.value) : err('Invalid user: empty name');
 };
 
-const enrichWithPermissions = async (result: Result<User, string>): Promise<Result<EnrichedUser, string>> => {
+const enrichWithPermissions = async (result: Result<User, string>) => {
   if (!result.ok) return result;
   await delay(10);
   const permissionMap: Record<string, string[]> = {

@@ -1,5 +1,5 @@
 import { flow, curry } from '@/composition';
-import { match, map } from '@/result';
+import { mapWith, match } from '@/result';
 import {
   validate,
   object,
@@ -113,49 +113,22 @@ const calculateTransfer = (input: TransferInput): TransferDetails => {
   };
 };
 
-// Main pipeline
-const hohmannTransfer = flow(
-  (input: unknown) => validate(input, transferInputSchema),
-  (r) => map(r, calculateTransfer),
-);
+// Main pipeline — validate at the boundary, then let it flow
+const hohmannTransfer = (input: unknown): ValidationResult<TransferDetails> => {
+  const result = flow((i: unknown) => validate(i, transferInputSchema), mapWith(calculateTransfer))(input);
 
-// Usage
-const result = hohmannTransfer({ fromAltitude: 400, toAltitude: 35_786 });
-
-const transferResult = match<TransferDetails, ValidationError[], ValidationResult<TransferDetails>>(result, {
-  ok: (data) => ({
-    valid: true,
-    data,
-  }),
-  err: (errors) => ({
-    valid: false,
-    errors: formatErrors(errors),
-  }),
-});
+  return match<TransferDetails, ValidationError[], ValidationResult<TransferDetails>>(result, {
+    ok: (data) => ({ valid: true, data }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  });
+};
 
 // === flow + validate: LEO to GEO Transfer ===
 console.log('=== flow + validate: LEO to GEO Transfer ===');
 
-console.log(JSON.stringify(transferResult, null, 2));
-
-// Example with invalid input
-const invalidResult = hohmannTransfer({ fromAltitude: 100, toAltitude: 35_786 }); // Below minimum altitude
-
-const invalidTransferResult = match<TransferDetails, ValidationError[], ValidationResult<TransferDetails>>(
-  invalidResult,
-  {
-    ok: (data) => ({
-      valid: true,
-      data,
-    }),
-    err: (errors) => ({
-      valid: false,
-      errors: formatErrors(errors),
-    }),
-  },
-);
+console.log(JSON.stringify(hohmannTransfer({ fromAltitude: 400, toAltitude: 35_786 }), null, 2));
 
 // === flow + validate: Invalid Altitude ===
 console.log('\n=== flow + validate: Invalid Altitude ===');
 
-console.log(JSON.stringify(invalidTransferResult, null, 2));
+console.log(JSON.stringify(hohmannTransfer({ fromAltitude: 100, toAltitude: 35_786 }), null, 2));

@@ -1,5 +1,5 @@
 import { pipeAsync } from '@/composition';
-import { err, flatMapWith, fromPromise, match, ok, type Result } from '@/result';
+import { flatMapWith, fromPromise, mapErr, match, ok, type Result } from '@/result';
 import {
   formatErrors,
   object,
@@ -37,10 +37,7 @@ const createPost = async (data: PostInput): Promise<Result<PostInput, Validation
     }).then(toJsonIfOk),
   );
 
-  return match(result, {
-    ok: (post) => ok(post),
-    err: (msg) => err([{ path: ['api'], message: msg }]),
-  });
+  return mapErr(result, (msg) => [{ path: ['api'], message: String(msg) }]);
 };
 
 // Failing API variant to demo non-validation failure (e.g., 404)
@@ -53,10 +50,7 @@ const createPostFailing = async (data: PostInput): Promise<Result<PostInput, Val
     }).then(toJsonIfOk),
   );
 
-  return match(result, {
-    ok: (post) => ok(post),
-    err: (msg) => err([{ path: ['api'], message: String(msg) }]),
-  });
+  return mapErr(result, (msg) => [{ path: ['api'], message: String(msg) }]);
 };
 
 // Define an enriched post type

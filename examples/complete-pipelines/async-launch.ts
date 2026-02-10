@@ -1,5 +1,5 @@
 import { pipeAsync } from '@/composition';
-import { err, flatMapWith, fromPromise, match, ok, type Result } from '@/result';
+import { err, flatMapWith, fromPromise, mapWith, match, ok, type Result } from '@/result';
 import {
   formatErrors,
   object,
@@ -51,24 +51,35 @@ type LaunchDecision = {
 // Helper for API responses
 const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
 
-// Fetch weather and combine with params
+// Fetch daily forecast for the launch window date
 const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
+  const date = params.windowStart.toISOString().split('T')[0]!;
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.append('latitude', params.latitude.toString());
   url.searchParams.append('longitude', params.longitude.toString());
-  url.searchParams.append('current', 'wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+  url.searchParams.append('daily', 'wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max');
   url.searchParams.append('wind_speed_unit', 'ms');
+  url.searchParams.append('start_date', date);
+  url.searchParams.append('end_date', date);
 
   const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
 
   return match(result, {
-    ok: (data) => ok({ params, weather: data.current }),
+    ok: (data) =>
+      ok({
+        params,
+        weather: {
+          wind_speed_10m: data.daily.wind_speed_10m_max[0],
+          wind_direction_10m: data.daily.wind_direction_10m_dominant[0],
+          wind_gusts_10m: data.daily.wind_gusts_10m_max[0],
+        },
+      }),
     err: (msg) => err([{ path: ['weather_api'], message: String(msg) }]),
   });
 };
 
-// Calculate wind loads and decision
-const assessLaunchConditions = async (context: LaunchContext): Promise<Result<LaunchDecision, ValidationError[]>> => {
+// Pure calculation — always succeeds, so mapWith (not flatMapWith)
+const assessLaunchConditions = (context: LaunchContext): LaunchDecision => {
   const windLimits: Record<VehicleType, number> = {
     falcon9: 15,
     atlas5: 12,
@@ -78,15 +89,13 @@ const assessLaunchConditions = async (context: LaunchContext): Promise<Result<La
   const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
   const isGo = actualMaxWind <= maxWind;
 
-  const decision: LaunchDecision = {
+  return {
     windSpeed: context.weather.wind_speed_10m,
     windGusts: context.weather.wind_gusts_10m,
     maxAllowed: maxWind,
     recommendation: isGo ? 'GO' : 'NO GO',
     reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
   };
-
-  return ok(decision);
 };
 
 // Main pipeline
@@ -96,7 +105,7 @@ const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDe
   const result = await pipeAsync(
     validationResult,
     flatMapWith(fetchWeatherWithParams),
-    flatMapWith(assessLaunchConditions),
+    mapWith(assessLaunchConditions),
   );
 
   return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
@@ -113,20 +122,20 @@ const result = await evaluateLaunch({
   payload: 1000,
   latitude: 28.5721,
   longitude: -80.648,
-  windowStart: new Date('2025-01-01'),
+  windowStart: new Date(),
 });
 
 console.log(result);
 
-// === evaluateLaunch: Windy Conditions ===
-console.log('\n=== evaluateLaunch: Windy Conditions ===');
+// === evaluateLaunch: Different Location (result depends on live weather) ===
+console.log('\n=== evaluateLaunch: Different Location ===');
 
-const gabrielleTest = await evaluateLaunch({
-  vehicleType: 'atlas5', // or "falcon9" - both will fail
+const openOceanTest = await evaluateLaunch({
+  vehicleType: 'atlas5',
   payload: 5000,
   latitude: 27.2,
   longitude: -60.0,
-  windowStart: new Date('2025-09-21'),
+  windowStart: new Date(),
 });
 
-console.log(gabrielleTest);
+console.log(openOceanTest);

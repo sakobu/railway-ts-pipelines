@@ -1,5 +1,5 @@
 import { flow } from '@/composition';
-import { match, map, type Result } from '@/result';
+import { match, mapWith } from '@/result';
 import {
   validate,
   object,
@@ -13,12 +13,6 @@ import {
   type ValidationError,
   type ValidationResult,
 } from '@/schema';
-
-// Curried combinators for point-free pipeline composition
-const mapWith =
-  <T, U>(fn: (value: T) => U) =>
-  <E>(result: Result<T, E>): Result<U, E> =>
-    map(result, fn);
 
 // Types
 type Vec3 = { x: number; y: number; z: number };

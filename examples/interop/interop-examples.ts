@@ -76,7 +76,7 @@ matchResult(apiResult, {
 }); // "API Success: API response data"
 
 const missingConfig = { apiKey: undefined as string | undefined };
-const getApiKey2 = () => (missingConfig.apiKey ? some(missingConfig.apiKey) : none<string>());
+const getApiKey2 = () => (missingConfig.apiKey ? some(missingConfig.apiKey) : none());
 
 const apiResult2 = pipe(
   getApiKey2(),
