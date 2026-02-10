@@ -16,25 +16,68 @@ Requires TypeScript 5.0+ and Node.js 18+.
 
 ## What It Looks Like
 
+Same task, two styles — use whichever fits your codebase.
+
+**Pipeline-first** — keep validation and computation as separate pipeline steps:
+
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
-import { ok, match, flatMapWith } from '@railway-ts/pipelines/result';
-import { validate, object, required, chain, parseNumber, min } from '@railway-ts/pipelines/schema';
+import { mapWith, match } from '@railway-ts/pipelines/result';
+import {
+  validate,
+  object,
+  required,
+  chain,
+  parseNumber,
+  min,
+  formatErrors,
+  type ValidationError,
+  type ValidationResult,
+} from '@railway-ts/pipelines/schema';
 
 const schema = object({
   x: required(chain(parseNumber(), min(0))),
   y: required(chain(parseNumber(), min(1))),
 });
 
-const result = await pipeAsync(
-  validate({ x: '10', y: '2' }, schema),
-  flatMapWith(({ x, y }) => ok(x / y)),
+async function compute(input: unknown) {
+  const result = await pipeAsync(
+    validate(input, schema),
+    mapWith(({ x, y }) => x / y),
+  );
+
+  return match<number, ValidationError[], ValidationResult<number>>(result, {
+    ok: (value) => ({ valid: true, data: value }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  });
+}
+
+await compute({ x: '10', y: '2' }).then(console.log); // { valid: true, data: 5 }
+```
+
+**Schema-first** — fold the transform into the schema, get the result in one call:
+
+```typescript
+import {
+  validateAndFormatResult,
+  object,
+  required,
+  chain,
+  parseNumber,
+  min,
+  transform,
+} from '@railway-ts/pipelines/schema';
+
+const schema = chain(
+  object({
+    x: required(chain(parseNumber(), min(0))),
+    y: required(chain(parseNumber(), min(1))),
+  }),
+  transform(({ x, y }) => x / y),
 );
 
-match(result, {
-  ok: (value) => console.log(value), // 5
-  err: (errors) => console.error(errors),
-});
+const result = validateAndFormatResult({ x: '10', y: '2' }, schema);
+console.log(result); // { valid: true, data: 5 }
 ```
 
 **The pattern:** Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
