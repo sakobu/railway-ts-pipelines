@@ -152,6 +152,26 @@ describe('Result curried helpers', () => {
     });
   });
 
+  describe('tapErrWith (async)', () => {
+    test('executes async side effect on Err', async () => {
+      let called = false;
+      const doTap = tapErrWith<string>(async (e: string) => {
+        called = true;
+        expect(e).toBe('boom');
+      });
+      const result = await doTap(err('boom'));
+      expect(called).toBe(true);
+      expect(result).toEqual(err('boom'));
+    });
+
+    test('returns original on Ok without awaiting', () => {
+      const doTap = tapErrWith<string>(async () => {});
+      const result = doTap(ok(42));
+      // Ok short-circuits synchronously even with async overload
+      expect(result as unknown).toEqual(ok(42));
+    });
+  });
+
   describe('orElse', () => {
     test('returns original on Ok', () => {
       expect(orElse(ok(42), () => ok(0))).toEqual(ok(42));

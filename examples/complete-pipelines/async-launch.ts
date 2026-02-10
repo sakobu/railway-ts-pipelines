@@ -1,5 +1,5 @@
 import { pipeAsync } from '@/composition';
-import { err, flatMapWith, fromPromise, mapWith, match, ok, type Result } from '@/result';
+import { err, flatMapWith, fromPromise, match, ok, type Result } from '@/result';
 import {
   formatErrors,
   object,
@@ -70,8 +70,8 @@ const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<Laun
   });
 };
 
-// Pure calculation — always succeeds, so mapWith (not flatMapWith)
-const assessLaunchConditions = (context: LaunchContext) => {
+// Business rule check — can fail, so flatMapWith
+const assessLaunchConditions = (context: LaunchContext): Result<LaunchDecision, ValidationError[]> => {
   const windLimits: Record<VehicleType, number> = {
     falcon9: 15,
     atlas5: 12,
@@ -79,18 +79,23 @@ const assessLaunchConditions = (context: LaunchContext) => {
 
   const maxWind = windLimits[context.params.vehicleType];
   const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
-  const isGo = actualMaxWind <= maxWind;
 
-  return {
+  if (actualMaxWind > maxWind) {
+    return err([{ path: ['weather'], message: `Wind ${actualMaxWind} m/s exceeds ${maxWind} m/s limit` }]);
+  }
+
+  return ok({
     windSpeed: context.weather.wind_speed_10m,
     windGusts: context.weather.wind_gusts_10m,
     maxAllowed: maxWind,
-    recommendation: isGo ? 'GO' : 'NO GO',
-    reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
-  };
+  });
 };
 
-type LaunchDecision = ReturnType<typeof assessLaunchConditions>;
+type LaunchDecision = {
+  windSpeed: number;
+  windGusts: number;
+  maxAllowed: number;
+};
 
 // Main pipeline
 const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
@@ -99,7 +104,7 @@ const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDe
   const result = await pipeAsync(
     validationResult,
     flatMapWith(fetchWeatherWithParams),
-    mapWith(assessLaunchConditions),
+    flatMapWith(assessLaunchConditions),
   );
 
   return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {

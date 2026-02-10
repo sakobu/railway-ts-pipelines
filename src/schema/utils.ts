@@ -264,7 +264,6 @@ export function formatErrors(errors: ValidationError[]): Record<string, string> 
         }
       }, '');
 
-      // eslint-disable-next-line security/detect-object-injection -- formattedPath is constructed from our own ValidationError paths
       acc[formattedPath || ROOT_ERROR_KEY] = error.message;
       return acc;
     },

@@ -85,10 +85,10 @@ Uses 10 overloads to handle up to 10 items. For arrays longer than 10, falls bac
 
 ## Type Inference
 
-The schema system uses conditional types and mapped types to infer output types from validators.
+The schema system uses conditional types, mapped types, and type composition to infer output types from validators.
 
 ```typescript
-type InferSchemaType<T> = T extends Validator<any, infer O> ? O : never;
+type InferSchemaType<V> = ProcessType<InferType<V>>;
 
 const userSchema = object({
   name: required(string()),
@@ -106,31 +106,28 @@ This happens at compile time with zero runtime overhead. The types are purely fo
 
 ## `this: void` for Referential Transparency
 
-All functions take `this: void` as their first parameter to ensure they don't depend on `this` context:
+The composition functions (`pipe`, `flow`, `pipeAsync`, `flowAsync`) annotate their callback parameters with `this: void` to ensure they don't depend on `this` context:
 
 ```typescript
-export function map<T, U, E>(this: void, result: Result<T, E>, fn: (value: T) => U): Result<U, E> {
-  // ...
-}
+export function pipe<A, B>(a: A, ab: (this: void, a: A) => B): B;
+export function pipe<A, B, C>(a: A, ab: (this: void, a: A) => B, bc: (this: void, b: B) => C): C;
 ```
 
 ### Why?
 
-Prevents bugs from lost context:
+Prevents bugs from lost context when composing functions:
 
 ```typescript
 // Without this: void
-const obj = {
-  method: map,
-};
-obj.method(ok(5), (x) => x * 2); // Might break if map uses 'this'
+const obj = { transform: (x: number) => x * 2 };
+pipe(5, obj.transform); // Might break if transform uses 'this'
 
 // With this: void
-// TypeScript error: map cannot be called as a method
-// Forces you to call it correctly: map(ok(5), (x) => x * 2)
+// TypeScript catches methods that depend on 'this' context
+// Forces all composed functions to be pure and context-free
 ```
 
-Makes all functions referentially transparent - they behave the same regardless of how they're called.
+Makes all composed functions referentially transparent — they behave the same regardless of how they're called.
 
 ---
 
@@ -139,7 +136,9 @@ Makes all functions referentially transparent - they behave the same regardless 
 `Result` and `Option` use discriminated unions for exhaustive pattern matching:
 
 ```typescript
-type Result<T, E> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
+type Result<T, E> =
+  | { readonly ok: true; readonly value: T; readonly [RESULT_BRAND]: 'ok' }
+  | { readonly ok: false; readonly error: E; readonly [RESULT_BRAND]: 'error' };
 ```
 
 TypeScript's control flow analysis narrows types with the type guards:
@@ -180,3 +179,11 @@ These features support the core design:
 4. **Compile-Time Correctness** - Discriminated unions and exhaustiveness checking catch errors at compile time
 
 The library prioritizes **zero runtime surprises** by pushing as much validation and checking into TypeScript's type system as possible.
+
+---
+
+## Next Steps
+
+-> **[Getting Started](../GETTING_STARTED.md)** - Core concepts and first pipeline
+-> **[Recipes](RECIPES.md)** - Patterns: point-free composition, error recovery, async pipelines
+-> **[API Reference](../README.md)** - Full function catalog

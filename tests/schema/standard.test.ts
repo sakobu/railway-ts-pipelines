@@ -3,11 +3,11 @@ import { describe, test, expect } from 'bun:test';
 import { err, ok } from '@/result';
 import { object, required } from '@/schema/core';
 import { number } from '@/schema/number';
-import { string } from '@/schema/string';
 import { toStandardSchema } from '@/schema/standard';
+import { string } from '@/schema/string';
 
-import type { StandardSchemaV1 } from '@/schema/standard';
 import type { AsyncValidator, Validator } from '@/schema/core';
+import type { StandardSchemaV1 } from '@/schema/standard';
 
 describe('Standard Schema', () => {
   describe('toStandardSchema', () => {
@@ -133,6 +133,7 @@ describe('Standard Schema', () => {
         age: required(number()),
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const schema = toStandardSchema(userSchema);
 
       // This is a compile-time check — if it compiles, the types work
@@ -169,7 +170,6 @@ describe('Standard Schema', () => {
 
     test('sync validator that throws non-Error returns stringified message', () => {
       const throwingValidator: Validator<unknown, string> = () => {
-        // eslint-disable-next-line no-throw-literal
         throw 'raw string error';
       };
 
@@ -182,6 +182,7 @@ describe('Standard Schema', () => {
     });
 
     test('type inference: InferInput resolves to unknown', () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const schema = toStandardSchema(string());
 
       // Compile-time check: input type should be unknown

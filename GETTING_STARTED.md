@@ -19,9 +19,243 @@ import { pipe, flow } from '@railway-ts/pipelines/composition';
 import { validate, object, required } from '@railway-ts/pipelines/schema';
 ```
 
+## Core Concept: Result
+
+A `Result<T, E>` is either `Ok` holding a value or `Err` holding an error. Use it instead of try-catch.
+
+```typescript
+import { pipe } from '@railway-ts/pipelines/composition';
+import { ok, err, isOk, isErr, mapWith, flatMapWith, match } from '@railway-ts/pipelines/result';
+
+// Create Results
+const good = ok(42); // Result<number, never>
+const bad = err('oops'); // Result<never, string>
+
+// Type narrowing with guards
+if (isOk(good)) {
+  console.log(good.value); // TypeScript knows .value exists
+}
+if (isErr(bad)) {
+  console.log(bad.error); // TypeScript knows .error exists
+}
+```
+
+Build a pipeline with `map` and `flatMap`:
+
+```typescript
+const divide = (a: number, b: number) => (b === 0 ? err('division by zero') : ok(a / b));
+
+const result = pipe(
+  divide(10, 2),
+  mapWith((x) => x * 3), // Ok(5) -> Ok(15)
+  flatMapWith((x) => divide(x, 3)), // Ok(15) -> Ok(5)
+);
+
+match(result, {
+  ok: (value) => console.log(value), // 5
+  err: (error) => console.error(error),
+});
+```
+
+**Key insight:** Once a step returns `Err`, all subsequent `map`/`flatMap` calls are skipped. Write happy-path code; handle errors once at the end with `match`.
+
+## Core Concept: Option
+
+An `Option<T>` is either `Some` holding a value or `None`. Use it instead of `null`/`undefined` checks.
+
+```typescript
+import { pipe } from '@railway-ts/pipelines/composition';
+import {
+  some,
+  none,
+  fromNullable,
+  isSome,
+  isNone,
+  mapWith,
+  flatMapWith,
+  filterWith,
+  match,
+} from '@railway-ts/pipelines/option';
+
+// Create Options
+const present = some('Alice'); // Option<string>
+const absent = none<string>(); // Option<string>
+const maybe = fromNullable(users.get(id)); // Option<User>
+
+// Type narrowing
+if (isSome(present)) {
+  console.log(present.value); // TypeScript knows .value exists
+}
+```
+
+Transform and branch:
+
+```typescript
+type Users = Map<string, { name: string; role: string }>;
+const users: Users = new Map([['1', { name: 'Alice', role: 'admin' }]]);
+
+const getUpperName = (id: string) =>
+  pipe(
+    fromNullable(users.get(id)),
+    filterWith((u) => u.role === 'admin'),
+    mapWith((u) => u.name.toUpperCase()),
+  );
+
+match(getUpperName('1'), {
+  some: (name) => console.log(name), // "ALICE"
+  none: () => console.log('Not found'),
+});
+
+match(getUpperName('999'), {
+  some: (name) => console.log(name),
+  none: () => console.log('Not found'), // "Not found"
+});
+```
+
+**Same pattern as Result:** `map`/`flatMap` skip on `None`, you branch once with `match`.
+
+## Converting Legacy Code
+
+Wrap existing code that throws, rejects, or returns `null` into `Result`/`Option` values.
+
+### Wrapping Try-Catch
+
+```typescript
+import { fromTry, fromTryWithError } from '@railway-ts/pipelines/result';
+
+// fromTry: error becomes a string message
+const config = fromTry(() => JSON.parse(rawText));
+// Result<any, string>
+
+// fromTryWithError: error stays as an Error object (preserves stack trace)
+const config2 = fromTryWithError(() => JSON.parse(rawText));
+// Result<any, Error>
+```
+
+### Wrapping Promises
+
+```typescript
+import { fromPromise, fromPromiseWithError } from '@railway-ts/pipelines/result';
+
+// fromPromise: rejection becomes a string
+const user = await fromPromise(fetch('/api/user').then((r) => r.json()));
+// Result<User, string>
+
+// fromPromiseWithError: transform the rejection into a typed error
+const user2 = await fromPromiseWithError(
+  fetch('/api/user').then((r) => r.json()),
+  (err) => ({ code: 'FETCH_FAILED', cause: err }),
+);
+// Result<User, { code: string; cause: unknown }>
+```
+
+### Wrapping Nullable Returns
+
+```typescript
+import { fromNullable } from '@railway-ts/pipelines/option';
+
+const findUser = (id: string): User | null => {
+  /* ... */
+};
+
+const user = fromNullable(findUser('123'));
+// Option<User>
+```
+
+## Core Concept: Composition
+
+Build pipelines by chaining functions instead of nesting them.
+
+```typescript
+import { pipe, flow, pipeAsync, flowAsync } from '@railway-ts/pipelines/composition';
+
+// pipe: execute immediately, left to right
+const result = pipe(
+  5,
+  (x) => x * 2,
+  (x) => x + 1,
+);
+// 11
+
+// flow: create a reusable pipeline
+const double = flow(
+  (x: number) => x * 2,
+  (x) => x + 1,
+);
+double(5); // 11
+
+// pipeAsync: like pipe, but awaits each step
+const data = await pipeAsync(
+  userId,
+  fetchUser, // async
+  validateUser, // sync or async
+  enrichProfile, // async
+);
+
+// flowAsync: reusable async pipeline
+const processOrder = flowAsync(validateOrder, chargePayment, createShipment);
+await processOrder(orderInput);
+```
+
+`pipeAsync`/`flowAsync` accept any mix of sync and async functions. Each step's return value is awaited before passing to the next.
+
+## Core Concept: Schema Validation
+
+Validators are functions that take untrusted input and return `Result<T, ValidationError[]>`. Compose them to build schemas.
+
+### Primitives and Chains
+
+```typescript
+import { string, parseNumber, min, max, chain } from '@railway-ts/pipelines/schema';
+
+// Single validator
+const str = string(); // Validator<unknown, string>
+
+// Chain validators: each feeds into the next
+const positiveInt = chain(parseNumber(), min(0));
+// Validator<unknown, number> -- parses string to number, then checks >= 0
+```
+
+### Object Schemas
+
+```typescript
+import { object, required, optional, type InferSchemaType } from '@railway-ts/pipelines/schema';
+
+const userSchema = object({
+  name: required(string()),
+  age: required(chain(parseNumber(), min(18), max(120))),
+  email: optional(string()),
+});
+
+type User = InferSchemaType<typeof userSchema>;
+// { name: string; age: number; email?: string }
+```
+
+### Running Validation
+
+```typescript
+import { validate, validateAndFormatResult, formatErrors } from '@railway-ts/pipelines/schema';
+import { match } from '@railway-ts/pipelines/result';
+
+// validate: returns Result<T, ValidationError[]>
+const result = validate(input, userSchema);
+
+match(result, {
+  ok: (user) => console.log(user),
+  err: (errors) => console.error(errors),
+  // errors: [{ path: ['age'], message: 'Must be at least 18' }, ...]
+});
+
+// validateAndFormatResult: validates and returns a simple { valid, data?, errors? } object
+const output = validateAndFormatResult(input, userSchema);
+// { valid: true, data: User } or { valid: false, errors: { age: 'Must be at least 18' } }
+```
+
+`formatErrors` converts `ValidationError[]` into a flat `Record<string, string>` keyed by dot-path -- useful for wiring to form UIs.
+
 ## Your First Pipeline
 
-Build a pipeline that validates input, transforms it, and handles errors.
+Now that you know the pieces, here's how they combine. Validate input, transform it, handle errors:
 
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
@@ -38,13 +272,11 @@ import {
   type ValidationResult,
 } from '@railway-ts/pipelines/schema';
 
-// 1. Define schema
 const schema = object({
   x: required(chain(parseNumber(), min(0))),
   y: required(chain(parseNumber(), min(1))),
 });
 
-// 2. Build pipeline
 async function compute(input: unknown): Promise<ValidationResult<number>> {
   const result = await pipeAsync(
     validate(input, schema),
@@ -57,147 +289,14 @@ async function compute(input: unknown): Promise<ValidationResult<number>> {
   });
 }
 
-// 3. Use it
 await compute({ x: '10', y: '2' }).then(console.log);
 // { valid: true, data: 5 }
 
 await compute({ x: '-5', y: '0' }).then(console.log);
-// { valid: false, errors: [...] }
+// { valid: false, errors: { x: 'Must be at least 0', y: 'Must be at least 1' } }
 ```
 
-**The key insight:** After validation, you never check for errors again. The pipeline propagates them automatically. Write happy path code, handle errors once at the end.
-
-## Real-World Example: Launch Decision System
-
-Validate launch parameters, fetch weather data, make GO/NO-GO decision.
-
-```typescript
-import { pipeAsync } from '@railway-ts/pipelines/composition';
-import { err, fromPromise, match, ok, flatMapWith, type Result } from '@railway-ts/pipelines/result';
-import {
-  formatErrors,
-  object,
-  required,
-  chain,
-  parseNumber,
-  min,
-  max,
-  stringEnum,
-  parseDate,
-  validate,
-  type ValidationError,
-  type ValidationResult,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
-
-// Schema
-const launchSchema = object({
-  vehicleType: required(stringEnum(['falcon9', 'atlas5'] as const)),
-  payload: required(chain(parseNumber(), min(1000), max(25_000))),
-  latitude: required(chain(parseNumber(), min(-90), max(90))),
-  longitude: required(chain(parseNumber(), min(-180), max(180))),
-  windowStart: required(parseDate()),
-});
-
-type LaunchParams = InferSchemaType<typeof launchSchema>;
-type VehicleType = LaunchParams['vehicleType'];
-
-// Weather API types
-type WeatherData = {
-  wind_speed_10m: number;
-  wind_direction_10m: number;
-  wind_gusts_10m: number;
-};
-
-type LaunchContext = {
-  params: LaunchParams;
-  weather: WeatherData;
-};
-
-type LaunchDecision = {
-  windSpeed: number;
-  windGusts: number;
-  maxAllowed: number;
-  recommendation: 'GO' | 'NO GO';
-  reason: string;
-};
-
-// Helper for API responses
-const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
-
-// Fetch weather and combine with params
-const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.append('latitude', params.latitude.toString());
-  url.searchParams.append('longitude', params.longitude.toString());
-  url.searchParams.append('current', 'wind_speed_10m,wind_direction_10m,wind_gusts_10m');
-  url.searchParams.append('wind_speed_unit', 'ms');
-
-  const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
-
-  return match(result, {
-    ok: (data) => ok({ params, weather: data.current }),
-    err: (msg) => err([{ path: ['weather_api'], message: String(msg) }]),
-  });
-};
-
-// Calculate wind loads and decision
-const assessLaunchConditions = async (context: LaunchContext): Promise<Result<LaunchDecision, ValidationError[]>> => {
-  const windLimits: Record<VehicleType, number> = {
-    falcon9: 15,
-    atlas5: 12,
-  };
-
-  const maxWind = windLimits[context.params.vehicleType];
-  const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
-  const isGo = actualMaxWind <= maxWind;
-
-  const decision: LaunchDecision = {
-    windSpeed: context.weather.wind_speed_10m,
-    windGusts: context.weather.wind_gusts_10m,
-    maxAllowed: maxWind,
-    recommendation: isGo ? 'GO' : 'NO GO',
-    reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
-  };
-
-  return ok(decision);
-};
-
-// Main pipeline
-const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
-  const validationResult = validate(input, launchSchema);
-
-  const result = await pipeAsync(
-    validationResult,
-    flatMapWith(fetchWeatherWithParams),
-    flatMapWith(assessLaunchConditions),
-  );
-
-  return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
-    ok: (decision) => ({ valid: true, data: decision }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
-  });
-};
-
-// Usage
-const result = await evaluateLaunch({
-  vehicleType: 'falcon9',
-  payload: 1000,
-  latitude: 28.5721,
-  longitude: -80.648,
-  windowStart: new Date('2025-01-01'),
-});
-
-console.log(result);
-// { valid: true, data: { windSpeed: 7.2, windGusts: 9.1, maxAllowed: 15, recommendation: 'GO', reason: 'Conditions nominal' } }
-```
-
-**The pattern:**
-
-1. Validate at boundary with schema
-2. Chain async operations with `pipeAsync` + `flatMapWith`
-3. Pure business logic functions
-4. Branch once at the end with `match`
+**The pattern:** validate at boundaries with schema, chain with `pipeAsync` + `flatMapWith`, branch once at the end with `match`.
 
 ## Running Examples
 
@@ -213,7 +312,7 @@ bun run examples/index.ts
 bun run examples/complete-pipelines/async-launch.ts
 ```
 
-**Start with:** `examples/complete-pipelines/async-launch.ts` - shows the full pattern.
+**Start with:** `examples/complete-pipelines/async-launch.ts` -- shows the full pattern.
 
 **Example categories:**
 
@@ -225,9 +324,9 @@ bun run examples/complete-pipelines/async-launch.ts
 
 ## Next Steps
 
-→ **[Recipes](docs/RECIPES.md)** - Common patterns like point-free composition  
-→ **[Advanced](docs/ADVANCED.md)** - Symbol branding, type inference details  
-→ **[API Reference](README.md)** - Full function catalog
+-> **[Recipes](docs/RECIPES.md)** - Patterns: point-free composition, error recovery, async pipelines, testing
+-> **[Advanced](docs/ADVANCED.md)** - Symbol branding, type inference, implementation details
+-> **[API Reference](README.md)** - Full function catalog
 
 ## Questions
 

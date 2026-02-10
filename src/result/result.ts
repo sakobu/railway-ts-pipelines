@@ -865,11 +865,25 @@ export function tapWith<T, E>(fn: (value: T) => MaybeAsync<void>): (result: Resu
  * // Point-free in a pipe
  * const result = pipe(err("oops"), tapErrWith((e: string) => reportError(e)));
  *
+ * // Async side effect in a pipe
+ * const audit = tapErrWith(async (error: string) => {
+ *   await logErrorToService(error);
+ * });
+ *
  * @param fn - The side-effect function to execute on the Err value
  * @returns A function that takes a Result, performs the side effect if Err, and returns the original Result
  */
-export function tapErrWith<E>(fn: (error: E) => void): <T>(result: Result<T, E>) => Result<T, E> {
-  return (result) => tapErr(result, fn);
+export function tapErrWith<E>(fn: (error: E) => Promise<void>): <T>(result: Result<T, E>) => Promise<Result<T, E>>;
+export function tapErrWith<E>(fn: (error: E) => void): <T>(result: Result<T, E>) => Result<T, E>;
+export function tapErrWith<E>(
+  fn: (error: E) => MaybeAsync<void>,
+): <T>(result: Result<T, E>) => MaybeAsync<Result<T, E>> {
+  return (result) => {
+    if (result.ok) return result;
+    const out = fn(result.error);
+    if (out instanceof Promise) return out.then(() => result);
+    return result;
+  };
 }
 
 /**

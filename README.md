@@ -14,50 +14,36 @@ bun add @railway-ts/pipelines  # or npm, pnpm, yarn
 
 Requires TypeScript 5.0+ and Node.js 18+.
 
-## Quick Start
+## What It Looks Like
 
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { ok, match, flatMapWith } from '@railway-ts/pipelines/result';
-import {
-  validate,
-  object,
-  required,
-  chain,
-  parseNumber,
-  min,
-  formatErrors,
-  type ValidationError,
-  type ValidationResult,
-} from '@railway-ts/pipelines/schema';
+import { validate, object, required, chain, parseNumber, min } from '@railway-ts/pipelines/schema';
 
 const schema = object({
   x: required(chain(parseNumber(), min(0))),
   y: required(chain(parseNumber(), min(1))),
 });
 
-async function compute(input: unknown): Promise<ValidationResult<number>> {
-  const result = await pipeAsync(
-    validate(input, schema),
-    flatMapWith(({ x, y }) => ok(x / y)),
-  );
+const result = await pipeAsync(
+  validate({ x: '10', y: '2' }, schema),
+  flatMapWith(({ x, y }) => ok(x / y)),
+);
 
-  return match<number, ValidationError[], ValidationResult<number>>(result, {
-    ok: (value) => ({ valid: true, data: value }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
-  });
-}
-
-await compute({ x: 10, y: 2 }).then(console.log); // { valid: true, data: 5 }
+match(result, {
+  ok: (value) => console.log(value), // 5
+  err: (errors) => console.error(errors),
+});
 ```
 
 **The pattern:** Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
 
 ## Documentation
 
--> **[Getting Started](GETTING_STARTED.md)** - Your first pipeline  
--> **[Recipes](docs/RECIPES.md)** - Common patterns (point-free composition, async, validation)  
--> **[Advanced](docs/ADVANCED.md)** - Symbol branding, tuple preservation, type inference  
+-> **[Getting Started](GETTING_STARTED.md)** - Core concepts, first pipeline, import patterns
+-> **[Recipes](docs/RECIPES.md)** - Point-free composition, error recovery, async pipelines, validation patterns
+-> **[Advanced](docs/ADVANCED.md)** - Symbol branding, type inference, implementation details
 -> **[Examples](examples/)** - Working code you can run
 
 ## Why This Library
@@ -70,11 +56,13 @@ await compute({ x: 10, y: 2 }).then(console.log); // { valid: true, data: 5 }
 
 **Railway-oriented:** Errors propagate automatically. Write happy path code, handle errors once at the end.
 
+**Standard Schema v1:** Works with tRPC, TanStack Form, React Hook Form, and any Standard Schema consumer via `toStandardSchema()`. See [Recipes](docs/RECIPES.md#standard-schema-interop).
+
 ## API Reference
 
 ### Option
 
-Handle nullable values without `if (x != null)` everywhere.
+Handle nullable values without `if (x !== null)` everywhere.
 
 ```typescript
 import { pipe } from '@railway-ts/pipelines/composition';
@@ -92,12 +80,12 @@ match(name, {
 }); // Output: Alice
 ```
 
-**Core:** `some`, `none`, `isSome`, `isNone`  
-**Transform:** `map`, `flatMap`, `bimap`, `filter`, `tap`  
-**Curried:** `mapWith`, `flatMapWith`, `filterWith`, `tapWith`  
-**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
-**Combine:** `combine`  
-**Convert:** `fromNullable`, `mapToResult`  
+**Core:** `some`, `none`, `isSome`, `isNone`
+**Transform:** `map`, `flatMap`, `bimap`, `filter`, `tap`
+**Curried:** `mapWith`, `flatMapWith`, `filterWith`, `tapWith`
+**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`
+**Combine:** `combine`
+**Convert:** `fromNullable`, `mapToResult`
 **Branch:** `match`
 
 ### Result
@@ -121,13 +109,13 @@ match(result, {
 }); // Output: 15
 ```
 
-**Core:** `ok`, `err`, `isOk`, `isErr`  
-**Transform:** `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr`  
-**Curried:** `mapWith`, `flatMapWith`, `mapErrWith`, `filterWith`, `tapWith`, `tapErrWith`  
-**Recovery:** `orElse`, `orElseWith`  
-**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`  
-**Combine:** `combine`, `combineAll`  
-**Convert:** `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption`  
+**Core:** `ok`, `err`, `isOk`, `isErr`
+**Transform:** `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr`
+**Curried:** `mapWith`, `flatMapWith`, `mapErrWith`, `filterWith`, `tapWith`, `tapErrWith`
+**Recovery:** `orElse`, `orElseWith`
+**Unwrap:** `unwrap`, `unwrapOr`, `unwrapOrElse`
+**Combine:** `combine`, `combineAll`
+**Convert:** `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption`
 **Branch:** `match`
 
 ### Schema
@@ -161,19 +149,22 @@ const result = validate(input, userSchema);
 // Result<User, ValidationError[]>
 ```
 
-**Primitives:** `string`, `number`, `boolean`, `date`, `bigint`  
-**Parsers:** `parseNumber`, `parseInt`, `parseFloat`, `parseJSON`, `parseString`, `parseBigInt`, `parseBool`, `parseDate`, `parseISODate`, `parseURL`, `parseEnum`  
-**Structures:** `object`, `array`, `tuple`, `tupleOf`  
-**Unions:** `union`, `discriminatedUnion`, `literal`  
-**Modifiers:** `required`, `optional`, `nullable`, `emptyAsOptional`  
-**String Constraints:** `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber`  
-**Number Constraints:** `min`, `max`, `integer`, `finite`, `between`  
-**Enums:** `stringEnum`, `numberEnum`  
-**Array Constraints:** `minItems`, `maxItems`, `notEmpty`, `unique`  
-**Combinators:** `chain`, `transform`, `refine`, `matches`  
-**Cross-field:** `refineAt`, `refineAtAsync`  
+**Primitives:** `string`, `number`, `boolean`, `date`, `bigint`
+**Parsers:** `parseNumber`, `parseString`, `parseBool`, `parseBigInt`, `parseDate`, `parseISODate`, `parseJSON`, `parseURL`, `parseEnum`
+**Structures:** `object`, `array`, `tuple`, `tupleOf`
+**Unions:** `union`, `discriminatedUnion`, `literal`
+**Modifiers:** `required`, `optional`, `nullable`, `emptyAsOptional`
+**String Constraints:** `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber`
+**Number Constraints:** `min`, `max`, `integer`, `finite`, `between`, `positive`, `negative`, `nonZero`, `divisibleBy`, `precision`
+**Date Constraints:** `dateRange`, `pastDate`, `futureDate`, `todayOrFuture`
+**Enums:** `stringEnum`, `enumValue`, `oneOf`
+**Boolean Constraints:** `matches`
+**Array Constraints:** `minItems`, `maxItems`, `notEmpty`, `unique`
+**Combinators:** `chain`, `transform`, `refine`
+**Cross-field:** `refineAt`, `refineAtAsync`
 **Async:** `chainAsync`, `refineAsync`, `refineAtAsync`
-**Utilities:** `validate`, `formatErrors`, `InferSchemaType`, `Validator`, `AsyncValidator`, `MaybeAsyncValidator`, `ValidationError`, `ValidationResult`
+**Utilities:** `validate`, `validateAndFormatResult`, `formatErrors`, `toStandardSchema`, `ROOT_ERROR_KEY`
+**Types:** `Validator`, `AsyncValidator`, `MaybeAsyncValidator`, `Schema`, `SyncSchema`, `InferSchemaType`, `ValidatorMapOutput`, `ValidationError`, `ValidationResult`, `StandardSchemaV1`
 
 ### Composition
 
@@ -204,19 +195,9 @@ const processOrder = flowAsync(validateOrder, chargePayment, createShipment);
 await processOrder(orderInput);
 ```
 
-**Sync:** `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled`  
+**Sync:** `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled`
 **Async:** `pipeAsync`, `flowAsync`
-
-## Import Patterns
-
-### Subpath imports (recommended for tree-shaking)
-
-```typescript
-import { some, none, map, mapWith } from '@railway-ts/pipelines/option';
-import { ok, err, flatMap, flatMapWith } from '@railway-ts/pipelines/result';
-import { pipe, flow, pipeAsync, flowAsync } from '@railway-ts/pipelines/composition';
-import { string, number, validate } from '@railway-ts/pipelines/schema';
-```
+**Types:** `MaybeAsync`
 
 ## Examples
 

@@ -1,10 +1,12 @@
-# Common Patterns
+# Recipes
+
+Patterns and techniques. Each recipe is self-contained. Assumes you've read [Getting Started](../GETTING_STARTED.md).
+
+---
 
 ## Point-Free Composition
 
-**This is why you're reading this document.**
-
-Eliminate wrapper lambdas in pipelines with curried helpers. These are exported from both the `result` and `option` modules.
+Eliminate wrapper lambdas in pipelines with curried helpers. Exported from both `result` and `option` modules.
 
 ### The Problem
 
@@ -60,32 +62,7 @@ const processData = flow(
 
 ---
 
-## Error Accumulation
-
-Collect all validation errors instead of failing on the first one.
-
-```typescript
-import { combineAll } from '@railway-ts/pipelines/result';
-import { validate, type ValidationError } from '@railway-ts/pipelines/schema';
-
-const validateFields = (data: unknown) => {
-  const name = validate(data.name, nameSchema);
-  const email = validate(data.email, emailSchema);
-  const age = validate(data.age, ageSchema);
-
-  return combineAll([name, email, age]);
-  // Result<[string, string, number], ValidationError[]>
-};
-
-match(validateFields(input), {
-  ok: ([name, email, age]) => createUser({ name, email, age }),
-  err: (errors) => displayAllErrors(errors),
-});
-```
-
----
-
-## Async Patterns
+## Async Pipelines
 
 ### Sequential Steps
 
@@ -110,6 +87,8 @@ const processOrder = async (input: unknown) => {
 
 ### Mixing Sync and Async
 
+`pipeAsync` awaits each step, so you can freely mix sync and async functions:
+
 ```typescript
 const process = async (input: unknown) =>
   await pipeAsync(
@@ -121,58 +100,46 @@ const process = async (input: unknown) =>
   );
 ```
 
----
+### Async Side Effects
 
-## Converting Legacy Code
-
-### Wrapping Try-Catch
+`tapWith` accepts async functions. Side effects run without altering the Result:
 
 ```typescript
-import { fromTry } from '@railway-ts/pipelines/result';
+import { tapWith, tapErrWith } from '@railway-ts/pipelines/result';
 
-// Legacy code that throws
-const parseConfig = (text: string) => JSON.parse(text);
-
-// Wrapped
-const safeParseConfig = (text: string) => fromTry(() => parseConfig(text));
-
-const config = safeParseConfig(input);
-// Result<any, string>
+const processAndAudit = async (input: unknown) =>
+  await pipeAsync(
+    validate(input, schema),
+    flatMapWith(processPayment),
+    tapWith(async (payment) => {
+      await auditLog.write({ event: 'payment_processed', payment });
+    }),
+    tapErrWith(async (errors) => {
+      await auditLog.write({ event: 'payment_failed', errors });
+    }),
+  );
 ```
 
-### Wrapping Promises
+### Reusable Async Pipelines
+
+Use `flowAsync` to define an async pipeline as a reusable function:
 
 ```typescript
-import { fromPromise } from '@railway-ts/pipelines/result';
+import { flowAsync } from '@railway-ts/pipelines/composition';
+import { mapWith, flatMapWith, tapWith } from '@railway-ts/pipelines/result';
 
-// Legacy async code
-const fetchUser = async (id: string) => {
-  const response = await fetch(`/api/users/${id}`);
-  return response.json();
-};
+const processOrder = flowAsync(
+  (input: unknown) => validate(input, orderSchema),
+  flatMapWith(validateInventory),
+  flatMapWith(chargePayment),
+  tapWith(async (order) => {
+    await sendConfirmationEmail(order);
+  }),
+  flatMapWith(createShipment),
+);
 
-// Wrapped
-const safeFetchUser = async (id: string) => fromPromise(fetchUser(id));
-
-const user = await safeFetchUser('123');
-// Result<User, string>
-```
-
-### Wrapping Nullable Returns
-
-```typescript
-import { fromNullable } from '@railway-ts/pipelines/option';
-
-// Legacy code that returns null
-const findUser = (id: string): User | null => {
-  /* ... */
-};
-
-// Wrapped
-const safeFindUser = (id: string) => fromNullable(findUser(id));
-
-const user = safeFindUser('123');
-// Option<User>
+// Use it
+const result = await processOrder(rawInput);
 ```
 
 ---
@@ -182,12 +149,62 @@ const user = safeFindUser('123');
 ### Multi-Step Validation
 
 ```typescript
+import { flow } from '@railway-ts/pipelines/composition';
+import { mapWith, flatMapWith, tapWith, tapErrWith } from '@railway-ts/pipelines/result';
+
 const validateAndTransform = flow(
   (input: unknown) => validate(input, inputSchema),
-  (r) => flatMap(r, (data) => validateBusinessRules(data)),
-  (r) => flatMap(r, (data) => checkAgainstDatabase(data)),
-  (r) => map(r, (data) => transformForStorage(data)),
+  flatMapWith(validateBusinessRules),
+  flatMapWith(checkAgainstDatabase),
+  mapWith(transformForStorage),
 );
+```
+
+### Cross-Field Validation
+
+Use `refineAt` after `object()` to validate relationships between fields. Errors are attached to a specific path:
+
+```typescript
+import { object, required, string, chain, refineAt } from '@railway-ts/pipelines/schema';
+
+const signupSchema = chain(
+  object({
+    password: required(string()),
+    confirmPassword: required(string()),
+  }),
+  refineAt('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
+);
+
+const result = validate({ password: 'abc', confirmPassword: 'xyz' }, signupSchema);
+// Err([{ path: ['confirmPassword'], message: 'Passwords must match' }])
+```
+
+### Formatting Errors for UI
+
+`formatErrors` flattens `ValidationError[]` into `Record<string, string>` keyed by dot-path. `ROOT_ERROR_KEY` (`"_root"`) is used for errors without a field path:
+
+```typescript
+import { validate, formatErrors, ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+import { match } from '@railway-ts/pipelines/result';
+
+const result = validate(input, schema);
+
+match(result, {
+  ok: (data) => submitForm(data),
+  err: (errors) => {
+    const formatted = formatErrors(errors);
+    // { name: 'Required', 'address.zip': 'Must be 5 digits', _root: 'Form invalid' }
+
+    // Wire to form state
+    for (const [field, message] of Object.entries(formatted)) {
+      if (field === ROOT_ERROR_KEY) {
+        showBanner(message);
+      } else {
+        setFieldError(field, message);
+      }
+    }
+  },
+});
 ```
 
 ### Conditional Validation
@@ -210,35 +227,126 @@ const validateConditionally = (input: unknown) => {
 ```typescript
 const validateAndLog = flow(
   (input: unknown) => validate(input, schema),
-  (r) => tap(r, (data) => logger.info('Validated:', data)),
-  (r) => tapErr(r, (errors) => logger.error('Failed:', errors)),
+  tapWith((data) => logger.info('Validated:', data)),
+  tapErrWith((errors) => logger.error('Failed:', errors)),
 );
 ```
 
 ---
 
-## Type Narrowing
+## Combining Results
 
-### Custom Type Guards
+### `combine` -- Fail on First Error
+
+Use when you need all results to succeed. Returns the first error encountered:
 
 ```typescript
-const isPositive = (n: number): Result<number, string> => (n > 0 ? ok(n) : err('Must be positive'));
+import { combine } from '@railway-ts/pipelines/result';
 
-const isEven = (n: number): Result<number, string> => (n % 2 === 0 ? ok(n) : err('Must be even'));
+const fetchUserData = async (userId: string) => {
+  const [profile, settings, preferences] = await Promise.all([
+    fetchProfile(userId),
+    fetchSettings(userId),
+    fetchPreferences(userId),
+  ]);
 
-const validateNumber = flow((n: number) =>
-  pipe(
-    n,
-    (x) => isPositive(x),
-    (r) => flatMap(r, isEven),
-  ),
-);
+  return combine([profile, settings, preferences]);
+  // Result<[Profile, Settings, Preferences], Error>
+};
+
+match(await fetchUserData('123'), {
+  ok: ([profile, settings, preferences]) => {
+    // All three succeeded, full type safety
+    return { profile, settings, preferences };
+  },
+  err: (error) => handleError(error),
+});
 ```
+
+### `combineAll` -- Collect All Errors
+
+Use for form validation where you want to show every error at once:
+
+```typescript
+import { combineAll } from '@railway-ts/pipelines/result';
+
+const validateForm = (data: { name: unknown; email: unknown; age: unknown }) => {
+  const name = validate(data.name, nameSchema);
+  const email = validate(data.email, emailSchema);
+  const age = validate(data.age, ageSchema);
+
+  return combineAll([name, email, age]);
+  // Result<[string, string, number], ValidationError[][]>
+};
+
+match(validateForm(input), {
+  ok: ([name, email, age]) => createUser({ name, email, age }),
+  err: (errorGroups) => displayAllErrors(errorGroups.flat()),
+});
+```
+
+### When to Use Which
+
+|                | `combine`                              | `combineAll`                      |
+| -------------- | -------------------------------------- | --------------------------------- |
+| **Stops at**   | First error                            | Collects all                      |
+| **Error type** | `E` (single)                           | `E[]` (array of all)              |
+| **Use case**   | Parallel fetches, dependent operations | Form validation, batch processing |
+
+---
+
+## Error Recovery
+
+### `orElse` -- Fallback on Error
+
+Recover from an `Err` by providing an alternative `Result`:
+
+```typescript
+import { ok, err, orElse } from '@railway-ts/pipelines/result';
+
+const primary = err('primary failed');
+const recovered = orElse(primary, (error) => ok('fallback value'));
+// Ok('fallback value')
+```
+
+### `orElseWith` -- Curried for Pipelines
+
+```typescript
+import { pipe } from '@railway-ts/pipelines/composition';
+import { orElseWith, flatMapWith, mapWith } from '@railway-ts/pipelines/result';
+
+const fetchWithFallback = (id: string) =>
+  pipe(
+    fetchFromCache(id),
+    orElseWith(() => fetchFromDatabase(id)),
+    orElseWith(() => fetchFromBackupService(id)),
+    mapWith(normalize),
+  );
+```
+
+### `bimap` -- Transform Both Branches
+
+Apply different transformations to `Ok` and `Err` in one step:
+
+```typescript
+import { bimap } from '@railway-ts/pipelines/result';
+
+const result = bimap(
+  fetchUser(id),
+  (user) => user.displayName, // transform Ok
+  (error) => `Failed: ${error.code}`, // transform Err
+);
+// Result<string, string>
+```
+
+---
+
+## Discriminated Unions and Enums
 
 ### Discriminated Unions
 
 ```typescript
-import { discriminatedUnion, literal, object } from '@railway-ts/pipelines/schema';
+import { discriminatedUnion, literal, object, required, number } from '@railway-ts/pipelines/schema';
 
 const shapeSchema = discriminatedUnion('type', {
   circle: object({
@@ -267,54 +375,179 @@ match(result, {
 });
 ```
 
----
+### Enum Validation
 
-## Combining Multiple Data Sources
+Three ways to validate enums, each for a different use case:
+
+**`stringEnum`** -- String union types (most common):
 
 ```typescript
-import { combine } from '@railway-ts/pipelines/result';
+import { stringEnum } from '@railway-ts/pipelines/schema';
 
-const fetchUserData = async (userId: string) => {
-  const [profile, settings, preferences] = await Promise.all([
-    fetchProfile(userId),
-    fetchSettings(userId),
-    fetchPreferences(userId),
-  ]);
+const roleValidator = stringEnum(['admin', 'editor', 'viewer'] as const);
+// Validator<unknown, 'admin' | 'editor' | 'viewer'>
 
-  // Combine all results, fail if any failed
-  return combine([profile, settings, preferences]);
-  // Result<[Profile, Settings, Preferences], Error>
-};
+validate('admin', roleValidator); // Ok('admin')
+validate('hacker', roleValidator); // Err(...)
+```
 
-const data = await fetchUserData('123');
+**`enumValue`** -- TypeScript `enum` keyword:
 
-match(data, {
-  ok: ([profile, settings, preferences]) => {
-    // All three succeeded, full type safety
-    return { profile, settings, preferences };
-  },
-  err: (error) => {
-    // One or more failed
-    return null;
-  },
+```typescript
+import { enumValue } from '@railway-ts/pipelines/schema';
+
+enum Status {
+  Active = 'active',
+  Inactive = 'inactive',
+}
+
+const statusValidator = enumValue(Status);
+// Validator<unknown, Status>
+
+validate('active', statusValidator); // Ok(Status.Active)
+```
+
+**`oneOf`** -- Any fixed set of values:
+
+```typescript
+import { oneOf } from '@railway-ts/pipelines/schema';
+
+const priorityValidator = oneOf([1, 2, 3] as const);
+// Validator<unknown, 1 | 2 | 3>
+
+validate(2, priorityValidator); // Ok(2)
+validate(5, priorityValidator); // Err(...)
+```
+
+|                 | `stringEnum`        | `enumValue`      | `oneOf`              |
+| --------------- | ------------------- | ---------------- | -------------------- |
+| **Input**       | `readonly string[]` | TS `enum` object | `readonly T[]`       |
+| **Output type** | String union        | Enum type        | Union of values      |
+| **Use when**    | String literals     | TS enums         | Numbers, mixed types |
+
+---
+
+## Type Interop: Option, Result, Promise
+
+Convert between `Option`, `Result`, and `Promise` when crossing module boundaries.
+
+### Option -> Result
+
+When an optional lookup needs to participate in a Result pipeline:
+
+```typescript
+import { fromNullable, mapToResult } from '@railway-ts/pipelines/option';
+
+const users = new Map([['1', 'Alice']]);
+
+const userResult = mapToResult(fromNullable(users.get('999')), 'User not found');
+// Result<string, string> -- Err('User not found')
+```
+
+### Result -> Option
+
+When you care about the value but not the specific error:
+
+```typescript
+import { fromTry, mapToOption } from '@railway-ts/pipelines/result';
+
+const parsed = mapToOption(fromTry(() => JSON.parse(text)));
+// Option<any> -- Some if parsed, None if threw
+```
+
+### Result -> Promise
+
+Bridge into async code that expects thrown errors:
+
+```typescript
+import { err, ok, toPromise } from '@railway-ts/pipelines/result';
+
+const value = await toPromise(ok(42));
+// 42
+
+await toPromise(err('boom'));
+// throws 'boom'
+```
+
+### Mixed Workflow
+
+```typescript
+import { pipe } from '@railway-ts/pipelines/composition';
+import { fromNullable, mapToResult } from '@railway-ts/pipelines/option';
+import { err, flatMapWith, match, ok } from '@railway-ts/pipelines/result';
+
+const getApiKey = () => fromNullable(process.env.API_KEY);
+
+const callApi = (key: string) => (key === 'valid' ? ok('response data') : err('Invalid API key'));
+
+const result = pipe(mapToResult(getApiKey(), 'API key not configured'), flatMapWith(callApi));
+
+match(result, {
+  ok: (data) => console.log(data),
+  err: (error) => console.error(error),
 });
 ```
 
 ---
 
-## Reusable Validators
+## Specialized Validators
+
+### Number Validators
 
 ```typescript
-import { chain, string, pattern } from '@railway-ts/pipelines/schema';
+import { chain, parseNumber, positive, precision, min, max, integer, between } from '@railway-ts/pipelines/schema';
 
-// Reusable validators
+// Currency: positive, 2 decimal places
+const currency = chain(parseNumber(), positive(), precision(2));
+
+// Age: integer between 0 and 150
+const age = chain(parseNumber(), integer(), between(0, 150));
+
+// Temperature: any number in range
+const temperature = chain(parseNumber(), min(-273.15), max(1_000_000));
+```
+
+### Date Validators
+
+```typescript
+import { chain, parseDate, parseISODate, todayOrFuture, pastDate, dateRange } from '@railway-ts/pipelines/schema';
+
+// Booking date: must be in the future
+const bookingDate = chain(parseDate(), todayOrFuture());
+
+// Birth date: must be in the past
+const birthDate = chain(parseDate(), pastDate());
+
+// Event window: within a specific range
+const eventDate = chain(parseISODate(), dateRange(new Date('2025-01-01'), new Date('2025-12-31')));
+```
+
+### Empty-String Handling
+
+`emptyAsOptional` treats empty strings (and `null`/`undefined`) as `undefined` instead of failing validation. Useful for HTML forms where blank fields submit as `""`:
+
+```typescript
+import { object, required, optional, string, emptyAsOptional, chain, parseNumber } from '@railway-ts/pipelines/schema';
+
+const formSchema = object({
+  name: required(string()),
+  nickname: optional(emptyAsOptional(string())), // "" -> undefined
+  age: optional(emptyAsOptional(chain(parseNumber()))), // "" -> undefined, "25" -> 25
+});
+
+validate({ name: 'Alice', nickname: '', age: '' }, formSchema);
+// Ok({ name: 'Alice' }) -- nickname and age are undefined, not errors
+```
+
+### Reusable Validators
+
+```typescript
+import { chain, object, optional, pattern, required, string } from '@railway-ts/pipelines/schema';
+
 const email = () => chain(string(), pattern(/^[^@]+@[^@]+\.[^@]+$/));
-
 const phoneUS = () => chain(string(), pattern(/^\d{3}-\d{3}-\d{4}$/));
-
 const zipCode = () => chain(string(), pattern(/^\d{5}$/));
 
-// Compose into larger schemas
 const contactSchema = object({
   email: required(email()),
   phone: optional(phoneUS()),
@@ -324,7 +557,91 @@ const contactSchema = object({
 
 ---
 
+## Standard Schema Interop
+
+`toStandardSchema` wraps any validator as a [Standard Schema v1](https://github.com/standard-schema/standard-schema) object, making it compatible with tRPC, TanStack Form, React Hook Form, and other tools that accept Standard Schema.
+
+```typescript
+import { toStandardSchema, type StandardSchemaV1 } from '@railway-ts/pipelines/schema';
+
+const userSchema = object({
+  name: required(string()),
+  age: required(chain(parseNumber(), min(18))),
+});
+
+const standardUser = toStandardSchema(userSchema);
+// StandardSchemaV1<unknown, { name: string; age: number }>
+```
+
+Works with both sync and async validators:
+
+```typescript
+const asyncSchema = chainAsync(
+  object({ email: required(string()) }),
+  refineAtAsync(
+    'email',
+    async (data) => {
+      const exists = await checkEmailExists(data.email);
+      return !exists;
+    },
+    'Email already in use',
+  ),
+);
+
+const standardAsync = toStandardSchema(asyncSchema);
+// Can be passed to any Standard Schema consumer
+```
+
+---
+
+## Composition Utilities
+
+### `curry` / `uncurry` -- Partial Application
+
+Convert multi-argument functions to chains of single-argument functions and back:
+
+```typescript
+import { curry, uncurry } from '@railway-ts/pipelines/composition';
+
+const add = (a: number, b: number) => a + b;
+
+const curriedAdd = curry(add);
+const add5 = curriedAdd(5);
+add5(3); // 8
+
+// Reverse it
+const originalAdd = uncurry(curriedAdd);
+originalAdd(5, 3); // 8
+```
+
+### `tupled` / `untupled` -- Tuple Conversion
+
+Convert between multi-argument and tuple-accepting functions. Pairs naturally with `combine`:
+
+```typescript
+import { tupled, untupled } from '@railway-ts/pipelines/composition';
+import { combine, mapWith, match } from '@railway-ts/pipelines/result';
+import { pipe } from '@railway-ts/pipelines/composition';
+
+const createUser = (name: string, age: number) => ({ name, age });
+
+const tupledCreate = tupled(createUser);
+// ([string, number]) => { name: string; age: number }
+
+// Combine validated fields, then pass the tuple directly
+const result = pipe(combine([validateName(input.name), validateAge(input.age)]), mapWith(tupledCreate));
+// Result<{ name: string; age: number }, ValidationError>
+
+// Reverse it
+const originalCreate = untupled(tupledCreate);
+originalCreate('Alice', 30); // { name: 'Alice', age: 30 }
+```
+
+---
+
 ## Testing Pipelines
+
+### Sync Pipelines
 
 ```typescript
 import { isOk, isErr } from '@railway-ts/pipelines/result';
@@ -347,3 +664,164 @@ test('rejects invalid age', () => {
   }
 });
 ```
+
+### Async Pipelines
+
+```typescript
+test('processes order end-to-end', async () => {
+  const result = await processOrder({ item: 'widget', quantity: 5 });
+
+  expect(isOk(result)).toBe(true);
+  if (isOk(result)) {
+    expect(result.value.status).toBe('shipped');
+  }
+});
+
+test('rejects invalid quantity', async () => {
+  const result = await processOrder({ item: 'widget', quantity: -1 });
+
+  expect(isErr(result)).toBe(true);
+});
+```
+
+---
+
+## Full Example: Launch Decision Pipeline
+
+Full pipeline: validate launch parameters, fetch weather data, make GO/NO-GO decision.
+
+```typescript
+import { pipeAsync } from '@railway-ts/pipelines/composition';
+import { err, fromPromise, match, ok, flatMapWith, type Result } from '@railway-ts/pipelines/result';
+import {
+  formatErrors,
+  object,
+  required,
+  chain,
+  parseNumber,
+  min,
+  max,
+  stringEnum,
+  parseDate,
+  validate,
+  type ValidationError,
+  type ValidationResult,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
+
+// Schema
+const launchSchema = object({
+  vehicleType: required(stringEnum(['falcon9', 'atlas5'] as const)),
+  payload: required(chain(parseNumber(), min(1000), max(25_000))),
+  latitude: required(chain(parseNumber(), min(-90), max(90))),
+  longitude: required(chain(parseNumber(), min(-180), max(180))),
+  windowStart: required(parseDate()),
+});
+
+type LaunchParams = InferSchemaType<typeof launchSchema>;
+type VehicleType = LaunchParams['vehicleType'];
+
+// Weather API types
+type WeatherData = {
+  wind_speed_10m: number;
+  wind_direction_10m: number;
+  wind_gusts_10m: number;
+};
+
+type LaunchContext = {
+  params: LaunchParams;
+  weather: WeatherData;
+};
+
+type LaunchDecision = {
+  windSpeed: number;
+  windGusts: number;
+  maxAllowed: number;
+  recommendation: 'GO' | 'NO GO';
+  reason: string;
+};
+
+// Helper for API responses
+const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
+
+// Fetch weather and combine with params
+const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.append('latitude', params.latitude.toString());
+  url.searchParams.append('longitude', params.longitude.toString());
+  url.searchParams.append('current', 'wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+  url.searchParams.append('wind_speed_unit', 'ms');
+
+  const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
+
+  return match(result, {
+    ok: (data) => ok({ params, weather: data.current }),
+    err: (msg) => err([{ path: ['weather_api'], message: String(msg) }]),
+  });
+};
+
+// Calculate wind loads and decision
+const assessLaunchConditions = async (context: LaunchContext): Promise<Result<LaunchDecision, ValidationError[]>> => {
+  const windLimits: Record<VehicleType, number> = {
+    falcon9: 15,
+    atlas5: 12,
+  };
+
+  const maxWind = windLimits[context.params.vehicleType];
+  const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
+  const isGo = actualMaxWind <= maxWind;
+
+  const decision: LaunchDecision = {
+    windSpeed: context.weather.wind_speed_10m,
+    windGusts: context.weather.wind_gusts_10m,
+    maxAllowed: maxWind,
+    recommendation: isGo ? 'GO' : 'NO GO',
+    reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
+  };
+
+  return ok(decision);
+};
+
+// Main pipeline
+const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {
+  const validationResult = validate(input, launchSchema);
+
+  const result = await pipeAsync(
+    validationResult,
+    flatMapWith(fetchWeatherWithParams),
+    flatMapWith(assessLaunchConditions),
+  );
+
+  return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
+    ok: (decision) => ({ valid: true, data: decision }),
+    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  });
+};
+
+// Usage
+const result = await evaluateLaunch({
+  vehicleType: 'falcon9',
+  payload: 1000,
+  latitude: 28.5721,
+  longitude: -80.648,
+  windowStart: new Date('2025-01-01'),
+});
+
+console.log(result);
+// { valid: true, data: { windSpeed: 7.2, windGusts: 9.1, maxAllowed: 15, recommendation: 'GO', reason: 'Conditions nominal' } }
+```
+
+**The pattern:**
+
+1. Validate at boundary with schema
+2. Chain async operations with `pipeAsync` + `flatMapWith`
+3. Pure business logic functions
+4. Branch once at the end with `match`
+
+---
+
+## Next Steps
+
+-> **[Getting Started](../GETTING_STARTED.md)** - Core concepts and first pipeline
+-> **[Advanced](ADVANCED.md)** - Symbol branding, type inference, implementation details
+-> **[API Reference](../README.md)** - Full function catalog
