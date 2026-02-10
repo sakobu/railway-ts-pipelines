@@ -40,14 +40,6 @@ type LaunchContext = {
   weather: WeatherData;
 };
 
-type LaunchDecision = {
-  windSpeed: number;
-  windGusts: number;
-  maxAllowed: number;
-  recommendation: 'GO' | 'NO GO';
-  reason: string;
-};
-
 // Helper for API responses
 const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
 
@@ -79,7 +71,7 @@ const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<Laun
 };
 
 // Pure calculation — always succeeds, so mapWith (not flatMapWith)
-const assessLaunchConditions = (context: LaunchContext): LaunchDecision => {
+const assessLaunchConditions = (context: LaunchContext) => {
   const windLimits: Record<VehicleType, number> = {
     falcon9: 15,
     atlas5: 12,
@@ -97,6 +89,8 @@ const assessLaunchConditions = (context: LaunchContext): LaunchDecision => {
     reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
   };
 };
+
+type LaunchDecision = ReturnType<typeof assessLaunchConditions>;
 
 // Main pipeline
 const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDecision>> => {

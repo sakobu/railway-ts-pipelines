@@ -61,38 +61,38 @@ const trigNT = (n: number, t: number) => {
 };
 
 // Flattened propagation functions - no currying
-const propagateX = (x0: number, vx0: number, vy0: number, n: number, t: number): number => {
+const propagateX = (x0: number, vx0: number, vy0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return (4 - 3 * c) * x0 + (s / n) * vx0 + ((2 * (1 - c)) / n) * vy0;
 };
 
-const propagateY = (x0: number, y0: number, vx0: number, vy0: number, n: number, t: number): number => {
+const propagateY = (x0: number, y0: number, vx0: number, vy0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return 6 * (s - n * t) * x0 + y0 - ((2 * (1 - c)) / n) * vx0 + ((4 * s - 3 * n * t) / n) * vy0;
 };
 
-const propagateZ = (z0: number, vz0: number, n: number, t: number): number => {
+const propagateZ = (z0: number, vz0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return c * z0 + (s / n) * vz0;
 };
 
-const propagateVx = (x0: number, vx0: number, vy0: number, n: number, t: number): number => {
+const propagateVx = (x0: number, vx0: number, vy0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return 3 * n * s * x0 + c * vx0 + 2 * s * vy0;
 };
 
-const propagateVy = (x0: number, vx0: number, vy0: number, n: number, t: number): number => {
+const propagateVy = (x0: number, vx0: number, vy0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return 6 * n * (c - 1) * x0 - 2 * s * vx0 + (4 * c - 3) * vy0;
 };
 
-const propagateVz = (z0: number, vz0: number, n: number, t: number): number => {
+const propagateVz = (z0: number, vz0: number, n: number, t: number) => {
   const { s, c } = trigNT(n, t);
   return -n * s * z0 + c * vz0;
 };
 
 // Main propagation function - works on validated input
-const propagateRelativeMotion = (state: RelativeState): { position: Vec3; velocity: Vec3 } => {
+const propagateRelativeMotion = (state: RelativeState) => {
   const n = meanMotion(state.semiMajorAxis);
   const t = state.time;
   const { position: p0, velocity: v0 } = state;
@@ -114,7 +114,7 @@ const propagateRelativeMotion = (state: RelativeState): { position: Vec3; veloci
 };
 
 // Calculate relative distance
-const relativeDistance = (state: { position: Vec3 }): number =>
+const relativeDistance = (state: { position: Vec3 }) =>
   Math.hypot(state.position.x, state.position.y, state.position.z);
 
 // Add distance to propagated state
@@ -130,12 +130,8 @@ const hillsPropagation = flow(
   mapWith(addDistance),
 );
 
-// Define the output type for propagated state
-type PropagatedState = {
-  position: Vec3;
-  velocity: Vec3;
-  distance: number;
-};
+// Derive the output type from the addDistance function
+type PropagatedState = ReturnType<typeof addDistance>;
 
 // Usage - ISS rendezvous scenario
 const propagationResult = hillsPropagation({
@@ -182,11 +178,8 @@ const driftAnalysis = flow(
   mapWith(trajectoryToDistances),
 );
 
-// Define type for drift analysis output
-type DriftPoint = {
-  time: number;
-  distance: number;
-};
+// Derive the output type from the trajectoryToDistances function
+type DriftPoint = ReturnType<typeof trajectoryToDistances>[number];
 
 const driftResult = driftAnalysis({
   position: vec3(0.01, 0, 0), // 10m radial offset
