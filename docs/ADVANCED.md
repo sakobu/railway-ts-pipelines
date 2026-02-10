@@ -184,6 +184,5 @@ The library prioritizes **zero runtime surprises** by pushing as much validation
 
 ## Next Steps
 
--> **[Getting Started](../GETTING_STARTED.md)** - Core concepts and first pipeline
 -> **[Recipes](RECIPES.md)** - Patterns: point-free composition, error recovery, async pipelines
 -> **[API Reference](../README.md)** - Full function catalog

@@ -1,6 +1,6 @@
 # Recipes
 
-Patterns and techniques. Each recipe is self-contained. Assumes you've read [Getting Started](../GETTING_STARTED.md).
+Patterns and techniques. Each recipe is self-contained.
 
 ---
 
@@ -84,6 +84,31 @@ const processOrder = async (input: unknown) => {
   });
 };
 ```
+
+### Parallel Execution in Object Schemas
+
+When an `object()` schema contains async validators, all fields are validated concurrently using `Promise.all`. This means three async field validators that each take 50ms finish in ~50ms total, not 150ms:
+
+```typescript
+import { object, required, chainAsync, string, refineAsync, validate } from '@railway-ts/pipelines/schema';
+
+const signupSchema = object({
+  email: required(chainAsync(string(), refineAsync(async (email) => {
+    return !(await isEmailTaken(email)); // ~50ms
+  }, 'Email already in use'))),
+  username: required(chainAsync(string(), refineAsync(async (name) => {
+    return !(await isUsernameTaken(name)); // ~50ms
+  }, 'Username taken'))),
+  invite: required(chainAsync(string(), refineAsync(async (code) => {
+    return await isValidInvite(code); // ~50ms
+  }, 'Invalid invite code'))),
+});
+
+// All three checks run in parallel: ~50ms total, not ~150ms
+const result = await validate(input, signupSchema);
+```
+
+This applies to `object()`, `tuple()`, and `tupleOf()`. If all validators in the schema are synchronous, the return type stays synchronous -- you don't pay for async when you don't use it.
 
 ### Mixing Sync and Async
 
@@ -822,6 +847,5 @@ console.log(result);
 
 ## Next Steps
 
--> **[Getting Started](../GETTING_STARTED.md)** - Core concepts and first pipeline
 -> **[Advanced](ADVANCED.md)** - Symbol branding, type inference, implementation details
 -> **[API Reference](../README.md)** - Full function catalog

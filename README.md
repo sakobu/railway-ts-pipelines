@@ -4,7 +4,7 @@
 
 Railway-oriented programming for TypeScript. Result and Option types that don't suck.
 
-**Design philosophy:** Small, focused API surface. Practical over academic. No fp-ts complexity, no Effect-TS kitchen sink.
+Small, focused API surface. Errors propagate automatically, you handle them once at the end.
 
 ## Install
 
@@ -14,11 +14,49 @@ bun add @railway-ts/pipelines  # or npm, pnpm, yarn
 
 Requires TypeScript 5.0+ and Node.js 18+.
 
-## What It Looks Like
+## Quick Example
 
-Same task, two styles — use whichever fits your codebase.
+```typescript
+import { pipe } from '@railway-ts/pipelines/composition';
+import { ok, err, mapWith, match } from '@railway-ts/pipelines/result';
 
-**Pipeline-first** — keep validation and computation as separate pipeline steps:
+const divide = (a: number, b: number) =>
+  b === 0 ? err('div by zero') : ok(a / b);
+
+const result = pipe(
+  divide(10, 2),
+  mapWith((x) => x * 3),
+);
+
+match(result, {
+  ok: (value) => console.log(value),   // 15
+  err: (error) => console.error(error),
+});
+```
+
+## Documentation
+
+-> **[Getting Started](docs/GETTING_STARTED.md)** - Guided walkthrough from first principles to full pipelines
+-> **[Recipes](docs/RECIPES.md)** - Point-free composition, error recovery, async pipelines, validation patterns
+-> **[Advanced](docs/ADVANCED.md)** - Symbol branding, type inference, implementation details
+-> **[Examples](examples/)** - Working code you can run
+
+For a complete real-world pipeline, see the [Launch Decision Pipeline](docs/RECIPES.md#full-example-launch-decision-pipeline) -- validates input, fetches weather data, and makes a GO/NO-GO decision.
+
+## What's Included
+
+- **Result\<T, E\>** -- typed success/failure with map, flatMap, match, and recovery
+- **Option\<T\>** -- nullable handling without null checks
+- **Schema validation** -- parse unknown data, accumulate all errors, infer TypeScript types
+- **Composition** -- `pipe`, `flow`, `pipeAsync`, `flowAsync`, `curry`
+- **Async** -- sync-preserving overloads, parallel field validation, seamless sync/async mixing
+- **Standard Schema v1** -- `toStandardSchema()` for tRPC, TanStack Form, React Hook Form, and other consumers
+
+## Two Styles
+
+Same task, two approaches -- use whichever fits your codebase.
+
+**Pipeline-first** -- keep validation and computation as separate pipeline steps:
 
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
@@ -55,7 +93,7 @@ async function compute(input: unknown) {
 await compute({ x: '10', y: '2' }).then(console.log); // { valid: true, data: 5 }
 ```
 
-**Schema-first** — fold the transform into the schema, get the result in one call:
+**Schema-first** -- fold the transform into the schema, get the result in one call:
 
 ```typescript
 import {
@@ -81,25 +119,6 @@ console.log(result); // { valid: true, data: 5 }
 ```
 
 **The pattern:** Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
-
-## Documentation
-
--> **[Getting Started](GETTING_STARTED.md)** - Core concepts, first pipeline, import patterns
--> **[Recipes](docs/RECIPES.md)** - Point-free composition, error recovery, async pipelines, validation patterns
--> **[Advanced](docs/ADVANCED.md)** - Symbol branding, type inference, implementation details
--> **[Examples](examples/)** - Working code you can run
-
-## Why This Library
-
-**Focused scope:** Result, Option, validation, composition. That's it. No monads seminar.
-
-**Practical:** Eliminates boilerplate for real patterns. Documentation shows you how, doesn't make it part of the API.
-
-**Type-safe:** Symbol branding prevents duck typing bugs. Tuple preservation means no type casts.
-
-**Railway-oriented:** Errors propagate automatically. Write happy path code, handle errors once at the end.
-
-**Standard Schema v1:** Works with tRPC, TanStack Form, React Hook Form, and any Standard Schema consumer via `toStandardSchema()`. See [Recipes](docs/RECIPES.md#standard-schema-interop).
 
 ## API Reference
 
@@ -164,6 +183,8 @@ match(result, {
 ### Schema
 
 Parse untrusted data into typed values. Accumulates all validation errors.
+
+> **Standard Schema v1 compliant** — use `toStandardSchema()` for interop with tRPC, TanStack Form, React Hook Form, and other Standard Schema consumers. See [Recipes → Standard Schema Interop](docs/RECIPES.md#standard-schema-interop).
 
 ```typescript
 import {
