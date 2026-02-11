@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 
 import { useDebounce } from './useDebounce';
+import { deepEqual } from './utils';
 
 /**
  * Represents the subset of form methods needed for auto-submission
@@ -10,7 +11,7 @@ type FormWithAutoSubmit<T> = {
   values: T;
   isDirty: boolean;
   isValid: boolean;
-  validateForm: (values: T) => void;
+  validateForm: (values: T) => { ok: boolean } | Promise<{ ok: boolean }>;
   handleSubmit: () => void;
 };
 
@@ -57,7 +58,7 @@ export const useFormAutoSubmission = <T>(
   delay = 200
 ) => {
   const { values, isDirty, isValid, validateForm, handleSubmit } = form;
-  const lastValidatedRef = useRef('');
+  const lastValidatedRef = useRef<T | null>(null);
 
   const debouncedSubmit = useDebounce(() => {
     if (isValid) handleSubmit();
@@ -65,15 +66,19 @@ export const useFormAutoSubmission = <T>(
 
   useEffect(() => {
     if (!isDirty) return;
+    if (deepEqual(values, lastValidatedRef.current)) return;
 
-    const valuesString = JSON.stringify(values);
-    if (valuesString === lastValidatedRef.current) return;
+    lastValidatedRef.current = values;
+    const result = validateForm(values);
 
-    lastValidatedRef.current = valuesString;
-    validateForm(values);
-
-    if (isValid) debouncedSubmit();
-  }, [values, isDirty, isValid, debouncedSubmit, validateForm]);
+    if (result instanceof Promise) {
+      void result.then((r) => {
+        if (r.ok) debouncedSubmit();
+      });
+    } else if (result.ok) {
+      debouncedSubmit();
+    }
+  }, [values, isDirty, debouncedSubmit, validateForm]);
 
   return null;
 };

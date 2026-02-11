@@ -6,6 +6,7 @@ import {
   userValidator,
   alwaysValidValidator,
   alwaysInvalidValidator,
+  alwaysValidAsyncValidator,
   type UserForm,
 } from '../fixtures/validators';
 
@@ -232,6 +233,32 @@ describe('useFormAutoSubmission', () => {
       expect(onSubmit).toHaveBeenCalledWith({ name: 'Jane' });
     });
 
+    test('auto-submits with async validator after validation resolves', async () => {
+      const onSubmit = mock((_values: Record<string, unknown>) => {});
+
+      const { result } = renderHook(() => {
+        const form = useForm(alwaysValidAsyncValidator, {
+          initialValues: { name: 'John' },
+          onSubmit,
+        });
+        useFormAutoSubmission(form);
+        return form;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(1);
+        },
+        { timeout: 500 }
+      );
+
+      expect(onSubmit).toHaveBeenCalledWith({ name: 'Jane' });
+    });
+
     test('does not submit if validation fails', async () => {
       const onSubmit = mock(() => {});
 
@@ -426,6 +453,59 @@ describe('useFormAutoSubmission', () => {
         name: 'Jane',
         email: 'jane@example.com',
         age: 30,
+      });
+    });
+  });
+
+  describe('stale isValid bug', () => {
+    test('submits after transitioning from invalid to valid values', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const initialValues = {
+        name: 'John',
+        email: 'john@example.com',
+        age: 25,
+      };
+
+      const { result } = renderHook(() => {
+        const form = useForm(userValidator, {
+          initialValues,
+          onSubmit,
+        });
+        useFormAutoSubmission(form);
+        return form;
+      });
+
+      // Make form invalid first
+      act(() => {
+        result.current.setFieldValue('name', '');
+      });
+
+      // Wait for validation to mark form as invalid
+      await waitFor(
+        () => {
+          expect(result.current.isValid).toBe(false);
+        },
+        { timeout: 300 }
+      );
+
+      // Now fix the invalid field back to valid
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      // The fix: validateForm return value is used directly,
+      // so submission should fire even though isValid was false on the previous render
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(1);
+        },
+        { timeout: 500 }
+      );
+
+      expect(onSubmit).toHaveBeenCalledWith({
+        name: 'Jane',
+        email: 'john@example.com',
+        age: 25,
       });
     });
   });
