@@ -286,23 +286,30 @@ form.setFieldTouched('password', false);
 
 ### setValues
 
-Update multiple field values at once.
+Update multiple field values at once. Nested objects are deep-merged so
+sibling keys you don't mention are preserved.
 
 ```typescript
-setValues(values: Partial<TValues>, shouldValidate?: boolean): void
+setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 ```
 
 **Parameters:**
 
-- `values` - Partial object with new values
+- `values` - Deep-partial object with new values (nested objects merge recursively; arrays, Dates, and primitives replace)
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
 
 **Example:**
 
 ```typescript
+// Flat update
 form.setValues({
   email: 'user@example.com',
   password: 'newpassword',
+});
+
+// Nested update — only city changes; street and zip are preserved
+form.setValues({
+  address: { city: 'NYC' },
 });
 ```
 

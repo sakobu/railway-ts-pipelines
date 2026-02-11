@@ -30,6 +30,14 @@ import type { ChangeEvent } from 'react';
  */
 export type FieldPath = string;
 
+export type DeepPartial<T> = T extends Date | RegExp | File | Blob
+  ? T
+  : T extends Array<unknown>
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
 /**
  * Internal state maintained by the form hook.
  *
@@ -850,7 +858,7 @@ export type FormAction<TValues extends Record<string, unknown>> =
       /** Updates multiple field values at once and optionally triggers validation */
       type: 'SET_VALUES';
       /** Partial object of field values to update */
-      values: Partial<TValues>;
+      values: DeepPartial<TValues>;
       /** Whether to trigger validation after setting values */
       shouldValidate?: boolean;
     }

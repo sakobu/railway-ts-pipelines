@@ -124,6 +124,26 @@ describe('useForm', () => {
       expect(result.current.values.email).toBe('jane@example.com');
       expect(result.current.isDirty).toBe(true);
     });
+
+    test('deep merges nested objects preserving sibling keys', () => {
+      const initialValues: UserWithAddressForm = {
+        name: 'John',
+        address: { street: '123 Main', city: 'LA', zip: '10001' },
+      };
+
+      const { result } = renderHook(() =>
+        useForm(userWithAddressValidator, { initialValues })
+      );
+
+      act(() => {
+        result.current.setValues({ address: { city: 'NYC' } });
+      });
+
+      expect(result.current.values.address?.city).toBe('NYC');
+      expect(result.current.values.address?.street).toBe('123 Main');
+      expect(result.current.values.address?.zip).toBe('10001');
+      expect(result.current.values.name).toBe('John');
+    });
   });
 
   describe('setFieldTouched', () => {

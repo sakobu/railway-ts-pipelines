@@ -136,6 +136,39 @@ describe('formReducer', () => {
       expect(result.isDirty).toBe(true);
     });
 
+    test('deep merges nested objects preserving sibling properties', () => {
+      const nestedValues = {
+        name: 'John',
+        address: { street: '123 Main', city: 'LA', zip: '10001' },
+      };
+      const nestedState: FormState<typeof nestedValues> = {
+        values: nestedValues,
+        touched: {},
+        clientErrors: {},
+        serverErrors: {},
+        fieldErrors: {},
+        validatingFields: {},
+        isSubmitting: false,
+        isFormValidating: false,
+        submitCount: 0,
+        isDirty: false,
+      };
+
+      const result = formReducer(
+        nestedState,
+        {
+          type: 'SET_VALUES',
+          values: { address: { city: 'NYC' } },
+        },
+        nestedValues
+      );
+
+      expect(result.values.address.city).toBe('NYC');
+      expect(result.values.address.street).toBe('123 Main');
+      expect(result.values.address.zip).toBe('10001');
+      expect(result.values.name).toBe('John');
+    });
+
     test('clears server errors for changed fields', () => {
       const stateWithErrors: FormState<typeof initialValues> = {
         ...initialState,

@@ -329,6 +329,40 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   return paths;
 };
 
+export const deepMerge = <T extends Record<string, unknown>>(
+  target: T,
+  source: Record<string, unknown>
+): T => {
+  const result = { ...target };
+
+  for (const key of Object.keys(source)) {
+    const srcVal = source[key];
+    const tgtVal = (target as Record<string, unknown>)[key];
+
+    if (
+      srcVal != null &&
+      typeof srcVal === 'object' &&
+      !Array.isArray(srcVal) &&
+      !(srcVal instanceof Date) &&
+      !(srcVal instanceof RegExp) &&
+      tgtVal != null &&
+      typeof tgtVal === 'object' &&
+      !Array.isArray(tgtVal) &&
+      !(tgtVal instanceof Date) &&
+      !(tgtVal instanceof RegExp)
+    ) {
+      (result as Record<string, unknown>)[key] = deepMerge(
+        tgtVal as Record<string, unknown>,
+        srcVal as Record<string, unknown>
+      );
+    } else {
+      (result as Record<string, unknown>)[key] = srcVal;
+    }
+  }
+
+  return result;
+};
+
 export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();

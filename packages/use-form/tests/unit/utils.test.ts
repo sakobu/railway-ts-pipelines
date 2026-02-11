@@ -4,6 +4,7 @@ import {
   setValueByPath,
   isPathAffected,
   collectFieldPaths,
+  deepMerge,
   deepEqual,
 } from '../../src/utils';
 
@@ -278,6 +279,77 @@ describe('collectFieldPaths', () => {
     expect(paths).toContain('user.contacts[1]');
     expect(paths).toContain('user.contacts[1].type');
     expect(paths).toContain('user.contacts[1].value');
+  });
+});
+
+describe('deepMerge', () => {
+  test('shallow keys merge normally', () => {
+    const target: Record<string, unknown> = { a: 1, b: 2 };
+    const source = { b: 3, c: 4 };
+    expect(deepMerge(target, source)).toEqual({ a: 1, b: 3, c: 4 });
+  });
+
+  test('nested objects merge recursively (partial nested update preserves sibling keys)', () => {
+    const target = { address: { street: '123 Main', city: 'LA', zip: '10001' } };
+    const source = { address: { city: 'NYC' } };
+    const result = deepMerge(target, source);
+    expect(result).toEqual({ address: { street: '123 Main', city: 'NYC', zip: '10001' } });
+  });
+
+  test('arrays replace entirely', () => {
+    const target = { tags: ['a', 'b', 'c'] };
+    const source = { tags: ['x'] };
+    expect(deepMerge(target, source)).toEqual({ tags: ['x'] });
+  });
+
+  test('Date values replace entirely', () => {
+    const d1 = new Date('2024-01-01');
+    const d2 = new Date('2025-06-15');
+    const target = { createdAt: d1 };
+    const source = { createdAt: d2 };
+    expect(deepMerge(target, source)).toEqual({ createdAt: d2 });
+  });
+
+  test('null replaces an existing object', () => {
+    const target = { address: { city: 'LA' } } as Record<string, unknown>;
+    const source = { address: null } as Record<string, unknown>;
+    expect(deepMerge(target, source)).toEqual({ address: null });
+  });
+
+  test('keys not in source are preserved', () => {
+    const target = { a: 1, b: 2, c: 3 };
+    const source = { b: 20 };
+    expect(deepMerge(target, source)).toEqual({ a: 1, b: 20, c: 3 });
+  });
+
+  test('deeply nested merge', () => {
+    const target = {
+      user: {
+        name: 'John',
+        address: { street: '123 Main', city: 'LA', zip: '90001' },
+        settings: { theme: 'dark', lang: 'en' },
+      },
+    };
+    const source = {
+      user: {
+        address: { city: 'NYC' },
+        settings: { theme: 'light' },
+      },
+    };
+    expect(deepMerge(target, source)).toEqual({
+      user: {
+        name: 'John',
+        address: { street: '123 Main', city: 'NYC', zip: '90001' },
+        settings: { theme: 'light', lang: 'en' },
+      },
+    });
+  });
+
+  test('does not mutate target', () => {
+    const target = { address: { city: 'LA' } };
+    const source = { address: { city: 'NYC' } };
+    deepMerge(target, source);
+    expect(target.address.city).toBe('LA');
   });
 });
 

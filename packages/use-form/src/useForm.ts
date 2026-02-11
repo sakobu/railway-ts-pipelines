@@ -14,7 +14,7 @@ import {
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
-import { getValueByPath, setValueByPath, collectFieldPaths } from './utils';
+import { deepMerge, getValueByPath, setValueByPath, collectFieldPaths } from './utils';
 import {
   isStandardSchema,
   fromStandardSchema,
@@ -22,6 +22,7 @@ import {
 } from './standardSchema';
 import type {
   ArrayHelpers,
+  DeepPartial,
   ExtractFieldPaths,
   FieldPath,
   FormAction,
@@ -502,7 +503,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const setValues = useCallback(
-    (newValues: Partial<TValues>, shouldValidate = validateOnChange): void => {
+    (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void => {
       dispatch({
         type: 'SET_VALUES',
         values: newValues,
@@ -510,7 +511,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       if (shouldValidate) {
         // Need to get latest state for validation
-        const updatedValues = { ...formState.values, ...newValues } as TValues;
+        const updatedValues = deepMerge(formState.values, newValues);
         void validateForm(updatedValues);
       }
     },
