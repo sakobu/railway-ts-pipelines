@@ -164,11 +164,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
   validator: Validator<unknown, TValues>,
   options: FormOptions<TValues> = {}
 ) => {
-  const {
-    initialValues = {} as Partial<TValues>,
-    onSubmit,
-    validationMode,
-  } = options;
+  const { initialValues = {} as TValues, onSubmit, validationMode } = options;
 
   // Derive behavior flags from validationMode
   const mode = validationMode ?? 'live';
