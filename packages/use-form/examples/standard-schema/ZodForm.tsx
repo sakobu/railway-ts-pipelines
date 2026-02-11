@@ -1,35 +1,43 @@
-import { toStandardSchema } from '@railway-ts/pipelines/schema';
+// Bring your own Zod schema — useForm detects Standard Schema v1
+// automatically, no adapters or wrappers needed.
+//
+// Zod v3.23+ implements Standard Schema v1 natively.
+
+import { z } from 'zod';
 import { useForm } from '../../src/';
-import { userSchema, type User } from '../sync/userSchema';
-import { prepareForAPI } from '../utils';
 
-// Convert the railway-ts pipeline validator into a Standard Schema v1 object,
-// then pass it straight to useForm — demonstrating full round-trip interop.
-const standardUserSchema = toStandardSchema(userSchema);
+// ── Your existing Zod schema — nothing special here ─────────
 
-export default function StandardSchemaForm() {
-  const form = useForm<User>(standardUserSchema, {
+const userSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters'),
+  email: z.email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  age: z.coerce.number().min(18, 'Must be at least 18').max(120),
+  role: z.enum(['admin', 'user']),
+});
+
+type User = z.infer<typeof userSchema>;
+
+// ── Pass it straight to useForm — that's it ─────────────────
+
+export default function ZodForm() {
+  const form = useForm<User>(userSchema, {
     initialValues: {
       username: '',
       email: '',
       password: '',
       age: 0,
-      birthdate: new Date(),
-      hasAcceptedTerms: false,
       role: 'user',
-      contacts: [],
     },
     onSubmit: (values) => {
-      const apiPayload = prepareForAPI(values);
-      console.log('Submit (Standard Schema):', apiPayload);
+      console.log('Submit (Zod):', values);
     },
   });
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <h2>Standard Schema Registration</h2>
+      <h2>Zod Schema - useForm</h2>
 
-      {/* Text Input - Username */}
       <div className="field">
         <label htmlFor={form.getFieldProps('username').id}>Username *</label>
         <input
@@ -42,7 +50,6 @@ export default function StandardSchemaForm() {
         )}
       </div>
 
-      {/* Email Input */}
       <div className="field">
         <label htmlFor={form.getFieldProps('email').id}>Email *</label>
         <input
@@ -55,7 +62,6 @@ export default function StandardSchemaForm() {
         )}
       </div>
 
-      {/* Password Input */}
       <div className="field">
         <label htmlFor={form.getFieldProps('password').id}>Password *</label>
         <input
@@ -68,7 +74,6 @@ export default function StandardSchemaForm() {
         )}
       </div>
 
-      {/* Number Input - Age */}
       <div className="field">
         <label htmlFor={form.getFieldProps('age').id}>Age *</label>
         <input type="number" min={0} max={120} {...form.getFieldProps('age')} />
@@ -77,40 +82,12 @@ export default function StandardSchemaForm() {
         )}
       </div>
 
-      {/* Date Input - Birthdate */}
-      <div className="field">
-        <label htmlFor={form.getFieldProps('birthdate').id}>Birthdate *</label>
-        <input type="date" {...form.getFieldProps('birthdate')} />
-        {form.touched.birthdate && form.errors.birthdate && (
-          <span className="error">{form.errors.birthdate}</span>
-        )}
-      </div>
-
-      {/* Select Input - Role */}
       <div className="field">
         <label htmlFor={form.getSelectFieldProps('role').id}>Role *</label>
         <select {...form.getSelectFieldProps('role')}>
-          <option value="">Select a role...</option>
           <option value="user">User</option>
           <option value="admin">Admin</option>
         </select>
-        {form.touched.role && form.errors.role && (
-          <span className="error">{form.errors.role}</span>
-        )}
-      </div>
-
-      {/* Checkbox - Terms Acceptance */}
-      <div className="field">
-        <label>
-          <input
-            type="checkbox"
-            {...form.getCheckboxProps('hasAcceptedTerms')}
-          />
-          I accept the terms and conditions *
-        </label>
-        {form.touched.hasAcceptedTerms && form.errors.hasAcceptedTerms && (
-          <span className="error">{form.errors.hasAcceptedTerms}</span>
-        )}
       </div>
 
       {/* Form Actions */}

@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import UserForm from './sync/UserForm';
 import AsyncUserForm from './async/AsyncUserForm';
-import StandardSchemaForm from './standard-schema/StandardSchemaForm';
+import ZodForm from './standard-schema/ZodForm';
+import ValibotForm from './standard-schema/ValibotForm';
 import FieldValidatorForm from './field-validators/FieldValidatorForm';
 
-type Tab = 'sync' | 'async' | 'standard-schema' | 'field-validators';
+type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');
@@ -27,10 +28,16 @@ function App() {
           Async (Cross-field)
         </button>
         <button
-          className={tab === 'standard-schema' ? 'active' : ''}
-          onClick={() => setTab('standard-schema')}
+          className={tab === 'zod' ? 'active' : ''}
+          onClick={() => setTab('zod')}
         >
-          Standard Schema
+          Zod
+        </button>
+        <button
+          className={tab === 'valibot' ? 'active' : ''}
+          onClick={() => setTab('valibot')}
+        >
+          Valibot
         </button>
         <button
           className={tab === 'field-validators' ? 'active' : ''}
@@ -41,7 +48,8 @@ function App() {
       </div>
       {tab === 'sync' && <UserForm />}
       {tab === 'async' && <AsyncUserForm />}
-      {tab === 'standard-schema' && <StandardSchemaForm />}
+      {tab === 'zod' && <ZodForm />}
+      {tab === 'valibot' && <ValibotForm />}
       {tab === 'field-validators' && <FieldValidatorForm />}
     </>
   );
