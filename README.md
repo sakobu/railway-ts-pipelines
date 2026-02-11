@@ -73,6 +73,10 @@ For a complete real-world pipeline, see the [Launch Decision Pipeline](docs/RECI
 - **Async** -- sync-preserving overloads, parallel field validation, seamless sync/async mixing
 - **Standard Schema v1** -- `toStandardSchema()` for tRPC, TanStack Form, React Hook Form, and other consumers
 
+## Ecosystem
+
+- **[@railway-ts/use-form](https://github.com/sakobu/railway-ts-use-form)** -- Type-safe React form hook. Define a schema here, get validated forms with autocomplete, error handling, and native HTML bindings.
+
 ## API Reference
 
 ### Option
