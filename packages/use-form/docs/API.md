@@ -10,7 +10,9 @@ Main hook for form management.
 
 ```typescript
 function useForm<TValues extends Record<string, unknown>>(
-  validator: MaybeAsyncValidator<unknown, TValues> | StandardSchemaV1<unknown, TValues>,
+  validator:
+    | MaybeAsyncValidator<unknown, TValues>
+    | StandardSchemaV1<unknown, TValues>,
   options: FormOptions<TValues>
 ): FormReturn<TValues>;
 ```

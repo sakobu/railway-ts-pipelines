@@ -8,20 +8,20 @@ Most users won't need this. But if you're debugging error priority, building cus
 
 The `errors` object returned by `useForm` is a merged view of three separate error layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority | Source | Property | Populated when |
-|---|---|---|---|
-| 1 (lowest) | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode) |
-| 2 | Field validators | `fieldErrors` | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors | `serverErrors` | You call `setServerErrors(...)` |
+| Priority    | Source            | Property       | Populated when                                                                 |
+| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 
 ```typescript
 // What useForm does internally:
 const errors = {
-  ...clientErrors,    // Schema errors (base)
-  ...fieldErrors,     // Field validator errors (override schema for same field)
-  ...serverErrors,    // Server errors (highest priority)
+  ...clientErrors, // Schema errors (base)
+  ...fieldErrors, // Field validator errors (override schema for same field)
+  ...serverErrors, // Server errors (highest priority)
 };
 ```
 
@@ -83,7 +83,10 @@ function PaymentForm() {
 
       {method === 'card' && (
         <>
-          <input {...form.getFieldProps('cardNumber')} placeholder="Card Number" />
+          <input
+            {...form.getFieldProps('cardNumber')}
+            placeholder="Card Number"
+          />
           <input {...form.getFieldProps('expiryDate')} placeholder="MM/YY" />
           <input {...form.getFieldProps('cvv')} placeholder="CVV" />
         </>
@@ -95,8 +98,14 @@ function PaymentForm() {
 
       {method === 'bank' && (
         <>
-          <input {...form.getFieldProps('accountNumber')} placeholder="Account Number" />
-          <input {...form.getFieldProps('routingNumber')} placeholder="Routing Number" />
+          <input
+            {...form.getFieldProps('accountNumber')}
+            placeholder="Account Number"
+          />
+          <input
+            {...form.getFieldProps('routingNumber')}
+            placeholder="Routing Number"
+          />
         </>
       )}
 
@@ -136,9 +145,7 @@ const phoneNumber = (message = 'Invalid phone number') =>
   refine<string>((value: unknown) => {
     if (!value || typeof value !== 'string') return ok(value as string);
     const cleaned = value.replace(/\D/g, '');
-    return cleaned.length === 10
-      ? ok(value)
-      : err([{ path: '', message }]);
+    return cleaned.length === 10 ? ok(value) : err([{ path: '', message }]);
   });
 
 const creditCard = (message = 'Invalid credit card') =>
@@ -288,18 +295,17 @@ function CalculatorForm() {
 
 ```tsx
 const form = useForm(schema, {
-  initialValues: { /* ... */ },
+  initialValues: {
+    /* ... */
+  },
   validationMode: 'submit',
 });
 
 // Before first submit: button is enabled (haven't validated yet)
 // After failed submit: button is disabled until errors are fixed
-<button
-  type="submit"
-  disabled={form.submitCount > 0 && !form.isValid}
->
+<button type="submit" disabled={form.submitCount > 0 && !form.isValid}>
   Submit
-</button>
+</button>;
 ```
 
 This avoids the common UX problem where the submit button starts disabled on a `submit`-mode form even though the user hasn't tried submitting yet.

@@ -19,8 +19,13 @@ Requires React 18+ and @railway-ts/pipelines ^0.1.10.
 ```tsx
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, string, required, chain,
-  nonEmpty, email, type InferSchemaType,
+  object,
+  string,
+  required,
+  chain,
+  nonEmpty,
+  email,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
@@ -95,14 +100,14 @@ Or try it live on [StackBlitz](https://stackblitz.com/edit/vitejs-vite-c3zpmon9?
 
 The `useForm` hook returns:
 
-| Category | Properties / Methods |
-|---|---|
-| **State** | `values`, `touched`, `errors`, `clientErrors`, `serverErrors`, `fieldErrors`, `isValid`, `isDirty`, `isSubmitting`, `isValidating`, `validatingFields`, `submitCount` |
-| **Field Management** | `setFieldValue(field, value, shouldValidate?)`, `setFieldTouched(field, touched?, shouldValidate?)`, `setValues(values, shouldValidate?)` |
-| **Server Errors** | `setServerErrors(errors)`, `clearServerErrors()` |
-| **Form Actions** | `handleSubmit(e?)` → `Promise<Result>`, `resetForm()`, `validateForm(values)` |
-| **Field Bindings** | `getFieldProps`, `getSelectFieldProps`, `getCheckboxProps`, `getSwitchProps`, `getSliderProps`, `getFileFieldProps`, `getCheckboxGroupOptionProps`, `getRadioGroupOptionProps` |
-| **Arrays** | `arrayHelpers(field)` → `{ values, push, remove, insert, swap, move, replace, getFieldProps, ... }` |
+| Category             | Properties / Methods                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **State**            | `values`, `touched`, `errors`, `clientErrors`, `serverErrors`, `fieldErrors`, `isValid`, `isDirty`, `isSubmitting`, `isValidating`, `validatingFields`, `submitCount`          |
+| **Field Management** | `setFieldValue(field, value, shouldValidate?)`, `setFieldTouched(field, touched?, shouldValidate?)`, `setValues(values, shouldValidate?)`                                      |
+| **Server Errors**    | `setServerErrors(errors)`, `clearServerErrors()`                                                                                                                               |
+| **Form Actions**     | `handleSubmit(e?)` → `Promise<Result>`, `resetForm()`, `validateForm(values)`                                                                                                  |
+| **Field Bindings**   | `getFieldProps`, `getSelectFieldProps`, `getCheckboxProps`, `getSwitchProps`, `getSliderProps`, `getFileFieldProps`, `getCheckboxGroupOptionProps`, `getRadioGroupOptionProps` |
+| **Arrays**           | `arrayHelpers(field)` → `{ values, push, remove, insert, swap, move, replace, getFieldProps, ... }`                                                                            |
 
 ## Works With
 

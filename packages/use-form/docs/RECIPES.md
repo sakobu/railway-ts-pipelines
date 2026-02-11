@@ -37,8 +37,16 @@ Patterns and techniques. Each recipe is self-contained.
 ```tsx
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, string, required, optional, chain,
-  nonEmpty, minLength, email, type InferSchemaType,
+  object,
+  string,
+  required,
+  optional,
+  chain,
+  nonEmpty,
+  minLength,
+  email,
+  ROOT_ERROR_KEY,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 const userSchema = object({
@@ -94,8 +102,8 @@ function CreateUserForm() {
       </div>
 
       {/* Form-level errors (not tied to a field) */}
-      {form.errors[''] && (
-        <div className="form-error">{form.errors['']}</div>
+      {form.errors[ROOT_ERROR_KEY] && (
+        <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>
       )}
 
       <button type="submit" disabled={form.isSubmitting || !form.isValid}>
@@ -114,10 +122,10 @@ function CreateUserForm() {
 }
 ```
 
-For form-level errors (network failures, rate limiting), use an empty string key:
+For form-level errors (network failures, rate limiting), use `ROOT_ERROR_KEY`:
 
 ```typescript
-form.setServerErrors({ '': 'Network error. Please try again.' });
+form.setServerErrors({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
 ```
 
 ---
@@ -264,11 +272,11 @@ helpers.values.forEach((_, index) => {
 
 **Solution:** Use `getCheckboxGroupOptionProps` for checkboxes and `getRadioGroupOptionProps` for radios.
 
-| Use case | Helper | Field type |
-|---|---|---|
+| Use case                         | Helper                                      | Field type               |
+| -------------------------------- | ------------------------------------------- | ------------------------ |
 | Multi-select (tags, permissions) | `getCheckboxGroupOptionProps(field, value)` | `string[]` or `number[]` |
-| Single-select (theme, role) | `getRadioGroupOptionProps(field, value)` | `string` or `number` |
-| Boolean toggle | `getCheckboxProps(field)` | `boolean` |
+| Single-select (theme, role)      | `getRadioGroupOptionProps(field, value)`    | `string` or `number`     |
+| Boolean toggle                   | `getCheckboxProps(field)`                   | `boolean`                |
 
 ```tsx
 const prefsSchema = object({
@@ -323,22 +331,22 @@ function PreferencesForm() {
 
 **Problem:** You need a file input with validation (type, size).
 
-**Solution:** Use `getFileFieldProps` and write a custom validator with `refine`. Use `path: ''` so the error attaches to the field itself.
+**Solution:** Use `getFileFieldProps` and chain `refine` predicates for validation. `required()` handles the "no file selected" case; each `refine` handles one check.
 
 ```tsx
-import { refine } from '@railway-ts/pipelines/schema';
-import { ok, err } from '@railway-ts/pipelines/result';
+import { chain, refine } from '@railway-ts/pipelines/schema';
 
-const fileValidator = refine((value: unknown) => {
-  if (!value) return err([{ path: '', message: 'File is required' }]);
-  if (!(value instanceof File))
-    return err([{ path: '', message: 'Must be a file' }]);
-  if (value.size > 5_000_000)
-    return err([{ path: '', message: 'File too large (max 5MB)' }]);
-  if (!value.type.startsWith('image/'))
-    return err([{ path: '', message: 'Must be an image' }]);
-  return ok(value as File);
-});
+const fileValidator = chain(
+  refine((value: unknown) => value instanceof File, 'Must be a file'),
+  refine(
+    (value: unknown) => (value as File).size <= 5_000_000,
+    'File too large (max 5MB)'
+  ),
+  refine(
+    (value: unknown) => (value as File).type.startsWith('image/'),
+    'Must be an image'
+  )
+);
 
 const uploadSchema = object({
   avatar: required(fileValidator),
@@ -358,7 +366,11 @@ function AvatarUpload() {
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <input type="file" accept="image/*" {...form.getFileFieldProps('avatar')} />
+      <input
+        type="file"
+        accept="image/*"
+        {...form.getFileFieldProps('avatar')}
+      />
       {form.touched.avatar && form.errors.avatar && (
         <span>{form.errors.avatar}</span>
       )}
@@ -368,7 +380,7 @@ function AvatarUpload() {
 }
 ```
 
-The `path: ''` convention tells the validation system "this error belongs to the field I'm validating, not a nested sub-path." The library maps it to the correct field path automatically.
+Error paths are handled automatically: `object()` constructs the field path (e.g., `["avatar"]`) and passes it through `required()` -> `chain()` -> `refine()`. No manual path construction needed.
 
 ---
 
@@ -378,17 +390,22 @@ The `path: ''` convention tells the validation system "this error belongs to the
 
 **Solution:** `useFormAutoSubmission` watches form values and triggers `handleSubmit` after a debounce delay. For manual control, `useDebounce` wraps any callback.
 
-| Tool | Use case | How it works |
-|---|---|---|
+| Tool                                 | Use case                | How it works                                                                |
+| ------------------------------------ | ----------------------- | --------------------------------------------------------------------------- |
 | `useFormAutoSubmission(form, delay)` | Auto-submit entire form | Watches `values`, waits `delay` ms, calls `handleSubmit` if valid and dirty |
-| `useDebounce(callback, delay)` | Debounce any function | Returns debounced version that resets timer on each call |
+| `useDebounce(callback, delay)`       | Debounce any function   | Returns debounced version that resets timer on each call                    |
 
 ```tsx
 import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
 
 function ProductFilters() {
   const form = useForm(filterSchema, {
-    initialValues: { search: '', category: '', minPrice: undefined, maxPrice: undefined },
+    initialValues: {
+      search: '',
+      category: '',
+      minPrice: undefined,
+      maxPrice: undefined,
+    },
     onSubmit: async (values) => {
       const params = new URLSearchParams();
       if (values.search) params.set('search', values.search);
@@ -481,26 +498,43 @@ function MultiStepForm() {
         <div>
           <h2>Personal Info</h2>
           <input {...form.getFieldProps('personal.name')} placeholder="Name" />
-          <input {...form.getFieldProps('personal.email')} placeholder="Email" />
-          <button type="button" onClick={handleNext}>Next</button>
+          <input
+            {...form.getFieldProps('personal.email')}
+            placeholder="Email"
+          />
+          <button type="button" onClick={handleNext}>
+            Next
+          </button>
         </div>
       )}
 
       {step === 2 && (
         <div>
           <h2>Address</h2>
-          <input {...form.getFieldProps('address.street')} placeholder="Street" />
+          <input
+            {...form.getFieldProps('address.street')}
+            placeholder="Street"
+          />
           <input {...form.getFieldProps('address.city')} placeholder="City" />
-          <button type="button" onClick={() => setStep(1)}>Back</button>
-          <button type="button" onClick={handleNext}>Next</button>
+          <button type="button" onClick={() => setStep(1)}>
+            Back
+          </button>
+          <button type="button" onClick={handleNext}>
+            Next
+          </button>
         </div>
       )}
 
       {step === 3 && (
         <div>
           <h2>Payment</h2>
-          <input {...form.getFieldProps('payment.cardNumber')} placeholder="Card Number" />
-          <button type="button" onClick={() => setStep(2)}>Back</button>
+          <input
+            {...form.getFieldProps('payment.cardNumber')}
+            placeholder="Card Number"
+          />
+          <button type="button" onClick={() => setStep(2)}>
+            Back
+          </button>
           <button type="submit">Submit</button>
         </div>
       )}
@@ -519,7 +553,13 @@ function MultiStepForm() {
 
 ```typescript
 import {
-  object, string, required, chain, refineAt, minLength, type InferSchemaType,
+  object,
+  string,
+  required,
+  chain,
+  refineAt,
+  minLength,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 type RegistrationData = {
@@ -607,7 +647,10 @@ function AccountForm() {
 
       {isBusiness && (
         <>
-          <input {...form.getFieldProps('companyName')} placeholder="Company Name" />
+          <input
+            {...form.getFieldProps('companyName')}
+            placeholder="Company Name"
+          />
           {form.touched.companyName && form.errors.companyName && (
             <span>{form.errors.companyName}</span>
           )}
@@ -651,7 +694,13 @@ type User = z.infer<typeof userSchema>;
 
 function ZodForm() {
   const form = useForm<User>(userSchema, {
-    initialValues: { username: '', email: '', password: '', age: 0, role: 'user' },
+    initialValues: {
+      username: '',
+      email: '',
+      password: '',
+      age: 0,
+      role: 'user',
+    },
     onSubmit: (values) => console.log('Submit:', values),
   });
 
@@ -675,10 +724,21 @@ import * as v from 'valibot';
 import { useForm } from '@railway-ts/use-form';
 
 const userSchema = v.object({
-  username: v.pipe(v.string(), v.minLength(3, 'Username must be at least 3 characters')),
+  username: v.pipe(
+    v.string(),
+    v.minLength(3, 'Username must be at least 3 characters')
+  ),
   email: v.pipe(v.string(), v.email('Invalid email address')),
-  password: v.pipe(v.string(), v.minLength(8, 'Password must be at least 8 characters')),
-  age: v.pipe(v.unknown(), v.transform(Number), v.number(), v.minValue(18, 'Must be at least 18')),
+  password: v.pipe(
+    v.string(),
+    v.minLength(8, 'Password must be at least 8 characters')
+  ),
+  age: v.pipe(
+    v.unknown(),
+    v.transform(Number),
+    v.number(),
+    v.minValue(18, 'Must be at least 18')
+  ),
   role: v.picklist(['admin', 'user']),
 });
 
@@ -686,7 +746,13 @@ type User = v.InferOutput<typeof userSchema>;
 
 function ValibotForm() {
   const form = useForm<User>(userSchema, {
-    initialValues: { username: '', email: '', password: '', age: 0, role: 'user' },
+    initialValues: {
+      username: '',
+      email: '',
+      password: '',
+      age: 0,
+      role: 'user',
+    },
     onSubmit: (values) => console.log('Submit:', values),
   });
 
@@ -697,14 +763,14 @@ function ValibotForm() {
 
 ### Comparison
 
-| Feature | @railway-ts/pipelines | Zod | Valibot |
-|---|---|---|---|
-| Error accumulation | All errors in one pass | First error per field | All errors in one pass |
-| Bundle size | ~4 KB | ~13 KB | ~7 KB |
-| Cross-field validation | `refineAt` (targeted) | `.refine` / `.superRefine` | `v.forward` + `v.custom` |
-| Async validation | `chainAsync`, `refineAtAsync` | `.refine` with async | `v.pipeAsync` |
-| Result type | Native `Result<T, E>` | Throws or `.safeParse` | Throws or `.safeParse` |
-| Standard Schema | `toStandardSchema()` | Native (v3.23+, v4) | Native (v1+) |
+| Feature                | @railway-ts/pipelines         | Zod                        | Valibot                  |
+| ---------------------- | ----------------------------- | -------------------------- | ------------------------ |
+| Error accumulation     | All errors in one pass        | First error per field      | All errors in one pass   |
+| Bundle size            | ~4 KB                         | ~13 KB                     | ~7 KB                    |
+| Cross-field validation | `refineAt` (targeted)         | `.refine` / `.superRefine` | `v.forward` + `v.custom` |
+| Async validation       | `chainAsync`, `refineAtAsync` | `.refine` with async       | `v.pipeAsync`            |
+| Result type            | Native `Result<T, E>`         | Throws or `.safeParse`     | Throws or `.safeParse`   |
+| Standard Schema        | `toStandardSchema()`          | Native (v3.23+, v4)        | Native (v1+)             |
 
 ---
 
@@ -725,7 +791,10 @@ function RegistrationForm() {
   const form = useForm<UserForm>(userSchema, {
     initialValues: { username: '', email: '', password: '' },
     onSubmit: async (values) => {
-      await fetch('/api/register', { method: 'POST', body: JSON.stringify(values) });
+      await fetch('/api/register', {
+        method: 'POST',
+        body: JSON.stringify(values),
+      });
     },
     fieldValidators: {
       username: async (value) => {
@@ -762,13 +831,13 @@ function RegistrationForm() {
 
 ### fieldValidators vs schema-level async
 
-| | `fieldValidators` | `chainAsync` / `refineAtAsync` |
-|---|---|---|
-| **Scope** | Single field | Entire form |
-| **Runs when** | After schema passes for that field | During schema validation |
-| **Loading state** | `validatingFields.fieldName` | `isValidating` (form-wide) |
-| **Race conditions** | Handled per-field (latest wins) | Handled per-form (latest wins) |
-| **Best for** | Server lookups (username, email) | Cross-field async checks |
+|                     | `fieldValidators`                  | `chainAsync` / `refineAtAsync` |
+| ------------------- | ---------------------------------- | ------------------------------ |
+| **Scope**           | Single field                       | Entire form                    |
+| **Runs when**       | After schema passes for that field | During schema validation       |
+| **Loading state**   | `validatingFields.fieldName`       | `isValidating` (form-wide)     |
+| **Race conditions** | Handled per-field (latest wins)    | Handled per-form (latest wins) |
+| **Best for**        | Server lookups (username, email)   | Cross-field async checks       |
 
 Field validators return `undefined` for valid, or an error message string for invalid. They receive the field value and the full form values object: `(value, values) => string | undefined | Promise<string | undefined>`.
 
@@ -805,7 +874,12 @@ function RegistrationForm() {
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void handleSave(); }}>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleSave();
+      }}
+    >
       <input type="email" {...form.getFieldProps('email')} />
       <input type="password" {...form.getFieldProps('password')} />
       <button type="submit">Register</button>
@@ -818,7 +892,9 @@ You can also combine `onSubmit` (for the main action) with the returned `Result`
 
 ```typescript
 const form = useForm(schema, {
-  initialValues: { /* ... */ },
+  initialValues: {
+    /* ... */
+  },
   onSubmit: async (values) => {
     await api.createUser(values);
   },
@@ -843,7 +919,12 @@ match(result, {
 ```tsx
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, required, chain, string, email, minLength,
+  object,
+  required,
+  chain,
+  string,
+  email,
+  minLength,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -905,7 +986,9 @@ Wrap field components in `React.memo` so they only re-render when their specific
 import { memo, useMemo } from 'react';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, required, string,
+  object,
+  required,
+  string,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -959,7 +1042,9 @@ For forms with many fields, `validationMode: 'blur'` avoids re-validating on eve
 
 ```typescript
 const form = useForm(schema, {
-  initialValues: { /* ... */ },
+  initialValues: {
+    /* ... */
+  },
   validationMode: 'blur',
 });
 ```
@@ -984,10 +1069,10 @@ UI libraries like Material-UI and Chakra UI use different prop names than native
 
 ### Which approach to use
 
-| Library | Approach |
-|---|---|
-| **Shadcn/ui, Radix, Headless UI** | `getFieldProps` works directly (native HTML under the hood) |
-| **Material-UI, Chakra UI (v3), Ant Design** | Map form state to component props manually |
+| Library                                     | Approach                                                    |
+| ------------------------------------------- | ----------------------------------------------------------- |
+| **Shadcn/ui, Radix, Headless UI**           | `getFieldProps` works directly (native HTML under the hood) |
+| **Material-UI, Chakra UI (v3), Ant Design** | Map form state to component props manually                  |
 
 ### Material-UI
 
@@ -995,7 +1080,12 @@ UI libraries like Material-UI and Chakra UI use different prop names than native
 import { TextField, Button } from '@mui/material';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, required, chain, string, email, minLength,
+  object,
+  required,
+  chain,
+  string,
+  email,
+  minLength,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -1056,7 +1146,12 @@ function MuiForm() {
 import { Field, Input, Button } from '@chakra-ui/react';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, required, chain, string, email, minLength,
+  object,
+  required,
+  chain,
+  string,
+  email,
+  minLength,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -1107,7 +1202,12 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, required, chain, string, email, minLength,
+  object,
+  required,
+  chain,
+  string,
+  email,
+  minLength,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -1266,7 +1366,9 @@ function PersistentForm() {
 ```tsx
 function FormWithWarning() {
   const form = useForm(schema, {
-    initialValues: { /* ... */ },
+    initialValues: {
+      /* ... */
+    },
   });
 
   useEffect(() => {
@@ -1302,8 +1404,16 @@ This recipe combines everything: schema validation, per-field async validators, 
 import { useForm } from '@railway-ts/use-form';
 import { match } from '@railway-ts/pipelines/result';
 import {
-  object, string, required, chain, refineAt,
-  nonEmpty, email, minLength, type InferSchemaType,
+  object,
+  string,
+  required,
+  chain,
+  refineAt,
+  nonEmpty,
+  email,
+  minLength,
+  ROOT_ERROR_KEY,
+  type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 // --- Schema with cross-field validation ---
@@ -1317,10 +1427,16 @@ type RegistrationData = {
 
 const registrationSchema = chain(
   object({
-    username: required(chain(string(), nonEmpty('Username is required'), minLength(3))),
+    username: required(
+      chain(string(), nonEmpty('Username is required'), minLength(3))
+    ),
     email: required(chain(string(), nonEmpty('Email is required'), email())),
-    password: required(chain(string(), nonEmpty('Password is required'), minLength(8))),
-    confirmPassword: required(chain(string(), nonEmpty('Please confirm your password'))),
+    password: required(
+      chain(string(), nonEmpty('Password is required'), minLength(8))
+    ),
+    confirmPassword: required(
+      chain(string(), nonEmpty('Please confirm your password'))
+    ),
   }),
   refineAt<RegistrationData>(
     'confirmPassword',
@@ -1334,7 +1450,9 @@ type Registration = InferSchemaType<typeof registrationSchema>;
 // --- Async availability check ---
 
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
-  const res = await fetch(`/api/check-username?u=${encodeURIComponent(username)}`);
+  const res = await fetch(
+    `/api/check-username?u=${encodeURIComponent(username)}`
+  );
   const data = await res.json();
   return data.available;
 };
@@ -1343,7 +1461,12 @@ const checkUsernameAvailable = async (username: string): Promise<boolean> => {
 
 export function RegistrationForm() {
   const form = useForm<Registration>(registrationSchema, {
-    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
+    initialValues: {
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
     fieldValidators: {
       username: async (value) => {
         const username = value as string;
@@ -1359,7 +1482,7 @@ export function RegistrationForm() {
 
     const result = await form.handleSubmit();
 
-    match(result, {
+    await match(result, {
       ok: async (values) => {
         // Submit to server
         const response = await fetch('/api/register', {
@@ -1424,8 +1547,8 @@ export function RegistrationForm() {
       </div>
 
       {/* Form-level errors */}
-      {form.errors[''] && (
-        <div className="form-error">{form.errors['']}</div>
+      {form.errors[ROOT_ERROR_KEY] && (
+        <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>
       )}
 
       <button

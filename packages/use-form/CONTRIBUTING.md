@@ -12,19 +12,19 @@ bun install
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `bun test` | Run tests |
-| `bun test --watch` | Watch mode |
-| `bun test --coverage` | With coverage |
-| `bun run build` | Build library |
-| `bun run typecheck` | Type check |
-| `bun run lint` | Lint |
-| `bun run lint:fix` | Auto-fix lint issues |
-| `bun run format` | Format code |
-| `bun run format:check` | Check formatting |
-| `bun run example` | Run examples (hot reload) |
-| `bun run check` | typecheck + lint + test |
+| Command                | What it does              |
+| ---------------------- | ------------------------- |
+| `bun test`             | Run tests                 |
+| `bun test --watch`     | Watch mode                |
+| `bun test --coverage`  | With coverage             |
+| `bun run build`        | Build library             |
+| `bun run typecheck`    | Type check                |
+| `bun run lint`         | Lint                      |
+| `bun run lint:fix`     | Auto-fix lint issues      |
+| `bun run format`       | Format code               |
+| `bun run format:check` | Check formatting          |
+| `bun run example`      | Run examples (hot reload) |
+| `bun run check`        | typecheck + lint + test   |
 
 ## Project Structure
 

@@ -110,16 +110,16 @@ The error display pattern is `touched && errors` -- show the error only after th
 
 There are specialized binding helpers for other input types:
 
-| Input Type | Helper | Returns |
-|---|---|---|
-| Text, email, textarea | `getFieldProps(field)` | `id`, `name`, `value`, `onChange`, `onBlur` |
-| Select | `getSelectFieldProps(field)` | `id`, `name`, `value`, `onChange`, `onBlur` |
-| Checkbox (boolean) | `getCheckboxProps(field)` | `id`, `name`, `checked`, `onChange`, `onBlur` |
-| Switch (toggle) | `getSwitchProps(field)` | `id`, `name`, `checked`, `onChange`, `onBlur` |
-| Slider (range) | `getSliderProps(field)` | `id`, `name`, `type`, `value`, `onChange`, `onBlur` |
-| File | `getFileFieldProps(field)` | `id`, `name`, `onChange`, `onBlur` |
+| Input Type             | Helper                                      | Returns                                                |
+| ---------------------- | ------------------------------------------- | ------------------------------------------------------ |
+| Text, email, textarea  | `getFieldProps(field)`                      | `id`, `name`, `value`, `onChange`, `onBlur`            |
+| Select                 | `getSelectFieldProps(field)`                | `id`, `name`, `value`, `onChange`, `onBlur`            |
+| Checkbox (boolean)     | `getCheckboxProps(field)`                   | `id`, `name`, `checked`, `onChange`, `onBlur`          |
+| Switch (toggle)        | `getSwitchProps(field)`                     | `id`, `name`, `checked`, `onChange`, `onBlur`          |
+| Slider (range)         | `getSliderProps(field)`                     | `id`, `name`, `type`, `value`, `onChange`, `onBlur`    |
+| File                   | `getFileFieldProps(field)`                  | `id`, `name`, `onChange`, `onBlur`                     |
 | Checkbox group (array) | `getCheckboxGroupOptionProps(field, value)` | `id`, `name`, `value`, `checked`, `onChange`, `onBlur` |
-| Radio group | `getRadioGroupOptionProps(field, value)` | `id`, `name`, `value`, `checked`, `onChange`, `onBlur` |
+| Radio group            | `getRadioGroupOptionProps(field, value)`    | `id`, `name`, `value`, `checked`, `onChange`, `onBlur` |
 
 All of them generate a stable `id` (e.g., `field-email`) that matches `<label htmlFor>` automatically.
 
@@ -131,8 +131,13 @@ Validators compose with `chain` -- each step runs left to right, and all errors 
 
 ```typescript
 import {
-  object, string, required, chain,
-  nonEmpty, email, minLength,
+  object,
+  string,
+  required,
+  chain,
+  nonEmpty,
+  email,
+  minLength,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -141,14 +146,14 @@ const signupSchema = object({
     chain(
       string(),
       nonEmpty('Email is required'),
-      email('Must be a valid email'),
+      email('Must be a valid email')
     )
   ),
   password: required(
     chain(
       string(),
       nonEmpty('Password is required'),
-      minLength(8, 'Must be at least 8 characters'),
+      minLength(8, 'Must be at least 8 characters')
     )
   ),
 });
@@ -166,17 +171,19 @@ Under the hood, validators return a `Result` -- either `Ok` with the validated v
 
 By default, validation runs on every change. That's great for short forms, but intrusive for long ones. The `validationMode` option controls when validation fires:
 
-| Mode | Validates on | Marks touched on | Best for |
-|---|---|---|---|
-| `live` (default) | Change and blur | Change | Short forms, immediate feedback |
-| `blur` | Blur only | Blur | Longer forms, less intrusive typing |
-| `mount` | Mount (once) | Mount (all fields) | Editing existing records |
-| `submit` | Submit only | Submit (all fields) | Simple forms, minimal interruption |
+| Mode             | Validates on    | Marks touched on    | Best for                            |
+| ---------------- | --------------- | ------------------- | ----------------------------------- |
+| `live` (default) | Change and blur | Change              | Short forms, immediate feedback     |
+| `blur`           | Blur only       | Blur                | Longer forms, less intrusive typing |
+| `mount`          | Mount (once)    | Mount (all fields)  | Editing existing records            |
+| `submit`         | Submit only     | Submit (all fields) | Simple forms, minimal interruption  |
 
 ```typescript
 // Validate only when a field loses focus
 const form = useForm(validator, {
-  initialValues: { /* ... */ },
+  initialValues: {
+    /* ... */
+  },
   validationMode: 'blur',
 });
 ```
@@ -192,7 +199,9 @@ const form = useForm(validator, {
 ```typescript
 // Don't bother the user until they submit
 const form = useForm(validator, {
-  initialValues: { /* ... */ },
+  initialValues: {
+    /* ... */
+  },
   validationMode: 'submit',
 });
 ```
@@ -269,11 +278,13 @@ Use dot notation everywhere -- field props, errors, touched state:
 ```tsx
 const profileSchema = object({
   name: required(string()),
-  address: required(object({
-    street: required(string()),
-    city: required(chain(string(), nonEmpty('City is required'))),
-    zip: required(chain(string(), nonEmpty('ZIP is required'))),
-  })),
+  address: required(
+    object({
+      street: required(string()),
+      city: required(chain(string(), nonEmpty('City is required'))),
+      zip: required(chain(string(), nonEmpty('ZIP is required'))),
+    })
+  ),
 });
 
 type Profile = InferSchemaType<typeof profileSchema>;
@@ -318,7 +329,14 @@ The field path autocomplete works through nested objects -- type `'address.'` an
 Use `arrayHelpers` for dynamic lists. It gives you `push`, `remove`, `swap`, `move`, `insert`, `replace`, and its own `getFieldProps` that takes an index:
 
 ```tsx
-import { object, string, required, email, array, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import {
+  object,
+  string,
+  required,
+  email,
+  array,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
 
 const contactSchema = object({
   name: required(string()),
@@ -350,7 +368,10 @@ function ContactsForm() {
               <span>{form.errors[`contacts.${index}.name`]}</span>
             )}
 
-          <input {...helpers.getFieldProps(index, 'email')} placeholder="Email" />
+          <input
+            {...helpers.getFieldProps(index, 'email')}
+            placeholder="Email"
+          />
           {form.touched[`contacts.${index}.email`] &&
             form.errors[`contacts.${index}.email`] && (
               <span>{form.errors[`contacts.${index}.email`]}</span>
@@ -379,15 +400,15 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 
 **All array operations:**
 
-| Method | What it does |
-|---|---|
-| `push(item)` | Add to end |
-| `remove(index)` | Remove by index |
-| `insert(index, item)` | Insert at position |
-| `swap(indexA, indexB)` | Swap two items |
-| `move(from, to)` | Move item to new position |
-| `replace(index, item)` | Replace item at index |
-| `getFieldProps(index, field)` | Get props for item field |
+| Method                        | What it does              |
+| ----------------------------- | ------------------------- |
+| `push(item)`                  | Add to end                |
+| `remove(index)`               | Remove by index           |
+| `insert(index, item)`         | Insert at position        |
+| `swap(indexA, indexB)`        | Swap two items            |
+| `move(from, to)`              | Move item to new position |
+| `replace(index, item)`        | Replace item at index     |
+| `getFieldProps(index, field)` | Get props for item field  |
 
 ---
 
