@@ -93,15 +93,30 @@ When an `object()` schema contains async validators, all fields are validated co
 import { object, required, chainAsync, string, refineAsync, validate } from '@railway-ts/pipelines/schema';
 
 const signupSchema = object({
-  email: required(chainAsync(string(), refineAsync(async (email) => {
-    return !(await isEmailTaken(email)); // ~50ms
-  }, 'Email already in use'))),
-  username: required(chainAsync(string(), refineAsync(async (name) => {
-    return !(await isUsernameTaken(name)); // ~50ms
-  }, 'Username taken'))),
-  invite: required(chainAsync(string(), refineAsync(async (code) => {
-    return await isValidInvite(code); // ~50ms
-  }, 'Invalid invite code'))),
+  email: required(
+    chainAsync(
+      string(),
+      refineAsync(async (email) => {
+        return !(await isEmailTaken(email)); // ~50ms
+      }, 'Email already in use'),
+    ),
+  ),
+  username: required(
+    chainAsync(
+      string(),
+      refineAsync(async (name) => {
+        return !(await isUsernameTaken(name)); // ~50ms
+      }, 'Username taken'),
+    ),
+  ),
+  invite: required(
+    chainAsync(
+      string(),
+      refineAsync(async (code) => {
+        return await isValidInvite(code); // ~50ms
+      }, 'Invalid invite code'),
+    ),
+  ),
 });
 
 // All three checks run in parallel: ~50ms total, not ~150ms

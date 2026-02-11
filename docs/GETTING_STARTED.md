@@ -11,8 +11,7 @@ Every function that can fail returns a `Result` -- either `Ok` with a value, or 
 ```typescript
 import { ok, err, isOk, isErr, type Result } from '@railway-ts/pipelines/result';
 
-const divide = (a: number, b: number): Result<number, string> =>
-  b === 0 ? err('Cannot divide by zero') : ok(a / b);
+const divide = (a: number, b: number): Result<number, string> => (b === 0 ? err('Cannot divide by zero') : ok(a / b));
 
 const result = divide(10, 2);
 
@@ -56,8 +55,7 @@ const failed = map(err('nope'), (x) => x * 2);
 ```typescript
 import { ok, err, flatMap } from '@railway-ts/pipelines/result';
 
-const divide = (a: number, b: number) =>
-  b === 0 ? err('div by zero') : ok(a / b);
+const divide = (a: number, b: number) => (b === 0 ? err('div by zero') : ok(a / b));
 
 const result = flatMap(ok(10), (x) => divide(x, 2));
 // Ok(5)
@@ -76,7 +74,13 @@ Nesting `map` and `flatMap` calls gets awkward fast:
 
 ```typescript
 // This gets hard to read
-const result = map(flatMap(map(ok(10), (x) => x + 1), (x) => divide(x, 3)), (x) => x * 2);
+const result = map(
+  flatMap(
+    map(ok(10), (x) => x + 1),
+    (x) => divide(x, 3),
+  ),
+  (x) => x * 2,
+);
 ```
 
 `pipe` lets you write the same thing as a top-to-bottom flow. Each step receives the output of the previous step:
@@ -85,14 +89,13 @@ const result = map(flatMap(map(ok(10), (x) => x + 1), (x) => divide(x, 3)), (x) 
 import { pipe } from '@railway-ts/pipelines/composition';
 import { ok, mapWith, flatMapWith } from '@railway-ts/pipelines/result';
 
-const divide = (a: number, b: number) =>
-  b === 0 ? err('div by zero') : ok(a / b);
+const divide = (a: number, b: number) => (b === 0 ? err('div by zero') : ok(a / b));
 
 const result = pipe(
   ok(10),
-  mapWith((x) => x + 1),        // Ok(11)
-  flatMapWith((x) => divide(x, 3)),  // Ok(3.666...)
-  mapWith((x) => x * 2),        // Ok(7.333...)
+  mapWith((x) => x + 1), // Ok(11)
+  flatMapWith((x) => divide(x, 3)), // Ok(3.666...)
+  mapWith((x) => x * 2), // Ok(7.333...)
 );
 ```
 
@@ -103,10 +106,10 @@ If any step produces an `Err`, everything after it is skipped:
 ```typescript
 const result = pipe(
   ok(10),
-  mapWith((x) => x + 1),             // Ok(11)
-  flatMapWith((x) => divide(x, 0)),  // Err('div by zero')
-  mapWith((x) => x * 2),             // skipped
-  mapWith((x) => x + 100),           // skipped
+  mapWith((x) => x + 1), // Ok(11)
+  flatMapWith((x) => divide(x, 0)), // Err('div by zero')
+  mapWith((x) => x * 2), // skipped
+  mapWith((x) => x + 100), // skipped
 );
 // Err('div by zero')
 ```
@@ -154,7 +157,7 @@ const users: Record<string, { name: string; age: number }> = {
 
 const greetAdult = (id: string) => {
   const result = pipe(
-    fromNullable(users[id]),        // Option<{ name, age }>
+    fromNullable(users[id]), // Option<{ name, age }>
     filterWith((u) => u.age >= 18), // None if under 18
     mapWith((u) => `Hello, ${u.name}!`),
   );
