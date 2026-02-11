@@ -929,27 +929,30 @@ describe('useForm', () => {
         })
       );
 
-      const validationResult = result.current.validateForm(
-        result.current.values
-      );
+      let validationResult: ReturnType<typeof result.current.validateForm>;
+      act(() => {
+        validationResult = result.current.validateForm(result.current.values);
+      });
 
       // Sync validator should return a plain Result, not a Promise
-      expect(validationResult instanceof Promise).toBe(false);
-      expect((validationResult as { ok: boolean }).ok).toBe(true);
+      expect(validationResult! instanceof Promise).toBe(false);
+      expect((validationResult! as { ok: boolean }).ok).toBe(true);
     });
 
-    test('async validators return Promise from validateForm', () => {
+    test('async validators return Promise from validateForm', async () => {
       const { result } = renderHook(() =>
         useForm(asyncUserValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
         })
       );
 
-      const validationResult = result.current.validateForm(
-        result.current.values
-      );
+      let validationResult: ReturnType<typeof result.current.validateForm>;
+      await act(async () => {
+        validationResult = result.current.validateForm(result.current.values);
+        if (validationResult instanceof Promise) await validationResult;
+      });
 
-      expect(validationResult instanceof Promise).toBe(true);
+      expect(validationResult! instanceof Promise).toBe(true);
     });
 
     test('isValidating is true during async validation, false after', async () => {
