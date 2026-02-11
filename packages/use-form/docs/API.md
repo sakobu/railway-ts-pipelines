@@ -10,7 +10,7 @@ Main hook for form management.
 
 ```typescript
 function useForm<TValues extends Record<string, unknown>>(
-  validator: Validator<unknown, TValues>,
+  validator: MaybeAsyncValidator<unknown, TValues> | StandardSchemaV1<unknown, TValues>,
   options: FormOptions<TValues>
 ): FormReturn<TValues>;
 ```
@@ -19,16 +19,30 @@ function useForm<TValues extends Record<string, unknown>>(
 
 #### validator
 
-Type: `Validator<unknown, TValues>`
+Type: `MaybeAsyncValidator<unknown, TValues> | StandardSchemaV1<unknown, TValues>`
 
-Railway-oriented validator from @railway-ts/pipelines.
+A Railway-oriented validator from @railway-ts/pipelines, **or** any Standard Schema v1 compliant object (Zod 3.23+, Valibot v1+, ArkType 2.0+). Standard Schema objects are detected automatically by checking for the `~standard` property -- no adapters needed.
 
 ```typescript
+// Railway-ts schema
 import { object, string, required } from '@railway-ts/pipelines/schema';
-
 const validator = object({
   email: required(string()),
   password: required(string()),
+});
+
+// Or a Zod schema (Standard Schema v1)
+import { z } from 'zod';
+const validator = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+// Or a Valibot schema (Standard Schema v1)
+import * as v from 'valibot';
+const validator = v.object({
+  email: v.pipe(v.string(), v.email()),
+  password: v.pipe(v.string(), v.minLength(8)),
 });
 ```
 
@@ -43,6 +57,7 @@ Configuration object.
   initialValues: TValues;
   onSubmit?: (values: TValues) => void | Promise<void>;
   validationMode?: "live" | "blur" | "mount" | "submit";
+  fieldValidators?: Partial<Record<ExtractFieldPaths<TValues>, FieldValidator>>;
 }
 ```
 
@@ -94,6 +109,32 @@ Controls when validation occurs.
 - `blur` - Validate on blur only
 - `mount` - Validate once on mount, mark all fields touched
 - `submit` - Validate only on submit
+
+#### fieldValidators
+
+Type: `Partial<Record<ExtractFieldPaths<TValues>, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>>>`
+Optional
+
+Per-field validator functions for field-level async validation. Run independently from the main schema validator, only for the changed field. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
+
+Return `undefined` for valid, or an error message string for invalid.
+
+```typescript
+const form = useForm(userSchema, {
+  initialValues: { username: '', email: '' },
+  fieldValidators: {
+    username: async (value) => {
+      const available = await checkUsernameAvailable(value as string);
+      return available ? undefined : 'Username is already taken';
+    },
+  },
+});
+
+// Track per-field validation state
+{form.validatingFields.username && <span>Checking...</span>}
+```
+
+Field validator errors are stored in `fieldErrors` and merged into `errors` with priority above schema errors but below server errors.
 
 ## Form State
 
@@ -188,21 +229,25 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-True when any async validation (form-level or field-level) is in progress.
+Derived property. True when **any** async validation is in progress -- either form-level (from an async schema like `chainAsync`) or field-level (from `fieldValidators`). Use this to disable the submit button during any async check.
 
 ```typescript
-{form.isValidating && <span>Validating...</span>}
+<button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
+  Submit
+</button>
 ```
 
 ### validatingFields
 
 Type: `Record<FieldPath, boolean>`
 
-Record of which fields currently have async validators running.
+Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running. Use this to show inline loading indicators next to individual fields.
 
 ```typescript
-{form.validatingFields.email && <span>Checking email...</span>}
+{form.validatingFields.username && <span>Checking username...</span>}
 ```
+
+**isValidating vs validatingFields:** `isValidating` is a single boolean covering all async validation (form-wide). `validatingFields` is a record that only tracks `fieldValidators` -- it won't show `true` for form-level async schemas.
 
 ### fieldErrors
 
@@ -352,7 +397,7 @@ form.clearServerErrors();
 
 ### handleSubmit
 
-Submit form with validation.
+Submit form with validation. Returns a Railway `Result` so you can pattern-match on the outcome.
 
 ```typescript
 handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
@@ -360,27 +405,46 @@ handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
 
 **Parameters:**
 
-- `e` - Optional form event (will call preventDefault)
+- `e` - Optional form event (will call `preventDefault`)
 
-**Returns:** Railway Result type with validated data on success, or validation errors on failure.
+**Returns:** `Promise<Result<TValues, ValidationError[]>>` -- `Ok` with validated data on success, `Err` with validation errors on failure.
+
+**What it does:**
+
+1. Calls `preventDefault` on the event (if provided)
+2. Marks all fields as touched
+3. Clears existing server errors
+4. Runs schema validation (awaits if async)
+5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
+6. If everything passes, calls `onSubmit` (if provided)
+7. Returns the `Result`
 
 **Example:**
 
 ```typescript
-// Use in form element
-<form onSubmit={form.handleSubmit}>{/* fields */}</form>
+// Basic: use onSubmit callback
+<form onSubmit={(e) => void form.handleSubmit(e)}>{/* fields */}</form>
 
-// Handle result programmatically
+// React 19: wrap in void to satisfy form action types
+<form onSubmit={(e) => void form.handleSubmit(e)}>{/* fields */}</form>
+
+// Advanced: pattern-match on the result
 import { match } from "@railway-ts/pipelines/result";
 
 const result = await form.handleSubmit();
 match(result, {
-  ok: (values) => console.log("Submitted:", values),
-  err: (errors) => console.error("Errors:", errors),
+  ok: (values) => {
+    console.log("Submitted:", values);
+    navigate("/success");
+  },
+  err: (errors) => {
+    console.error("Validation errors:", errors);
+    scrollToFirstError();
+  },
 });
 ```
 
-Validates form, sets all fields as touched, and calls onSubmit if valid.
+> **React 19 note:** React 19 form actions expect `onSubmit` handlers to not return a Promise. Use `(e) => void form.handleSubmit(e)` to discard the returned Promise and satisfy the type checker.
 
 ### resetForm
 

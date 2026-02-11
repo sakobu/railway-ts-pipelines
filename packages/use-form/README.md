@@ -2,40 +2,25 @@
 
 [![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![Build Status](https://github.com/sakobu/railway-ts-use-form/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-use-form/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Bundle Size](https://img.shields.io/bundlephobia/minzip/@railway-ts/use-form)](https://bundlephobia.com/package/@railway-ts/use-form) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-use-form)](https://codecov.io/gh/sakobu/railway-ts-use-form)
 
-Type-safe React form hook with Railway-oriented validation.
+React form hook where the schema is the source of truth. Define validation once, get TypeScript types, field autocomplete, error handling, and native HTML bindings for free.
 
-## Features
+> **Part of the [@railway-ts](https://github.com/sakobu) ecosystem.** Uses [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) for composable validation and Result types. Also accepts any [Standard Schema v1](https://github.com/standard-schema/standard-schema) validator (Zod, Valibot, ArkType).
 
-- Type inference from validation schemas
-- Autocomplete for nested field paths
-- Railway-oriented composable validators
-- Native HTML element support
-- Dual error sources (client and server)
-- Array field helpers with type safety
-- Four validation modes (live, blur, mount, submit)
-- React 19 compatible
-- Tree-shakeable ESM
-
-## Installation
+## Install
 
 ```bash
-bun add @railway-ts/use-form @railway-ts/pipelines
+bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.5
+Requires React 18+ and @railway-ts/pipelines ^0.1.10.
 
-## Quick Example
+## Quick Start
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
 import {
-  object,
-  string,
-  required,
-  chain,
-  nonEmpty,
-  email,
-  type InferSchemaType,
+  object, string, required, chain,
+  nonEmpty, email, type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
@@ -43,14 +28,13 @@ const loginSchema = object({
   password: required(chain(string(), nonEmpty('Password is required'))),
 });
 
-type LoginFormSchema = InferSchemaType<typeof loginSchema>;
+type LoginForm = InferSchemaType<typeof loginSchema>;
 
 export function LoginForm() {
-  const form = useForm<LoginFormSchema>(loginSchema, {
+  const form = useForm<LoginForm>(loginSchema, {
     initialValues: { email: '', password: '' },
     onSubmit: async (values) => {
       console.log('Login:', values);
-      return new Promise((resolve) => setTimeout(resolve, 1000));
     },
   });
 
@@ -74,62 +58,75 @@ export function LoginForm() {
 }
 ```
 
-## Playground
+## Examples
 
-Try the example live on StackBlitz:
+Clone and run:
 
-https://stackblitz.com/edit/vitejs-vite-c3zpmon9?embed=1&file=src%2FApp.tsx
+```bash
+git clone https://github.com/sakobu/railway-ts-use-form.git
+cd railway-ts-use-form
+bun install
+bun run example
+```
+
+Then open http://localhost:3000. The interactive app has tabs for:
+
+- **Sync** -- Basic form with schema validation
+- **Async (Cross-field)** -- Async schema with cross-field rules (password confirmation, date ranges)
+- **Zod** -- Standard Schema integration with Zod
+- **Valibot** -- Standard Schema integration with Valibot
+- **Field Validators** -- Per-field async validation with loading indicators
+
+Or try it live on [StackBlitz](https://stackblitz.com/edit/vitejs-vite-c3zpmon9?embed=1&file=src%2FApp.tsx).
+
+## What's Included
+
+- **Type-safe field paths** -- autocomplete for nested fields, dot-notation everywhere
+- **Railway validation** -- composable validators that accumulate all errors in one pass
+- **Standard Schema v1** -- bring your own Zod, Valibot, or ArkType schema instead
+- **Native HTML bindings** -- spread `getFieldProps` onto inputs, selects, checkboxes, files, radios, sliders
+- **Three error layers** -- client validation, per-field async validators, and server errors with automatic priority
+- **Array helpers** -- type-safe `push`, `remove`, `swap`, `move`, `insert`, `replace` with field bindings
+- **Four validation modes** -- `live`, `blur`, `mount`, `submit` for different UX needs
+- **Auto-submission** -- `useFormAutoSubmission` for search/filter forms with debounced submit
+- **React 18 + 19** -- compatible with both, tree-shakeable ESM
+
+## API at a Glance
+
+The `useForm` hook returns:
+
+| Category | Properties / Methods |
+|---|---|
+| **State** | `values`, `touched`, `errors`, `clientErrors`, `serverErrors`, `fieldErrors`, `isValid`, `isDirty`, `isSubmitting`, `isValidating`, `validatingFields`, `submitCount` |
+| **Field Management** | `setFieldValue(field, value, shouldValidate?)`, `setFieldTouched(field, touched?, shouldValidate?)`, `setValues(values, shouldValidate?)` |
+| **Server Errors** | `setServerErrors(errors)`, `clearServerErrors()` |
+| **Form Actions** | `handleSubmit(e?)` → `Promise<Result>`, `resetForm()`, `validateForm(values)` |
+| **Field Bindings** | `getFieldProps`, `getSelectFieldProps`, `getCheckboxProps`, `getSwitchProps`, `getSliderProps`, `getFileFieldProps`, `getCheckboxGroupOptionProps`, `getRadioGroupOptionProps` |
+| **Arrays** | `arrayHelpers(field)` → `{ values, push, remove, insert, swap, move, replace, getFieldProps, ... }` |
+
+## Works With
+
+Any [Standard Schema v1](https://github.com/standard-schema/standard-schema) library works out of the box -- no adapters, no wrappers. Pass the schema directly to `useForm`:
+
+- **Zod** 3.23+ (v4 also supported)
+- **Valibot** v1+
+- **ArkType** 2.0+
+- **@railway-ts/pipelines** (native)
+
+See [Recipes: Standard Schema](./docs/RECIPES.md#standard-schema--bring-your-own-validator) for Zod and Valibot examples.
 
 ## Documentation
 
-- [Getting Started](./GETTING_STARTED.md) - Installation, setup, core concepts
-- [Recipes](./docs/RECIPES.md) - Common patterns and use cases
-- [Advanced](./docs/ADVANCED.md) - Complex patterns, optimization, integration
-- [API Reference](./docs/API.md) - Complete API documentation
+- **[Getting Started](docs/GETTING_STARTED.md)** -- Step-by-step from first form to arrays
+- **[Recipes](./docs/RECIPES.md)** -- Patterns and techniques, each recipe self-contained
+- **[Advanced](./docs/ADVANCED.md)** -- Error priority, discriminated unions, custom validators
+- **[API Reference](./docs/API.md)** -- Complete API documentation
 
-## Core Concepts
+For a real-world example combining schema validation, async field validators, server errors, cross-field validation, and Result pattern-matching, see the [Full Registration Form](./docs/RECIPES.md#capstone-full-registration-form) recipe.
 
-### Type Inference
+## Contributing
 
-Derive TypeScript types from validation schemas:
-
-```typescript
-const userValidator = object({
-  username: required(string()),
-  email: required(email()),
-  age: required(parseNumber()),
-});
-
-type UserForm = InferSchemaType<typeof userValidator>;
-// { username: string; email: string; age: number; }
-```
-
-### Railway Validation
-
-Composable validators that accumulate errors:
-
-```typescript
-const validator = object({
-  email: required(chain(string(), nonEmpty('Required'), email())),
-  password: required(chain(string(), minLength(8))),
-});
-```
-
-### Validation Modes
-
-- `live` - Validate on change and blur, mark touched on change
-- `blur` - Validate on blur only
-- `mount` - Validate once on mount, mark all fields touched
-- `submit` - Validate only on submit
-
-## Development
-
-```bash
-bun install
-bun run build
-bun test
-bun run example
-```
+[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
