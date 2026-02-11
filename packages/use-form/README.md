@@ -1,8 +1,10 @@
 # @railway-ts/use-form
 
-[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![Build Status](https://github.com/sakobu/railway-ts-use-form/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-use-form/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Bundle Size](https://img.shields.io/bundlephobia/minzip/@railway-ts/use-form)](https://bundlephobia.com/package/@railway-ts/use-form) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-use-form)](https://codecov.io/gh/sakobu/railway-ts-use-form)
+[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![Build Status](https://github.com/sakobu/railway-ts-use-form/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-use-form/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-use-form)](https://codecov.io/gh/sakobu/railway-ts-use-form)
 
 React form hook where the schema is the source of truth. Define validation once, get TypeScript types, field autocomplete, error handling, and native HTML bindings for free.
+
+**~3.6 kB** minified + brotli
 
 > **Part of the [@railway-ts](https://github.com/sakobu) ecosystem.** Uses [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) for composable validation and Result types. Also accepts any [Standard Schema v1](https://github.com/standard-schema/standard-schema) validator (Zod, Valibot, ArkType).
 
@@ -12,7 +14,7 @@ React form hook where the schema is the source of truth. Define validation once,
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.10.
+Requires React 18+ and @railway-ts/pipelines ^0.1.12.
 
 ## Quick Start
 
