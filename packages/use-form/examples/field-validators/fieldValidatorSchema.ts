@@ -15,7 +15,7 @@ import {
   array,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
-import { addressSchema } from './userSchema';
+import { addressSchema } from '../sync/userSchema';
 
 // Simulated server-side username check — exported for use in fieldValidators
 export const checkUsernameAvailable = async (username: string): Promise<boolean> => {

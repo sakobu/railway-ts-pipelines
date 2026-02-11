@@ -224,7 +224,7 @@ pre {
 .tabs button {
   background: #ddd;
   color: #555;
-  flex: 0;
+  flex: 1;
   padding: 0.5rem 1.25rem;
   border-radius: 6px;
 }

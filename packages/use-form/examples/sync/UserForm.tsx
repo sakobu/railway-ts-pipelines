@@ -1,17 +1,9 @@
-// Alternative to schema-level async validation (AsyncUserForm).
-// Uses fieldValidators for per-field async validation with targeted
-// validatingFields tracking instead of form-wide isValidating.
+import { useForm } from '../../src/';
+import { userSchema, type User } from './userSchema';
+import { prepareForAPI } from '../utils';
 
-import { useForm } from '../src/';
-import {
-  fieldValidatorUserSchema,
-  checkUsernameAvailable,
-  type FieldValidatorUser,
-} from './fieldValidatorSchema';
-import { prepareForAPI } from './utils';
-
-export default function FieldValidatorForm() {
-  const form = useForm<FieldValidatorUser>(fieldValidatorUserSchema, {
+export default function UserForm() {
+  const form = useForm<User>(userSchema, {
     initialValues: {
       username: '',
       email: '',
@@ -26,30 +18,20 @@ export default function FieldValidatorForm() {
       const apiPayload = prepareForAPI(values);
       console.log('Submit:', apiPayload);
     },
-    // Per-field async validators — run after schema validation passes for that field
-    fieldValidators: {
-      username: async (value) => {
-        const available = await checkUsernameAvailable(value as string);
-        return available ? undefined : 'Username is already taken';
-      },
-    },
   });
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <h2>Field Validator Registration</h2>
+      <h2>User Registration</h2>
 
-      {/* Username — uses per-field validatingFields tracking */}
+      {/* Text Input - Username */}
       <div className="field">
         <label htmlFor={form.getFieldProps('username').id}>Username *</label>
         <input
           type="text"
-          placeholder="Enter username (try 'admin' or 'taken')"
+          placeholder="Enter username"
           {...form.getFieldProps('username')}
         />
-        {form.validatingFields.username && (
-          <span className="validating">Checking username...</span>
-        )}
         {form.touched.username && form.errors.username && (
           <span className="error">{form.errors.username}</span>
         )}
@@ -202,10 +184,7 @@ export default function FieldValidatorForm() {
 
       {/* Form Actions */}
       <div className="actions">
-        <button
-          type="submit"
-          disabled={form.isSubmitting || form.isValidating || !form.isValid}
-        >
+        <button type="submit" disabled={form.isSubmitting || !form.isValid}>
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 
@@ -219,16 +198,7 @@ export default function FieldValidatorForm() {
       </div>
 
       <pre>
-        {JSON.stringify(
-          {
-            values: form.values,
-            errors: form.errors,
-            isValidating: form.isValidating,
-            validatingFields: form.validatingFields,
-          },
-          null,
-          2
-        )}
+        {JSON.stringify({ values: form.values, errors: form.errors }, null, 2)}
       </pre>
     </form>
   );

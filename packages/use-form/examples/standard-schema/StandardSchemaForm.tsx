@@ -1,7 +1,7 @@
 import { toStandardSchema } from '@railway-ts/pipelines/schema';
-import { useForm } from '../src/';
-import { userSchema, type User } from './userSchema';
-import { prepareForAPI } from './utils';
+import { useForm } from '../../src/';
+import { userSchema, type User } from '../sync/userSchema';
+import { prepareForAPI } from '../utils';
 
 // Convert the railway-ts pipeline validator into a Standard Schema v1 object,
 // then pass it straight to useForm — demonstrating full round-trip interop.

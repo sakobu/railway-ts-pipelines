@@ -1,9 +1,17 @@
-import { useForm } from '../src/';
-import { asyncUserSchema, type AsyncUser } from './asyncUserSchema';
-import { prepareForAPI } from './utils';
+// Alternative to schema-level async validation (AsyncUserForm).
+// Uses fieldValidators for per-field async validation with targeted
+// validatingFields tracking instead of form-wide isValidating.
 
-export default function AsyncUserForm() {
-  const form = useForm<AsyncUser>(asyncUserSchema, {
+import { useForm } from '../../src/';
+import {
+  fieldValidatorUserSchema,
+  checkUsernameAvailable,
+  type FieldValidatorUser,
+} from './fieldValidatorSchema';
+import { prepareForAPI } from '../utils';
+
+export default function FieldValidatorForm() {
+  const form = useForm<FieldValidatorUser>(fieldValidatorUserSchema, {
     initialValues: {
       username: '',
       email: '',
@@ -18,13 +26,20 @@ export default function AsyncUserForm() {
       const apiPayload = prepareForAPI(values);
       console.log('Submit:', apiPayload);
     },
+    // Per-field async validators — run after schema validation passes for that field
+    fieldValidators: {
+      username: async (value) => {
+        const available = await checkUsernameAvailable(value as string);
+        return available ? undefined : 'Username is already taken';
+      },
+    },
   });
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <h2>Async User Registration</h2>
+      <h2>Field Validator Registration</h2>
 
-      {/* Text Input - Username (with async validation) */}
+      {/* Username — uses per-field validatingFields tracking */}
       <div className="field">
         <label htmlFor={form.getFieldProps('username').id}>Username *</label>
         <input
@@ -32,7 +47,9 @@ export default function AsyncUserForm() {
           placeholder="Enter username (try 'admin' or 'taken')"
           {...form.getFieldProps('username')}
         />
-        {form.isValidating && <span className="validating">Checking...</span>}
+        {form.validatingFields.username && (
+          <span className="validating">Checking username...</span>
+        )}
         {form.touched.username && form.errors.username && (
           <span className="error">{form.errors.username}</span>
         )}
@@ -207,6 +224,7 @@ export default function AsyncUserForm() {
             values: form.values,
             errors: form.errors,
             isValidating: form.isValidating,
+            validatingFields: form.validatingFields,
           },
           null,
           2
