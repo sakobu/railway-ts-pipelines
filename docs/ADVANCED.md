@@ -184,5 +184,5 @@ The library prioritizes **zero runtime surprises** by pushing as much validation
 
 ## Next Steps
 
--> **[Recipes](RECIPES.md)** - Patterns: point-free composition, error recovery, async pipelines
--> **[API Reference](../README.md)** - Full function catalog
+- **[Recipes](RECIPES.md)** — Patterns: point-free composition, error recovery, async pipelines
+- **[API Reference](../README.md)** — Full function catalog
