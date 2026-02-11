@@ -1,5 +1,6 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { isOk } from '@railway-ts/pipelines/result';
 import { useForm } from '../../src/useForm';
 import {
   userValidator,
@@ -640,12 +641,15 @@ describe('useForm', () => {
         return await result.current.handleSubmit();
       });
 
-      // Should return validated data
-      expect(submitResult).toEqual({
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      });
+      // Should return Result with validated data
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual({
+          name: 'John',
+          email: 'john@example.com',
+          age: 25,
+        });
+      }
     });
   });
 

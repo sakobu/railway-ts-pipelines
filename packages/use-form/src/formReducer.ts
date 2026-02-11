@@ -132,12 +132,13 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       return {
         ...state,
         isSubmitting: action.isSubmitting,
+        ...(action.isSubmitting ? { submitCount: state.submitCount + 1 } : {}),
       };
 
-    case 'SET_VALIDATING':
+    case 'SET_FORM_VALIDATING':
       return {
         ...state,
-        isValidating: action.isValidating,
+        isFormValidating: action.isFormValidating,
       };
 
     case 'SET_FIELD_VALIDATING': {
@@ -150,7 +151,6 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       return {
         ...state,
         validatingFields: newValidatingFields,
-        isValidating: Object.keys(newValidatingFields).length > 0,
       };
     }
 
@@ -176,7 +176,8 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         fieldErrors: {},
         validatingFields: {},
         isSubmitting: false,
-        isValidating: false,
+        isFormValidating: false,
+        submitCount: 0,
         isDirty: false,
       };
 

@@ -56,23 +56,24 @@ export const useFormAutoSubmission = <T>(
   form: FormWithAutoSubmit<T>,
   delay = 200
 ) => {
+  const { values, isDirty, isValid, validateForm, handleSubmit } = form;
   const lastValidatedRef = useRef('');
 
   const debouncedSubmit = useDebounce(() => {
-    if (form.isValid) form.handleSubmit();
+    if (isValid) handleSubmit();
   }, delay);
 
   useEffect(() => {
-    if (!form.isDirty) return;
+    if (!isDirty) return;
 
-    const valuesString = JSON.stringify(form.values);
+    const valuesString = JSON.stringify(values);
     if (valuesString === lastValidatedRef.current) return;
 
     lastValidatedRef.current = valuesString;
-    form.validateForm(form.values);
+    validateForm(values);
 
-    if (form.isValid) debouncedSubmit();
-  }, [form.values, form.isDirty, form.isValid, debouncedSubmit, form]);
+    if (isValid) debouncedSubmit();
+  }, [values, isDirty, isValid, debouncedSubmit, validateForm]);
 
   return null;
 };

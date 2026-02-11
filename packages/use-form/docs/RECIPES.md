@@ -417,7 +417,7 @@ function AvatarUpload() {
 ## Auto-Submit Form
 
 ```tsx
-import { useAutoSubmitForm } from '@railway-ts/use-form';
+import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
 
 const filterValidator = object({
   search: optional(string()),
@@ -436,12 +436,6 @@ function ProductFilters() {
       minPrice: undefined,
       maxPrice: undefined,
     },
-    validationMode: 'live',
-  });
-
-  // Auto-submit after 500ms of inactivity
-  useAutoSubmitForm(form, {
-    debounceMs: 500,
     onSubmit: async (values) => {
       const params = new URLSearchParams();
       if (values.search) params.set('search', values.search);
@@ -453,7 +447,11 @@ function ProductFilters() {
       const products = await response.json();
       // Update UI with products
     },
+    validationMode: 'live',
   });
+
+  // Auto-submit 500ms after the user stops typing
+  useFormAutoSubmission(form, 500);
 
   return (
     <div>
@@ -483,14 +481,11 @@ function ProductFilters() {
 ## Search with Debounce
 
 ```tsx
+import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
+
 function SearchBox() {
   const form = useForm(searchValidator, {
     initialValues: { query: '' },
-    validationMode: 'live',
-  });
-
-  useAutoSubmitForm(form, {
-    debounceMs: 300,
     onSubmit: async (values) => {
       if (!values.query) return;
       const results = await fetch(`/api/search?q=${values.query}`).then((r) =>
@@ -498,7 +493,10 @@ function SearchBox() {
       );
       // Update search results
     },
+    validationMode: 'live',
   });
+
+  useFormAutoSubmission(form, 300);
 
   return <input {...form.getFieldProps('query')} placeholder="Search..." />;
 }

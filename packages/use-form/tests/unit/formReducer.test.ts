@@ -13,7 +13,8 @@ describe('formReducer', () => {
     fieldErrors: {},
     validatingFields: {},
     isSubmitting: false,
-    isValidating: false,
+    isFormValidating: false,
+    submitCount: 0,
     isDirty: false,
   };
 
@@ -85,7 +86,8 @@ describe('formReducer', () => {
         fieldErrors: {},
         validatingFields: {},
         isSubmitting: false,
-        isValidating: false,
+        isFormValidating: false,
+        submitCount: 0,
         isDirty: false,
       };
 
@@ -295,7 +297,7 @@ describe('formReducer', () => {
   });
 
   describe('SET_SUBMITTING', () => {
-    test('sets isSubmitting to true', () => {
+    test('sets isSubmitting to true and increments submitCount', () => {
       const result = formReducer(
         initialState,
         {
@@ -306,12 +308,14 @@ describe('formReducer', () => {
       );
 
       expect(result.isSubmitting).toBe(true);
+      expect(result.submitCount).toBe(1);
     });
 
-    test('sets isSubmitting to false', () => {
+    test('sets isSubmitting to false without incrementing submitCount', () => {
       const submittingState: FormState<typeof initialValues> = {
         ...initialState,
         isSubmitting: true,
+        submitCount: 1,
       };
 
       const result = formReducer(
@@ -324,6 +328,21 @@ describe('formReducer', () => {
       );
 
       expect(result.isSubmitting).toBe(false);
+      expect(result.submitCount).toBe(1);
+    });
+
+    test('increments submitCount on each submission start', () => {
+      let state = initialState;
+
+      // First submit
+      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: true }, initialValues);
+      expect(state.submitCount).toBe(1);
+      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: false }, initialValues);
+      expect(state.submitCount).toBe(1);
+
+      // Second submit
+      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: true }, initialValues);
+      expect(state.submitCount).toBe(2);
     });
   });
 
@@ -337,7 +356,8 @@ describe('formReducer', () => {
         fieldErrors: { name: 'Field error' },
         validatingFields: { name: true },
         isSubmitting: true,
-        isValidating: true,
+        isFormValidating: true,
+        submitCount: 3,
         isDirty: true,
       };
 
@@ -356,7 +376,8 @@ describe('formReducer', () => {
       expect(result.fieldErrors).toEqual({});
       expect(result.validatingFields).toEqual({});
       expect(result.isSubmitting).toBe(false);
-      expect(result.isValidating).toBe(false);
+      expect(result.isFormValidating).toBe(false);
+      expect(result.submitCount).toBe(0);
       expect(result.isDirty).toBe(false);
     });
   });
@@ -410,14 +431,12 @@ describe('formReducer', () => {
       );
 
       expect(result.validatingFields.name).toBe(true);
-      expect(result.isValidating).toBe(true);
     });
 
     test('sets per-field validating state to false and removes key', () => {
       const validatingState: FormState<typeof initialValues> = {
         ...initialState,
         validatingFields: { name: true },
-        isValidating: true,
       };
 
       const result = formReducer(
@@ -431,14 +450,12 @@ describe('formReducer', () => {
       );
 
       expect(result.validatingFields.name).toBeUndefined();
-      expect(result.isValidating).toBe(false);
     });
 
-    test('derives isValidating from remaining fields', () => {
+    test('preserves other validating fields when one completes', () => {
       const validatingState: FormState<typeof initialValues> = {
         ...initialState,
         validatingFields: { name: true, email: true },
-        isValidating: true,
       };
 
       const result = formReducer(
@@ -453,7 +470,39 @@ describe('formReducer', () => {
 
       expect(result.validatingFields.name).toBeUndefined();
       expect(result.validatingFields.email).toBe(true);
-      expect(result.isValidating).toBe(true);
+    });
+  });
+
+  describe('SET_FORM_VALIDATING', () => {
+    test('sets form-level validating state to true', () => {
+      const result = formReducer(
+        initialState,
+        {
+          type: 'SET_FORM_VALIDATING',
+          isFormValidating: true,
+        },
+        initialValues
+      );
+
+      expect(result.isFormValidating).toBe(true);
+    });
+
+    test('sets form-level validating state to false', () => {
+      const validatingState: FormState<typeof initialValues> = {
+        ...initialState,
+        isFormValidating: true,
+      };
+
+      const result = formReducer(
+        validatingState,
+        {
+          type: 'SET_FORM_VALIDATING',
+          isFormValidating: false,
+        },
+        initialValues
+      );
+
+      expect(result.isFormValidating).toBe(false);
     });
   });
 

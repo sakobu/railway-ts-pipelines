@@ -84,14 +84,21 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
-  /** Whether async validation is currently in progress. */
-  isValidating: boolean;
+  /** Whether form-level async validation is currently in progress. */
+  isFormValidating: boolean;
 
   /** Per-field async validation tracking. True when that field's async validator is running. */
   validatingFields: Record<FieldPath, boolean>;
 
   /** Errors from per-field validators (stored separately so schema SET_CLIENT_ERRORS doesn't overwrite them). */
   fieldErrors: Record<FieldPath, string>;
+
+  /**
+   * Number of times the form has been submitted (via handleSubmit).
+   * Incremented at the start of each submission attempt, regardless of validation outcome.
+   * Useful in submit mode for patterns like `submitCount === 0 || form.isValid`.
+   */
+  submitCount: number;
 
   /**
    * Whether any form values have changed since initialization or last reset.
@@ -878,10 +885,10 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isSubmitting: boolean;
     }
   | {
-      /** Sets the async validation state (loading indicator) */
-      type: 'SET_VALIDATING';
-      /** Whether async validation is currently in progress */
-      isValidating: boolean;
+      /** Sets the form-level async validation state */
+      type: 'SET_FORM_VALIDATING';
+      /** Whether form-level async validation is currently in progress */
+      isFormValidating: boolean;
     }
   | {
       /** Sets per-field async validation state */

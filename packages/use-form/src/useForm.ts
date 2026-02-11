@@ -6,7 +6,7 @@ import {
   useRef,
   type FormEvent,
 } from 'react';
-import { isErr, match, type Result } from '@railway-ts/pipelines/result';
+import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
 import {
   validate,
   formatErrors,
@@ -209,7 +209,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
     fieldErrors: {},
     validatingFields: {},
     isSubmitting: false,
-    isValidating: false,
+    isFormValidating: false,
+    submitCount: 0,
     isDirty: false,
   };
 
@@ -250,6 +251,12 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
   // Form is valid when there are no errors of any kind
   const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
+
+  // Derived: true when any async validation (form-level or field-level) is running
+  const isValidating = useMemo(
+    () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
+    [formState.isFormValidating, formState.validatingFields]
+  );
 
   // ===========================================================================
   // Validation Functions
@@ -296,13 +303,13 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       if (validationResult instanceof Promise) {
         const seq = ++validationSeqRef.current;
-        dispatch({ type: 'SET_VALIDATING', isValidating: true });
+        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
 
         return validationResult.then((result) => {
           // Only dispatch if this is still the latest validation
           if (seq === validationSeqRef.current) {
             dispatchValidationResult(result);
-            dispatch({ type: 'SET_VALIDATING', isValidating: false });
+            dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
           }
           return result;
         });
@@ -638,7 +645,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * Returns a Promise that resolves to either the validated data or validation errors.
    *
    * @param e - Optional form event (will preventDefault if provided)
-   * @returns Promise<TValues | ValidationError[]> - Validated data on success, errors on failure
+   * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
    *
    * @example
    * // Use in form element
@@ -654,30 +661,24 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </button>
    *
    * @example
-   * // Handle result programmatically
+   * // Handle result programmatically with Railway pattern
+   * import { match } from "@railway-ts/pipelines/result";
+   *
    * const handleSave = async () => {
    *   const result = await form.handleSubmit();
-   *   if (Array.isArray(result)) {
-   *     // Validation failed, result is ValidationError[]
-   *     console.error("Validation errors:", result);
-   *   } else {
-   *     // Success, result is TValues
-   *     console.log("Form submitted:", result);
-   *     navigate("/success");
-   *   }
-   * };
-   *
-   * @example
-   * // With loading state
-   * const [isLoading, setIsLoading] = useState(false);
-   * const handleSubmitWithLoading = async () => {
-   *   setIsLoading(true);
-   *   await form.handleSubmit();
-   *   setIsLoading(false);
+   *   match(result, {
+   *     ok: (values) => {
+   *       console.log("Form submitted:", values);
+   *       navigate("/success");
+   *     },
+   *     err: (errors) => {
+   *       console.error("Validation errors:", errors);
+   *     },
+   *   });
    * };
    */
   const handleSubmit = useCallback(
-    async (e?: FormEvent): Promise<TValues | ValidationError[]> => {
+    async (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
       if (e) {
         e.preventDefault();
       }
@@ -716,7 +717,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       return match<
         TValues,
         ValidationError[],
-        Promise<TValues | ValidationError[]>
+        Promise<Result<TValues, ValidationError[]>>
       >(validationResult, {
         ok: async (validData) => {
           // Run all field validators in parallel before calling onSubmit
@@ -744,9 +745,11 @@ export const useForm = <TValues extends Record<string, unknown>>(
                 type: 'SET_SUBMITTING',
                 isSubmitting: false,
               });
-              return fieldResults
-                .filter((r) => r.error)
-                .map((r) => ({ path: [r.field], message: r.error! }));
+              return err(
+                fieldResults
+                  .filter((r) => r.error)
+                  .map((r) => ({ path: [r.field], message: r.error! }))
+              );
             }
           }
 
@@ -763,9 +766,9 @@ export const useForm = <TValues extends Record<string, unknown>>(
             isSubmitting: false,
           });
 
-          return validData;
+          return ok(validData);
         },
-        err: async (errors) => {
+        err: (errors) => {
           dispatch({
             type: 'SET_CLIENT_ERRORS',
             errors: formatErrors(errors),
@@ -776,7 +779,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
             isSubmitting: false,
           });
 
-          return Promise.resolve(errors);
+          return Promise.resolve(err(errors));
         },
       });
     },
@@ -1256,10 +1259,11 @@ export const useForm = <TValues extends Record<string, unknown>>(
     clientErrors: formState.clientErrors,
     serverErrors: formState.serverErrors,
     isSubmitting: formState.isSubmitting,
-    isValidating: formState.isValidating,
+    isValidating,
     validatingFields: formState.validatingFields,
     isValid,
     isDirty: formState.isDirty,
+    submitCount: formState.submitCount,
 
     // Field management
     setFieldValue,

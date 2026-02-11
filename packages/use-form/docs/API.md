@@ -184,6 +184,54 @@ True when form is currently being submitted.
 </button>
 ```
 
+### isValidating
+
+Type: `boolean`
+
+True when any async validation (form-level or field-level) is in progress.
+
+```typescript
+{form.isValidating && <span>Validating...</span>}
+```
+
+### validatingFields
+
+Type: `Record<FieldPath, boolean>`
+
+Record of which fields currently have async validators running.
+
+```typescript
+{form.validatingFields.email && <span>Checking email...</span>}
+```
+
+### fieldErrors
+
+Type: `Record<FieldPath, string>`
+
+Errors from per-field validators (stored separately from schema errors).
+These are merged into the `errors` object with priority above schema errors
+but below server errors.
+
+```typescript
+form.fieldErrors.email; // "Email is already taken"
+```
+
+### submitCount
+
+Type: `number`
+
+Number of times the form has been submitted (via handleSubmit).
+Useful in `submit` mode for patterns like `submitCount === 0 || form.isValid`.
+
+```typescript
+<button
+  type="submit"
+  disabled={form.submitCount > 0 && !form.isValid}
+>
+  Submit
+</button>
+```
+
 ## Form Methods
 
 ### setFieldValue
@@ -300,17 +348,29 @@ form.clearServerErrors();
 Submit form with validation.
 
 ```typescript
-handleSubmit(e?: FormEvent): Promise<void>
+handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
 ```
 
 **Parameters:**
 
 - `e` - Optional form event (will call preventDefault)
 
+**Returns:** Railway Result type with validated data on success, or validation errors on failure.
+
 **Example:**
 
 ```typescript
+// Use in form element
 <form onSubmit={form.handleSubmit}>{/* fields */}</form>
+
+// Handle result programmatically
+import { match } from "@railway-ts/pipelines/result";
+
+const result = await form.handleSubmit();
+match(result, {
+  ok: (values) => console.log("Submitted:", values),
+  err: (errors) => console.error("Errors:", errors),
+});
 ```
 
 Validates form, sets all fields as touched, and calls onSubmit if valid.
@@ -873,57 +933,47 @@ getRadioGroupOptionProps<TField extends ExtractFieldPaths<TItem>>(
 />
 ```
 
-## useAutoSubmitForm
+## useFormAutoSubmission
 
 Hook for auto-submitting forms after debounced changes.
+Monitors form values and automatically triggers submission when the form
+is dirty, valid, and values have changed since the last validation.
 
 ### Signature
 
 ```typescript
-function useAutoSubmitForm<TValues extends Record<string, unknown>>(
-  form: ReturnType<typeof useForm<TValues>>,
-  options: AutoSubmitOptions<TValues>
-): void;
+function useFormAutoSubmission<T>(
+  form: FormWithAutoSubmit<T>,
+  delay?: number
+): null;
 ```
 
 ### Parameters
 
 #### form
 
-Type: `ReturnType<typeof useForm<TValues>>`
+A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`).
 
-Form instance from useForm.
+#### delay
 
-#### options
+Type: `number`
+Optional, Default: `200`
 
-Type: `AutoSubmitOptions<TValues>`
-
-```typescript
-{
-  debounceMs: number;
-  onSubmit: (values: TValues) => void | Promise<void>;
-}
-```
-
-**Properties:**
-
-- `debounceMs` - Milliseconds to wait after last change before submitting
-- `onSubmit` - Callback invoked with validated form values
+Debounce delay in milliseconds before auto-submitting.
 
 ### Example
 
 ```typescript
 const form = useForm(validator, {
   initialValues: { search: '' },
-  validationMode: 'live',
-});
-
-useAutoSubmitForm(form, {
-  debounceMs: 500,
   onSubmit: async (values) => {
     await fetch(`/api/search?q=${values.search}`);
   },
+  validationMode: 'live',
 });
+
+// Auto-submit 500ms after the user stops typing
+useFormAutoSubmission(form, 500);
 ```
 
 ## useDebounce

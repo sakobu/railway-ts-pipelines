@@ -16,7 +16,7 @@ export default function AsyncUserForm() {
     initialValues: {
       username: '',
       email: '',
-      organization: '' as AsyncUser['organization'],
+      organization: '',
     },
     onSubmit: (values) => {
       console.log('Submit:', values);
@@ -56,7 +56,9 @@ export default function AsyncUserForm() {
 
       {/* Organization — changing this re-triggers the username check */}
       <div className="field">
-        <label htmlFor={form.getSelectFieldProps('organization').id}>Organization *</label>
+        <label htmlFor={form.getSelectFieldProps('organization').id}>
+          Organization *
+        </label>
         <select {...form.getSelectFieldProps('organization')}>
           <option value="">Select an organization...</option>
           <option value="acme-corp">Acme Corp</option>
