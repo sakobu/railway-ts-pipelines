@@ -1,5 +1,5 @@
 import type { FieldPath, FormAction, FormState } from './types';
-import { isPathAffected, setValueByPath } from './utils';
+import { deepEqual, isPathAffected, setValueByPath } from './utils';
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
@@ -79,11 +79,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...state,
         values: newValues,
         serverErrors: newServerErrors,
-        isDirty: true,
+        isDirty: !deepEqual(newValues, initialValues),
       };
     }
 
     case 'SET_VALUES': {
+      const newValues = { ...state.values, ...action.values };
       const newServerErrors = { ...state.serverErrors };
       Object.keys(action.values).forEach((field) => {
         Object.keys(newServerErrors).forEach((errorPath) => {
@@ -95,9 +96,9 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 
       return {
         ...state,
-        values: { ...state.values, ...action.values },
+        values: newValues,
         serverErrors: newServerErrors,
-        isDirty: true,
+        isDirty: !deepEqual(newValues, initialValues),
       };
     }
 

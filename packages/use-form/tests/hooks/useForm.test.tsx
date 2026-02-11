@@ -1029,6 +1029,106 @@ describe('useForm', () => {
     });
   });
 
+  describe('isDirty', () => {
+    test('isDirty is false initially', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
+        })
+      );
+
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('isDirty becomes true after changing a field', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Bob');
+      });
+
+      expect(result.current.isDirty).toBe(true);
+    });
+
+    test('isDirty resets to false when field is changed back to initial value', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Bob');
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Alice');
+      });
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('isDirty resets to false when setValues restores all fields to initial', () => {
+      const initialValues = { name: 'Alice', email: 'alice@test.com', age: 30 };
+      const { result } = renderHook(() =>
+        useForm(userValidator, { initialValues })
+      );
+
+      act(() => {
+        result.current.setValues({ name: 'Bob', email: 'bob@test.com' });
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => {
+        result.current.setValues({ name: 'Alice', email: 'alice@test.com' });
+      });
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('isDirty resets to false after resetForm()', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Bob');
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => {
+        result.current.resetForm();
+      });
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('isDirty handles Date values correctly', () => {
+      const initialDate = new Date('2024-01-01');
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { startDate: initialDate },
+        })
+      );
+
+      expect(result.current.isDirty).toBe(false);
+
+      act(() => {
+        result.current.setFieldValue('startDate', new Date('2024-06-15'));
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => {
+        result.current.setFieldValue('startDate', new Date('2024-01-01'));
+      });
+      expect(result.current.isDirty).toBe(false);
+    });
+  });
+
   describe('fieldValidators', () => {
     test('per-field validatingFields only set for the changed field', async () => {
       const { result } = renderHook(() =>

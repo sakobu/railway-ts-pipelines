@@ -4,6 +4,7 @@ import {
   setValueByPath,
   isPathAffected,
   collectFieldPaths,
+  deepEqual,
 } from '../../src/utils';
 
 describe('getValueByPath', () => {
@@ -277,5 +278,71 @@ describe('collectFieldPaths', () => {
     expect(paths).toContain('user.contacts[1]');
     expect(paths).toContain('user.contacts[1].type');
     expect(paths).toContain('user.contacts[1].value');
+  });
+});
+
+describe('deepEqual', () => {
+  test('primitives: equal and unequal', () => {
+    expect(deepEqual(1, 1)).toBe(true);
+    expect(deepEqual('hello', 'hello')).toBe(true);
+    expect(deepEqual(true, true)).toBe(true);
+    expect(deepEqual(1, 2)).toBe(false);
+    expect(deepEqual('a', 'b')).toBe(false);
+    expect(deepEqual(true, false)).toBe(false);
+  });
+
+  test('Date comparison: same time and different times', () => {
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-01-01'))).toBe(true);
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-06-15'))).toBe(false);
+  });
+
+  test('RegExp comparison', () => {
+    expect(deepEqual(/abc/gi, /abc/gi)).toBe(true);
+    expect(deepEqual(/abc/, /def/)).toBe(false);
+  });
+
+  test('nested objects', () => {
+    expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } })).toBe(true);
+    expect(deepEqual({ a: { b: 1 } }, { a: { b: 2 } })).toBe(false);
+    expect(deepEqual({ a: { b: 1 } }, { a: { c: 1 } })).toBe(false);
+  });
+
+  test('arrays', () => {
+    expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true);
+    expect(deepEqual([1, 2, 3], [1, 2, 4])).toBe(false);
+    expect(deepEqual([1, 2], [1, 2, 3])).toBe(false);
+  });
+
+  test('mixed nesting', () => {
+    const a = { users: [{ name: 'Alice', tags: ['admin'] }] };
+    const b = { users: [{ name: 'Alice', tags: ['admin'] }] };
+    const c = { users: [{ name: 'Alice', tags: ['user'] }] };
+    expect(deepEqual(a, b)).toBe(true);
+    expect(deepEqual(a, c)).toBe(false);
+  });
+
+  test('edge cases: null and undefined', () => {
+    expect(deepEqual(null, null)).toBe(true);
+    expect(deepEqual(undefined, undefined)).toBe(true);
+    expect(deepEqual(null, undefined)).toBe(false);
+    expect(deepEqual(null, { a: 1 })).toBe(false);
+    expect(deepEqual({ a: 1 }, null)).toBe(false);
+  });
+
+  test('different types', () => {
+    expect(deepEqual(1, '1')).toBe(false);
+    expect(deepEqual([], {})).toBe(false);
+    expect(deepEqual(0, false)).toBe(false);
+    expect(deepEqual('', false)).toBe(false);
+  });
+
+  test('objects with different key counts', () => {
+    expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+    expect(deepEqual({ a: 1, b: 2 }, { a: 1 })).toBe(false);
+  });
+
+  test('same reference returns true', () => {
+    const obj = { a: 1 };
+    expect(deepEqual(obj, obj)).toBe(true);
   });
 });

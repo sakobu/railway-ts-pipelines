@@ -386,16 +386,19 @@ function SearchForm() {
     initialValues: { query: '' },
   });
 
-  const debouncedQuery = useDebounce(form.values.query, 300);
+  const debouncedSearch = useDebounce((query: string) => {
+    fetch(`/api/search?q=${query}`);
+  }, 300);
 
-  useEffect(() => {
-    if (debouncedQuery) {
-      // Perform search
-      fetch(`/api/search?q=${debouncedQuery}`);
-    }
-  }, [debouncedQuery]);
-
-  return <input {...form.getFieldProps('query')} />;
+  return (
+    <input
+      {...form.getFieldProps('query')}
+      onChange={(e) => {
+        form.setFieldValue('query', e.target.value);
+        debouncedSearch(e.target.value);
+      }}
+    />
+  );
 }
 ```
 

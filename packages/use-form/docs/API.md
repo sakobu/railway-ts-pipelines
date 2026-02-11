@@ -978,33 +978,35 @@ useFormAutoSubmission(form, 500);
 
 ## useDebounce
 
-Hook for debouncing values.
+Hook for debouncing a callback function.
 
 ### Signature
 
 ```typescript
-function useDebounce<T>(value: T, delay: number): T;
+function useDebounce<T extends (...args: Param) => Return>(
+  callback: T,
+  delay: number
+): (...args: Param) => void;
 ```
 
 ### Parameters
 
-- `value` - Value to debounce
-- `delay` - Milliseconds to wait
+- `callback` - The function to debounce
+- `delay` - Milliseconds to wait before invoking the callback
 
 ### Returns
 
-Debounced value.
+A debounced version of the callback. Calling it resets the delay timer; the original callback fires once the caller stops invoking for `delay` ms.
 
 ### Example
 
 ```typescript
-const debouncedSearch = useDebounce(form.values.search, 300);
+const debouncedSearch = useDebounce((query: string) => {
+  fetchSearchResults(query);
+}, 300);
 
-useEffect(() => {
-  if (debouncedSearch) {
-    performSearch(debouncedSearch);
-  }
-}, [debouncedSearch]);
+// In a handler:
+<input onChange={(e) => debouncedSearch(e.target.value)} />
 ```
 
 ## Validation Functions
