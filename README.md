@@ -99,15 +99,15 @@ match(name, {
 }); // Output: Alice
 ```
 
-| Category | Functions |
-|----------|-----------|
-| **Core** | `some`, `none`, `isSome`, `isNone` |
-| **Transform** | `map`, `flatMap`, `bimap`, `filter`, `tap` |
-| **Curried** | `mapWith`, `flatMapWith`, `filterWith`, `tapWith` |
-| **Unwrap** | `unwrap`, `unwrapOr`, `unwrapOrElse` |
-| **Combine** | `combine` |
-| **Convert** | `fromNullable`, `mapToResult` |
-| **Branch** | `match` |
+| Category      | Functions                                         |
+| ------------- | ------------------------------------------------- |
+| **Core**      | `some`, `none`, `isSome`, `isNone`                |
+| **Transform** | `map`, `flatMap`, `bimap`, `filter`, `tap`        |
+| **Curried**   | `mapWith`, `flatMapWith`, `filterWith`, `tapWith` |
+| **Unwrap**    | `unwrap`, `unwrapOr`, `unwrapOrElse`              |
+| **Combine**   | `combine`                                         |
+| **Convert**   | `fromNullable`, `mapToResult`                     |
+| **Branch**    | `match`                                           |
 
 ### Result
 
@@ -130,22 +130,22 @@ match(result, {
 }); // Output: 15
 ```
 
-| Category | Functions |
-|----------|-----------|
-| **Core** | `ok`, `err`, `isOk`, `isErr` |
-| **Transform** | `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr` |
-| **Curried** | `mapWith`, `flatMapWith`, `mapErrWith`, `filterWith`, `tapWith`, `tapErrWith` |
-| **Recovery** | `orElse`, `orElseWith` |
-| **Unwrap** | `unwrap`, `unwrapOr`, `unwrapOrElse` |
-| **Combine** | `combine`, `combineAll` |
-| **Convert** | `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption` |
-| **Branch** | `match` |
+| Category      | Functions                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| **Core**      | `ok`, `err`, `isOk`, `isErr`                                                                     |
+| **Transform** | `map`, `mapErr`, `flatMap`, `bimap`, `filter`, `tap`, `tapErr`                                   |
+| **Curried**   | `mapWith`, `flatMapWith`, `mapErrWith`, `filterWith`, `tapWith`, `tapErrWith`                    |
+| **Recovery**  | `orElse`, `orElseWith`                                                                           |
+| **Unwrap**    | `unwrap`, `unwrapOr`, `unwrapOrElse`                                                             |
+| **Combine**   | `combine`, `combineAll`                                                                          |
+| **Convert**   | `fromTry`, `fromTryWithError`, `fromPromise`, `fromPromiseWithError`, `toPromise`, `mapToOption` |
+| **Branch**    | `match`                                                                                          |
 
 ### Schema
 
 Parse untrusted data into typed values. Accumulates all validation errors.
 
-> **Standard Schema v1 compliant** — use `toStandardSchema()` for interop with tRPC, TanStack Form, React Hook Form, and other Standard Schema consumers. See [Recipes → Standard Schema Interop](docs/RECIPES.md#standard-schema-interop).
+> **Standard Schema v1 compliant** — use `toStandardSchema()` for interop with tRPC, TanStack Form, React Hook Form, and other Standard Schema consumers. See [Recipes -> Standard Schema Interop](docs/RECIPES.md#standard-schema-interop).
 
 ```typescript
 import {
@@ -174,24 +174,24 @@ const result = validate(input, userSchema);
 // Result<User, ValidationError[]>
 ```
 
-| Category | Functions |
-|----------|-----------|
-| **Primitives** | `string`, `number`, `boolean`, `date`, `bigint` |
-| **Parsers** | `parseNumber`, `parseString`, `parseBool`, `parseBigInt`, `parseDate`, `parseISODate`, `parseJSON`, `parseURL`, `parseEnum` |
-| **Structures** | `object`, `array`, `tuple`, `tupleOf` |
-| **Unions** | `union`, `discriminatedUnion`, `literal` |
-| **Modifiers** | `required`, `optional`, `nullable`, `emptyAsOptional` |
-| **String Constraints** | `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber` |
-| **Number Constraints** | `min`, `max`, `integer`, `finite`, `between`, `positive`, `negative`, `nonZero`, `divisibleBy`, `precision` |
-| **Date Constraints** | `dateRange`, `pastDate`, `futureDate`, `todayOrFuture` |
-| **Enums** | `stringEnum`, `enumValue`, `oneOf` |
-| **Boolean Constraints** | `matches` |
-| **Array Constraints** | `minItems`, `maxItems`, `notEmpty`, `unique` |
-| **Combinators** | `chain`, `transform`, `refine` |
-| **Cross-field** | `refineAt`, `refineAtAsync` |
-| **Async** | `chainAsync`, `refineAsync`, `refineAtAsync` |
-| **Utilities** | `validate`, `validateAndFormatResult`, `formatErrors`, `toStandardSchema`, `ROOT_ERROR_KEY` |
-| **Types** | `Validator`, `AsyncValidator`, `MaybeAsyncValidator`, `Schema`, `SyncSchema`, `InferSchemaType`, `ValidatorMapOutput`, `ValidationError`, `ValidationResult`, `StandardSchemaV1` |
+| Category                | Functions                                                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Primitives**          | `string`, `number`, `boolean`, `date`, `bigint`                                                                                                                                  |
+| **Parsers**             | `parseNumber`, `parseString`, `parseBool`, `parseBigInt`, `parseDate`, `parseISODate`, `parseJSON`, `parseURL`, `parseEnum`                                                      |
+| **Structures**          | `object`, `array`, `tuple`, `tupleOf`                                                                                                                                            |
+| **Unions**              | `union`, `discriminatedUnion`, `literal`                                                                                                                                         |
+| **Modifiers**           | `required`, `optional`, `nullable`, `emptyAsOptional`                                                                                                                            |
+| **String Constraints**  | `minLength`, `maxLength`, `pattern`, `nonEmpty`, `email`, `phoneNumber`                                                                                                          |
+| **Number Constraints**  | `min`, `max`, `integer`, `finite`, `between`, `positive`, `negative`, `nonZero`, `divisibleBy`, `precision`                                                                      |
+| **Date Constraints**    | `dateRange`, `pastDate`, `futureDate`, `todayOrFuture`                                                                                                                           |
+| **Enums**               | `stringEnum`, `enumValue`, `oneOf`                                                                                                                                               |
+| **Boolean Constraints** | `matches`                                                                                                                                                                        |
+| **Array Constraints**   | `minItems`, `maxItems`, `notEmpty`, `unique`                                                                                                                                     |
+| **Combinators**         | `chain`, `transform`, `refine`                                                                                                                                                   |
+| **Cross-field**         | `refineAt`, `refineAtAsync`                                                                                                                                                      |
+| **Async**               | `chainAsync`, `refineAsync`, `refineAtAsync`                                                                                                                                     |
+| **Utilities**           | `validate`, `validateAndFormatResult`, `formatErrors`, `toStandardSchema`, `ROOT_ERROR_KEY`                                                                                      |
+| **Types**               | `Validator`, `AsyncValidator`, `MaybeAsyncValidator`, `Schema`, `SyncSchema`, `InferSchemaType`, `ValidatorMapOutput`, `ValidationError`, `ValidationResult`, `StandardSchemaV1` |
 
 ### Composition
 
@@ -222,11 +222,11 @@ const processOrder = flowAsync(validateOrder, chargePayment, createShipment);
 await processOrder(orderInput);
 ```
 
-| Category | Functions |
-|----------|-----------|
-| **Sync** | `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled` |
-| **Async** | `pipeAsync`, `flowAsync` |
-| **Types** | `MaybeAsync` |
+| Category  | Functions                                                |
+| --------- | -------------------------------------------------------- |
+| **Sync**  | `pipe`, `flow`, `curry`, `uncurry`, `tupled`, `untupled` |
+| **Async** | `pipeAsync`, `flowAsync`                                 |
+| **Types** | `MaybeAsync`                                             |
 
 ## Examples
 
