@@ -2,6 +2,7 @@ import { ok, err } from '@railway-ts/pipelines/result';
 import type {
   Validator,
   MaybeAsyncValidator,
+  StandardSchemaV1,
 } from '@railway-ts/pipelines/schema';
 import {
   object,
@@ -145,4 +146,87 @@ export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<
 > = async () => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   return err([{ path: ['root'], message: 'Async validation failed' }]);
+};
+
+// =============================================================================
+// Standard Schema v1 Mock Validators
+// =============================================================================
+
+/**
+ * Sync Standard Schema v1 mock that validates UserForm shape.
+ * Does NOT depend on any external schema library.
+ */
+export const standardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (value) => {
+      const v = value as Partial<UserForm>;
+      const issues: StandardSchemaV1.Issue[] = [];
+      if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
+      if (!v.email?.includes('@'))
+        issues.push({ message: 'Email must be valid', path: ['email'] });
+      if (v.age == null || v.age < 18)
+        issues.push({ message: 'Must be 18 or older', path: ['age'] });
+      return issues.length ? { issues } : { value: v as UserForm };
+    },
+  },
+};
+
+/**
+ * Async Standard Schema v1 mock that simulates async validation.
+ * Name 'taken' is rejected.
+ */
+export const asyncStandardSchemaUserValidator: StandardSchemaV1<
+  unknown,
+  UserForm
+> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: async (value) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const v = value as Partial<UserForm>;
+      const issues: StandardSchemaV1.Issue[] = [];
+      if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
+      if (v.name === 'taken')
+        issues.push({ message: 'Name is already taken', path: ['name'] });
+      if (!v.email?.includes('@'))
+        issues.push({ message: 'Email must be valid', path: ['email'] });
+      if (v.age == null || v.age < 18)
+        issues.push({ message: 'Must be 18 or older', path: ['age'] });
+      return issues.length ? { issues } : { value: v as UserForm };
+    },
+  },
+};
+
+/**
+ * Standard Schema v1 mock with nested path segments using { key } objects.
+ */
+export const standardSchemaNestedPathValidator: StandardSchemaV1<
+  unknown,
+  UserWithAddressForm
+> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (value) => {
+      const v = value as Partial<UserWithAddressForm>;
+      const issues: StandardSchemaV1.Issue[] = [];
+      if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
+      if (!v.address?.street)
+        issues.push({
+          message: 'Street is required',
+          path: [{ key: 'address' }, { key: 'street' }],
+        });
+      if (!v.address?.city)
+        issues.push({
+          message: 'City is required',
+          path: ['address', 'city'],
+        });
+      return issues.length
+        ? { issues }
+        : { value: v as UserWithAddressForm };
+    },
+  },
 };

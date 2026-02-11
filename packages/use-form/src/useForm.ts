@@ -15,6 +15,11 @@ import {
 } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
 import { getValueByPath, setValueByPath, collectFieldPaths } from './utils';
+import {
+  isStandardSchema,
+  fromStandardSchema,
+  type FormValidator,
+} from './standardSchema';
 import type {
   ArrayHelpers,
   ExtractFieldPaths,
@@ -162,10 +167,20 @@ import {
  * );
  */
 export const useForm = <TValues extends Record<string, unknown>>(
-  validator: MaybeAsyncValidator<unknown, TValues>,
+  validatorOrSchema: FormValidator<TValues>,
   options: FormOptions<TValues> = {}
 ) => {
   const { initialValues = {} as TValues, onSubmit, validationMode } = options;
+
+  // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
+  // useMemo ensures referential stability since fromStandardSchema creates a new function.
+  const validator: MaybeAsyncValidator<unknown, TValues> = useMemo(
+    () =>
+      isStandardSchema(validatorOrSchema)
+        ? fromStandardSchema(validatorOrSchema)
+        : validatorOrSchema,
+    [validatorOrSchema],
+  );
 
   // Derive behavior flags from validationMode
   const mode = validationMode ?? 'live';

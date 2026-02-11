@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import UserForm from './UserForm';
 import AsyncUserForm from './AsyncUserForm';
+import StandardSchemaForm from './StandardSchemaForm';
+
+type Tab = 'sync' | 'async' | 'standard-schema';
 
 function App() {
-  const [tab, setTab] = useState<'sync' | 'async'>('sync');
+  const [tab, setTab] = useState<Tab>('sync');
 
   return (
     <>
@@ -22,8 +25,16 @@ function App() {
         >
           Async
         </button>
+        <button
+          className={tab === 'standard-schema' ? 'active' : ''}
+          onClick={() => setTab('standard-schema')}
+        >
+          Standard Schema
+        </button>
       </div>
-      {tab === 'sync' ? <UserForm /> : <AsyncUserForm />}
+      {tab === 'sync' && <UserForm />}
+      {tab === 'async' && <AsyncUserForm />}
+      {tab === 'standard-schema' && <StandardSchemaForm />}
     </>
   );
 }

@@ -185,7 +185,10 @@ export default function AsyncUserForm() {
 
       {/* Form Actions */}
       <div className="actions">
-        <button type="submit" disabled={form.isSubmitting || form.isValidating || !form.isValid}>
+        <button
+          type="submit"
+          disabled={form.isSubmitting || form.isValidating || !form.isValid}
+        >
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 
@@ -200,9 +203,13 @@ export default function AsyncUserForm() {
 
       <pre>
         {JSON.stringify(
-          { values: form.values, errors: form.errors, isValidating: form.isValidating },
+          {
+            values: form.values,
+            errors: form.errors,
+            isValidating: form.isValidating,
+          },
           null,
-          2,
+          2
         )}
       </pre>
     </form>
