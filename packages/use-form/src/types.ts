@@ -465,30 +465,32 @@ export type NativeCheckboxGroupOptionProps = {
  * type Form = { payment: Payment };
  * type Paths = ExtractFieldPaths<Form>; // "payment" | "payment.type" | "payment.cardNumber" | "payment.email"
  */
-export type ExtractFieldPaths<T> = T extends object
-  ? {
-      [K in keyof T]-?: K extends string | number
-        ? T[K] extends
-            | Date
-            | readonly unknown[]
-            | ((...args: never[]) => unknown)
-          ? `${K}`
-          : T[K] extends object | undefined
-            ? T[K] extends { type: string }
-              ? // Discriminated union case - extract from all possible types
-                T[K] extends infer U
-                ? U extends { type: infer Type }
-                  ? Type extends string
-                    ? // For discriminated unions, we need to extract paths from all variants
-                      K | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+export type ExtractFieldPaths<T> = T extends readonly unknown[]
+  ? never
+  : T extends object
+    ? {
+        [K in keyof T]-?: K extends string | number
+          ? NonNullable<T[K]> extends
+              | Date
+              | readonly unknown[]
+              | ((...args: never[]) => unknown)
+            ? `${K}`
+            : T[K] extends object | undefined
+              ? T[K] extends { type: string }
+                ? // Discriminated union case - extract from all possible types
+                  T[K] extends infer U
+                  ? U extends { type: infer Type }
+                    ? Type extends string
+                      ? // For discriminated unions, we need to extract paths from all variants
+                        `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+                      : never
                     : never
                   : never
-                : never
-              : `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
-            : `${K}`
-        : never;
-    }[keyof T]
-  : never;
+                : `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+              : `${K}`
+          : never;
+      }[keyof T]
+    : never;
 
 /**
  * Constrains a field path to only valid paths for a given form type.
