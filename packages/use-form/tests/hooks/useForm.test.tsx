@@ -179,6 +179,22 @@ describe('useForm', () => {
     });
   });
 
+  test('handleSubmit maintains stable reference across value changes', () => {
+    const { result } = renderHook(() =>
+      useForm(userValidator, {
+        initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+      })
+    );
+
+    const firstRef = result.current.handleSubmit;
+
+    act(() => {
+      result.current.setFieldValue('name', 'Alice');
+    });
+
+    expect(result.current.handleSubmit).toBe(firstRef);
+  });
+
   describe('handleSubmit', () => {
     test('calls onSubmit with valid data', async () => {
       const onSubmit = mock((values: UserForm) => {});

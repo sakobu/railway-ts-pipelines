@@ -218,6 +218,12 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // Initialize the reducer
   const [formState, dispatch] = useReducer(reducerFn, initialState);
 
+  // Ref to access latest formState inside stable callbacks without re-creating them
+  const formStateRef = useRef(formState);
+  useEffect(() => {
+    formStateRef.current = formState;
+  });
+
   // Sequence counter for race condition protection on async validation
   const validationSeqRef = useRef(0);
 
@@ -680,19 +686,21 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const handleSubmit = useCallback(
     async (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
+      const { values, clientErrors, serverErrors } = formStateRef.current;
+
       if (e) {
         e.preventDefault();
       }
 
       // Mark all fields and error paths as touched (deep)
       const valuePaths = collectFieldPaths(
-        formState.values as Record<string, unknown>
+        values as Record<string, unknown>
       );
       const allPaths = Array.from(
         new Set([
           ...valuePaths,
-          ...Object.keys(formState.clientErrors),
-          ...Object.keys(formState.serverErrors),
+          ...Object.keys(clientErrors),
+          ...Object.keys(serverErrors),
         ])
       );
 
@@ -712,7 +720,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       // Validate the form (await handles both sync and async validators)
-      const validationResult = await validate(formState.values, validator);
+      const validationResult = await validate(values, validator);
 
       // Handle result using Railway pattern
       return match<
@@ -729,8 +737,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
             const fieldResults = await Promise.all(
               fieldEntries.map(async ([field, validatorFn]) => {
-                const fieldValue = getValueByPath(formState.values, field);
-                const error = await validatorFn(fieldValue, formState.values);
+                const fieldValue = getValueByPath(values, field);
+                const error = await validatorFn(fieldValue, values);
                 if (error) {
                   dispatch({ type: 'SET_FIELD_ERROR', field, error });
                 } else {
@@ -784,14 +792,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         },
       });
     },
-    [
-      formState.values,
-      formState.clientErrors,
-      formState.serverErrors,
-      validator,
-      onSubmit,
-      fieldValidators,
-    ]
+    [validator, onSubmit, fieldValidators]
   );
 
   /**
