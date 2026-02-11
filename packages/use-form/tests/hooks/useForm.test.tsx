@@ -1005,6 +1005,24 @@ describe('useForm', () => {
       expect(result.current.values.value).toBe('third');
       expect(result.current.isValid).toBe(true);
     });
+
+    test('async validation failure with alwaysInvalidAsyncValidator', async () => {
+      const onSubmit = mock(() => {});
+      const { result } = renderHook(() =>
+        useForm(alwaysInvalidAsyncValidator, {
+          initialValues: { value: 'anything' },
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.isValid).toBe(false);
+      expect(result.current.errors.root).toBe('Async validation failed');
+    });
   });
 
   describe('fieldValidators', () => {
@@ -1314,6 +1332,107 @@ describe('useForm', () => {
 
       expect(result.current.errors.name).toBe('Name is taken');
       expect(result.current.isValidating).toBe(false);
+    });
+
+    test('field validator runs after async schema on change', async () => {
+      let callCount = 0;
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              callCount++;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'valid');
+      });
+
+      await waitFor(() => expect(callCount).toBe(1));
+      expect(result.current.errors.name).toBeUndefined();
+    });
+
+    test('field validator runs on blur in blur mode', async () => {
+      let callCount = 0;
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'taken', email: 'john@test.com', age: 25 },
+          validationMode: 'blur',
+          fieldValidators: {
+            name: async (value) => {
+              callCount++;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      await waitFor(() => {
+        expect(result.current.validatingFields.name).toBeUndefined();
+      });
+      expect(callCount).toBe(1);
+      expect(result.current.errors.name).toBe('Name is taken');
+    });
+
+    test('field validator skipped on blur when schema has error for field', async () => {
+      let validatorCalled = false;
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: 'john@test.com', age: 25 },
+          validationMode: 'blur',
+          fieldValidators: {
+            name: async (value) => {
+              validatorCalled = true;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(validatorCalled).toBe(false);
+      expect(result.current.errors.name).toBe('Name is required');
+    });
+
+    test('field validator runs on blur with async schema in blur mode', async () => {
+      let callCount = 0;
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'blur',
+          fieldValidators: {
+            name: async (value) => {
+              callCount++;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      await waitFor(() => expect(callCount).toBe(1));
+      expect(result.current.errors.name).toBeUndefined();
     });
   });
 });
