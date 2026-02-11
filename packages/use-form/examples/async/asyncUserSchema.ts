@@ -13,19 +13,24 @@ import {
 } from '@railway-ts/pipelines/schema';
 
 // Simulated server-side check: is this username taken at this org?
-const checkUsernameAtOrg = async (username: string, org: string): Promise<boolean> => {
+const checkUsernameAtOrg = async (
+  username: string,
+  org: string
+): Promise<boolean> => {
   await new Promise((r) => setTimeout(r, 500));
   const taken: Record<string, string[]> = {
     'acme-corp': ['admin', 'alice'],
-    'globex': ['admin', 'bob'],
-    'initech': ['admin', 'carol'],
+    globex: ['admin', 'bob'],
+    initech: ['admin', 'carol'],
   };
   return !(taken[org] ?? []).includes(username.toLowerCase());
 };
 
 // Define base schema first so we can infer the type for refineAtAsync
 const baseSchema = object({
-  username: required(chain(string(), nonEmpty('Username is required'), minLength(3))),
+  username: required(
+    chain(string(), nonEmpty('Username is required'), minLength(3))
+  ),
   email: required(chain(string(), nonEmpty('Email is required'), email())),
   organization: required(stringEnum(['acme-corp', 'globex', 'initech'])),
 });
@@ -40,6 +45,6 @@ export const asyncUserSchema = chainAsync(
   refineAtAsync<AsyncUser>(
     'username',
     async (data) => checkUsernameAtOrg(data.username, data.organization),
-    'Username is already taken at this organization',
-  ),
+    'Username is already taken at this organization'
+  )
 );

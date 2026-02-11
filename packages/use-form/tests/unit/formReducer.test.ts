@@ -368,13 +368,25 @@ describe('formReducer', () => {
       let state = initialState;
 
       // First submit
-      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: true }, initialValues);
+      state = formReducer(
+        state,
+        { type: 'SET_SUBMITTING', isSubmitting: true },
+        initialValues
+      );
       expect(state.submitCount).toBe(1);
-      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: false }, initialValues);
+      state = formReducer(
+        state,
+        { type: 'SET_SUBMITTING', isSubmitting: false },
+        initialValues
+      );
       expect(state.submitCount).toBe(1);
 
       // Second submit
-      state = formReducer(state, { type: 'SET_SUBMITTING', isSubmitting: true }, initialValues);
+      state = formReducer(
+        state,
+        { type: 'SET_SUBMITTING', isSubmitting: true },
+        initialValues
+      );
       expect(state.submitCount).toBe(2);
     });
   });

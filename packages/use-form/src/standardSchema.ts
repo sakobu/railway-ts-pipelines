@@ -36,13 +36,13 @@ export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
  * the string[] format used by railway-ts ValidationError paths.
  */
 function convertPath(
-  path: ReadonlyArray<PropertyKey | { key: PropertyKey }> | undefined,
+  path: ReadonlyArray<PropertyKey | { key: PropertyKey }> | undefined
 ): string[] {
   if (!path) return [];
   return path.map((s) =>
     typeof s === 'object' && s !== null && 'key' in s
       ? String(s.key)
-      : String(s),
+      : String(s)
   );
 }
 
@@ -55,7 +55,7 @@ function convertPath(
  * `{ value }` → `ok(value)`, `{ issues }` → `err(ValidationError[])`.
  */
 function convertResult<T>(
-  result: StandardSchemaV1.Result<T>,
+  result: StandardSchemaV1.Result<T>
 ): Result<T, ValidationError[]> {
   if ('issues' in result && result.issues) {
     const errors: ValidationError[] = result.issues.map((issue) => ({
@@ -77,10 +77,10 @@ function convertResult<T>(
  * any Standard Schema v1 compliant validator (Valibot, ArkType, etc.).
  */
 export function fromStandardSchema<T extends Record<string, unknown>>(
-  schema: StandardSchemaV1<unknown, T>,
+  schema: StandardSchemaV1<unknown, T>
 ): MaybeAsyncValidator<unknown, T> {
   return (
-    value: unknown,
+    value: unknown
   ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> => {
     const result = schema['~standard'].validate(value);
     if (result instanceof Promise) {

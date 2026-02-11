@@ -290,10 +290,14 @@ describe('deepMerge', () => {
   });
 
   test('nested objects merge recursively (partial nested update preserves sibling keys)', () => {
-    const target = { address: { street: '123 Main', city: 'LA', zip: '10001' } };
+    const target = {
+      address: { street: '123 Main', city: 'LA', zip: '10001' },
+    };
     const source = { address: { city: 'NYC' } };
     const result = deepMerge(target, source);
-    expect(result).toEqual({ address: { street: '123 Main', city: 'NYC', zip: '10001' } });
+    expect(result).toEqual({
+      address: { street: '123 Main', city: 'NYC', zip: '10001' },
+    });
   });
 
   test('arrays replace entirely', () => {
@@ -364,8 +368,12 @@ describe('deepEqual', () => {
   });
 
   test('Date comparison: same time and different times', () => {
-    expect(deepEqual(new Date('2024-01-01'), new Date('2024-01-01'))).toBe(true);
-    expect(deepEqual(new Date('2024-01-01'), new Date('2024-06-15'))).toBe(false);
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-01-01'))).toBe(
+      true
+    );
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-06-15'))).toBe(
+      false
+    );
   });
 
   test('RegExp comparison', () => {

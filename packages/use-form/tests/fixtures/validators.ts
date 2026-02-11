@@ -107,20 +107,20 @@ export const asyncUserValidator = object({
     chainAsync(
       string(),
       nonEmpty('Name is required'),
-      refineAsync<string>(
-        async (value) => {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return value !== 'taken';
-        },
-        'Name is already taken',
-      ),
-    ),
+      refineAsync<string>(async (value) => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return value !== 'taken';
+      }, 'Name is already taken')
+    )
   ),
   email: required(
-    chain(string(), nonEmpty('Email is required'), email('Email must be valid')),
+    chain(string(), nonEmpty('Email is required'), email('Email must be valid'))
   ),
   age: required(
-    chain(parseNumber('Age must be a valid number'), min(18, 'Must be 18 or older')),
+    chain(
+      parseNumber('Age must be a valid number'),
+      min(18, 'Must be 18 or older')
+    )
   ),
 });
 
@@ -156,22 +156,24 @@ export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<
  * Sync Standard Schema v1 mock that validates UserForm shape.
  * Does NOT depend on any external schema library.
  */
-export const standardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> = {
-  '~standard': {
-    version: 1,
-    vendor: 'test',
-    validate: (value) => {
-      const v = value as Partial<UserForm>;
-      const issues: StandardSchemaV1.Issue[] = [];
-      if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
-      if (!v.email?.includes('@'))
-        issues.push({ message: 'Email must be valid', path: ['email'] });
-      if (v.age == null || v.age < 18)
-        issues.push({ message: 'Must be 18 or older', path: ['age'] });
-      return issues.length ? { issues } : { value: v as UserForm };
+export const standardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> =
+  {
+    '~standard': {
+      version: 1,
+      vendor: 'test',
+      validate: (value) => {
+        const v = value as Partial<UserForm>;
+        const issues: StandardSchemaV1.Issue[] = [];
+        if (!v.name)
+          issues.push({ message: 'Name is required', path: ['name'] });
+        if (!v.email?.includes('@'))
+          issues.push({ message: 'Email must be valid', path: ['email'] });
+        if (v.age == null || v.age < 18)
+          issues.push({ message: 'Must be 18 or older', path: ['age'] });
+        return issues.length ? { issues } : { value: v as UserForm };
+      },
     },
-  },
-};
+  };
 
 /**
  * Async Standard Schema v1 mock that simulates async validation.
@@ -224,9 +226,7 @@ export const standardSchemaNestedPathValidator: StandardSchemaV1<
           message: 'City is required',
           path: ['address', 'city'],
         });
-      return issues.length
-        ? { issues }
-        : { value: v as UserWithAddressForm };
+      return issues.length ? { issues } : { value: v as UserWithAddressForm };
     },
   },
 };

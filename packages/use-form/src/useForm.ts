@@ -6,7 +6,13 @@ import {
   useRef,
   type FormEvent,
 } from 'react';
-import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
+import {
+  isErr,
+  ok,
+  err,
+  match,
+  type Result,
+} from '@railway-ts/pipelines/result';
 import {
   validate,
   formatErrors,
@@ -14,7 +20,12 @@ import {
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
-import { deepMerge, getValueByPath, setValueByPath, collectFieldPaths } from './utils';
+import {
+  deepMerge,
+  getValueByPath,
+  setValueByPath,
+  collectFieldPaths,
+} from './utils';
 import {
   isStandardSchema,
   fromStandardSchema,
@@ -180,7 +191,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       isStandardSchema(validatorOrSchema)
         ? fromStandardSchema(validatorOrSchema)
         : validatorOrSchema,
-    [validatorOrSchema],
+    [validatorOrSchema]
   );
 
   // Derive behavior flags from validationMode
@@ -261,7 +272,9 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
-    () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
+    () =>
+      formState.isFormValidating ||
+      Object.keys(formState.validatingFields).length > 0,
     [formState.isFormValidating, formState.validatingFields]
   );
 
@@ -304,8 +317,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const validateForm = useCallback(
     (
-      values: TValues,
-    ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
+      values: TValues
+    ):
+      | Result<TValues, ValidationError[]>
+      | Promise<Result<TValues, ValidationError[]>> => {
       const validationResult = validate(values, validator);
 
       if (validationResult instanceof Promise) {
@@ -326,7 +341,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       dispatchValidationResult(validationResult);
       return validationResult;
     },
-    [validator, dispatchValidationResult],
+    [validator, dispatchValidationResult]
   );
 
   /**
@@ -335,7 +350,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const runFieldValidator = useCallback(
     (field: FieldPath, values: TValues): void => {
-      const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
+      const validatorFn =
+        fieldValidators?.[field as ExtractFieldPaths<TValues>];
       if (!validatorFn) return;
 
       dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
@@ -353,14 +369,18 @@ export const useForm = <TValues extends Record<string, unknown>>(
         void result.then((error) => {
           if (seq === fieldValidationSeqRef.current[field]) {
             dispatch({ type: 'SET_FIELD_ERROR', field, error });
-            dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            dispatch({
+              type: 'SET_FIELD_VALIDATING',
+              field,
+              isValidating: false,
+            });
           }
         });
       } else {
         dispatch({ type: 'SET_FIELD_ERROR', field, error: result });
       }
     },
-    [fieldValidators],
+    [fieldValidators]
   );
 
   /**
@@ -378,7 +398,11 @@ export const useForm = <TValues extends Record<string, unknown>>(
             runFieldValidator(field, values);
           } else {
             dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
-            dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            dispatch({
+              type: 'SET_FIELD_VALIDATING',
+              field,
+              isValidating: false,
+            });
           }
         };
 
@@ -389,7 +413,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         }
       }
     },
-    [validateForm, fieldValidators, runFieldValidator],
+    [validateForm, fieldValidators, runFieldValidator]
   );
 
   // Validate on mount if enabled
@@ -509,7 +533,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const setValues = useCallback(
-    (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void => {
+    (
+      newValues: DeepPartial<TValues>,
+      shouldValidate = validateOnChange
+    ): void => {
       dispatch({
         type: 'SET_VALUES',
         values: newValues,
@@ -569,7 +596,13 @@ export const useForm = <TValues extends Record<string, unknown>>(
         }
       }
     },
-    [formState.values, validateOnBlur, validateOnChange, validateForm, runValidationPipeline]
+    [
+      formState.values,
+      validateOnBlur,
+      validateOnChange,
+      validateForm,
+      runValidationPipeline,
+    ]
   );
 
   // ===========================================================================
@@ -693,9 +726,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       }
 
       // Mark all fields and error paths as touched (deep)
-      const valuePaths = collectFieldPaths(
-        values as Record<string, unknown>
-      );
+      const valuePaths = collectFieldPaths(values as Record<string, unknown>);
       const allPaths = Array.from(
         new Set([
           ...valuePaths,
@@ -732,7 +763,13 @@ export const useForm = <TValues extends Record<string, unknown>>(
           // Run all field validators in parallel before calling onSubmit
           if (fieldValidators) {
             const fieldEntries = Object.entries(fieldValidators) as Array<
-              [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
+              [
+                string,
+                (
+                  value: unknown,
+                  values: TValues
+                ) => string | undefined | Promise<string | undefined>,
+              ]
             >;
 
             const fieldResults = await Promise.all(
@@ -742,7 +779,11 @@ export const useForm = <TValues extends Record<string, unknown>>(
                 if (error) {
                   dispatch({ type: 'SET_FIELD_ERROR', field, error });
                 } else {
-                  dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+                  dispatch({
+                    type: 'SET_FIELD_ERROR',
+                    field,
+                    error: undefined,
+                  });
                 }
                 return { field, error };
               })
@@ -1217,8 +1258,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         );
 
       const arrayValue =
-        getValueByPath<TValues, TItem[]>(formState.values, field) ||
-        [];
+        getValueByPath<TValues, TItem[]>(formState.values, field) || [];
 
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(
         field,

@@ -197,10 +197,15 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    * A field validator only runs when the schema produces no error for that field.
    * Return undefined for valid, or an error message string for invalid.
    */
-  fieldValidators?: Partial<Record<
-    ExtractFieldPaths<TValues>,
-    (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>
-  >>;
+  fieldValidators?: Partial<
+    Record<
+      ExtractFieldPaths<TValues>,
+      (
+        value: unknown,
+        values: TValues
+      ) => string | undefined | Promise<string | undefined>
+    >
+  >;
 }
 
 // =============================================================================

@@ -365,8 +365,10 @@ export const deepMerge = <T extends Record<string, unknown>>(
 
 export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
+  if (a instanceof Date && b instanceof Date)
+    return a.getTime() === b.getTime();
+  if (a instanceof RegExp && b instanceof RegExp)
+    return a.toString() === b.toString();
   if (a == null || b == null) return false;
   if (typeof a !== 'object' || typeof b !== 'object') return false;
 
