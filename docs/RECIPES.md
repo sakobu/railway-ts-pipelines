@@ -717,7 +717,7 @@ Full pipeline: validate launch parameters, fetch weather data, make GO/NO-GO dec
 
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
-import { err, fromPromise, match, ok, flatMapWith, type Result } from '@railway-ts/pipelines/result';
+import { err, flatMapWith, fromPromise, match, ok, type Result } from '@railway-ts/pipelines/result';
 import {
   formatErrors,
   object,
@@ -758,35 +758,44 @@ type LaunchContext = {
   weather: WeatherData;
 };
 
-type LaunchDecision = {
-  windSpeed: number;
-  windGusts: number;
-  maxAllowed: number;
-  recommendation: 'GO' | 'NO GO';
-  reason: string;
-};
-
 // Helper for API responses
 const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
 
-// Fetch weather and combine with params
+// Fetch daily forecast for the launch window date
 const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
+  const date = params.windowStart.toISOString().split('T')[0]!;
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.append('latitude', params.latitude.toString());
   url.searchParams.append('longitude', params.longitude.toString());
-  url.searchParams.append('current', 'wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+  url.searchParams.append('daily', 'wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max');
   url.searchParams.append('wind_speed_unit', 'ms');
+  url.searchParams.append('start_date', date);
+  url.searchParams.append('end_date', date);
 
   const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
 
   return match(result, {
-    ok: (data) => ok({ params, weather: data.current }),
+    ok: (data) =>
+      ok({
+        params,
+        weather: {
+          wind_speed_10m: data.daily.wind_speed_10m_max[0],
+          wind_direction_10m: data.daily.wind_direction_10m_dominant[0],
+          wind_gusts_10m: data.daily.wind_gusts_10m_max[0],
+        },
+      }),
     err: (msg) => err([{ path: ['weather_api'], message: String(msg) }]),
   });
 };
 
-// Calculate wind loads and decision
-const assessLaunchConditions = async (context: LaunchContext): Promise<Result<LaunchDecision, ValidationError[]>> => {
+type LaunchDecision = {
+  windSpeed: number;
+  windGusts: number;
+  maxAllowed: number;
+};
+
+// Business rule check — can fail, so flatMapWith
+const assessLaunchConditions = (context: LaunchContext): Result<LaunchDecision, ValidationError[]> => {
   const windLimits: Record<VehicleType, number> = {
     falcon9: 15,
     atlas5: 12,
@@ -794,17 +803,16 @@ const assessLaunchConditions = async (context: LaunchContext): Promise<Result<La
 
   const maxWind = windLimits[context.params.vehicleType];
   const actualMaxWind = Math.max(context.weather.wind_speed_10m, context.weather.wind_gusts_10m);
-  const isGo = actualMaxWind <= maxWind;
 
-  const decision: LaunchDecision = {
+  if (actualMaxWind > maxWind) {
+    return err([{ path: ['weather'], message: `Wind ${actualMaxWind} m/s exceeds ${maxWind} m/s limit` }]);
+  }
+
+  return ok({
     windSpeed: context.weather.wind_speed_10m,
     windGusts: context.weather.wind_gusts_10m,
     maxAllowed: maxWind,
-    recommendation: isGo ? 'GO' : 'NO GO',
-    reason: isGo ? 'Conditions nominal' : 'Wind exceeds limits',
-  };
-
-  return ok(decision);
+  });
 };
 
 // Main pipeline
@@ -829,18 +837,17 @@ const result = await evaluateLaunch({
   payload: 1000,
   latitude: 28.5721,
   longitude: -80.648,
-  windowStart: new Date('2025-01-01'),
+  windowStart: new Date(),
 });
 
 console.log(result);
-// { valid: true, data: { windSpeed: 7.2, windGusts: 9.1, maxAllowed: 15, recommendation: 'GO', reason: 'Conditions nominal' } }
 ```
 
 **The pattern:**
 
 1. Validate at boundary with schema
 2. Chain async operations with `pipeAsync` + `flatMapWith`
-3. Pure business logic functions
+3. Pure business logic as sync functions that return `Result` (can fail via `Err`)
 4. Branch once at the end with `match`
 
 ---
