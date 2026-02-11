@@ -408,7 +408,7 @@ describe('useForm', () => {
     });
 
     test('validates nested fields', async () => {
-      const initialValues: Partial<UserWithAddressForm> = {
+      const initialValues: UserWithAddressForm = {
         name: 'John',
         address: { street: '', city: '', zip: '' },
       };

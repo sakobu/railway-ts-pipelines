@@ -11,7 +11,7 @@ Main hook for form management.
 ```typescript
 function useForm<TValues extends Record<string, unknown>>(
   validator: Validator<unknown, TValues>,
-  options?: FormOptions<TValues>
+  options: FormOptions<TValues>
 ): FormReturn<TValues>;
 ```
 
@@ -36,11 +36,11 @@ const validator = object({
 
 Type: `FormOptions<TValues>`
 
-Optional configuration object.
+Configuration object.
 
 ```typescript
 {
-  initialValues?: TValues;
+  initialValues: TValues;
   onSubmit?: (values: TValues) => void | Promise<void>;
   validationMode?: "live" | "blur" | "mount" | "submit";
 }
@@ -59,7 +59,7 @@ Configuration options for useForm.
 #### initialValues
 
 Type: `TValues`
-Optional
+Required
 
 Initial values for form fields. Used when form is reset.
 
@@ -101,7 +101,7 @@ Properties returned by useForm.
 
 ### values
 
-Type: `Partial<TValues>`
+Type: `TValues`
 
 Current form field values.
 
@@ -334,7 +334,7 @@ resetForm(): void
 Manually trigger validation.
 
 ```typescript
-validateForm(values: Partial<TValues>): Result<TValues, ValidationError[]>
+validateForm(values: TValues): Result<TValues, ValidationError[]>
 ```
 
 **Parameters:**

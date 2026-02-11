@@ -7,7 +7,7 @@ import { useDebounce } from './useDebounce';
  * @template T - The type of form values
  */
 type FormWithAutoSubmit<T> = {
-  values: Partial<T>;
+  values: T;
   isDirty: boolean;
   isValid: boolean;
   validateForm: (values: T) => void;
@@ -69,7 +69,7 @@ export const useFormAutoSubmission = <T>(
     if (valuesString === lastValidatedRef.current) return;
 
     lastValidatedRef.current = valuesString;
-    form.validateForm(form.values as T);
+    form.validateForm(form.values);
 
     if (form.isValid) debouncedSubmit();
   }, [form.values, form.isDirty, form.isValid, debouncedSubmit, form]);

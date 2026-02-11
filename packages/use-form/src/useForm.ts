@@ -71,7 +71,7 @@ import {
  *
  * @returns An object containing:
  * **Form State:**
- * - `values` - Current form field values (Partial<TValues>)
+ * - `values` - Current form field values (TValues)
  * - `touched` - Record of which fields have been interacted with
  * - `errors` - Combined client and server errors (server takes precedence)
  * - `clientErrors` - Validation errors from the validator function
@@ -168,9 +168,9 @@ import {
  */
 export const useForm = <TValues extends Record<string, unknown>>(
   validatorOrSchema: FormValidator<TValues>,
-  options: FormOptions<TValues> = {}
+  options: FormOptions<TValues>
 ) => {
-  const { initialValues = {} as TValues, onSubmit, validationMode, fieldValidators } = options;
+  const { initialValues, onSubmit, validationMode, fieldValidators } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
@@ -290,7 +290,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const validateForm = useCallback(
     (
-      values: Partial<TValues>,
+      values: TValues,
     ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
       const validationResult = validate(values, validator);
 
@@ -320,7 +320,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * Only runs when the field has a registered fieldValidator.
    */
   const runFieldValidator = useCallback(
-    (field: FieldPath, values: Partial<TValues>): void => {
+    (field: FieldPath, values: TValues): void => {
       const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
       if (!validatorFn) return;
 
@@ -347,6 +347,35 @@ export const useForm = <TValues extends Record<string, unknown>>(
       }
     },
     [fieldValidators],
+  );
+
+  /**
+   * Runs schema validation followed by field-level validation for a single field.
+   * If the schema produces an error for the field, the field validator is skipped.
+   */
+  const runValidationPipeline = useCallback(
+    (field: FieldPath, values: TValues): void => {
+      const schemaResult = validateForm(values);
+
+      if (fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
+        const afterSchema = (result: Result<TValues, ValidationError[]>) => {
+          const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
+          if (!schemaErrors[field]) {
+            runFieldValidator(field, values);
+          } else {
+            dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+            dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+          }
+        };
+
+        if (schemaResult instanceof Promise) {
+          void schemaResult.then(afterSchema);
+        } else {
+          afterSchema(schemaResult);
+        }
+      }
+    },
+    [validateForm, fieldValidators, runFieldValidator],
   );
 
   // Validate on mount if enabled
@@ -406,7 +435,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       shouldValidate = validateOnChange
     ): void => {
       // Calculate updated values first
-      const updatedValues = setValueByPath<Partial<TValues>, TValue>(
+      const updatedValues = setValueByPath<TValues, TValue>(
         formState.values,
         field,
         value
@@ -426,36 +455,15 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       // Validate with calculated values if needed
       if (shouldValidate) {
-        const schemaResult = validateForm(updatedValues);
-
-        // Run per-field validator after schema completes (only if schema passes for this field)
-        if (fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
-          const afterSchema = (result: Result<TValues, ValidationError[]>) => {
-            const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
-            if (!schemaErrors[field]) {
-              runFieldValidator(field, updatedValues);
-            } else {
-              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
-              dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
-            }
-          };
-
-          if (schemaResult instanceof Promise) {
-            void schemaResult.then(afterSchema);
-          } else {
-            afterSchema(schemaResult);
-          }
-        }
+        runValidationPipeline(field, updatedValues);
       }
     },
     [
       formState.values,
       formState.touched,
       validateOnChange,
-      validateForm,
       touchOnChange,
-      fieldValidators,
-      runFieldValidator,
+      runValidationPipeline,
     ]
   );
 
@@ -495,7 +503,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       if (shouldValidate) {
         // Need to get latest state for validation
-        const updatedValues = { ...formState.values, ...newValues };
+        const updatedValues = { ...formState.values, ...newValues } as TValues;
         void validateForm(updatedValues);
       }
     },
@@ -538,30 +546,16 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       if (shouldValidate) {
-        const schemaResult = validateForm(formState.values);
-
-        // Run per-field validator after schema completes (only if schema passes for this field).
-        // In "live" mode (validateOnChange=true), field validators already ran on change, so skip on blur.
-        if (!validateOnChange && fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
-          const afterSchema = (result: Result<TValues, ValidationError[]>) => {
-            const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
-            if (!schemaErrors[field]) {
-              runFieldValidator(field, formState.values);
-            } else {
-              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
-              dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
-            }
-          };
-
-          if (schemaResult instanceof Promise) {
-            void schemaResult.then(afterSchema);
-          } else {
-            afterSchema(schemaResult);
-          }
+        if (!validateOnChange) {
+          // In non-live modes, run field validators on blur
+          runValidationPipeline(field, formState.values);
+        } else {
+          // In live mode, field validators already ran on change — only re-run schema
+          void validateForm(formState.values);
         }
       }
     },
-    [formState.values, validateOnBlur, validateOnChange, validateForm, fieldValidators, runFieldValidator]
+    [formState.values, validateOnBlur, validateOnChange, validateForm, runValidationPipeline]
   );
 
   // ===========================================================================
@@ -728,7 +722,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
           // Run all field validators in parallel before calling onSubmit
           if (fieldValidators) {
             const fieldEntries = Object.entries(fieldValidators) as Array<
-              [string, (value: unknown, values: Partial<TValues>) => string | undefined | Promise<string | undefined>]
+              [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
             >;
 
             const fieldResults = await Promise.all(
@@ -1218,7 +1212,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         );
 
       const arrayValue =
-        getValueByPath<Partial<TValues>, TItem[]>(formState.values, field) ||
+        getValueByPath<TValues, TItem[]>(formState.values, field) ||
         [];
 
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(

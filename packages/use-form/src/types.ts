@@ -53,9 +53,8 @@ export type FieldPath = string;
 export interface FormState<TValues extends Record<string, unknown>> {
   /**
    * Current values of all form fields.
-   * Values are partial to allow for progressive form filling.
    */
-  values: Partial<TValues>;
+  values: TValues;
 
   /**
    * Record of which fields have been interacted with by the user.
@@ -106,16 +105,18 @@ export interface FormState<TValues extends Record<string, unknown>> {
  * Configuration options for the useForm hook.
  *
  * These options control the form's initial state, submission behavior, and validation timing.
- * All options are optional - the form will work with minimal configuration.
+ * `initialValues` is required; all other options are optional.
  *
  * @template TValues - The type of form values being managed
  *
  * @example
  * // Minimal configuration
- * const form = useForm(userValidator);
+ * const form = useForm(userValidator, {
+ *   initialValues: { email: "", password: "" }
+ * });
  *
  * @example
- * // With initial values and submit handler
+ * // With submit handler
  * const form = useForm(userValidator, {
  *   initialValues: { email: "", password: "" },
  *   onSubmit: async (values) => {
@@ -134,10 +135,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
 export interface FormOptions<TValues extends Record<string, unknown>> {
   /**
    * Initial values for the form fields.
-   * If not provided, all fields start as undefined.
    * These values are used when the form is reset.
    */
-  initialValues?: TValues;
+  initialValues: TValues;
 
   /**
    * Callback function that runs when the form is submitted with valid data.
@@ -184,7 +184,7 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    */
   fieldValidators?: Partial<Record<
     ExtractFieldPaths<TValues>,
-    (value: unknown, values: Partial<TValues>) => string | undefined | Promise<string | undefined>
+    (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>
   >>;
 }
 

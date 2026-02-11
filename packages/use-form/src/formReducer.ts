@@ -58,7 +58,7 @@ import { isPathAffected, setValueByPath } from './utils';
 export const formReducer = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   action: FormAction<TValues>,
-  initialValues: Partial<TValues>
+  initialValues: TValues
 ): FormState<TValues> => {
   switch (action.type) {
     case 'SET_FIELD_VALUE': {
