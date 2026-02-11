@@ -6,6 +6,10 @@ Railway-oriented programming for TypeScript. Result and Option types that don't 
 
 Small, focused API surface. Errors propagate automatically, you handle them once at the end.
 
+Fully tree-shakable — import only what you need:
+
+`option` 402 B · `result` 582 B · `composition` 233 B · `schema` ~3 kB — **~4.2 kB total** minified + brotli
+
 ## Install
 
 ```bash
