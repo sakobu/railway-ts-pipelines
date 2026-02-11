@@ -1,6 +1,6 @@
 {
   "name": "@railway-ts/pipelines",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Railway-oriented pipelines for TypeScript: a lightweight fp-style Result/Option and schema layer for handling errors and validating boundaries.",
   "type": "module",
   "exports": {
@@ -56,10 +56,22 @@
     "check": "bun run typecheck && bun run lint && bun run test"
   },
   "size-limit": [
-    { "path": "dist/option/index.mjs", "limit": "2 kB" },
-    { "path": "dist/result/index.mjs", "limit": "4 kB" },
-    { "path": "dist/composition/index.mjs", "limit": "2 kB" },
-    { "path": "dist/schema/index.mjs", "limit": "10 kB" }
+    {
+      "path": "dist/option/index.mjs",
+      "limit": "2 kB"
+    },
+    {
+      "path": "dist/result/index.mjs",
+      "limit": "4 kB"
+    },
+    {
+      "path": "dist/composition/index.mjs",
+      "limit": "2 kB"
+    },
+    {
+      "path": "dist/schema/index.mjs",
+      "limit": "10 kB"
+    }
   ],
   "keywords": [
     "railway",
