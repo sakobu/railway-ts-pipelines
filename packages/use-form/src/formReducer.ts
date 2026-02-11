@@ -134,6 +134,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         isSubmitting: action.isSubmitting,
       };
 
+    case 'SET_VALIDATING':
+      return {
+        ...state,
+        isValidating: action.isValidating,
+      };
+
     case 'RESET_FORM':
       return {
         values: initialValues,
@@ -141,6 +147,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         clientErrors: {},
         serverErrors: {},
         isSubmitting: false,
+        isValidating: false,
         isDirty: false,
       };
 

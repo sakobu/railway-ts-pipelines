@@ -11,6 +11,7 @@ describe('formReducer', () => {
     clientErrors: {},
     serverErrors: {},
     isSubmitting: false,
+    isValidating: false,
     isDirty: false,
   };
 
@@ -80,6 +81,7 @@ describe('formReducer', () => {
           'user.name': 'Name error',
         },
         isSubmitting: false,
+        isValidating: false,
         isDirty: false,
       };
 
@@ -329,6 +331,7 @@ describe('formReducer', () => {
         clientErrors: { name: 'Name error' },
         serverErrors: { email: 'Email error' },
         isSubmitting: true,
+        isValidating: false,
         isDirty: true,
       };
 

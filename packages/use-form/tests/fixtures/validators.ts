@@ -1,9 +1,14 @@
 import { ok, err } from '@railway-ts/pipelines/result';
-import type { Validator } from '@railway-ts/pipelines/schema';
+import type {
+  Validator,
+  MaybeAsyncValidator,
+} from '@railway-ts/pipelines/schema';
 import {
   object,
   required,
   chain,
+  chainAsync,
+  refineAsync,
   string,
   nonEmpty,
   email,
@@ -86,4 +91,58 @@ export const alwaysValidValidator: Validator<
  */
 export const alwaysInvalidValidator: Validator<unknown, never> = () => {
   return err([{ path: ['root'], message: 'Validation failed' }]);
+};
+
+// =============================================================================
+// Async Validators
+// =============================================================================
+
+/**
+ * Async user validator that simulates a server-side uniqueness check.
+ * Name 'taken' is rejected as already in use.
+ */
+export const asyncUserValidator = object({
+  name: required(
+    chainAsync(
+      string(),
+      nonEmpty('Name is required'),
+      refineAsync<string>(
+        async (value) => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return value !== 'taken';
+        },
+        'Name is already taken',
+      ),
+    ),
+  ),
+  email: required(
+    chain(string(), nonEmpty('Email is required'), email('Email must be valid')),
+  ),
+  age: required(
+    chain(parseNumber('Age must be a valid number'), min(18, 'Must be 18 or older')),
+  ),
+});
+
+export type AsyncUserForm = InferSchemaType<typeof asyncUserValidator>;
+
+/**
+ * Always valid async validator for testing (pass-through)
+ */
+export const alwaysValidAsyncValidator: MaybeAsyncValidator<
+  unknown,
+  Record<string, unknown>
+> = async (input) => {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  return ok(input as Record<string, unknown>);
+};
+
+/**
+ * Always invalid async validator for testing
+ */
+export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<
+  unknown,
+  never
+> = async () => {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  return err([{ path: ['root'], message: 'Async validation failed' }]);
 };

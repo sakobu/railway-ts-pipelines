@@ -85,6 +85,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
+  /** Whether async validation is currently in progress. */
+  isValidating: boolean;
+
   /**
    * Whether any form values have changed since initialization or last reset.
    * Set to true when any field value changes from its initial value.
@@ -854,6 +857,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'SET_SUBMITTING';
       /** Whether the form is currently submitting */
       isSubmitting: boolean;
+    }
+  | {
+      /** Sets the async validation state (loading indicator) */
+      type: 'SET_VALIDATING';
+      /** Whether async validation is currently in progress */
+      isValidating: boolean;
     }
   | {
       /** Resets the form to initial values and clears all errors and touched state */

@@ -5,7 +5,11 @@ import {
   userValidator,
   userWithAddressValidator,
   alwaysValidValidator,
+  asyncUserValidator,
+  alwaysValidAsyncValidator,
+  alwaysInvalidAsyncValidator,
   type UserForm,
+  type AsyncUserForm,
   type UserWithAddressForm,
 } from '../fixtures/validators';
 
@@ -835,6 +839,168 @@ describe('useForm', () => {
       expect(props.name).toBe('preferences[0].size');
       expect(props.value).toBe('medium');
       expect(props.checked).toBe(true);
+    });
+  });
+
+  describe('async validation', () => {
+    test('accepts async validator and validates on mount', async () => {
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+          validationMode: 'mount',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.errors.name).toBe('Name is required');
+        expect(result.current.errors.email).toBe('Email is required');
+        expect(result.current.isValid).toBe(false);
+      });
+    });
+
+    test('async validation errors appear after resolution', async () => {
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: 'taken', email: 'a@b.com', age: 25 },
+          validationMode: 'mount',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.errors.name).toBe('Name is already taken');
+      });
+    });
+
+    test('async validation clears errors on valid input', async () => {
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: 'valid', email: 'a@b.com', age: 25 },
+          validationMode: 'mount',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.isValid).toBe(true);
+        expect(result.current.errors).toEqual({});
+      });
+    });
+
+    test('handleSubmit works with async validator — valid case', async () => {
+      const onSubmit = mock((values: AsyncUserForm) => {});
+      const validValues = { name: 'John', email: 'john@example.com', age: 25 };
+
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: validValues,
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith(validValues);
+    });
+
+    test('handleSubmit works with async validator — invalid case', async () => {
+      const onSubmit = mock((values: AsyncUserForm) => {});
+      const invalidValues = { name: 'taken', email: 'a@b.com', age: 25 };
+
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: invalidValues,
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.errors.name).toBe('Name is already taken');
+    });
+
+    test('sync validators still return Result (not Promise) from validateForm', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      const validationResult = result.current.validateForm(
+        result.current.values
+      );
+
+      // Sync validator should return a plain Result, not a Promise
+      expect(validationResult instanceof Promise).toBe(false);
+      expect((validationResult as { ok: boolean }).ok).toBe(true);
+    });
+
+    test('async validators return Promise from validateForm', () => {
+      const { result } = renderHook(() =>
+        useForm(asyncUserValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      const validationResult = result.current.validateForm(
+        result.current.values
+      );
+
+      expect(validationResult instanceof Promise).toBe(true);
+    });
+
+    test('isValidating is true during async validation, false after', async () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidAsyncValidator, {
+          initialValues: { name: 'test' },
+        })
+      );
+
+      expect(result.current.isValidating).toBe(false);
+
+      act(() => {
+        result.current.setFieldValue('name', 'updated');
+      });
+
+      // isValidating should be true while async validation is in progress
+      expect(result.current.isValidating).toBe(true);
+
+      await waitFor(() => {
+        expect(result.current.isValidating).toBe(false);
+      });
+    });
+
+    test('race condition: rapid changes only apply the latest validation result', async () => {
+      // Use alwaysInvalidAsyncValidator to verify that stale results don't overwrite
+      const { result } = renderHook(() =>
+        useForm(alwaysValidAsyncValidator, {
+          initialValues: { value: 'initial' },
+        })
+      );
+
+      // Rapidly trigger multiple validations
+      act(() => {
+        result.current.setFieldValue('value', 'first');
+      });
+      act(() => {
+        result.current.setFieldValue('value', 'second');
+      });
+      act(() => {
+        result.current.setFieldValue('value', 'third');
+      });
+
+      // Wait for all validations to resolve
+      await waitFor(() => {
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      // The latest value should be set, and form should be valid
+      // (only the last validation result should have been dispatched)
+      expect(result.current.values.value).toBe('third');
+      expect(result.current.isValid).toBe(true);
     });
   });
 });

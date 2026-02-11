@@ -10,7 +10,7 @@ import { isErr, match, type Result } from '@railway-ts/pipelines/result';
 import {
   validate,
   formatErrors,
-  type Validator,
+  type MaybeAsyncValidator,
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
@@ -58,7 +58,7 @@ import {
  *
  * @template TValues - The shape of form values as a record with string keys
  *
- * @param validator - Railway-oriented validator from @railway-ts/pipelines that validates form values
+ * @param validator - Railway-oriented validator (sync or async) from @railway-ts/pipelines that validates form values
  * @param options - Configuration options for form behavior
  * @param options.initialValues - Initial values for form fields (used on mount and reset)
  * @param options.onSubmit - Callback invoked when form is submitted with valid data
@@ -74,6 +74,7 @@ import {
  * - `isValid` - Whether the form has no validation errors
  * - `isDirty` - Whether any values have changed from initial state
  * - `isSubmitting` - Whether the form is currently being submitted
+ * - `isValidating` - Whether async validation is currently in progress
  *
  * **Field Management:**
  * - `setFieldValue(field, value, shouldValidate?)` - Update a single field
@@ -161,7 +162,7 @@ import {
  * );
  */
 export const useForm = <TValues extends Record<string, unknown>>(
-  validator: Validator<unknown, TValues>,
+  validator: MaybeAsyncValidator<unknown, TValues>,
   options: FormOptions<TValues> = {}
 ) => {
   const { initialValues = {} as TValues, onSubmit, validationMode } = options;
@@ -191,11 +192,15 @@ export const useForm = <TValues extends Record<string, unknown>>(
     clientErrors: {},
     serverErrors: {},
     isSubmitting: false,
+    isValidating: false,
     isDirty: false,
   };
 
   // Initialize the reducer
   const [formState, dispatch] = useReducer(reducerFn, initialState);
+
+  // Sequence counter for race condition protection on async validation
+  const validationSeqRef = useRef(0);
 
   // ===========================================================================
   // Computed State
@@ -228,38 +233,15 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // ===========================================================================
 
   /**
-   * Validates the current form values using the Railway-oriented validator and updates error state.
-   * Returns a Result type that can be pattern-matched for success or failure.
-   *
-   * @param values - The form values to validate (usually form.values)
-   * @returns Railway Result<TValues, ValidationError[]> - Ok with validated data or Err with errors
-   *
-   * @example
-   * // Manually trigger validation
-   * const result = form.validateForm(form.values);
-   * if (isOk(result)) {
-   *   console.log("Form is valid!", result.value);
-   * }
-   *
-   * @example
-   * // Validate before a custom action
-   * const handleCustomAction = () => {
-   *   const result = form.validateForm(form.values);
-   *   if (isErr(result)) {
-   *     alert("Please fix validation errors first");
-   *     return;
-   *   }
-   *   // Proceed with custom action
-   * };
+   * Dispatches the validation result to update client errors.
+   * Shared by both sync and async validation paths.
    */
-  const validateForm = useCallback(
-    (values: Partial<TValues>): Result<TValues, ValidationError[]> => {
-      const validationResult = validate(values, validator);
-
-      if (isErr(validationResult)) {
+  const dispatchValidationResult = useCallback(
+    (result: Result<TValues, ValidationError[]>) => {
+      if (isErr(result)) {
         dispatch({
           type: 'SET_CLIENT_ERRORS',
-          errors: formatErrors(validationResult.error),
+          errors: formatErrors(result.error),
         });
       } else {
         dispatch({
@@ -267,10 +249,47 @@ export const useForm = <TValues extends Record<string, unknown>>(
           errors: {},
         });
       }
+    },
+    []
+  );
 
+  /**
+   * Validates the current form values using the Railway-oriented validator and updates error state.
+   * Accepts both sync and async validators (MaybeAsyncValidator).
+   *
+   * - When the validator is sync, returns `Result<TValues, ValidationError[]>` immediately.
+   * - When the validator is async, returns `Promise<Result<TValues, ValidationError[]>>`.
+   *   A sequence counter protects against race conditions: only the latest async validation
+   *   result dispatches state updates.
+   *
+   * @param values - The form values to validate (usually form.values)
+   * @returns Railway Result or Promise<Result> depending on the validator
+   */
+  const validateForm = useCallback(
+    (
+      values: Partial<TValues>,
+    ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
+      const validationResult = validate(values, validator);
+
+      if (validationResult instanceof Promise) {
+        const seq = ++validationSeqRef.current;
+        dispatch({ type: 'SET_VALIDATING', isValidating: true });
+
+        return validationResult.then((result) => {
+          // Only dispatch if this is still the latest validation
+          if (seq === validationSeqRef.current) {
+            dispatchValidationResult(result);
+            dispatch({ type: 'SET_VALIDATING', isValidating: false });
+          }
+          return result;
+        });
+      }
+
+      // Sync path — no race conditions possible
+      dispatchValidationResult(validationResult);
       return validationResult;
     },
-    [validator]
+    [validator, dispatchValidationResult],
   );
 
   // Validate on mount if enabled
@@ -278,7 +297,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
   useEffect(() => {
     if (validateOnMount && !didMountRef.current) {
       didMountRef.current = true;
-      validateForm(initialValues);
+      void validateForm(initialValues);
 
       // Also mark all fields as touched (including nested and array items)
       const allFields = collectFieldPaths(
@@ -350,7 +369,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       // Validate with calculated values if needed
       if (shouldValidate) {
-        validateForm(updatedValues);
+        void validateForm(updatedValues);
       }
     },
     [
@@ -399,7 +418,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       if (shouldValidate) {
         // Need to get latest state for validation
         const updatedValues = { ...formState.values, ...newValues };
-        validateForm(updatedValues);
+        void validateForm(updatedValues);
       }
     },
     [formState.values, validateOnChange, validateForm]
@@ -441,7 +460,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       if (shouldValidate) {
-        validateForm(formState.values);
+        void validateForm(formState.values);
       }
     },
     [formState.values, validateOnBlur, validateForm]
@@ -598,8 +617,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
         type: 'CLEAR_SERVER_ERRORS',
       });
 
-      // Validate the form
-      const validationResult = validate(formState.values, validator);
+      // Validate the form (await handles both sync and async validators)
+      const validationResult = await validate(formState.values, validator);
 
       // Handle result using Railway pattern
       return match<
@@ -682,7 +701,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     });
 
     if (validateOnMount) {
-      validateForm(initialValues);
+      void validateForm(initialValues);
     }
   }, [initialValues, validateForm, validateOnMount]);
 
@@ -1113,6 +1132,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     clientErrors: formState.clientErrors,
     serverErrors: formState.serverErrors,
     isSubmitting: formState.isSubmitting,
+    isValidating: formState.isValidating,
     isValid,
     isDirty: formState.isDirty,
 
