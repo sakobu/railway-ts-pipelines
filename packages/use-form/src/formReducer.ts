@@ -140,12 +140,41 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         isValidating: action.isValidating,
       };
 
+    case 'SET_FIELD_VALIDATING': {
+      const newValidatingFields = { ...state.validatingFields };
+      if (action.isValidating) {
+        newValidatingFields[action.field] = true;
+      } else {
+        delete newValidatingFields[action.field];
+      }
+      return {
+        ...state,
+        validatingFields: newValidatingFields,
+        isValidating: Object.keys(newValidatingFields).length > 0,
+      };
+    }
+
+    case 'SET_FIELD_ERROR': {
+      const newFieldErrors = { ...state.fieldErrors };
+      if (action.error) {
+        newFieldErrors[action.field] = action.error;
+      } else {
+        delete newFieldErrors[action.field];
+      }
+      return {
+        ...state,
+        fieldErrors: newFieldErrors,
+      };
+    }
+
     case 'RESET_FORM':
       return {
         values: initialValues,
         touched: {},
         clientErrors: {},
         serverErrors: {},
+        fieldErrors: {},
+        validatingFields: {},
         isSubmitting: false,
         isValidating: false,
         isDirty: false,

@@ -4,8 +4,9 @@ import { createRoot } from 'react-dom/client';
 import UserForm from './UserForm';
 import AsyncUserForm from './AsyncUserForm';
 import StandardSchemaForm from './StandardSchemaForm';
+import FieldValidatorForm from './FieldValidatorForm';
 
-type Tab = 'sync' | 'async' | 'standard-schema';
+type Tab = 'sync' | 'async' | 'standard-schema' | 'field-validators';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');
@@ -31,10 +32,17 @@ function App() {
         >
           Standard Schema
         </button>
+        <button
+          className={tab === 'field-validators' ? 'active' : ''}
+          onClick={() => setTab('field-validators')}
+        >
+          Field Validators
+        </button>
       </div>
       {tab === 'sync' && <UserForm />}
       {tab === 'async' && <AsyncUserForm />}
       {tab === 'standard-schema' && <StandardSchemaForm />}
+      {tab === 'field-validators' && <FieldValidatorForm />}
     </>
   );
 }

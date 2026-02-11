@@ -1003,4 +1003,314 @@ describe('useForm', () => {
       expect(result.current.isValid).toBe(true);
     });
   });
+
+  describe('fieldValidators', () => {
+    test('per-field validatingFields only set for the changed field', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 50));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      // Change name field - should trigger field validator
+      act(() => {
+        result.current.setFieldValue('name', 'valid');
+      });
+
+      // validatingFields should show name is validating
+      await waitFor(() => {
+        expect(result.current.validatingFields.name).toBe(true);
+      });
+
+      // email should NOT be in validatingFields
+      expect(result.current.validatingFields.email).toBeUndefined();
+
+      // Wait for validation to finish
+      await waitFor(() => {
+        expect(result.current.validatingFields.name).toBeUndefined();
+      });
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    test('sync-only field changes do not trigger isValidating', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 50));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      // Change email field (no field validator) - should NOT trigger isValidating
+      act(() => {
+        result.current.setFieldValue('email', 'new@test.com');
+      });
+
+      expect(result.current.isValidating).toBe(false);
+      expect(result.current.validatingFields.email).toBeUndefined();
+    });
+
+    test('field validator returns error message', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'taken');
+      });
+
+      await waitFor(() => {
+        expect(result.current.errors.name).toBe('Name is taken');
+      });
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    test('field validator skipped when schema has error for that field', async () => {
+      let validatorCalled = false;
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              validatorCalled = true;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      // Set name to empty string (schema will produce "Name is required" error)
+      act(() => {
+        result.current.setFieldValue('name', '');
+      });
+
+      // Wait a bit for any async to settle
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Field validator should NOT have been called since schema errored
+      expect(validatorCalled).toBe(false);
+      expect(result.current.errors.name).toBe('Name is required');
+    });
+
+    test('race condition protection - rapid changes to same field', async () => {
+      let callCount = 0;
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              callCount++;
+              const delay = value === 'first' ? 100 : 10;
+              await new Promise((r) => setTimeout(r, delay));
+              return value === 'first' ? 'First error' : undefined;
+            },
+          },
+        })
+      );
+
+      // Rapid changes - first one takes longer
+      act(() => {
+        result.current.setFieldValue('name', 'first');
+      });
+      act(() => {
+        result.current.setFieldValue('name', 'second');
+      });
+
+      // Wait for all to complete
+      await waitFor(() => {
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      // The slow "first" result should be discarded; "second" is valid
+      expect(result.current.errors.name).toBeUndefined();
+    });
+
+    test('handleSubmit runs all field validators and blocks submit on error', async () => {
+      const onSubmit = mock(() => {});
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'taken', email: 'john@test.com', age: 25 },
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.errors.name).toBe('Name is taken');
+    });
+
+    test('handleSubmit calls onSubmit when field validators pass', async () => {
+      const onSubmit = mock(() => {});
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test('resetForm clears validatingFields and fieldErrors', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              await new Promise((r) => setTimeout(r, 50));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      // Trigger field validation
+      act(() => {
+        result.current.setFieldValue('name', 'taken');
+      });
+
+      await waitFor(() => {
+        expect(result.current.errors.name).toBe('Name is taken');
+      });
+
+      // Reset the form
+      act(() => {
+        result.current.resetForm();
+      });
+
+      expect(result.current.validatingFields).toEqual({});
+      expect(result.current.errors.name).toBeUndefined();
+    });
+
+    test('error priority: fieldErrors override clientErrors, serverErrors override both', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'Jo', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async () => {
+              await new Promise((r) => setTimeout(r, 10));
+              return 'Name is taken (field)';
+            },
+          },
+        })
+      );
+
+      // First, get a schema error for name (too short - "Jo" might not trigger, let's use an empty one)
+      act(() => {
+        result.current.setFieldValue('name', 'validname');
+      });
+
+      // Wait for field validator to produce error
+      await waitFor(() => {
+        expect(result.current.errors.name).toBe('Name is taken (field)');
+      });
+
+      // Now set a server error - should override field error
+      act(() => {
+        result.current.setServerErrors({ name: 'Server says no' });
+      });
+
+      expect(result.current.errors.name).toBe('Server says no');
+    });
+
+    test('field validator does not re-fire on blur in live mode', async () => {
+      let callCount = 0;
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: async (value) => {
+              callCount++;
+              await new Promise((r) => setTimeout(r, 10));
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      // Change triggers field validator
+      act(() => {
+        result.current.setFieldValue('name', 'valid');
+      });
+      await waitFor(() =>
+        expect(result.current.validatingFields.name).toBeUndefined()
+      );
+      expect(callCount).toBe(1);
+
+      // Blur should NOT re-trigger field validator
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+      // Give it a tick to ensure nothing async kicks off
+      await waitFor(() => expect(callCount).toBe(1));
+      expect(result.current.validatingFields.name).toBeUndefined();
+    });
+
+    test('sync field validator works without Promise', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'taken', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: {
+            name: (value) => {
+              return value === 'taken' ? 'Name is taken' : undefined;
+            },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'taken');
+      });
+
+      expect(result.current.errors.name).toBe('Name is taken');
+      expect(result.current.isValidating).toBe(false);
+    });
+  });
 });

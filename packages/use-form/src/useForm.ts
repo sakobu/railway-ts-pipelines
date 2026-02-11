@@ -170,7 +170,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
   validatorOrSchema: FormValidator<TValues>,
   options: FormOptions<TValues> = {}
 ) => {
-  const { initialValues = {} as TValues, onSubmit, validationMode } = options;
+  const { initialValues = {} as TValues, onSubmit, validationMode, fieldValidators } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
@@ -206,6 +206,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
     touched: {},
     clientErrors: {},
     serverErrors: {},
+    fieldErrors: {},
+    validatingFields: {},
     isSubmitting: false,
     isValidating: false,
     isDirty: false,
@@ -217,28 +219,34 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // Sequence counter for race condition protection on async validation
   const validationSeqRef = useRef(0);
 
+  // Per-field sequence counters for race condition protection on field-level async validation
+  const fieldValidationSeqRef = useRef<Record<string, number>>({});
+
   // ===========================================================================
   // Computed State
   // ===========================================================================
 
-  // Combined errors from both client and server
+  // Combined errors from client, field validators, and server (server > field > client)
   const errors = useMemo(() => {
     const combined: Record<FieldPath, string> = {};
 
-    // Add all server errors
-    Object.entries(formState.serverErrors).forEach(([path, message]) => {
-      combined[path] = message;
+    // Schema errors (base)
+    Object.entries(formState.clientErrors).forEach(([path, msg]) => {
+      combined[path] = msg;
     });
 
-    // Add client errors only if there's no server error for the same path
-    Object.entries(formState.clientErrors).forEach(([path, message]) => {
-      if (!combined[path]) {
-        combined[path] = message;
-      }
+    // Field validator errors (override schema for same field)
+    Object.entries(formState.fieldErrors).forEach(([path, msg]) => {
+      combined[path] = msg;
+    });
+
+    // Server errors (highest priority)
+    Object.entries(formState.serverErrors).forEach(([path, msg]) => {
+      combined[path] = msg;
     });
 
     return combined;
-  }, [formState.clientErrors, formState.serverErrors]);
+  }, [formState.clientErrors, formState.fieldErrors, formState.serverErrors]);
 
   // Form is valid when there are no errors of any kind
   const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
@@ -305,6 +313,40 @@ export const useForm = <TValues extends Record<string, unknown>>(
       return validationResult;
     },
     [validator, dispatchValidationResult],
+  );
+
+  /**
+   * Runs a single field's validator with per-field race condition protection.
+   * Only runs when the field has a registered fieldValidator.
+   */
+  const runFieldValidator = useCallback(
+    (field: FieldPath, values: Partial<TValues>): void => {
+      const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
+      if (!validatorFn) return;
+
+      dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+
+      const fieldValue = getValueByPath(values, field);
+      const result = validatorFn(fieldValue, values);
+
+      if (result instanceof Promise) {
+        if (!fieldValidationSeqRef.current[field]) {
+          fieldValidationSeqRef.current[field] = 0;
+        }
+        const seq = ++fieldValidationSeqRef.current[field];
+        dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: true });
+
+        void result.then((error) => {
+          if (seq === fieldValidationSeqRef.current[field]) {
+            dispatch({ type: 'SET_FIELD_ERROR', field, error });
+            dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+          }
+        });
+      } else {
+        dispatch({ type: 'SET_FIELD_ERROR', field, error: result });
+      }
+    },
+    [fieldValidators],
   );
 
   // Validate on mount if enabled
@@ -384,7 +426,26 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       // Validate with calculated values if needed
       if (shouldValidate) {
-        void validateForm(updatedValues);
+        const schemaResult = validateForm(updatedValues);
+
+        // Run per-field validator after schema completes (only if schema passes for this field)
+        if (fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
+          const afterSchema = (result: Result<TValues, ValidationError[]>) => {
+            const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
+            if (!schemaErrors[field]) {
+              runFieldValidator(field, updatedValues);
+            } else {
+              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+              dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            }
+          };
+
+          if (schemaResult instanceof Promise) {
+            void schemaResult.then(afterSchema);
+          } else {
+            afterSchema(schemaResult);
+          }
+        }
       }
     },
     [
@@ -393,6 +454,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
       validateOnChange,
       validateForm,
       touchOnChange,
+      fieldValidators,
+      runFieldValidator,
     ]
   );
 
@@ -475,10 +538,30 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       if (shouldValidate) {
-        void validateForm(formState.values);
+        const schemaResult = validateForm(formState.values);
+
+        // Run per-field validator after schema completes (only if schema passes for this field).
+        // In "live" mode (validateOnChange=true), field validators already ran on change, so skip on blur.
+        if (!validateOnChange && fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
+          const afterSchema = (result: Result<TValues, ValidationError[]>) => {
+            const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
+            if (!schemaErrors[field]) {
+              runFieldValidator(field, formState.values);
+            } else {
+              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+              dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            }
+          };
+
+          if (schemaResult instanceof Promise) {
+            void schemaResult.then(afterSchema);
+          } else {
+            afterSchema(schemaResult);
+          }
+        }
       }
     },
-    [formState.values, validateOnBlur, validateForm]
+    [formState.values, validateOnBlur, validateOnChange, validateForm, fieldValidators, runFieldValidator]
   );
 
   // ===========================================================================
@@ -642,6 +725,37 @@ export const useForm = <TValues extends Record<string, unknown>>(
         Promise<TValues | ValidationError[]>
       >(validationResult, {
         ok: async (validData) => {
+          // Run all field validators in parallel before calling onSubmit
+          if (fieldValidators) {
+            const fieldEntries = Object.entries(fieldValidators) as Array<
+              [string, (value: unknown, values: Partial<TValues>) => string | undefined | Promise<string | undefined>]
+            >;
+
+            const fieldResults = await Promise.all(
+              fieldEntries.map(async ([field, validatorFn]) => {
+                const fieldValue = getValueByPath(formState.values, field);
+                const error = await validatorFn(fieldValue, formState.values);
+                if (error) {
+                  dispatch({ type: 'SET_FIELD_ERROR', field, error });
+                } else {
+                  dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+                }
+                return { field, error };
+              })
+            );
+
+            const hasFieldErrors = fieldResults.some((r) => r.error);
+            if (hasFieldErrors) {
+              dispatch({
+                type: 'SET_SUBMITTING',
+                isSubmitting: false,
+              });
+              return fieldResults
+                .filter((r) => r.error)
+                .map((r) => ({ path: [r.field], message: r.error! }));
+            }
+          }
+
           if (onSubmit) {
             try {
               await onSubmit(validData);
@@ -678,6 +792,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       formState.serverErrors,
       validator,
       onSubmit,
+      fieldValidators,
     ]
   );
 
@@ -1148,6 +1263,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     serverErrors: formState.serverErrors,
     isSubmitting: formState.isSubmitting,
     isValidating: formState.isValidating,
+    validatingFields: formState.validatingFields,
     isValid,
     isDirty: formState.isDirty,
 

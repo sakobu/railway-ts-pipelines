@@ -88,6 +88,12 @@ export interface FormState<TValues extends Record<string, unknown>> {
   /** Whether async validation is currently in progress. */
   isValidating: boolean;
 
+  /** Per-field async validation tracking. True when that field's async validator is running. */
+  validatingFields: Record<FieldPath, boolean>;
+
+  /** Errors from per-field validators (stored separately so schema SET_CLIENT_ERRORS doesn't overwrite them). */
+  fieldErrors: Record<FieldPath, string>;
+
   /**
    * Whether any form values have changed since initialization or last reset.
    * Set to true when any field value changes from its initial value.
@@ -169,6 +175,17 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    * @default "live"
    */
   validationMode?: 'live' | 'blur' | 'mount' | 'submit';
+
+  /**
+   * Per-field validator functions for field-level async validation.
+   * Run independently from the main schema validator, only for the changed field.
+   * A field validator only runs when the schema produces no error for that field.
+   * Return undefined for valid, or an error message string for invalid.
+   */
+  fieldValidators?: Partial<Record<
+    ExtractFieldPaths<TValues>,
+    (value: unknown, values: Partial<TValues>) => string | undefined | Promise<string | undefined>
+  >>;
 }
 
 // =============================================================================
@@ -865,6 +882,22 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'SET_VALIDATING';
       /** Whether async validation is currently in progress */
       isValidating: boolean;
+    }
+  | {
+      /** Sets per-field async validation state */
+      type: 'SET_FIELD_VALIDATING';
+      /** The field path being validated */
+      field: FieldPath;
+      /** Whether the field's async validator is running */
+      isValidating: boolean;
+    }
+  | {
+      /** Sets or clears a per-field validator error */
+      type: 'SET_FIELD_ERROR';
+      /** The field path */
+      field: FieldPath;
+      /** The error message, or undefined to clear */
+      error: string | undefined;
     }
   | {
       /** Resets the form to initial values and clears all errors and touched state */
