@@ -19,7 +19,7 @@ Type-safe React form hook with Railway-oriented validation.
 ## Installation
 
 ```bash
-bun add @railway-ts/use-form @railway-ts/pipelines react
+bun add @railway-ts/use-form @railway-ts/pipelines
 ```
 
 Requires React 18+ and @railway-ts/pipelines ^0.1.5
