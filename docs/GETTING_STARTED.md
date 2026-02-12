@@ -293,6 +293,5 @@ const processOrder = async (input: unknown) => {
 
 You now understand the core: `Result`, `Option`, `map`, `flatMap`, `pipe`, `match`, `validate`.
 
-- **[Recipes](RECIPES.md)** — Patterns for real-world use: point-free composition, error recovery, async pipelines, combining results, Standard Schema interop
-- **[Advanced](ADVANCED.md)** — How it works under the hood: symbol branding, tuple-preserving combinators, type inference
-- **[API Reference](../README.md#api-reference)** — Full function catalog
+- **[Recipes](RECIPES.md)** — Patterns for real work: async pipelines, error recovery, validation, Standard Schema
+- **[API Reference](API.md)** — Every function signature and description

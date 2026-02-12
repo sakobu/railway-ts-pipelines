@@ -869,5 +869,4 @@ console.log(result);
 
 ## Next Steps
 
-- **[Advanced](ADVANCED.md)** — Symbol branding, type inference, implementation details
-- **[API Reference](../README.md)** — Full function catalog
+- **[API Reference](API.md)** — Every function signature and description
