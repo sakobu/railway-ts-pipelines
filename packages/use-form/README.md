@@ -120,7 +120,7 @@ Any [Standard Schema v1](https://github.com/standard-schema/standard-schema) lib
 - **ArkType** 2.0+
 - **@railway-ts/pipelines** (native)
 
-See [Recipes: Standard Schema](./docs/RECIPES.md#standard-schema--bring-your-own-validator) for Zod and Valibot examples.
+See [Recipes: Standard Schema](./docs/RECIPES.md#standard-schema-bring-your-own-validator) for Zod and Valibot examples.
 
 ## Documentation
 

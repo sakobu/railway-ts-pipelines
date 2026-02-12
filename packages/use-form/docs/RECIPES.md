@@ -15,7 +15,7 @@ Patterns and techniques. Each recipe is self-contained.
 7. [Multi-Step Wizard](#multi-step-wizard)
 8. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
 9. [Conditional Validation](#conditional-validation)
-10. [Standard Schema -- Bring Your Own Validator](#standard-schema--bring-your-own-validator)
+10. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
 11. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
 12. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
 13. [Custom Field Components](#custom-field-components)
@@ -670,7 +670,7 @@ function AccountForm() {
 
 ---
 
-## Standard Schema -- Bring Your Own Validator
+## Standard Schema: Bring Your Own Validator
 
 **Problem:** You already have Zod or Valibot schemas in your codebase and don't want to rewrite them.
 
