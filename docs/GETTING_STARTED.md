@@ -114,6 +114,8 @@ const result = pipe(
 // Err('div by zero')
 ```
 
+> The `With` suffix pattern you've been using is called **point-free composition** -- see [Recipes: Point-Free Composition](RECIPES.md#point-free-composition) for more advanced uses like `flow` + point-free pipelines.
+
 ---
 
 ## Step 4: match -- Handle Both Cases
@@ -238,7 +240,7 @@ match(result, {
 
 ## Step 7: Putting It All Together
 
-Now you have all the pieces. Here's a complete pipeline that validates input, transforms it, and handles the result:
+Now you have all the pieces. Here's a complete pipeline that validates input, transforms it, and handles the result. This example uses `fromPromiseWithError` to safely convert Promises that can reject into `Result` values:
 
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
@@ -264,6 +266,8 @@ const orderSchema = object({
 
 // 2. Business logic as plain functions that return Results
 const checkInventory = (order: { item: string; quantity: number }) =>
+  // fromPromiseWithError wraps a Promise into a Result,
+  // mapping rejection through your error function
   fromPromiseWithError(
     fetch(`/api/inventory/${order.item}`).then((r) => r.json()),
     () => [{ path: ['item'], message: 'Inventory check failed' }],
@@ -293,5 +297,5 @@ const processOrder = async (input: unknown) => {
 
 You now understand the core: `Result`, `Option`, `map`, `flatMap`, `pipe`, `match`, `validate`.
 
-- **[Recipes](RECIPES.md)** — Patterns for real work: async pipelines, error recovery, validation, Standard Schema
-- **[API Reference](API.md)** — Every function signature and description
+- **[Recipes](RECIPES.md)** -- Patterns for real work: async pipelines, error recovery, validation, Standard Schema
+- **[API Reference](API.md)** -- Every function signature and description

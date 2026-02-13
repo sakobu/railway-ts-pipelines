@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) [![Build Status](https://github.com/sakobu/railway-ts-pipelines/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-pipelines/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-pipelines)](https://codecov.io/gh/sakobu/railway-ts-pipelines)
 
-Railway-oriented programming for TypeScript. Typed `Result<T, E>` pipelines with first-class validation and optional `Option<T>` support — small, modular, and fully tree-shakable.
+Railway-oriented programming for TypeScript. Typed `Result<T, E>` pipelines with first-class validation and optional `Option<T>` support -- small, modular, and fully tree-shakable.
 
 ## Why?
 
@@ -20,19 +20,19 @@ No runtime. No global context. No required framework. Import only what you need.
 
 The library is layered and modular:
 
-- **Result** — explicit success/failure, no exceptions
-- **Option** — nullable handling without null checks
-- **Schema** — parse unknown input into typed values
-- **Composition** — build sync and async pipelines
+- **Result** -- explicit success/failure, no exceptions
+- **Option** -- nullable handling without null checks
+- **Schema** -- parse unknown input into typed values
+- **Composition** -- build sync and async pipelines
 
 Each layer works independently. Combine them when it makes sense.
 
 Fully tree-shakable:
 
-- `result` — 582 B
-- `option` — 402 B
-- `composition` — 233 B
-- `schema` — ~3 kB
+- `result` -- 582 B
+- `option` -- 402 B
+- `composition` -- 233 B
+- `schema` -- ~3 kB
 
 **~4.2 kB total** (minified + brotli)
 
@@ -137,7 +137,7 @@ match(result, {
 }); // Output: 15
 ```
 
-`ok` · `err` · `isOk` · `isErr` · `map` · `flatMap` · `mapErr` · `bimap` · `filter` · `tap` · `tapErr` · `orElse` · `combine` · `combineAll` · `fromPromise` · `fromTry` · `match` · `unwrapOr` — [full API](docs/API.md#result)
+`ok` · `err` · `isOk` · `isErr` · `map` · `flatMap` · `mapErr` · `bimap` · `filter` · `tap` · `tapErr` · `orElse` · `combine` · `combineAll` · `fromPromise` · `fromTry` · `match` · `unwrapOr` -- [full API](docs/API.md#result)
 
 ### Option
 
@@ -159,7 +159,7 @@ match(name, {
 }); // Output: Alice
 ```
 
-`some` · `none` · `isSome` · `isNone` · `map` · `flatMap` · `bimap` · `filter` · `tap` · `combine` · `fromNullable` · `mapToResult` · `match` · `unwrapOr` — [full API](docs/API.md#option)
+`some` · `none` · `isSome` · `isNone` · `map` · `flatMap` · `bimap` · `filter` · `tap` · `combine` · `fromNullable` · `mapToResult` · `match` · `unwrapOr` -- [full API](docs/API.md#option)
 
 Use independently, or convert to Result when needed.
 
@@ -167,7 +167,7 @@ Use independently, or convert to Result when needed.
 
 Parse unknown data into typed values. Accumulates all validation errors.
 
-> **Standard Schema v1 compliant** — use `toStandardSchema()` for interop with tRPC, TanStack Form, React Hook Form, and other Standard Schema consumers. See [Recipes -> Standard Schema Interop](docs/RECIPES.md#standard-schema-interop).
+> **Standard Schema v1 compliant** -- use `toStandardSchema()` for interop with tRPC, TanStack Form, React Hook Form, and other Standard Schema consumers. See [Recipes -> Standard Schema Interop](docs/RECIPES.md#standard-schema-interop).
 
 ```typescript
 import {
@@ -196,7 +196,7 @@ const result = validate(input, userSchema);
 // Result<User, ValidationError[]>
 ```
 
-`object` · `array` · `tuple` · `required` · `optional` · `chain` · `string` · `parseNumber` · `email` · `min` · `max` · `union` · `discriminatedUnion` · `refine` · `refineAt` · `transform` · `validate` · `toStandardSchema` — [full API](docs/API.md#schema)
+`object` · `array` · `tuple` · `required` · `optional` · `chain` · `string` · `parseNumber` · `email` · `min` · `max` · `union` · `discriminatedUnion` · `refine` · `refineAt` · `transform` · `validate` · `toStandardSchema` -- [full API](docs/API.md#schema)
 
 ### Composition
 
@@ -227,20 +227,20 @@ const processOrder = flowAsync(validateOrder, chargePayment, createShipment);
 await processOrder(orderInput);
 ```
 
-`pipe` · `flow` · `pipeAsync` · `flowAsync` · `curry` · `uncurry` · `tupled` · `untupled` — [full API](docs/API.md#composition)
+`pipe` · `flow` · `pipeAsync` · `flowAsync` · `curry` · `uncurry` · `tupled` · `untupled` -- [full API](docs/API.md#composition)
 
 Sync and async composition share the same mental model.
 
 ## Ecosystem
 
-- **[@railway-ts/use-form](https://github.com/sakobu/railway-ts-use-form)** — Type-safe React form hook built directly on the Schema layer. Define a schema once — use it for validation, type inference, and form state.
+- **[@railway-ts/use-form](https://github.com/sakobu/railway-ts-use-form)** -- Type-safe React form hook built directly on the Schema layer. Define a schema once -- use it for validation, type inference, and form state.
 
 ## Documentation
 
-- **[Getting Started](docs/GETTING_STARTED.md)** — Learn the concepts, one at a time
-- **[Recipes](docs/RECIPES.md)** — Patterns for real work: async pipelines, error recovery, validation, Standard Schema
-- **[API Reference](docs/API.md)** — Every function signature and description
-- **[Examples](examples/)** — Working code you can run
+- **[Getting Started](docs/GETTING_STARTED.md)** -- Learn the concepts, one at a time
+- **[Recipes](docs/RECIPES.md)** -- Patterns for real work: async pipelines, error recovery, validation, Standard Schema
+- **[API Reference](docs/API.md)** -- Every function signature and description
+- **[Examples](examples/)** -- Working code you can run
 
 For a complete real-world pipeline, see the [Launch Decision Pipeline](docs/RECIPES.md#full-example-launch-decision-pipeline) -- validates input, fetches weather data, and makes a GO/NO-GO decision.
 
