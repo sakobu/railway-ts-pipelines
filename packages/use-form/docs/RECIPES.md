@@ -498,6 +498,11 @@ function MultiStepForm() {
     if (isOk(result)) setStep(step + 1);
   };
 
+  // Note: validateForm validates all fields, not just the current step.
+  // This works here because each step only renders its own error messages.
+  // If you need per-step validation gating (e.g., disable "Next" until
+  // the current step is valid), check only the current step's fields in the result.
+
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       {step === 1 && (

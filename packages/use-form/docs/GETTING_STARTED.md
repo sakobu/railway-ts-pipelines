@@ -263,7 +263,9 @@ Three things to know about server errors:
 
 1. **They auto-clear** -- when the user edits a field, its server error disappears
 2. **They win** -- if a field has both a client error and a server error, the server error is displayed (server > fieldValidator > client)
-3. **Form-level errors** -- use an empty string key `''` for errors not tied to a specific field
+3. **Form-level errors** -- use `ROOT_ERROR_KEY` (from `@railway-ts/pipelines/schema`) for errors not tied to a specific field (e.g., network errors, rate limiting)
+
+`handleSubmit` accepts an optional form event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard).
 
 `handleSubmit` also returns a `Result`, so you can pattern-match on the outcome instead of using `onSubmit`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
 
