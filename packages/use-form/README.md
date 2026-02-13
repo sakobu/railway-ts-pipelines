@@ -75,7 +75,7 @@ export function LoginForm() {
         <span>{form.errors.password}</span>
       )}
 
-      <button type="submit" disabled={form.isSubmitting || !form.isValid}>
+      <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Logging in...' : 'Log In'}
       </button>
     </form>
@@ -174,13 +174,12 @@ export function RegistrationForm() {
     },
     fieldValidators: {
       username: async (value) => {
-        const username = value as string;
-        if (username.length < 3) return undefined;
+        if (value.length < 3) return undefined;
 
         try {
           const { available } = await queryClient.fetchQuery({
-            queryKey: ['check-username', username],
-            queryFn: () => checkUsername(username),
+            queryKey: ['check-username', value],
+            queryFn: () => checkUsername(value),
             staleTime: 30_000,
           });
           return available ? undefined : 'Username is already taken';
@@ -221,7 +220,7 @@ export function RegistrationForm() {
 
       <button
         type="submit"
-        disabled={mutation.isPending || form.isValidating || !form.isValid}
+        disabled={mutation.isPending || form.isValidating}
       >
         {mutation.isPending ? 'Registering...' : 'Create Account'}
       </button>

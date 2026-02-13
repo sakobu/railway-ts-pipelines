@@ -114,10 +114,10 @@ Controls when validation occurs.
 
 #### fieldValidators
 
-Type: `Partial<Record<ExtractFieldPaths<TValues>, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>>>`
+Type: `{ [K in ExtractFieldPaths<TValues>]?: (value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined> }`
 Optional
 
-Per-field validator functions for field-level async validation. Run independently from the main schema validator, only for the changed field. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
+Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator, only for the changed field. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
 
 Return `undefined` for valid, or an error message string for invalid.
 
@@ -126,7 +126,7 @@ const form = useForm(userSchema, {
   initialValues: { username: '', email: '' },
   fieldValidators: {
     username: async (value) => {
-      const available = await checkUsernameAvailable(value as string);
+      const available = await checkUsernameAvailable(value);
       return available ? undefined : 'Username is already taken';
     },
   },

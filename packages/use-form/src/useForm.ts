@@ -361,7 +361,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
 
       const fieldValue = getValueByPath(values, field);
-      const result = validatorFn(fieldValue, values);
+      const result = (validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>)(fieldValue, values);
 
       if (result instanceof Promise) {
         if (!fieldValidationSeqRef.current[field]) {

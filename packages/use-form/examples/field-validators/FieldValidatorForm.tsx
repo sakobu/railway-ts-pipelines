@@ -29,7 +29,7 @@ export default function FieldValidatorForm() {
     // Per-field async validators — run after schema validation passes for that field
     fieldValidators: {
       username: async (value) => {
-        const available = await checkUsernameAvailable(value as string);
+        const available = await checkUsernameAvailable(value);
         return available ? undefined : 'Username is already taken';
       },
     },

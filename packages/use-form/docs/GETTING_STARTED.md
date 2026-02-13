@@ -98,7 +98,7 @@ function LoginForm() {
         )}
       </div>
 
-      <button type="submit" disabled={form.isSubmitting || !form.isValid}>
+      <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Logging in...' : 'Log In'}
       </button>
     </form>

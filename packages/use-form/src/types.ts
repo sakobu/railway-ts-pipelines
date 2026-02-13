@@ -197,15 +197,12 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    * A field validator only runs when the schema produces no error for that field.
    * Return undefined for valid, or an error message string for invalid.
    */
-  fieldValidators?: Partial<
-    Record<
-      ExtractFieldPaths<TValues>,
-      (
-        value: unknown,
-        values: TValues
-      ) => string | undefined | Promise<string | undefined>
-    >
-  >;
+  fieldValidators?: {
+    [K in ExtractFieldPaths<TValues>]?: (
+      value: FieldTypeAtPath<TValues, K>,
+      values: TValues
+    ) => string | undefined | Promise<string | undefined>;
+  };
 }
 
 // =============================================================================
@@ -502,6 +499,28 @@ export type NativeCheckboxGroupOptionProps = {
  * type Form = { payment: Payment };
  * type Paths = ExtractFieldPaths<Form>; // "payment" | "payment.type" | "payment.cardNumber" | "payment.email"
  */
+/**
+ * Resolves the type at a dot-separated field path within a type.
+ * Companion to ExtractFieldPaths — while ExtractFieldPaths extracts all valid paths,
+ * FieldTypeAtPath resolves the value type at a given path.
+ *
+ * @template T - The root type to traverse
+ * @template P - A dot-separated path string
+ *
+ * @example
+ * type User = { name: string; address: { city: string; zip: number } };
+ * type City = FieldTypeAtPath<User, "address.city">; // string
+ * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
+ */
+export type FieldTypeAtPath<T, P extends string> =
+  P extends `${infer K}.${infer Rest}`
+    ? K extends keyof T
+      ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
+      : unknown
+    : P extends keyof T
+      ? T[P]
+      : unknown;
+
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
   ? never
   : T extends object

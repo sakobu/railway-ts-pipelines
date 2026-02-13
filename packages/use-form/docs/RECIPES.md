@@ -112,7 +112,7 @@ function CreateUserForm() {
         <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>
       )}
 
-      <button type="submit" disabled={form.isSubmitting || !form.isValid}>
+      <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Saving...' : 'Create User'}
       </button>
 
@@ -1007,7 +1007,7 @@ function RegistrationForm() {
     },
     fieldValidators: {
       username: async (value) => {
-        const available = await checkUsernameAvailable(value as string);
+        const available = await checkUsernameAvailable(value);
         return available ? undefined : 'Username is already taken';
       },
     },
@@ -1029,7 +1029,7 @@ function RegistrationForm() {
 
       <button
         type="submit"
-        disabled={form.isSubmitting || form.isValidating || !form.isValid}
+        disabled={form.isSubmitting || form.isValidating}
       >
         Register
       </button>
@@ -1048,7 +1048,7 @@ function RegistrationForm() {
 | **Race conditions** | Handled per-field (latest wins)    | Handled per-form (latest wins) |
 | **Best for**        | Server lookups (username, email)   | Cross-field async checks       |
 
-Field validators return `undefined` for valid, or an error message string for invalid. They receive the field value and the full form values object: `(value, values) => string | undefined | Promise<string | undefined>`.
+Field validators return `undefined` for valid, or an error message string for invalid. They receive the typed field value and the full form values object: `(value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>` — no cast needed.
 
 ---
 
@@ -1664,9 +1664,8 @@ export function RegistrationForm() {
     initialValues: { username: '', email: '', password: '', confirmPassword: '' },
     fieldValidators: {
       username: async (value) => {
-        const username = value as string;
-        if (username.length < 3) return undefined;
-        const result = await checkUsername(username);
+        if (value.length < 3) return undefined;
+        const result = await checkUsername(value);
         return match(result, {
           ok: ({ available }) => available ? undefined : 'Username is already taken',
           err: () => 'Unable to check username availability',
@@ -1703,7 +1702,7 @@ export function RegistrationForm() {
         <span>{form.errors[ROOT_ERROR_KEY]}</span>
       )}
 
-      <button type="submit" disabled={form.isSubmitting || form.isValidating || !form.isValid}>
+      <button type="submit" disabled={form.isSubmitting || form.isValidating}>
         {form.isSubmitting ? 'Registering...' : 'Create Account'}
       </button>
     </form>
@@ -1796,13 +1795,12 @@ export function RegistrationForm() {
     initialValues: { username: '', email: '', password: '', confirmPassword: '' },
     fieldValidators: {
       username: async (value) => {
-        const username = value as string;
-        if (username.length < 3) return undefined;
+        if (value.length < 3) return undefined;
 
         try {
           const { available } = await queryClient.fetchQuery({
-            queryKey: ['check-username', username],
-            queryFn: () => checkUsername(username),
+            queryKey: ['check-username', value],
+            queryFn: () => checkUsername(value),
             staleTime: 30_000,
           });
           return available ? undefined : 'Username is already taken';
@@ -1835,7 +1833,7 @@ export function RegistrationForm() {
         <span>{form.errors[ROOT_ERROR_KEY]}</span>
       )}
 
-      <button type="submit" disabled={mutation.isPending || form.isValidating || !form.isValid}>
+      <button type="submit" disabled={mutation.isPending || form.isValidating}>
         {mutation.isPending ? 'Registering...' : 'Create Account'}
       </button>
     </form>
