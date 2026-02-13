@@ -512,14 +512,16 @@ export type NativeCheckboxGroupOptionProps = {
  * type City = FieldTypeAtPath<User, "address.city">; // string
  * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
  */
-export type FieldTypeAtPath<T, P extends string> =
-  P extends `${infer K}.${infer Rest}`
-    ? K extends keyof T
-      ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
-      : unknown
-    : P extends keyof T
-      ? T[P]
-      : unknown;
+export type FieldTypeAtPath<
+  T,
+  P extends string,
+> = P extends `${infer K}.${infer Rest}`
+  ? K extends keyof T
+    ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
+    : unknown
+  : P extends keyof T
+    ? T[P]
+    : unknown;
 
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
   ? never

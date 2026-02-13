@@ -361,7 +361,12 @@ export const useForm = <TValues extends Record<string, unknown>>(
       dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
 
       const fieldValue = getValueByPath(values, field);
-      const result = (validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>)(fieldValue, values);
+      const result = (
+        validatorFn as (
+          value: unknown,
+          values: TValues
+        ) => string | undefined | Promise<string | undefined>
+      )(fieldValue, values);
 
       if (result instanceof Promise) {
         if (!fieldValidationSeqRef.current[field]) {
@@ -755,9 +760,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         const { values, clientErrors, serverErrors } = formStateRef.current;
 
         // Mark all fields and error paths as touched (deep)
-        const valuePaths = collectFieldPaths(
-          values as Record<string, unknown>
-        );
+        const valuePaths = collectFieldPaths(values as Record<string, unknown>);
         const allPaths = Array.from(
           new Set([
             ...valuePaths,

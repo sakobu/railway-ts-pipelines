@@ -580,11 +580,19 @@ const registrationSchema = chain(
     startDate: required(string()),
     endDate: required(string()),
   }),
-  refineAt('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
-  refineAt('endDate', (data) => {
-    if (!data.startDate || !data.endDate) return true;
-    return new Date(data.endDate) > new Date(data.startDate);
-  }, 'End date must be after start date'),
+  refineAt(
+    'confirmPassword',
+    (data) => data.password === data.confirmPassword,
+    'Passwords must match'
+  ),
+  refineAt(
+    'endDate',
+    (data) => {
+      if (!data.startDate || !data.endDate) return true;
+      return new Date(data.endDate) > new Date(data.startDate);
+    },
+    'End date must be after start date'
+  )
 );
 
 type RegistrationData = InferSchemaType<typeof registrationSchema>;
@@ -607,8 +615,16 @@ const accountSchema = chain(
     companyName: optional(string()),
     taxId: optional(string()),
   }),
-  refineAt('companyName', (data) => data.accountType === 'personal' || !!data.companyName, 'Company name is required for business accounts'),
-  refineAt('taxId', (data) => data.accountType === 'personal' || !!data.taxId, 'Tax ID is required for business accounts'),
+  refineAt(
+    'companyName',
+    (data) => data.accountType === 'personal' || !!data.companyName,
+    'Company name is required for business accounts'
+  ),
+  refineAt(
+    'taxId',
+    (data) => data.accountType === 'personal' || !!data.taxId,
+    'Tax ID is required for business accounts'
+  )
 );
 
 type AccountData = InferSchemaType<typeof accountSchema>;
@@ -1027,10 +1043,7 @@ function RegistrationForm() {
 
       {/* ... other fields ... */}
 
-      <button
-        type="submit"
-        disabled={form.isSubmitting || form.isValidating}
-      >
+      <button type="submit" disabled={form.isSubmitting || form.isValidating}>
         Register
       </button>
     </form>
@@ -1611,10 +1624,23 @@ This recipe combines everything: schema validation, per-field async validators, 
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
-import { ok, err, match, fromPromise, type Result } from '@railway-ts/pipelines/result';
 import {
-  object, string, required, chain, refineAt,
-  nonEmpty, email, minLength, ROOT_ERROR_KEY,
+  ok,
+  err,
+  match,
+  fromPromise,
+  type Result,
+} from '@railway-ts/pipelines/result';
+import {
+  object,
+  string,
+  required,
+  chain,
+  refineAt,
+  nonEmpty,
+  email,
+  minLength,
+  ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -1623,11 +1649,15 @@ import {
 const schema = chain(
   object({
     username: required(chain(string(), nonEmpty(), minLength(3))),
-    email:    required(chain(string(), nonEmpty(), email())),
+    email: required(chain(string(), nonEmpty(), email())),
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
+  refineAt(
+    'confirmPassword',
+    (d) => d.password === d.confirmPassword,
+    'Passwords must match'
+  )
 );
 
 type Registration = InferSchemaType<typeof schema>;
@@ -1636,23 +1666,27 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string) =>
   fromPromise<{ available: boolean }>(
-    fetch(`/api/check-username?u=${encodeURIComponent(username)}`)
-      .then((res) => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)),
+    fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then(
+      (res) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
+    )
   );
 
-const registerUser = async (values: Registration): Promise<Result<void, Record<string, string>>> => {
+const registerUser = async (
+  values: Registration
+): Promise<Result<void, Record<string, string>>> => {
   const result = await fromPromise(
     fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
-    }),
+    })
   );
 
-  if (!result.ok) return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
+  if (!result.ok)
+    return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
 
   const res = result.value;
-  if (!res.ok) return err(await res.json() as Record<string, string>);
+  if (!res.ok) return err((await res.json()) as Record<string, string>);
 
   return ok(undefined);
 };
@@ -1661,13 +1695,19 @@ const registerUser = async (values: Registration): Promise<Result<void, Record<s
 
 export function RegistrationForm() {
   const form = useForm<Registration>(schema, {
-    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
+    initialValues: {
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
     fieldValidators: {
       username: async (value) => {
         if (value.length < 3) return undefined;
         const result = await checkUsername(value);
         return match(result, {
-          ok: ({ available }) => available ? undefined : 'Username is already taken',
+          ok: ({ available }) =>
+            available ? undefined : 'Username is already taken',
           err: () => 'Unable to check username availability',
         });
       },
@@ -1675,7 +1715,9 @@ export function RegistrationForm() {
     onSubmit: async (values) => {
       const result = await registerUser(values);
       match(result, {
-        ok: () => { window.location.href = '/welcome'; },
+        ok: () => {
+          window.location.href = '/welcome';
+        },
         err: (errors) => form.setServerErrors(errors),
       });
     },
@@ -1685,13 +1727,19 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && <span>{form.errors.username}</span>}
+      {form.touched.username && form.errors.username && (
+        <span>{form.errors.username}</span>
+      )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
+      {form.touched.email && form.errors.email && (
+        <span>{form.errors.email}</span>
+      )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && <span>{form.errors.password}</span>}
+      {form.touched.password && form.errors.password && (
+        <span>{form.errors.password}</span>
+      )}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
       {form.touched.confirmPassword && form.errors.confirmPassword && (
@@ -1730,8 +1778,15 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object, string, required, chain, refineAt,
-  nonEmpty, email, minLength, ROOT_ERROR_KEY,
+  object,
+  string,
+  required,
+  chain,
+  refineAt,
+  nonEmpty,
+  email,
+  minLength,
+  ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -1740,11 +1795,15 @@ import {
 const schema = chain(
   object({
     username: required(chain(string(), nonEmpty(), minLength(3))),
-    email:    required(chain(string(), nonEmpty(), email())),
+    email: required(chain(string(), nonEmpty(), email())),
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
+  refineAt(
+    'confirmPassword',
+    (d) => d.password === d.confirmPassword,
+    'Passwords must match'
+  )
 );
 
 type Registration = InferSchemaType<typeof schema>;
@@ -1752,8 +1811,9 @@ type Registration = InferSchemaType<typeof schema>;
 // --- API layer ---
 
 const checkUsername = (username: string): Promise<{ available: boolean }> =>
-  fetch(`/api/check-username?u=${encodeURIComponent(username)}`)
-    .then((res) => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
+  fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
+    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)
+  );
 
 class ApiValidationError extends Error {
   constructor(public fieldErrors: Record<string, string>) {
@@ -1792,7 +1852,12 @@ export function RegistrationForm() {
   });
 
   const form = useForm<Registration>(schema, {
-    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
+    initialValues: {
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
     fieldValidators: {
       username: async (value) => {
         if (value.length < 3) return undefined;
@@ -1816,13 +1881,19 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && <span>{form.errors.username}</span>}
+      {form.touched.username && form.errors.username && (
+        <span>{form.errors.username}</span>
+      )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
+      {form.touched.email && form.errors.email && (
+        <span>{form.errors.email}</span>
+      )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && <span>{form.errors.password}</span>}
+      {form.touched.password && form.errors.password && (
+        <span>{form.errors.password}</span>
+      )}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
       {form.touched.confirmPassword && form.errors.confirmPassword && (
