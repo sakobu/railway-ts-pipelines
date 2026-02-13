@@ -92,15 +92,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from '@railway-ts/use-form';
 import {
-  object,
-  string,
-  required,
-  chain,
-  refineAt,
-  nonEmpty,
-  email,
-  minLength,
-  ROOT_ERROR_KEY,
+  object, string, required, chain, refineAt,
+  nonEmpty, email, minLength, ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
@@ -109,34 +102,23 @@ import {
 const schema = chain(
   object({
     username: required(chain(string(), nonEmpty(), minLength(3))),
-    email: required(chain(string(), nonEmpty(), email())),
+    email:    required(chain(string(), nonEmpty(), email())),
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt(
-    'confirmPassword',
-    (d) => d.password === d.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
 type Registration = InferSchemaType<typeof schema>;
 
 // --- API layer ---
 
-type UsernameCheck = { available: boolean };
-type ServerErrors = Record<string, string>;
-
-const toJsonIfOk = (res: Response) =>
-  res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`);
-
-const checkUsername = (username: string): Promise<UsernameCheck> =>
-  fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then(
-    toJsonIfOk
-  );
+const checkUsername = (username: string): Promise<{ available: boolean }> =>
+  fetch(`/api/check-username?u=${encodeURIComponent(username)}`)
+    .then((res) => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
 
 class ApiValidationError extends Error {
-  constructor(public fieldErrors: ServerErrors) {
+  constructor(public fieldErrors: Record<string, string>) {
     super('Validation failed');
   }
 }
@@ -172,12 +154,7 @@ export function RegistrationForm() {
   });
 
   const form = useForm<Registration>(schema, {
-    initialValues: {
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    },
+    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
     fieldValidators: {
       username: async (value) => {
         const username = value as string;
@@ -202,19 +179,13 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
-      )}
+      {form.touched.username && form.errors.username && <span>{form.errors.username}</span>}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
-      )}
+      {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
-      )}
+      {form.touched.password && form.errors.password && <span>{form.errors.password}</span>}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
       {form.touched.confirmPassword && form.errors.confirmPassword && (
@@ -225,10 +196,7 @@ export function RegistrationForm() {
         <span>{form.errors[ROOT_ERROR_KEY]}</span>
       )}
 
-      <button
-        type="submit"
-        disabled={mutation.isPending || form.isValidating || !form.isValid}
-      >
+      <button type="submit" disabled={mutation.isPending || form.isValidating || !form.isValid}>
         {mutation.isPending ? 'Registering...' : 'Create Account'}
       </button>
     </form>
