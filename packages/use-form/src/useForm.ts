@@ -754,11 +754,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       const validationResult = await validate(values, validator);
 
       // Handle result using Railway pattern
-      return match<
-        TValues,
-        ValidationError[],
-        Promise<Result<TValues, ValidationError[]>>
-      >(validationResult, {
+      return match(validationResult, {
         ok: async (validData) => {
           // Run all field validators in parallel before calling onSubmit
           if (fieldValidators) {
