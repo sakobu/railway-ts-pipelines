@@ -15,16 +15,22 @@ Patterns and techniques. Each recipe is self-contained.
 7. [Multi-Step Wizard](#multi-step-wizard)
 8. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
 9. [Conditional Validation](#conditional-validation)
-10. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
-11. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
-12. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
-13. [Custom Field Components](#custom-field-components)
-14. [Performance Patterns](#performance-patterns)
-15. [UI Library Integration](#ui-library-integration)
-16. [Testing Forms](#testing-forms)
-17. [Form State Persistence](#form-state-persistence)
-18. [Unsaved Changes Warning](#unsaved-changes-warning)
-19. [Capstone: Full Registration Form](#capstone-full-registration-form)
+10. [Discriminated Unions](#discriminated-unions)
+11. [Custom Validators](#custom-validators)
+12. [Programmatic Field Updates](#programmatic-field-updates)
+13. [submitCount Patterns](#submitcount-patterns)
+14. [Understanding Error Priority](#understanding-error-priority)
+15. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
+16. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
+17. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
+18. [Custom Field Components](#custom-field-components)
+19. [Performance Patterns](#performance-patterns)
+20. [UI Library Integration](#ui-library-integration)
+21. [Testing Forms](#testing-forms)
+22. [Form State Persistence](#form-state-persistence)
+23. [Unsaved Changes Warning](#unsaved-changes-warning)
+24. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
+25. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
 
 ---
 
@@ -562,13 +568,6 @@ import {
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
-type RegistrationData = {
-  password: string;
-  confirmPassword: string;
-  startDate: string;
-  endDate: string;
-};
-
 const registrationSchema = chain(
   object({
     password: required(chain(string(), minLength(8))),
@@ -576,22 +575,14 @@ const registrationSchema = chain(
     startDate: required(string()),
     endDate: required(string()),
   }),
-  // Error appears on the confirmPassword field
-  refineAt<RegistrationData>(
-    'confirmPassword',
-    (data) => data.password === data.confirmPassword,
-    'Passwords must match'
-  ),
-  // Error appears on the endDate field
-  refineAt<RegistrationData>(
-    'endDate',
-    (data) => {
-      if (!data.startDate || !data.endDate) return true;
-      return new Date(data.endDate) > new Date(data.startDate);
-    },
-    'End date must be after start date'
-  )
+  refineAt('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
+  refineAt('endDate', (data) => {
+    if (!data.startDate || !data.endDate) return true;
+    return new Date(data.endDate) > new Date(data.startDate);
+  }, 'End date must be after start date'),
 );
+
+type RegistrationData = InferSchemaType<typeof registrationSchema>;
 ```
 
 The key insight: `chain` at the **object level** (not the field level) gives `refineAt` access to all fields. The first argument to `refineAt` is the field path where the error should appear.
@@ -605,34 +596,20 @@ The key insight: `chain` at the **object level** (not the field level) gives `re
 **Solution:** Same technique as cross-field validation. Use `refineAt` to conditionally require fields.
 
 ```tsx
-type AccountData = {
-  accountType: 'personal' | 'business';
-  companyName?: string;
-  taxId?: string;
-};
-
 const accountSchema = chain(
   object({
     accountType: required(stringEnum(['personal', 'business'])),
     companyName: optional(string()),
     taxId: optional(string()),
   }),
-  refineAt<AccountData>(
-    'companyName',
-    (data) => data.accountType === 'personal' || !!data.companyName,
-    'Company name is required for business accounts'
-  ),
-  refineAt<AccountData>(
-    'taxId',
-    (data) => data.accountType === 'personal' || !!data.taxId,
-    'Tax ID is required for business accounts'
-  )
+  refineAt('companyName', (data) => data.accountType === 'personal' || !!data.companyName, 'Company name is required for business accounts'),
+  refineAt('taxId', (data) => data.accountType === 'personal' || !!data.taxId, 'Tax ID is required for business accounts'),
 );
 
-type Account = InferSchemaType<typeof accountSchema>;
+type AccountData = InferSchemaType<typeof accountSchema>;
 
 function AccountForm() {
-  const form = useForm<Account>(accountSchema, {
+  const form = useForm<AccountData>(accountSchema, {
     initialValues: { accountType: 'personal', companyName: '', taxId: '' },
   });
 
@@ -667,6 +644,233 @@ function AccountForm() {
   );
 }
 ```
+
+---
+
+## Discriminated Unions
+
+**Problem:** Your form's shape changes based on a discriminator field -- payment method, account type, entity kind.
+
+**Solution:** Use `discriminatedUnion` from `@railway-ts/pipelines/schema`. Field path autocomplete includes paths from **all variants**, so `getFieldProps` works regardless of which variant is active.
+
+```typescript
+import { discriminatedUnion, literal } from '@railway-ts/pipelines/schema';
+
+const paymentSchema = discriminatedUnion('method', {
+  card: object({
+    method: literal('card'),
+    cardNumber: required(chain(string(), nonEmpty())),
+    expiryDate: required(string()),
+    cvv: required(string()),
+  }),
+  paypal: object({
+    method: literal('paypal'),
+    email: required(email()),
+  }),
+  bank: object({
+    method: literal('bank'),
+    accountNumber: required(string()),
+    routingNumber: required(string()),
+  }),
+});
+
+type Payment = InferSchemaType<typeof paymentSchema>;
+```
+
+```tsx
+function PaymentForm() {
+  const form = useForm<Payment>(paymentSchema, {
+    initialValues: { method: 'card', cardNumber: '', expiryDate: '', cvv: '' },
+  });
+
+  const method = form.values.method;
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <select {...form.getSelectFieldProps('method')}>
+        <option value="card">Credit Card</option>
+        <option value="paypal">PayPal</option>
+        <option value="bank">Bank Transfer</option>
+      </select>
+
+      {method === 'card' && (
+        <>
+          <input
+            {...form.getFieldProps('cardNumber')}
+            placeholder="Card Number"
+          />
+          <input {...form.getFieldProps('expiryDate')} placeholder="MM/YY" />
+          <input {...form.getFieldProps('cvv')} placeholder="CVV" />
+        </>
+      )}
+
+      {method === 'paypal' && (
+        <input {...form.getFieldProps('email')} placeholder="PayPal Email" />
+      )}
+
+      {method === 'bank' && (
+        <>
+          <input
+            {...form.getFieldProps('accountNumber')}
+            placeholder="Account Number"
+          />
+          <input
+            {...form.getFieldProps('routingNumber')}
+            placeholder="Routing Number"
+          />
+        </>
+      )}
+
+      <button type="submit">Pay</button>
+    </form>
+  );
+}
+```
+
+`ExtractFieldPaths<Payment>` includes paths from all variants -- `'method' | 'cardNumber' | 'expiryDate' | 'cvv' | 'email' | 'accountNumber' | 'routingNumber'`.
+
+---
+
+## Custom Validators
+
+**Problem:** You need reusable validation functions beyond what's built in -- strong passwords, phone numbers, credit card numbers.
+
+**Solution:** Create validators with `refine`. Use `path: ''` so the error attaches to the field being validated (the library maps it to the correct path automatically).
+
+```typescript
+import { refine } from '@railway-ts/pipelines/schema';
+import { ok, err } from '@railway-ts/pipelines/result';
+
+const strongPassword = (message = 'Password is too weak') =>
+  refine<string>((value: unknown) => {
+    if (!value || typeof value !== 'string') return ok(value as string);
+
+    const hasUpper = /[A-Z]/.test(value);
+    const hasLower = /[a-z]/.test(value);
+    const hasNumber = /[0-9]/.test(value);
+    const hasSpecial = /[!@#$%^&*]/.test(value);
+    const isLongEnough = value.length >= 8;
+
+    if (hasUpper && hasLower && hasNumber && hasSpecial && isLongEnough) {
+      return ok(value);
+    }
+    return err([{ path: '', message }]);
+  });
+
+const phoneNumber = (message = 'Invalid phone number') =>
+  refine<string>((value: unknown) => {
+    if (!value || typeof value !== 'string') return ok(value as string);
+    const cleaned = value.replace(/\D/g, '');
+    return cleaned.length === 10 ? ok(value) : err([{ path: '', message }]);
+  });
+
+const creditCard = (message = 'Invalid credit card') =>
+  refine<string>((value: unknown) => {
+    if (!value || typeof value !== 'string') return ok(value as string);
+    const cleaned = value.replace(/\s/g, '');
+    if (!/^\d{13,19}$/.test(cleaned)) return err([{ path: '', message }]);
+
+    // Luhn algorithm
+    let sum = 0;
+    let isEven = false;
+    for (let i = cleaned.length - 1; i >= 0; i--) {
+      let digit = parseInt(cleaned[i]);
+      if (isEven) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      isEven = !isEven;
+    }
+    return sum % 10 === 0 ? ok(value) : err([{ path: '', message }]);
+  });
+
+// Use in schemas
+const schema = object({
+  password: required(chain(string(), strongPassword())),
+  phone: optional(chain(string(), phoneNumber())),
+  card: optional(chain(string(), creditCard())),
+});
+```
+
+The `path: ''` convention means "this field" -- the library resolves it to whatever field path this validator is nested under. See the [API Reference](./API.md#validation-paths) for the full explanation of `path: ''` vs `refineAt`.
+
+---
+
+## Programmatic Field Updates
+
+**Problem:** You need to update computed fields (totals, derived values) without triggering validation.
+
+**Solution:** Pass `false` as the third argument to `setFieldValue` to skip validation.
+
+```typescript
+function CalculatorForm() {
+  const form = useForm(calculatorSchema, {
+    initialValues: { quantity: 0, price: 0, total: 0 },
+  });
+
+  useEffect(() => {
+    const total = (form.values.quantity || 0) * (form.values.price || 0);
+    form.setFieldValue('total', total, false); // false = skip validation
+  }, [form.values.quantity, form.values.price]);
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <input type="number" {...form.getFieldProps('quantity')} />
+      <input type="number" {...form.getFieldProps('price')} />
+      <input type="number" {...form.getFieldProps('total')} readOnly />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+---
+
+## submitCount Patterns
+
+**Problem:** In `submit` validation mode, the submit button starts disabled even though the user hasn't tried submitting yet.
+
+**Solution:** Use `submitCount` to distinguish "hasn't submitted yet" from "submitted with errors." Before the first submit, keep the button enabled; after a failed submit, disable until errors are fixed.
+
+```tsx
+const form = useForm(schema, {
+  initialValues: {
+    /* ... */
+  },
+  validationMode: 'submit',
+});
+
+// Before first submit: button is enabled (haven't validated yet)
+// After failed submit: button is disabled until errors are fixed
+<button type="submit" disabled={form.submitCount > 0 && !form.isValid}>
+  Submit
+</button>;
+```
+
+---
+
+## Understanding Error Priority
+
+**Problem:** You're seeing unexpected error messages and need to understand which error layer takes precedence.
+
+**Solution:** The `errors` object is a merged view of three separate layers. When multiple layers have an error for the same field, higher-priority layers win:
+
+| Priority    | Source            | Property       | Populated when                                                                 |
+| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
+
+**When each layer gets cleared:**
+
+- `clientErrors` -- replaced on every schema validation run
+- `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field; bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+
+A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
+
+For the full technical details, see the [API Reference: Error Priority](./API.md#error-priority).
 
 ---
 
@@ -1396,165 +1600,105 @@ For React Router or Next.js navigation, you'll also need to hook into the router
 
 ---
 
-## Capstone: Full Registration Form
+## Capstone: Full Registration Form (Result Pattern)
 
 This recipe combines everything: schema validation, per-field async validators, server errors, cross-field validation (password confirmation), and Result pattern-matching on submit.
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
-import { match } from '@railway-ts/pipelines/result';
+import { ok, err, match, fromPromise, type Result } from '@railway-ts/pipelines/result';
 import {
-  object,
-  string,
-  required,
-  chain,
-  refineAt,
-  nonEmpty,
-  email,
-  minLength,
-  ROOT_ERROR_KEY,
+  object, string, required, chain, refineAt,
+  nonEmpty, email, minLength, ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
 
-// --- Schema with cross-field validation ---
+// --- Schema ---
 
-type RegistrationData = {
-  username: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-};
-
-const registrationSchema = chain(
+const schema = chain(
   object({
-    username: required(
-      chain(string(), nonEmpty('Username is required'), minLength(3))
-    ),
-    email: required(chain(string(), nonEmpty('Email is required'), email())),
-    password: required(
-      chain(string(), nonEmpty('Password is required'), minLength(8))
-    ),
-    confirmPassword: required(
-      chain(string(), nonEmpty('Please confirm your password'))
-    ),
+    username: required(chain(string(), nonEmpty(), minLength(3))),
+    email:    required(chain(string(), nonEmpty(), email())),
+    password: required(chain(string(), nonEmpty(), minLength(8))),
+    confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt<RegistrationData>(
-    'confirmPassword',
-    (data) => data.password === data.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
-type Registration = InferSchemaType<typeof registrationSchema>;
+type Registration = InferSchemaType<typeof schema>;
 
-// --- Async availability check ---
+// --- API layer ---
 
-const checkUsernameAvailable = async (username: string): Promise<boolean> => {
-  const res = await fetch(
-    `/api/check-username?u=${encodeURIComponent(username)}`
+const checkUsername = (username: string) =>
+  fromPromise<{ available: boolean }>(
+    fetch(`/api/check-username?u=${encodeURIComponent(username)}`)
+      .then((res) => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)),
   );
-  const data = await res.json();
-  return data.available;
+
+const registerUser = async (values: Registration): Promise<Result<void, Record<string, string>>> => {
+  const result = await fromPromise(
+    fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(values),
+    }),
+  );
+
+  if (!result.ok) return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
+
+  const res = result.value;
+  if (!res.ok) return err(await res.json() as Record<string, string>);
+
+  return ok(undefined);
 };
 
 // --- Component ---
 
 export function RegistrationForm() {
-  const form = useForm<Registration>(registrationSchema, {
-    initialValues: {
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    },
+  const form = useForm<Registration>(schema, {
+    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
     fieldValidators: {
       username: async (value) => {
         const username = value as string;
-        if (username.length < 3) return undefined; // Let schema handle this
-        const available = await checkUsernameAvailable(username);
-        return available ? undefined : 'Username is already taken';
+        if (username.length < 3) return undefined;
+        const result = await checkUsername(username);
+        return match(result, {
+          ok: ({ available }) => available ? undefined : 'Username is already taken',
+          err: () => 'Unable to check username availability',
+        });
       },
+    },
+    onSubmit: async (values) => {
+      const result = await registerUser(values);
+      match(result, {
+        ok: () => { window.location.href = '/welcome'; },
+        err: (errors) => form.setServerErrors(errors),
+      });
     },
   });
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const result = await form.handleSubmit();
-
-    await match(result, {
-      ok: async (values) => {
-        // Submit to server
-        const response = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
-        });
-
-        if (!response.ok) {
-          const errors = await response.json();
-          form.setServerErrors(errors);
-          return;
-        }
-
-        window.location.href = '/welcome';
-      },
-      err: (errors) => {
-        console.error('Validation failed:', errors);
-      },
-    });
-  };
-
   return (
-    <form onSubmit={(e) => void handleRegister(e)}>
-      {/* Username with async validation indicator */}
-      <div>
-        <label htmlFor="field-username">Username</label>
-        <input {...form.getFieldProps('username')} />
-        {form.validatingFields.username && (
-          <span className="validating">Checking availability...</span>
-        )}
-        {form.touched.username && form.errors.username && (
-          <span className="error">{form.errors.username}</span>
-        )}
-      </div>
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <input {...form.getFieldProps('username')} />
+      {form.validatingFields.username && <span>Checking...</span>}
+      {form.touched.username && form.errors.username && <span>{form.errors.username}</span>}
 
-      {/* Email */}
-      <div>
-        <label htmlFor="field-email">Email</label>
-        <input type="email" {...form.getFieldProps('email')} />
-        {form.touched.email && form.errors.email && (
-          <span className="error">{form.errors.email}</span>
-        )}
-      </div>
+      <input type="email" {...form.getFieldProps('email')} />
+      {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
 
-      {/* Password */}
-      <div>
-        <label htmlFor="field-password">Password</label>
-        <input type="password" {...form.getFieldProps('password')} />
-        {form.touched.password && form.errors.password && (
-          <span className="error">{form.errors.password}</span>
-        )}
-      </div>
+      <input type="password" {...form.getFieldProps('password')} />
+      {form.touched.password && form.errors.password && <span>{form.errors.password}</span>}
 
-      {/* Confirm Password (cross-field validation) */}
-      <div>
-        <label htmlFor="field-confirmPassword">Confirm Password</label>
-        <input type="password" {...form.getFieldProps('confirmPassword')} />
-        {form.touched.confirmPassword && form.errors.confirmPassword && (
-          <span className="error">{form.errors.confirmPassword}</span>
-        )}
-      </div>
-
-      {/* Form-level errors */}
-      {form.errors[ROOT_ERROR_KEY] && (
-        <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>
+      <input type="password" {...form.getFieldProps('confirmPassword')} />
+      {form.touched.confirmPassword && form.errors.confirmPassword && (
+        <span>{form.errors.confirmPassword}</span>
       )}
 
-      <button
-        type="submit"
-        disabled={form.isSubmitting || form.isValidating || !form.isValid}
-      >
+      {form.errors[ROOT_ERROR_KEY] && (
+        <span>{form.errors[ROOT_ERROR_KEY]}</span>
+      )}
+
+      <button type="submit" disabled={form.isSubmitting || form.isValidating || !form.isValid}>
         {form.isSubmitting ? 'Registering...' : 'Create Account'}
       </button>
     </form>
@@ -1568,5 +1712,143 @@ This form demonstrates:
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `fieldValidators` for username availability with `validatingFields` loading state
 - **Server errors** -- `setServerErrors` from API response, auto-clear on edit
-- **Result pattern-matching** -- `match` on `handleSubmit` return value
-- **React 19 compatibility** -- `(e) => void handleRegister(e)` pattern
+- **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching
+- **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
+
+---
+
+## Capstone: Full Registration Form (React Query)
+
+The same registration form using React Query for server state and React Router for navigation -- no Result types, just idiomatic React patterns.
+
+```tsx
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from '@railway-ts/use-form';
+import {
+  object, string, required, chain, refineAt,
+  nonEmpty, email, minLength, ROOT_ERROR_KEY,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
+
+// --- Schema ---
+
+const schema = chain(
+  object({
+    username: required(chain(string(), nonEmpty(), minLength(3))),
+    email:    required(chain(string(), nonEmpty(), email())),
+    password: required(chain(string(), nonEmpty(), minLength(8))),
+    confirmPassword: required(chain(string(), nonEmpty())),
+  }),
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
+);
+
+type Registration = InferSchemaType<typeof schema>;
+
+// --- API layer ---
+
+const checkUsername = (username: string): Promise<{ available: boolean }> =>
+  fetch(`/api/check-username?u=${encodeURIComponent(username)}`)
+    .then((res) => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`));
+
+class ApiValidationError extends Error {
+  constructor(public fieldErrors: Record<string, string>) {
+    super('Validation failed');
+  }
+}
+
+const registerUser = async (values: Registration): Promise<void> => {
+  const res = await fetch('/api/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  });
+
+  if (!res.ok) throw new ApiValidationError(await res.json());
+};
+
+// --- Component ---
+
+export function RegistrationForm() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: () => navigate('/welcome'),
+    onError: (error) => {
+      if (error instanceof ApiValidationError) {
+        form.setServerErrors(error.fieldErrors);
+      } else {
+        form.setServerErrors({
+          [ROOT_ERROR_KEY]: 'Network error. Please try again.',
+        });
+      }
+    },
+  });
+
+  const form = useForm<Registration>(schema, {
+    initialValues: { username: '', email: '', password: '', confirmPassword: '' },
+    fieldValidators: {
+      username: async (value) => {
+        const username = value as string;
+        if (username.length < 3) return undefined;
+
+        try {
+          const { available } = await queryClient.fetchQuery({
+            queryKey: ['check-username', username],
+            queryFn: () => checkUsername(username),
+            staleTime: 30_000,
+          });
+          return available ? undefined : 'Username is already taken';
+        } catch {
+          return 'Unable to check username availability';
+        }
+      },
+    },
+    onSubmit: (values) => mutation.mutate(values),
+  });
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <input {...form.getFieldProps('username')} />
+      {form.validatingFields.username && <span>Checking...</span>}
+      {form.touched.username && form.errors.username && <span>{form.errors.username}</span>}
+
+      <input type="email" {...form.getFieldProps('email')} />
+      {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
+
+      <input type="password" {...form.getFieldProps('password')} />
+      {form.touched.password && form.errors.password && <span>{form.errors.password}</span>}
+
+      <input type="password" {...form.getFieldProps('confirmPassword')} />
+      {form.touched.confirmPassword && form.errors.confirmPassword && (
+        <span>{form.errors.confirmPassword}</span>
+      )}
+
+      {form.errors[ROOT_ERROR_KEY] && (
+        <span>{form.errors[ROOT_ERROR_KEY]}</span>
+      )}
+
+      <button type="submit" disabled={mutation.isPending || form.isValidating || !form.isValid}>
+        {mutation.isPending ? 'Registering...' : 'Create Account'}
+      </button>
+    </form>
+  );
+}
+```
+
+This form demonstrates:
+
+- **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
+- **Cross-field validation** -- `refineAt` for password confirmation
+- **Per-field async validation** -- `queryClient.fetchQuery` with `staleTime` for caching username checks
+- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors`, auto-clear on edit
+- **React Query integration** -- `useMutation` for submit, `fetchQuery` for field validation
+- **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
+
+---
+
+## What's Next
+
+- **[API Reference](./API.md)** -- Complete API documentation

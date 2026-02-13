@@ -161,7 +161,7 @@ const signupSchema = object({
 
 If a user submits with an empty email and a 3-character password, they see both errors at once -- not one at a time. This is the "railway" approach: each field travels its own track, and errors accumulate across all fields rather than short-circuiting at the first failure.
 
-Under the hood, validators return a `Result` -- either `Ok` with the validated value, or `Err` with an array of errors. You don't need to work with `Result` directly for basic forms (the hook handles it), but it's there when you want more control. See [Pattern-Matching Submit Results](./docs/RECIPES.md#pattern-matching-submit-results) for an example.
+Under the hood, validators return a `Result` -- either `Ok` with the validated value, or `Err` with an array of errors. You don't need to work with `Result` directly for basic forms (the hook handles it), but it's there when you want more control. See [Pattern-Matching Submit Results](./RECIPES.md#pattern-matching-submit-results) for an example.
 
 > **Deep dive:** The [@railway-ts/pipelines Getting Started](https://github.com/sakobu/railway-ts-pipelines/blob/main/docs/GETTING_STARTED.md) explains `Result`, `chain`, `pipe`, and the full validation model.
 
@@ -265,7 +265,7 @@ Three things to know about server errors:
 2. **They win** -- if a field has both a client error and a server error, the server error is displayed (server > fieldValidator > client)
 3. **Form-level errors** -- use an empty string key `''` for errors not tied to a specific field
 
-`handleSubmit` also returns a `Result`, so you can pattern-match on the outcome instead of using `onSubmit`. See [Recipes](./docs/RECIPES.md#pattern-matching-submit-results) for that pattern.
+`handleSubmit` also returns a `Result`, so you can pattern-match on the outcome instead of using `onSubmit`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
 
 > **React 19 note:** React 19 form actions expect `onSubmit` to not return a Promise. Use `(e) => void form.handleSubmit(e)` to satisfy the type checker.
 
@@ -416,6 +416,5 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 
 You now know the core: schemas, field bindings, validation, submission, nesting, and arrays.
 
-- **[Recipes](./docs/RECIPES.md)** -- Patterns and techniques: Standard Schema (Zod/Valibot), per-field async validation, cross-field validation, UI library integration, multi-step wizards, and more
-- **[Advanced](./docs/ADVANCED.md)** -- Error priority, discriminated unions, custom validators, type extraction
-- **[API Reference](./docs/API.md)** -- Complete API documentation
+- **[Recipes](./RECIPES.md)** -- Patterns and techniques: Standard Schema (Zod/Valibot), per-field async validation, cross-field validation, UI library integration, multi-step wizards, and more
+- **[API Reference](./API.md)** -- Complete API documentation

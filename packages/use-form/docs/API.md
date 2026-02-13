@@ -263,6 +263,35 @@ but below server errors.
 form.fieldErrors.email; // "Email is already taken"
 ```
 
+### Error Priority
+
+The `errors` object is a merged view of three separate error layers. When multiple layers have an error for the same field, higher-priority layers win:
+
+| Priority    | Source            | Property       | Populated when                                                                 |
+| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
+
+The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
+
+```typescript
+// What useForm does internally:
+const errors = {
+  ...clientErrors, // Schema errors (base)
+  ...fieldErrors, // Field validator errors (override schema for same field)
+  ...serverErrors, // Server errors (highest priority)
+};
+```
+
+**When each layer gets cleared:**
+
+- `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
+- `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field; bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+
+A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
+
 ### submitCount
 
 Type: `number`
@@ -424,10 +453,7 @@ handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
 **Example:**
 
 ```typescript
-// Basic: use onSubmit callback
-<form onSubmit={(e) => void form.handleSubmit(e)}>{/* fields */}</form>
-
-// React 19: wrap in void to satisfy form action types
+// Use onSubmit callback (void discards the Promise for React 19 compatibility)
 <form onSubmit={(e) => void form.handleSubmit(e)}>{/* fields */}</form>
 
 // Advanced: pattern-match on the result
@@ -1129,16 +1155,15 @@ const validator = chain(
 
 ```typescript
 // Conditional required field
-type AccountData = {
-  accountType: 'personal' | 'business';
-  taxId?: string;
-};
+const baseSchema = object({
+  accountType: required(stringEnum(['personal', 'business'])),
+  taxId: optional(string()),
+});
+
+type AccountData = InferSchemaType<typeof baseSchema>;
 
 const accountValidator = chain(
-  object({
-    accountType: required(stringEnum(['personal', 'business'])),
-    taxId: optional(string()),
-  }),
+  baseSchema,
   refineAt<AccountData>(
     'taxId',
     (data) => data.accountType === 'personal' || !!data.taxId,
@@ -1164,13 +1189,44 @@ const bookingValidator = chain(
 );
 ```
 
-**See also:** [Recipes - Dependent Fields](../RECIPES.md#dependent-fields) for more examples
+**See also:** [Recipes - Dependent Fields](./RECIPES.md#dependent-fields--cross-field-validation) for more examples
+
+### Validation Paths
+
+There are two patterns for where validation errors land:
+
+**Single-field validation** -- validating the field's own value:
+
+- Use `path: ''` in the error object
+- The library attaches the error to whatever field path this validator is nested under
+- Example: `avatar: required(fileValidator)` where `fileValidator` returns `err([{ path: '', message: '...' }])`
+
+**Cross-field validation** -- validating based on other fields:
+
+- Use `chain` at the **object level** with `refineAt`
+- The first argument to `refineAt` is the field path where the error should appear
+- The predicate receives the entire parent object
+- Example: `refineAt('confirmPassword', (data) => data.password === data.confirmPassword, '...')`
+
+```typescript
+// Single-field: error lands on the field itself
+const strongPassword = refine<string>((value) => {
+  if (isStrong(value)) return ok(value);
+  return err([{ path: '', message: 'Too weak' }]); // path: '' = "this field"
+});
+
+// Cross-field: error lands on the specified target
+const schema = chain(
+  object({ password: required(string()), confirm: required(string()) }),
+  refineAt('confirm', (d) => d.password === d.confirm, 'Must match') // target = 'confirm'
+);
+```
 
 ## Type Utilities
 
 ### InferSchemaType
 
-Extract TypeScript type from validator schema.
+Extract TypeScript type from validator schema. Works with nested objects, arrays, and composed schemas.
 
 ```typescript
 import { type InferSchemaType } from '@railway-ts/pipelines/schema';
@@ -1184,21 +1240,43 @@ type Form = InferSchemaType<typeof validator>;
 // { name: string; age: number; }
 ```
 
-### ExtractFieldPaths
-
-Extract all valid field paths from a type.
+Compose with nested schemas:
 
 ```typescript
+const addressSchema = object({
+  city: required(string()),
+  zip: required(string()),
+});
+
+const userSchema = object({
+  name: required(string()),
+  addresses: array(addressSchema),
+  primaryContact: required(contactSchema),
+});
+
+type User = InferSchemaType<typeof userSchema>;
+type Address = InferSchemaType<typeof addressSchema>;
+type UserAddresses = User['addresses']; // Address[]
+```
+
+### ExtractFieldPaths
+
+Extract all valid dot-notation field paths from a type. Arrays and Dates are treated as terminal values -- `ExtractFieldPaths` returns `"tags"`, not `"tags[0]"`.
+
+```typescript
+import { type ExtractFieldPaths } from '@railway-ts/use-form';
+
 type User = {
   name: string;
   address: {
     city: string;
     zip: string;
   };
+  tags: string[];
 };
 
 type Paths = ExtractFieldPaths<User>;
-// "name" | "address" | "address.city" | "address.zip"
+// "name" | "address" | "address.city" | "address.zip" | "tags"
 ```
 
 ### FieldPath
