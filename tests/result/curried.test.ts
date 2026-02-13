@@ -82,7 +82,7 @@ describe('Result curried helpers', () => {
 
     test('passes through Err', () => {
       const positive = filterWith((x: number) => x > 0, 'not positive');
-      expect(positive(err('already bad'))).toEqual(err('not positive'));
+      expect(positive(err('already bad'))).toEqual(err('already bad'));
     });
   });
 

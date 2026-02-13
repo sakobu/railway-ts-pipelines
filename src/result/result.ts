@@ -201,7 +201,8 @@ export function bimap<T, E, U, F>(result: Result<T, E>, okFn: (value: T) => U, e
  * @returns The original Result if it contains a value that satisfies the predicate, otherwise an Error
  */
 export function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E> {
-  return result.ok && predicate(result.value) ? result : err(error);
+  if (!result.ok) return result;
+  return predicate(result.value) ? result : err(error);
 }
 
 // ─── Side Effects ───────────────────────────────────────────

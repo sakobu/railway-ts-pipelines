@@ -90,7 +90,7 @@ Transform both Ok and Err branches in one call.
 function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E>;
 ```
 
-Keep the Ok value if the predicate passes, otherwise return the provided error.
+Keep the Ok value if the predicate passes, otherwise return the provided error. Err passes through unchanged.
 
 ### Side Effects
 

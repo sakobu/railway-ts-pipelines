@@ -58,7 +58,7 @@ const isAdult = (result: Result<number, string>) => filter(result, (a) => a >= 1
 
 console.log('filter 25:', isAdult(age)); // { ok: true, value: 25 }
 console.log('filter 12:', isAdult(tooYoung)); // { ok: false, error: "must be 18 or older" }
-console.log('filter err:', isAdult(err('no age'))); // { ok: false, error: "must be 18 or older" }
+console.log('filter err:', isAdult(err('no age'))); // { ok: false, error: "no age" }
 
 // === tap: Side Effects on Ok ===
 console.log('\n=== tap: Side Effects on Ok ===');

@@ -342,7 +342,7 @@ describe('Result', () => {
 
       expect(isErr(filtered)).toBe(true);
       if (isErr(filtered)) {
-        expect(filtered.error).toBe('Value too small');
+        expect(filtered.error).toBe('original error');
       }
     });
   });
