@@ -32,7 +32,7 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.15.
+Requires React 18+ and @railway-ts/pipelines ^0.1.16.
 
 ## Quick Start
 
@@ -218,10 +218,7 @@ export function RegistrationForm() {
         <span>{form.errors[ROOT_ERROR_KEY]}</span>
       )}
 
-      <button
-        type="submit"
-        disabled={mutation.isPending || form.isValidating}
-      >
+      <button type="submit" disabled={mutation.isPending || form.isValidating}>
         {mutation.isPending ? 'Registering...' : 'Create Account'}
       </button>
     </form>
