@@ -72,10 +72,7 @@ export default function AsyncUserForm() {
 
       {/* Form Actions */}
       <div className="actions">
-        <button
-          type="submit"
-          disabled={form.isSubmitting || form.isValidating || !form.isValid}
-        >
+        <button type="submit" disabled={form.isSubmitting || form.isValidating}>
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 

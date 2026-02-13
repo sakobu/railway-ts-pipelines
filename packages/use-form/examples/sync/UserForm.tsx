@@ -184,7 +184,7 @@ export default function UserForm() {
 
       {/* Form Actions */}
       <div className="actions">
-        <button type="submit" disabled={form.isSubmitting || !form.isValid}>
+        <button type="submit" disabled={form.isSubmitting}>
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 
