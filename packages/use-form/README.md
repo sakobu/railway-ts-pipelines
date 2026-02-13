@@ -32,7 +32,7 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.12.
+Requires React 18+ and @railway-ts/pipelines ^0.1.13.
 
 ## Quick Start
 
@@ -109,11 +109,15 @@ import {
 const schema = chain(
   object({
     username: required(chain(string(), nonEmpty(), minLength(3))),
-    email:    required(chain(string(), nonEmpty(), email())),
+    email: required(chain(string(), nonEmpty(), email())),
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
+  refineAt(
+    'confirmPassword',
+    (d) => d.password === d.confirmPassword,
+    'Passwords must match'
+  )
 );
 
 type Registration = InferSchemaType<typeof schema>;

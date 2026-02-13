@@ -70,7 +70,7 @@
     }
   ],
   "peerDependencies": {
-    "@railway-ts/pipelines": "^0.1.12",
+    "@railway-ts/pipelines": "^0.1.13",
     "react": "^18.0.0 || ^19.0.0",
     "typescript": "^5"
   },
