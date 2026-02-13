@@ -9,9 +9,9 @@ A guided walkthrough. Each section introduces one concept, building to a complet
 Every function that can fail returns a `Result` -- either `Ok` with a value, or `Err` with an error. No exceptions, no special return conventions, just data.
 
 ```typescript
-import { ok, err, isOk, isErr, type Result } from '@railway-ts/pipelines/result';
+import { ok, err, isOk, isErr } from '@railway-ts/pipelines/result';
 
-const divide = (a: number, b: number): Result<number, string> => (b === 0 ? err('Cannot divide by zero') : ok(a / b));
+const divide = (a: number, b: number) => (b === 0 ? err('Cannot divide by zero') : ok(a / b));
 
 const result = divide(10, 2);
 
@@ -150,7 +150,7 @@ The most common entry point is `fromNullable`, which wraps a value that might be
 import { pipe } from '@railway-ts/pipelines/composition';
 import { fromNullable, mapWith, filterWith, match } from '@railway-ts/pipelines/option';
 
-const users: Record<string, { name: string; age: number }> = {
+const users = {
   u1: { name: 'Alice', age: 30 },
   u2: { name: 'Bob', age: 17 },
 };
@@ -227,8 +227,8 @@ match(result, {
   ok: (user) => console.log(user),
   err: (errors) => {
     // [
-    //   { path: ['name'], message: 'Expected a string' },
-    //   { path: ['age'], message: 'Expected a valid number' },
+    //   { path: ['name'], message: 'Must be a string' },
+    //   { path: ['age'], message: 'Must be a valid number' },
     // ]
   },
 });
