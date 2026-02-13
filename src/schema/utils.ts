@@ -296,15 +296,15 @@ export function validateAndFormatResult<T>(
   const result = schema(input);
   if (result instanceof Promise) {
     return result.then((r) =>
-      match<T, ValidationError[], ValidationResult<T>>(r, {
-        ok: (data) => ({ valid: true, data }),
-        err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+      match(r, {
+        ok: (data) => ({ valid: true as const, data }),
+        err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
       }),
     );
   }
-  return match<T, ValidationError[], ValidationResult<T>>(result, {
-    ok: (data) => ({ valid: true, data }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (data) => ({ valid: true as const, data }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 }
 

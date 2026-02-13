@@ -840,9 +840,9 @@ const evaluateLaunch = async (input: unknown): Promise<ValidationResult<LaunchDe
     flatMapWith(assessLaunchConditions),
   );
 
-  return match<LaunchDecision, ValidationError[], ValidationResult<LaunchDecision>>(result, {
-    ok: (decision) => ({ valid: true, data: decision }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (decision) => ({ valid: true as const, data: decision }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 };
 

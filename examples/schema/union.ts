@@ -14,9 +14,6 @@ import {
   string,
   stringEnum,
   validate,
-  type InferSchemaType,
-  type ValidationError,
-  type ValidationResult,
 } from '@/schema';
 
 // === Literal Constants ===
@@ -108,14 +105,6 @@ const completeAlertSchema = discriminatedUnion('type', {
   [ALERT_TYPES.ELECTRICAL]: electricalAlertSchema,
   [ALERT_TYPES.FUEL]: fuelAlertSchema,
 });
-
-type CompleteAlertSchema = InferSchemaType<typeof completeAlertSchema>;
-
-// Result type used in this example that includes extra display fields
-type AlertValidationDisplay = ValidationResult<CompleteAlertSchema> & {
-  summary?: string;
-  errorCount?: number;
-};
 
 // === Valid Data Examples ===
 const validEngineAlert = {
@@ -238,14 +227,14 @@ const extraFieldsInjection = {
 // === Validation Function ===
 const processValidation = (data: unknown) => {
   const validationResult = validate(data, completeAlertSchema);
-  return match<CompleteAlertSchema, ValidationError[], AlertValidationDisplay>(validationResult, {
+  return match(validationResult, {
     ok: (validData) => ({
-      valid: true,
+      valid: true as const,
       data: validData,
       summary: `Alert processed: ${validData.type} on ${validData.aircraftId} (${validData.severity})`,
     }),
     err: (errors) => ({
-      valid: false,
+      valid: false as const,
       errors: formatErrors(errors),
       errorCount: errors.length,
     }),

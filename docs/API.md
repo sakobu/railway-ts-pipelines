@@ -19,7 +19,7 @@ Typed success/failure. No exceptions, no try-catch pyramids.
 #### `ok`
 
 ```typescript
-function ok<T, E = never>(value: T): Result<T, E>
+function ok<T, E = never>(value: T): Result<T, E>;
 ```
 
 Create a Result containing a success value.
@@ -27,7 +27,7 @@ Create a Result containing a success value.
 #### `err`
 
 ```typescript
-function err<E>(error: E): Result<never, E>
+function err<E>(error: E): Result<never, E>;
 ```
 
 Create a Result containing an error.
@@ -37,7 +37,7 @@ Create a Result containing an error.
 #### `isOk`
 
 ```typescript
-function isOk<T, E>(result: Result<T, E>): result is { ok: true; value: T }
+function isOk<T, E>(result: Result<T, E>): result is { ok: true; value: T };
 ```
 
 Check if a Result is an Ok variant. Narrows the type so `result.value` is accessible.
@@ -45,7 +45,7 @@ Check if a Result is an Ok variant. Narrows the type so `result.value` is access
 #### `isErr`
 
 ```typescript
-function isErr<T, E>(result: Result<T, E>): result is { ok: false; error: E }
+function isErr<T, E>(result: Result<T, E>): result is { ok: false; error: E };
 ```
 
 Check if a Result is an Err variant. Narrows the type so `result.error` is accessible.
@@ -55,7 +55,7 @@ Check if a Result is an Err variant. Narrows the type so `result.error` is acces
 #### `map`
 
 ```typescript
-function map<T, E, U>(result: Result<T, E>, fn: (value: T) => U): Result<U, E>
+function map<T, E, U>(result: Result<T, E>, fn: (value: T) => U): Result<U, E>;
 ```
 
 Transform the Ok value. Err passes through unchanged.
@@ -63,7 +63,7 @@ Transform the Ok value. Err passes through unchanged.
 #### `flatMap`
 
 ```typescript
-function flatMap<T, E, U>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E>
+function flatMap<T, E, U>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E>;
 ```
 
 Transform the Ok value with a function that returns a Result. Useful for chaining operations that can fail.
@@ -71,7 +71,7 @@ Transform the Ok value with a function that returns a Result. Useful for chainin
 #### `mapErr`
 
 ```typescript
-function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Result<T, F>
+function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Result<T, F>;
 ```
 
 Transform the Err value. Ok passes through unchanged.
@@ -79,11 +79,7 @@ Transform the Err value. Ok passes through unchanged.
 #### `bimap`
 
 ```typescript
-function bimap<T, E, U, F>(
-  result: Result<T, E>,
-  okFn: (value: T) => U,
-  errFn: (error: E) => F,
-): Result<U, F>
+function bimap<T, E, U, F>(result: Result<T, E>, okFn: (value: T) => U, errFn: (error: E) => F): Result<U, F>;
 ```
 
 Transform both Ok and Err branches in one call.
@@ -91,11 +87,7 @@ Transform both Ok and Err branches in one call.
 #### `filter`
 
 ```typescript
-function filter<T, E>(
-  result: Result<T, E>,
-  predicate: (value: T) => boolean,
-  error: E,
-): Result<T, E>
+function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E>;
 ```
 
 Keep the Ok value if the predicate passes, otherwise return the provided error.
@@ -105,7 +97,7 @@ Keep the Ok value if the predicate passes, otherwise return the provided error.
 #### `tap`
 
 ```typescript
-function tap<T, E>(result: Result<T, E>, fn: (value: T) => void): Result<T, E>
+function tap<T, E>(result: Result<T, E>, fn: (value: T) => void): Result<T, E>;
 ```
 
 Execute a side effect on the Ok value without changing the Result. Useful for logging.
@@ -113,7 +105,7 @@ Execute a side effect on the Ok value without changing the Result. Useful for lo
 #### `tapErr`
 
 ```typescript
-function tapErr<T, E>(result: Result<T, E>, fn: (error: E) => void): Result<T, E>
+function tapErr<T, E>(result: Result<T, E>, fn: (error: E) => void): Result<T, E>;
 ```
 
 Execute a side effect on the Err value without changing the Result.
@@ -123,10 +115,7 @@ Execute a side effect on the Err value without changing the Result.
 #### `orElse`
 
 ```typescript
-function orElse<T, E>(
-  result: Result<T, E>,
-  fn: (error: E) => Result<T, E>,
-): Result<T, E>
+function orElse<T, E>(result: Result<T, E>, fn: (error: E) => Result<T, E>): Result<T, E>;
 ```
 
 Recover from an Err by applying `fn` to the error. Ok passes through unchanged.
@@ -136,10 +125,7 @@ Recover from an Err by applying `fn` to the error. Ok passes through unchanged.
 #### `match`
 
 ```typescript
-function match<T, E, R>(
-  result: Result<T, E>,
-  patterns: { ok: (value: T) => R; err: (error: E) => R },
-): R
+function match<T, E, R1, R2>(result: Result<T, E>, patterns: { ok: (value: T) => R1; err: (error: E) => R2 }): R1 | R2;
 ```
 
 Handle both Ok and Err cases, returning a single value.
@@ -156,7 +142,7 @@ const message = match(result, {
 #### `unwrap`
 
 ```typescript
-function unwrap<T, E>(result: Result<T, E>, errorMsg?: string): T
+function unwrap<T, E>(result: Result<T, E>, errorMsg?: string): T;
 ```
 
 Extract the Ok value, throwing if Err. **Prototyping only** — prefer `match` or `unwrapOr`.
@@ -164,7 +150,7 @@ Extract the Ok value, throwing if Err. **Prototyping only** — prefer `match` o
 #### `unwrapOr`
 
 ```typescript
-function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T): T
+function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T): T;
 ```
 
 Extract the Ok value, or return a default if Err.
@@ -172,7 +158,7 @@ Extract the Ok value, or return a default if Err.
 #### `unwrapOrElse`
 
 ```typescript
-function unwrapOrElse<T, E>(result: Result<T, E>, defaultFn: () => T): T
+function unwrapOrElse<T, E>(result: Result<T, E>, defaultFn: () => T): T;
 ```
 
 Extract the Ok value, or compute a default lazily if Err.
@@ -182,20 +168,20 @@ Extract the Ok value, or compute a default lazily if Err.
 #### `combine`
 
 ```typescript
-function combine<T, E>(results: readonly Result<T, E>[]): Result<T[], E>
+function combine<T, E>(results: readonly Result<T, E>[]): Result<T[], E>;
 ```
 
 Combine an array of Results into a single Result. Short-circuits on the first Err. Preserves tuple types for up to 10 elements.
 
 ```typescript
-combine([ok(1), ok(2), ok(3)]);       // ok([1, 2, 3])
+combine([ok(1), ok(2), ok(3)]); // ok([1, 2, 3])
 combine([ok(1), err('fail'), ok(3)]); // err('fail')
 ```
 
 #### `combineAll`
 
 ```typescript
-function combineAll<T, E>(results: readonly Result<T, E>[]): Result<T[], E[]>
+function combineAll<T, E>(results: readonly Result<T, E>[]): Result<T[], E[]>;
 ```
 
 Like `combine`, but collects **all** errors instead of short-circuiting.
@@ -211,7 +197,7 @@ combineAll([ok(1), err('a'), err('b')]); // err(['a', 'b'])
 #### `mapToOption`
 
 ```typescript
-function mapToOption<T, E>(result: Result<T, E>): Option<T>
+function mapToOption<T, E>(result: Result<T, E>): Option<T>;
 ```
 
 Convert to Option. Ok becomes Some, Err becomes None.
@@ -219,7 +205,7 @@ Convert to Option. Ok becomes Some, Err becomes None.
 #### `fromTry`
 
 ```typescript
-function fromTry<T>(f: () => T): Result<T, string>
+function fromTry<T>(f: () => T): Result<T, string>;
 ```
 
 Execute a function that might throw. Returns Ok on success, Err with the error message on throw.
@@ -227,7 +213,7 @@ Execute a function that might throw. Returns Ok on success, Err with the error m
 #### `fromTryWithError`
 
 ```typescript
-function fromTryWithError<T>(f: () => T): Result<T, Error>
+function fromTryWithError<T>(f: () => T): Result<T, Error>;
 ```
 
 Like `fromTry`, but preserves the full Error object (stack trace, custom properties).
@@ -235,7 +221,7 @@ Like `fromTry`, but preserves the full Error object (stack trace, custom propert
 #### `fromPromise`
 
 ```typescript
-function fromPromise<T>(promise: Promise<T>): Promise<Result<T, string>>
+function fromPromise<T>(promise: Promise<T>): Promise<Result<T, string>>;
 ```
 
 Convert a Promise to a Result. Rejects become Err with the error message as a string.
@@ -246,7 +232,7 @@ Convert a Promise to a Result. Rejects become Err with the error message as a st
 function fromPromiseWithError<T, E = unknown>(
   promise: Promise<T>,
   errorFn?: (error: unknown) => E,
-): Promise<Result<T, E>>
+): Promise<Result<T, E>>;
 ```
 
 Like `fromPromise`, but lets you transform the error with a custom function.
@@ -254,7 +240,7 @@ Like `fromPromise`, but lets you transform the error with a custom function.
 #### `toPromise`
 
 ```typescript
-function toPromise<T, E>(result: Result<T, E>): Promise<T>
+function toPromise<T, E>(result: Result<T, E>): Promise<T>;
 ```
 
 Convert a Result to a Promise. Ok resolves, Err rejects.
@@ -266,14 +252,14 @@ These return functions suitable for use in `pipe` and `flow`.
 #### `mapWith`
 
 ```typescript
-function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) => Result<U, E>
+function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) => Result<U, E>;
 ```
 
 #### `flatMapWith`
 
 ```typescript
-function flatMapWith<T, U, E>(fn: (value: T) => Result<U, E>): (result: Result<T, E>) => Result<U, E>
-function flatMapWith<T, U, E>(fn: (value: T) => Promise<Result<U, E>>): (result: Result<T, E>) => Promise<Result<U, E>>
+function flatMapWith<T, U, E>(fn: (value: T) => Result<U, E>): (result: Result<T, E>) => Result<U, E>;
+function flatMapWith<T, U, E>(fn: (value: T) => Promise<Result<U, E>>): (result: Result<T, E>) => Promise<Result<U, E>>;
 ```
 
 Supports both sync and async step functions.
@@ -281,20 +267,20 @@ Supports both sync and async step functions.
 #### `mapErrWith`
 
 ```typescript
-function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>) => Result<T, F>
+function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>) => Result<T, F>;
 ```
 
 #### `filterWith`
 
 ```typescript
-function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (result: Result<T, E>) => Result<T, E>
+function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (result: Result<T, E>) => Result<T, E>;
 ```
 
 #### `tapWith`
 
 ```typescript
-function tapWith<T, E>(fn: (value: T) => void): (result: Result<T, E>) => Result<T, E>
-function tapWith<T, E>(fn: (value: T) => Promise<void>): (result: Result<T, E>) => Promise<Result<T, E>>
+function tapWith<T, E>(fn: (value: T) => void): (result: Result<T, E>) => Result<T, E>;
+function tapWith<T, E>(fn: (value: T) => Promise<void>): (result: Result<T, E>) => Promise<Result<T, E>>;
 ```
 
 Supports both sync and async side effects.
@@ -302,14 +288,14 @@ Supports both sync and async side effects.
 #### `tapErrWith`
 
 ```typescript
-function tapErrWith<E>(fn: (error: E) => void): <T>(result: Result<T, E>) => Result<T, E>
-function tapErrWith<E>(fn: (error: E) => Promise<void>): <T>(result: Result<T, E>) => Promise<Result<T, E>>
+function tapErrWith<E>(fn: (error: E) => void): <T>(result: Result<T, E>) => Result<T, E>;
+function tapErrWith<E>(fn: (error: E) => Promise<void>): <T>(result: Result<T, E>) => Promise<Result<T, E>>;
 ```
 
 #### `orElseWith`
 
 ```typescript
-function orElseWith<T, E>(fn: (error: E) => Result<T, E>): (result: Result<T, E>) => Result<T, E>
+function orElseWith<T, E>(fn: (error: E) => Result<T, E>): (result: Result<T, E>) => Result<T, E>;
 ```
 
 ---
@@ -329,7 +315,7 @@ Nullable handling without null checks.
 #### `some`
 
 ```typescript
-function some<T>(value: T): Option<T>
+function some<T>(value: T): Option<T>;
 ```
 
 Create an Option containing a value.
@@ -337,7 +323,7 @@ Create an Option containing a value.
 #### `none`
 
 ```typescript
-function none<T = never>(): Option<T>
+function none<T = never>(): Option<T>;
 ```
 
 Create an Option containing nothing.
@@ -347,7 +333,7 @@ Create an Option containing nothing.
 #### `isSome`
 
 ```typescript
-function isSome<T>(option: Option<T>): option is { some: true; value: T }
+function isSome<T>(option: Option<T>): option is { some: true; value: T };
 ```
 
 Check if an Option is a Some variant.
@@ -355,7 +341,7 @@ Check if an Option is a Some variant.
 #### `isNone`
 
 ```typescript
-function isNone<T>(option: Option<T>): option is { some: false }
+function isNone<T>(option: Option<T>): option is { some: false };
 ```
 
 Check if an Option is a None variant.
@@ -365,7 +351,7 @@ Check if an Option is a None variant.
 #### `map`
 
 ```typescript
-function map<T, U>(option: Option<T>, fn: (value: T) => U): Option<U>
+function map<T, U>(option: Option<T>, fn: (value: T) => U): Option<U>;
 ```
 
 Transform the Some value. None passes through.
@@ -373,7 +359,7 @@ Transform the Some value. None passes through.
 #### `flatMap`
 
 ```typescript
-function flatMap<T, U>(option: Option<T>, fn: (value: T) => Option<U>): Option<U>
+function flatMap<T, U>(option: Option<T>, fn: (value: T) => Option<U>): Option<U>;
 ```
 
 Transform the Some value with a function that returns an Option.
@@ -381,11 +367,7 @@ Transform the Some value with a function that returns an Option.
 #### `bimap`
 
 ```typescript
-function bimap<T, U>(
-  option: Option<T>,
-  someFn: (value: T) => Option<U>,
-  noneFn: () => Option<U>,
-): Option<U>
+function bimap<T, U>(option: Option<T>, someFn: (value: T) => Option<U>, noneFn: () => Option<U>): Option<U>;
 ```
 
 Handle both Some and None branches, each returning a new Option.
@@ -393,7 +375,7 @@ Handle both Some and None branches, each returning a new Option.
 #### `filter`
 
 ```typescript
-function filter<T>(option: Option<T>, predicate: (value: T) => boolean): Option<T>
+function filter<T>(option: Option<T>, predicate: (value: T) => boolean): Option<T>;
 ```
 
 Keep the Some value if the predicate passes, otherwise return None.
@@ -403,7 +385,7 @@ Keep the Some value if the predicate passes, otherwise return None.
 #### `tap`
 
 ```typescript
-function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T>
+function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T>;
 ```
 
 Execute a side effect on the Some value without changing the Option.
@@ -413,10 +395,7 @@ Execute a side effect on the Some value without changing the Option.
 #### `match`
 
 ```typescript
-function match<T, R>(
-  option: Option<T>,
-  patterns: { some: (value: T) => R; none: () => R },
-): R
+function match<T, R1, R2>(option: Option<T>, patterns: { some: (value: T) => R1; none: () => R2 }): R1 | R2;
 ```
 
 Handle both Some and None cases, returning a single value.
@@ -426,7 +405,7 @@ Handle both Some and None cases, returning a single value.
 #### `unwrap`
 
 ```typescript
-function unwrap<T>(option: Option<T>, errorMsg?: string): T
+function unwrap<T>(option: Option<T>, errorMsg?: string): T;
 ```
 
 Extract the Some value, throwing if None. **Prototyping only** — prefer `match` or `unwrapOr`.
@@ -434,7 +413,7 @@ Extract the Some value, throwing if None. **Prototyping only** — prefer `match
 #### `unwrapOr`
 
 ```typescript
-function unwrapOr<T>(option: Option<T>, defaultValue: T): T
+function unwrapOr<T>(option: Option<T>, defaultValue: T): T;
 ```
 
 Extract the Some value, or return a default if None.
@@ -442,7 +421,7 @@ Extract the Some value, or return a default if None.
 #### `unwrapOrElse`
 
 ```typescript
-function unwrapOrElse<T>(option: Option<T>, defaultFn: () => T): T
+function unwrapOrElse<T>(option: Option<T>, defaultFn: () => T): T;
 ```
 
 Extract the Some value, or compute a default lazily if None.
@@ -452,7 +431,7 @@ Extract the Some value, or compute a default lazily if None.
 #### `combine`
 
 ```typescript
-function combine<T>(options: readonly Option<T>[]): Option<T[]>
+function combine<T>(options: readonly Option<T>[]): Option<T[]>;
 ```
 
 Combine an array of Options into a single Option. Returns None if any element is None. Preserves tuple types for up to 10 elements.
@@ -464,7 +443,7 @@ Combine an array of Options into a single Option. Returns None if any element is
 #### `fromNullable`
 
 ```typescript
-function fromNullable<T>(value: T | null | undefined): Option<T>
+function fromNullable<T>(value: T | null | undefined): Option<T>;
 ```
 
 Create an Option from a nullable value. `null`/`undefined` become None, everything else becomes Some.
@@ -472,7 +451,7 @@ Create an Option from a nullable value. `null`/`undefined` become None, everythi
 #### `mapToResult`
 
 ```typescript
-function mapToResult<T, E>(option: Option<T>, error: E): Result<T, E>
+function mapToResult<T, E>(option: Option<T>, error: E): Result<T, E>;
 ```
 
 Convert to Result. Some becomes Ok, None becomes Err with the provided error.
@@ -482,14 +461,14 @@ Convert to Result. Some becomes Ok, None becomes Err with the provided error.
 #### `mapWith`
 
 ```typescript
-function mapWith<T, U>(fn: (value: T) => U): (option: Option<T>) => Option<U>
+function mapWith<T, U>(fn: (value: T) => U): (option: Option<T>) => Option<U>;
 ```
 
 #### `flatMapWith`
 
 ```typescript
-function flatMapWith<T, U>(fn: (value: T) => Option<U>): (option: Option<T>) => Option<U>
-function flatMapWith<T, U>(fn: (value: T) => Promise<Option<U>>): (option: Option<T>) => Promise<Option<U>>
+function flatMapWith<T, U>(fn: (value: T) => Option<U>): (option: Option<T>) => Option<U>;
+function flatMapWith<T, U>(fn: (value: T) => Promise<Option<U>>): (option: Option<T>) => Promise<Option<U>>;
 ```
 
 Supports both sync and async step functions.
@@ -497,14 +476,14 @@ Supports both sync and async step functions.
 #### `filterWith`
 
 ```typescript
-function filterWith<T>(predicate: (value: T) => boolean): (option: Option<T>) => Option<T>
+function filterWith<T>(predicate: (value: T) => boolean): (option: Option<T>) => Option<T>;
 ```
 
 #### `tapWith`
 
 ```typescript
-function tapWith<T>(fn: (value: T) => void): (option: Option<T>) => Option<T>
-function tapWith<T>(fn: (value: T) => Promise<void>): (option: Option<T>) => Promise<Option<T>>
+function tapWith<T>(fn: (value: T) => void): (option: Option<T>) => Option<T>;
+function tapWith<T>(fn: (value: T) => Promise<void>): (option: Option<T>) => Promise<Option<T>>;
 ```
 
 Supports both sync and async side effects.
@@ -524,7 +503,7 @@ Parse untrusted data into typed values. Accumulates all validation errors.
 #### `Validator<I, O>`
 
 ```typescript
-type Validator<I, O = I> = (value: I, path?: string[]) => Result<O, ValidationError[]>
+type Validator<I, O = I> = (value: I, path?: string[]) => Result<O, ValidationError[]>;
 ```
 
 A synchronous validator function.
@@ -532,7 +511,7 @@ A synchronous validator function.
 #### `AsyncValidator<I, O>`
 
 ```typescript
-type AsyncValidator<I, O = I> = (value: I, path?: string[]) => Promise<Result<O, ValidationError[]>>
+type AsyncValidator<I, O = I> = (value: I, path?: string[]) => Promise<Result<O, ValidationError[]>>;
 ```
 
 An asynchronous validator that always returns a Promise.
@@ -543,7 +522,7 @@ An asynchronous validator that always returns a Promise.
 type MaybeAsyncValidator<I, O = I> = (
   value: I,
   path?: string[],
-) => Result<O, ValidationError[]> | Promise<Result<O, ValidationError[]>>
+) => Result<O, ValidationError[]> | Promise<Result<O, ValidationError[]>>;
 ```
 
 A validator that may return either sync or async. Used when mixing sync and async field validators.
@@ -551,7 +530,7 @@ A validator that may return either sync or async. Used when mixing sync and asyn
 #### `Schema<T>`
 
 ```typescript
-type Schema<T> = { [K in keyof T]: MaybeAsyncValidator<unknown, T[K]> }
+type Schema<T> = { [K in keyof T]: MaybeAsyncValidator<unknown, T[K]> };
 ```
 
 A validation schema where keys map to validators. Accepts both sync and async validators.
@@ -559,7 +538,7 @@ A validation schema where keys map to validators. Accepts both sync and async va
 #### `SyncSchema<T>`
 
 ```typescript
-type SyncSchema<T> = { [K in keyof T]: Validator<unknown, T[K]> }
+type SyncSchema<T> = { [K in keyof T]: Validator<unknown, T[K]> };
 ```
 
 A schema where all validators are synchronous. Preserves sync return types.
@@ -567,7 +546,7 @@ A schema where all validators are synchronous. Preserves sync return types.
 #### `ValidationError`
 
 ```typescript
-type ValidationError = { path: string[]; message: string }
+type ValidationError = { path: string[]; message: string };
 ```
 
 A validation error with path information and a message.
@@ -575,9 +554,7 @@ A validation error with path information and a message.
 #### `ValidationResult<T>`
 
 ```typescript
-type ValidationResult<T> =
-  | { valid: true; data: T }
-  | { valid: false; errors: Record<string, string> }
+type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: Record<string, string> };
 ```
 
 The result of a validation-and-format operation.
@@ -585,7 +562,7 @@ The result of a validation-and-format operation.
 #### `InferSchemaType<V>`
 
 ```typescript
-type InferSchemaType<V> = ProcessType<InferType<V>>
+type InferSchemaType<V> = ProcessType<InferType<V>>;
 ```
 
 Infer the output TypeScript type from a validator or schema.
@@ -608,8 +585,8 @@ Extract the union of output types from a validator map. Used by `discriminatedUn
 #### `object`
 
 ```typescript
-function object<T>(schema: SyncSchema<T>, options?: { strict?: boolean }): Validator<unknown, T>
-function object<T>(schema: Schema<T>, options?: { strict?: boolean }): MaybeAsyncValidator<unknown, T>
+function object<T>(schema: SyncSchema<T>, options?: { strict?: boolean }): Validator<unknown, T>;
+function object<T>(schema: Schema<T>, options?: { strict?: boolean }): MaybeAsyncValidator<unknown, T>;
 ```
 
 Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async.
@@ -624,8 +601,8 @@ const userSchema = object({
 #### `array`
 
 ```typescript
-function array<I, O>(itemValidator: Validator<I, O>): Validator<unknown, O[]>
-function array<I, O>(itemValidator: MaybeAsyncValidator<I, O>): MaybeAsyncValidator<unknown, O[]>
+function array<I, O>(itemValidator: Validator<I, O>): Validator<unknown, O[]>;
+function array<I, O>(itemValidator: MaybeAsyncValidator<I, O>): MaybeAsyncValidator<unknown, O[]>;
 ```
 
 Validate arrays where each item is validated by the provided validator.
@@ -633,9 +610,7 @@ Validate arrays where each item is validated by the provided validator.
 #### `tuple`
 
 ```typescript
-function tuple<V extends ReadonlyArray<Validator<unknown, unknown>>>(
-  validators: V,
-): Validator<unknown, TupleType<V>>
+function tuple<V extends ReadonlyArray<Validator<unknown, unknown>>>(validators: V): Validator<unknown, TupleType<V>>;
 ```
 
 Validate a heterogeneous tuple where each position has its own validator.
@@ -648,7 +623,7 @@ validate(['a', 1, true]); // ok(["a", 1, true])
 #### `tupleOf`
 
 ```typescript
-function tupleOf<T>(elementValidator: Validator<unknown, T>, length: number): Validator<unknown, T[]>
+function tupleOf<T>(elementValidator: Validator<unknown, T>, length: number): Validator<unknown, T[]>;
 ```
 
 Validate a homogeneous tuple with a fixed length. All elements share the same type.
@@ -662,7 +637,7 @@ const point3D = tupleOf(number(), 3); // [number, number, number]
 #### `required`
 
 ```typescript
-function required<I, O>(validator: Validator<I, O>, message?: string): Validator<I | undefined | null, O>
+function required<I, O>(validator: Validator<I, O>, message?: string): Validator<I | undefined | null, O>;
 ```
 
 Require a value to be defined (not null or undefined).
@@ -670,7 +645,7 @@ Require a value to be defined (not null or undefined).
 #### `optional`
 
 ```typescript
-function optional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>
+function optional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
 ```
 
 Allow null/undefined values. Returns `undefined` for missing values, otherwise applies the validator.
@@ -678,7 +653,7 @@ Allow null/undefined values. Returns `undefined` for missing values, otherwise a
 #### `nullable`
 
 ```typescript
-function nullable(message?: string): Validator<unknown, null>
+function nullable(message?: string): Validator<unknown, null>;
 ```
 
 Accept only `null` values.
@@ -686,7 +661,7 @@ Accept only `null` values.
 #### `emptyAsOptional`
 
 ```typescript
-function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>
+function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
 ```
 
 Treat empty strings, empty arrays, and empty objects as optional (returns `undefined`).
@@ -694,14 +669,14 @@ Treat empty strings, empty arrays, and empty objects as optional (returns `undef
 #### `literal`
 
 ```typescript
-function literal<T>(expectedValue: T, message?: string): Validator<unknown, T>
+function literal<T>(expectedValue: T, message?: string): Validator<unknown, T>;
 ```
 
 Accept only an exact value match.
 
 ```typescript
 const validate = literal('active');
-validate('active');    // ok("active")
+validate('active'); // ok("active")
 validate('completed'); // err(...)
 ```
 
@@ -710,7 +685,7 @@ validate('completed'); // err(...)
 #### `string`
 
 ```typescript
-function string(message?: string): Validator<unknown, string>
+function string(message?: string): Validator<unknown, string>;
 ```
 
 Ensure the value is a string.
@@ -718,7 +693,7 @@ Ensure the value is a string.
 #### `number`
 
 ```typescript
-function number(message?: string): Validator<unknown, number>
+function number(message?: string): Validator<unknown, number>;
 ```
 
 Ensure the value is a number (not NaN).
@@ -726,7 +701,7 @@ Ensure the value is a number (not NaN).
 #### `boolean`
 
 ```typescript
-function boolean(message?: string): Validator<unknown, boolean>
+function boolean(message?: string): Validator<unknown, boolean>;
 ```
 
 Ensure the value is a boolean.
@@ -734,7 +709,7 @@ Ensure the value is a boolean.
 #### `date`
 
 ```typescript
-function date(message?: string): Validator<unknown, Date>
+function date(message?: string): Validator<unknown, Date>;
 ```
 
 Ensure the value is a valid Date object.
@@ -742,7 +717,7 @@ Ensure the value is a valid Date object.
 #### `bigint`
 
 ```typescript
-function bigint(message?: string): Validator<unknown, bigint>
+function bigint(message?: string): Validator<unknown, bigint>;
 ```
 
 Ensure the value is a bigint.
@@ -754,7 +729,7 @@ Coerce untrusted input into typed values.
 #### `parseNumber`
 
 ```typescript
-function parseNumber(message?: string): Validator<unknown, number>
+function parseNumber(message?: string): Validator<unknown, number>;
 ```
 
 Parse strings and numbers into numbers. `'25'` becomes `25`.
@@ -762,7 +737,7 @@ Parse strings and numbers into numbers. `'25'` becomes `25`.
 #### `parseString`
 
 ```typescript
-function parseString(message?: string): Validator<unknown, string>
+function parseString(message?: string): Validator<unknown, string>;
 ```
 
 Coerce non-null/undefined values to strings. `12345` becomes `'12345'`.
@@ -770,7 +745,7 @@ Coerce non-null/undefined values to strings. `12345` becomes `'12345'`.
 #### `parseBool`
 
 ```typescript
-function parseBool(message?: string): Validator<unknown, boolean>
+function parseBool(message?: string): Validator<unknown, boolean>;
 ```
 
 Parse booleans, `0`/`1`, and strings like `'true'`/`'false'`, `'yes'`/`'no'`.
@@ -778,7 +753,7 @@ Parse booleans, `0`/`1`, and strings like `'true'`/`'false'`, `'yes'`/`'no'`.
 #### `parseBigInt`
 
 ```typescript
-function parseBigInt(message?: string): Validator<unknown, bigint>
+function parseBigInt(message?: string): Validator<unknown, bigint>;
 ```
 
 Parse BigInt values, strings, and integer numbers into bigints.
@@ -786,7 +761,7 @@ Parse BigInt values, strings, and integer numbers into bigints.
 #### `parseDate`
 
 ```typescript
-function parseDate(message?: string): Validator<unknown, Date>
+function parseDate(message?: string): Validator<unknown, Date>;
 ```
 
 Parse Date objects, date strings, and numeric timestamps into Date objects.
@@ -794,7 +769,7 @@ Parse Date objects, date strings, and numeric timestamps into Date objects.
 #### `parseISODate`
 
 ```typescript
-function parseISODate(message?: string): Validator<unknown, Date>
+function parseISODate(message?: string): Validator<unknown, Date>;
 ```
 
 Parse strict ISO date strings (`YYYY-MM-DD`) into Date objects. Validates calendar correctness.
@@ -802,7 +777,7 @@ Parse strict ISO date strings (`YYYY-MM-DD`) into Date objects. Validates calend
 #### `parseJSON`
 
 ```typescript
-function parseJSON(message?: string): Validator<unknown, unknown>
+function parseJSON(message?: string): Validator<unknown, unknown>;
 ```
 
 Parse JSON strings into objects. Already-parsed objects pass through.
@@ -810,7 +785,7 @@ Parse JSON strings into objects. Already-parsed objects pass through.
 #### `parseURL`
 
 ```typescript
-function parseURL(message?: string): Validator<unknown, URL>
+function parseURL(message?: string): Validator<unknown, URL>;
 ```
 
 Parse string URLs into URL objects.
@@ -821,13 +796,16 @@ Parse string URLs into URL objects.
 function parseEnum<T extends Record<string, string | number>>(
   enumObject: T,
   message?: string,
-): Validator<unknown, T[keyof T]>
+): Validator<unknown, T[keyof T]>;
 ```
 
 Parse input into TypeScript enum values. Supports case-insensitive key matching.
 
 ```typescript
-enum Status { Pending = 'PENDING', Approved = 'APPROVED' }
+enum Status {
+  Pending = 'PENDING',
+  Approved = 'APPROVED',
+}
 const validate = parseEnum(Status);
 validate('pending'); // ok("PENDING")
 ```
@@ -837,7 +815,7 @@ validate('pending'); // ok("PENDING")
 #### `minLength`
 
 ```typescript
-function minLength(min: number, message?: string): Validator<string>
+function minLength(min: number, message?: string): Validator<string>;
 ```
 
 Ensure a string has at least `min` characters.
@@ -845,7 +823,7 @@ Ensure a string has at least `min` characters.
 #### `maxLength`
 
 ```typescript
-function maxLength(max: number, message?: string): Validator<string>
+function maxLength(max: number, message?: string): Validator<string>;
 ```
 
 Ensure a string has at most `max` characters.
@@ -853,7 +831,7 @@ Ensure a string has at most `max` characters.
 #### `pattern`
 
 ```typescript
-function pattern(regex: RegExp, message?: string): Validator<string>
+function pattern(regex: RegExp, message?: string): Validator<string>;
 ```
 
 Ensure a string matches a regular expression.
@@ -861,7 +839,7 @@ Ensure a string matches a regular expression.
 #### `nonEmpty`
 
 ```typescript
-function nonEmpty(message?: string): Validator<string>
+function nonEmpty(message?: string): Validator<string>;
 ```
 
 Ensure a string is not empty after trimming whitespace.
@@ -869,7 +847,7 @@ Ensure a string is not empty after trimming whitespace.
 #### `email`
 
 ```typescript
-function email(message?: string): Validator<string>
+function email(message?: string): Validator<string>;
 ```
 
 Ensure a string is a valid email address.
@@ -877,7 +855,7 @@ Ensure a string is a valid email address.
 #### `phoneNumber`
 
 ```typescript
-function phoneNumber(message?: string): Validator<string>
+function phoneNumber(message?: string): Validator<string>;
 ```
 
 Ensure a string is a valid phone number. Accepts international formats with `+`, spaces, dashes, and parentheses.
@@ -887,7 +865,7 @@ Ensure a string is a valid phone number. Accepts international formats with `+`,
 #### `min`
 
 ```typescript
-function min(value: number, message?: string): Validator<number>
+function min(value: number, message?: string): Validator<number>;
 ```
 
 Ensure a number is at least `value` (inclusive).
@@ -895,7 +873,7 @@ Ensure a number is at least `value` (inclusive).
 #### `max`
 
 ```typescript
-function max(value: number, message?: string): Validator<number>
+function max(value: number, message?: string): Validator<number>;
 ```
 
 Ensure a number is at most `value` (inclusive).
@@ -903,7 +881,7 @@ Ensure a number is at most `value` (inclusive).
 #### `between`
 
 ```typescript
-function between(min: number, max: number, message?: string): Validator<number>
+function between(min: number, max: number, message?: string): Validator<number>;
 ```
 
 Ensure a number is between `min` and `max` (inclusive).
@@ -911,7 +889,7 @@ Ensure a number is between `min` and `max` (inclusive).
 #### `integer`
 
 ```typescript
-function integer(message?: string): Validator<number>
+function integer(message?: string): Validator<number>;
 ```
 
 Ensure a number is an integer.
@@ -919,7 +897,7 @@ Ensure a number is an integer.
 #### `positive`
 
 ```typescript
-function positive(message?: string): Validator<number>
+function positive(message?: string): Validator<number>;
 ```
 
 Ensure a number is greater than zero.
@@ -927,7 +905,7 @@ Ensure a number is greater than zero.
 #### `negative`
 
 ```typescript
-function negative(message?: string): Validator<number>
+function negative(message?: string): Validator<number>;
 ```
 
 Ensure a number is less than zero.
@@ -935,7 +913,7 @@ Ensure a number is less than zero.
 #### `nonZero`
 
 ```typescript
-function nonZero(message?: string): Validator<number>
+function nonZero(message?: string): Validator<number>;
 ```
 
 Ensure a number is not zero.
@@ -943,7 +921,7 @@ Ensure a number is not zero.
 #### `divisibleBy`
 
 ```typescript
-function divisibleBy(divisor: number, message?: string): Validator<number>
+function divisibleBy(divisor: number, message?: string): Validator<number>;
 ```
 
 Ensure a number is divisible by `divisor`.
@@ -951,7 +929,7 @@ Ensure a number is divisible by `divisor`.
 #### `precision`
 
 ```typescript
-function precision(maxDecimalPlaces: number, message?: string): Validator<number>
+function precision(maxDecimalPlaces: number, message?: string): Validator<number>;
 ```
 
 Ensure a number has at most `maxDecimalPlaces` decimal places.
@@ -959,7 +937,7 @@ Ensure a number has at most `maxDecimalPlaces` decimal places.
 #### `finite`
 
 ```typescript
-function finite(message?: string): Validator<number>
+function finite(message?: string): Validator<number>;
 ```
 
 Ensure a number is finite (not `Infinity` or `-Infinity`).
@@ -969,7 +947,7 @@ Ensure a number is finite (not `Infinity` or `-Infinity`).
 #### `dateRange`
 
 ```typescript
-function dateRange(min: Date, max: Date, message?: string): Validator<Date>
+function dateRange(min: Date, max: Date, message?: string): Validator<Date>;
 ```
 
 Ensure a Date is within a range (inclusive).
@@ -977,7 +955,7 @@ Ensure a Date is within a range (inclusive).
 #### `pastDate`
 
 ```typescript
-function pastDate(message?: string): Validator<Date>
+function pastDate(message?: string): Validator<Date>;
 ```
 
 Ensure a Date is in the past.
@@ -985,7 +963,7 @@ Ensure a Date is in the past.
 #### `futureDate`
 
 ```typescript
-function futureDate(message?: string): Validator<Date>
+function futureDate(message?: string): Validator<Date>;
 ```
 
 Ensure a Date is in the future.
@@ -993,7 +971,7 @@ Ensure a Date is in the future.
 #### `todayOrFuture`
 
 ```typescript
-function todayOrFuture(message?: string): Validator<Date>
+function todayOrFuture(message?: string): Validator<Date>;
 ```
 
 Ensure a Date is today or in the future (calendar date comparison).
@@ -1003,7 +981,7 @@ Ensure a Date is today or in the future (calendar date comparison).
 #### `matches`
 
 ```typescript
-function matches(expected: boolean, message?: string): Validator<boolean>
+function matches(expected: boolean, message?: string): Validator<boolean>;
 ```
 
 Ensure a boolean matches the expected value.
@@ -1013,7 +991,7 @@ Ensure a boolean matches the expected value.
 #### `minItems`
 
 ```typescript
-function minItems<T>(min: number, message?: string): Validator<T[], T[]>
+function minItems<T>(min: number, message?: string): Validator<T[], T[]>;
 ```
 
 Ensure an array has at least `min` items.
@@ -1021,7 +999,7 @@ Ensure an array has at least `min` items.
 #### `maxItems`
 
 ```typescript
-function maxItems<T>(max: number, message?: string): Validator<T[], T[]>
+function maxItems<T>(max: number, message?: string): Validator<T[], T[]>;
 ```
 
 Ensure an array has at most `max` items.
@@ -1029,7 +1007,7 @@ Ensure an array has at most `max` items.
 #### `notEmpty`
 
 ```typescript
-function notEmpty<T>(message?: string): Validator<T[], T[]>
+function notEmpty<T>(message?: string): Validator<T[], T[]>;
 ```
 
 Ensure an array is not empty.
@@ -1037,13 +1015,13 @@ Ensure an array is not empty.
 #### `unique`
 
 ```typescript
-function unique<T>(message?: string, keyExtractor?: (item: T) => unknown): Validator<T[], T[]>
+function unique<T>(message?: string, keyExtractor?: (item: T) => unknown): Validator<T[], T[]>;
 ```
 
 Ensure all array elements are unique. Optional `keyExtractor` for comparing objects.
 
 ```typescript
-unique<{ id: number }>('Duplicate ID', (item) => item.id)
+unique<{ id: number }>('Duplicate ID', (item) => item.id);
 ```
 
 ### Enums
@@ -1051,10 +1029,7 @@ unique<{ id: number }>('Duplicate ID', (item) => item.id)
 #### `stringEnum`
 
 ```typescript
-function stringEnum<T extends string>(
-  allowedValues: T[],
-  message?: string,
-): Validator<unknown, T>
+function stringEnum<T extends string>(allowedValues: T[], message?: string): Validator<unknown, T>;
 ```
 
 Validate that a value is a string and one of the allowed values. Combines `string()` + membership check.
@@ -1066,7 +1041,7 @@ function enumValue<T extends Record<string, string | number>>(
   enumObject: T,
   message?: string,
   excludedValues?: T[keyof T][],
-): Validator<unknown, T[keyof T]>
+): Validator<unknown, T[keyof T]>;
 ```
 
 Validate against a TypeScript enum. Supports excluding specific values.
@@ -1074,7 +1049,7 @@ Validate against a TypeScript enum. Supports excluding specific values.
 #### `oneOf`
 
 ```typescript
-function oneOf<T>(allowedValues: T[], message?: string): Validator<T>
+function oneOf<T>(allowedValues: T[], message?: string): Validator<T>;
 ```
 
 Ensure a value is one of the allowed values.
@@ -1087,7 +1062,7 @@ Ensure a value is one of the allowed values.
 function union<I, O1, O2>(
   validators: [Validator<I, O1>, Validator<I, O2>],
   options?: { collectAllErrors?: boolean; errorPrefix?: string },
-): Validator<I, O1 | O2>
+): Validator<I, O1 | O2>;
 ```
 
 Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware.
@@ -1095,7 +1070,7 @@ Try validators in order. Returns the first success, or all errors if none match.
 ```typescript
 const validate = union([string(), number()]);
 validate('hello'); // ok("hello")
-validate(42);      // ok(42)
+validate(42); // ok(42)
 ```
 
 #### `discriminatedUnion`
@@ -1105,7 +1080,7 @@ function discriminatedUnion<M extends Record<string, Validator<unknown, unknown>
   discriminantField: string,
   validatorMap: M,
   fallbackMessage?: string,
-): Validator<unknown, ValidatorMapOutput<M>>
+): Validator<unknown, ValidatorMapOutput<M>>;
 ```
 
 Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects.
@@ -1122,8 +1097,8 @@ const validate = discriminatedUnion('type', {
 #### `chain`
 
 ```typescript
-function chain<A, B>(v1: Validator<A, B>): Validator<A, B>
-function chain<A, B, C>(v1: Validator<A, B>, v2: Validator<B, C>): Validator<A, C>
+function chain<A, B>(v1: Validator<A, B>): Validator<A, B>;
+function chain<A, B, C>(v1: Validator<A, B>, v2: Validator<B, C>): Validator<A, C>;
 // ... up to 10 validators
 ```
 
@@ -1137,11 +1112,8 @@ validate('password123'); // ok("password123")
 #### `chainAsync`
 
 ```typescript
-function chainAsync<A, B>(v1: MaybeAsyncValidator<A, B>): AsyncValidator<A, B>
-function chainAsync<A, B, C>(
-  v1: MaybeAsyncValidator<A, B>,
-  v2: MaybeAsyncValidator<B, C>,
-): AsyncValidator<A, C>
+function chainAsync<A, B>(v1: MaybeAsyncValidator<A, B>): AsyncValidator<A, B>;
+function chainAsync<A, B, C>(v1: MaybeAsyncValidator<A, B>, v2: MaybeAsyncValidator<B, C>): AsyncValidator<A, C>;
 // ... up to 10 validators
 ```
 
@@ -1158,19 +1130,23 @@ const validate = chainAsync(
 #### `transform`
 
 ```typescript
-function transform<I, O>(transformer: (value: I) => O): Validator<I, O>
+function transform<I, O>(transformer: (value: I) => O): Validator<I, O>;
 ```
 
 Create a validator that transforms a value during validation.
 
 ```typescript
-const normalize = chain(string(), email(), transform((s) => s.toLowerCase()));
+const normalize = chain(
+  string(),
+  email(),
+  transform((s) => s.toLowerCase()),
+);
 ```
 
 #### `refine`
 
 ```typescript
-function refine<T>(predicate: (value: T) => boolean, message?: string): Validator<T, T>
+function refine<T>(predicate: (value: T) => boolean, message?: string): Validator<T, T>;
 ```
 
 Create a validator with a custom predicate.
@@ -1182,10 +1158,7 @@ const isEven = refine<number>((n) => n % 2 === 0, 'Must be even');
 #### `refineAsync`
 
 ```typescript
-function refineAsync<T>(
-  predicate: (value: T) => Promise<boolean>,
-  message?: string,
-): AsyncValidator<T, T>
+function refineAsync<T>(predicate: (value: T) => Promise<boolean>, message?: string): AsyncValidator<T, T>;
 ```
 
 Async version of `refine`. Use for database lookups, API checks, etc.
@@ -1195,11 +1168,7 @@ Async version of `refine`. Use for database lookups, API checks, etc.
 #### `refineAt`
 
 ```typescript
-function refineAt<T>(
-  targetPath: string | string[],
-  predicate: (value: T) => boolean,
-  message: string,
-): Validator<T, T>
+function refineAt<T>(targetPath: string | string[], predicate: (value: T) => boolean, message: string): Validator<T, T>;
 ```
 
 Validate across fields, attaching the error to a specific field path. Receives the entire parent object.
@@ -1218,7 +1187,7 @@ function refineAtAsync<T>(
   targetPath: string | string[],
   predicate: (value: T) => Promise<boolean>,
   message: string,
-): AsyncValidator<T, T>
+): AsyncValidator<T, T>;
 ```
 
 Async version of `refineAt`.
@@ -1235,11 +1204,11 @@ const validate = chainAsync(
 #### `validate`
 
 ```typescript
-function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>
+function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
 function validate<T>(
   value: unknown,
   validator: MaybeAsyncValidator<unknown, T>,
-): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
 ```
 
 Run a validator against a value. Returns sync when the validator is sync.
@@ -1247,14 +1216,11 @@ Run a validator against a value. Returns sync when the validator is sync.
 #### `validateAndFormatResult`
 
 ```typescript
-function validateAndFormatResult<T>(
-  input: unknown,
-  schema: Validator<unknown, T>,
-): ValidationResult<T>
+function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>): ValidationResult<T>;
 function validateAndFormatResult<T>(
   input: unknown,
   schema: MaybeAsyncValidator<unknown, T>,
-): ValidationResult<T> | Promise<ValidationResult<T>>
+): ValidationResult<T> | Promise<ValidationResult<T>>;
 ```
 
 Validate and format in one call. Returns `{ valid: true, data }` or `{ valid: false, errors }`.
@@ -1262,7 +1228,7 @@ Validate and format in one call. Returns `{ valid: true, data }` or `{ valid: fa
 #### `formatErrors`
 
 ```typescript
-function formatErrors(errors: ValidationError[]): Record<string, string>
+function formatErrors(errors: ValidationError[]): Record<string, string>;
 ```
 
 Convert validation errors to a flat object. Array paths use bracket notation.
@@ -1278,7 +1244,7 @@ formatErrors([
 #### `ROOT_ERROR_KEY`
 
 ```typescript
-const ROOT_ERROR_KEY = '_root'
+const ROOT_ERROR_KEY = '_root';
 ```
 
 The key used in formatted errors for root-level validation errors (empty path).
@@ -1288,16 +1254,14 @@ The key used in formatted errors for root-level validation errors (empty path).
 #### `toStandardSchema`
 
 ```typescript
-function toStandardSchema<O>(validator: Validator<unknown, O>): StandardSchemaV1<unknown, O>
-function toStandardSchema<O>(validator: MaybeAsyncValidator<unknown, O>): StandardSchemaV1<unknown, O>
+function toStandardSchema<O>(validator: Validator<unknown, O>): StandardSchemaV1<unknown, O>;
+function toStandardSchema<O>(validator: MaybeAsyncValidator<unknown, O>): StandardSchemaV1<unknown, O>;
 ```
 
 Wrap a validator as a Standard Schema v1 object for interop with tRPC, TanStack Form, React Hook Form, and other consumers.
 
 ```typescript
-const standardSchema = toStandardSchema(
-  object({ name: required(string()), email: required(email()) }),
-);
+const standardSchema = toStandardSchema(object({ name: required(string()), email: required(email()) }));
 ```
 
 #### `StandardSchemaV1`
@@ -1331,7 +1295,7 @@ Build pipelines. No nested function calls.
 #### `MaybeAsync<T>`
 
 ```typescript
-type MaybeAsync<T> = T | Promise<T>
+type MaybeAsync<T> = T | Promise<T>;
 ```
 
 A value that may or may not be wrapped in a Promise.
@@ -1341,38 +1305,45 @@ A value that may or may not be wrapped in a Promise.
 #### `pipe`
 
 ```typescript
-function pipe<A>(value: A): A
-function pipe<A, B>(value: A, fn1: (a: A) => B): B
-function pipe<A, B, C>(value: A, fn1: (a: A) => B, fn2: (b: B) => C): C
+function pipe<A>(value: A): A;
+function pipe<A, B>(value: A, fn1: (a: A) => B): B;
+function pipe<A, B, C>(value: A, fn1: (a: A) => B, fn2: (b: B) => C): C;
 // ... up to 20 functions
 ```
 
 Execute a value through a series of functions. Each output feeds into the next.
 
 ```typescript
-const result = pipe(5, (x) => x * 2, (x) => x + 1); // 11
+const result = pipe(
+  5,
+  (x) => x * 2,
+  (x) => x + 1,
+); // 11
 ```
 
 #### `flow`
 
 ```typescript
-function flow<A, B>(fn1: (a: A) => B): (a: A) => B
-function flow<A, B, C>(fn1: (a: A) => B, fn2: (b: B) => C): (a: A) => C
+function flow<A, B>(fn1: (a: A) => B): (a: A) => B;
+function flow<A, B, C>(fn1: (a: A) => B, fn2: (b: B) => C): (a: A) => C;
 // ... up to 20 functions
 ```
 
 Compose functions left-to-right into a reusable pipeline. Like `pipe` but returns a function.
 
 ```typescript
-const process = flow((x: number) => x * 2, (x) => x + 1);
+const process = flow(
+  (x: number) => x * 2,
+  (x) => x + 1,
+);
 process(5); // 11
 ```
 
 #### `curry`
 
 ```typescript
-function curry<A, B, R>(fn: (a: A, b: B) => R): (a: A) => (b: B) => R
-function curry<A, B, C, R>(fn: (a: A, b: B, c: C) => R): (a: A) => (b: B) => (c: C) => R
+function curry<A, B, R>(fn: (a: A, b: B) => R): (a: A) => (b: B) => R;
+function curry<A, B, C, R>(fn: (a: A, b: B, c: C) => R): (a: A) => (b: B) => (c: C) => R;
 // ... up to 4 parameters
 ```
 
@@ -1381,8 +1352,8 @@ Convert a multi-argument function into a chain of single-argument functions.
 #### `uncurry`
 
 ```typescript
-function uncurry<A, B, R>(fn: (a: A) => (b: B) => R): (a: A, b: B) => R
-function uncurry<A, B, C, R>(fn: (a: A) => (b: B) => (c: C) => R): (a: A, b: B, c: C) => R
+function uncurry<A, B, R>(fn: (a: A) => (b: B) => R): (a: A, b: B) => R;
+function uncurry<A, B, C, R>(fn: (a: A) => (b: B) => (c: C) => R): (a: A, b: B, c: C) => R;
 // ... up to 4 parameters
 ```
 
@@ -1391,7 +1362,7 @@ Reverse of `curry`. Convert a curried function back to multi-argument form.
 #### `tupled`
 
 ```typescript
-function tupled<A extends unknown[], R>(fn: (...args: A) => R): (args: A) => R
+function tupled<A extends unknown[], R>(fn: (...args: A) => R): (args: A) => R;
 ```
 
 Convert a multi-argument function into one that takes a single tuple argument.
@@ -1405,7 +1376,7 @@ tupledAdd([1, 2]); // 3
 #### `untupled`
 
 ```typescript
-function untupled<A extends unknown[], R>(fn: (args: A) => R): (...args: A) => R
+function untupled<A extends unknown[], R>(fn: (args: A) => R): (...args: A) => R;
 ```
 
 Reverse of `tupled`. Convert a tuple-argument function back to multi-argument form.
@@ -1415,8 +1386,8 @@ Reverse of `tupled`. Convert a tuple-argument function back to multi-argument fo
 #### `pipeAsync`
 
 ```typescript
-function pipeAsync<A>(value: MaybeAsync<A>): Promise<A>
-function pipeAsync<A, B>(value: MaybeAsync<A>, fn1: (a: A) => MaybeAsync<B>): Promise<B>
+function pipeAsync<A>(value: MaybeAsync<A>): Promise<A>;
+function pipeAsync<A, B>(value: MaybeAsync<A>, fn1: (a: A) => MaybeAsync<B>): Promise<B>;
 // ... up to 20 functions
 ```
 
@@ -1429,11 +1400,8 @@ const data = await pipeAsync(userId, fetchUser, validateUser, enrichProfile);
 #### `flowAsync`
 
 ```typescript
-function flowAsync<A, B>(fn1: (a: A) => MaybeAsync<B>): (a: A) => Promise<B>
-function flowAsync<A, B, C>(
-  fn1: (a: A) => MaybeAsync<B>,
-  fn2: (b: B) => MaybeAsync<C>,
-): (a: A) => Promise<C>
+function flowAsync<A, B>(fn1: (a: A) => MaybeAsync<B>): (a: A) => Promise<B>;
+function flowAsync<A, B, C>(fn1: (a: A) => MaybeAsync<B>, fn2: (b: B) => MaybeAsync<C>): (a: A) => Promise<C>;
 // ... up to 20 functions
 ```
 

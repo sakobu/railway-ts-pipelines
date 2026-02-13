@@ -290,13 +290,13 @@ export function orElse<T, E>(result: Result<T, E>, fn: (error: E) => Result<T, E
  * @param patterns - An object containing handler functions for Ok and Error cases
  * @returns The result of calling the appropriate handler function
  */
-export function match<T, E, R>(
+export function match<T, E, R1, R2>(
   result: Result<T, E>,
   patterns: {
-    ok: (value: T) => R;
-    err: (error: E) => R;
+    ok: (value: T) => R1;
+    err: (error: E) => R2;
   },
-): R {
+): R1 | R2 {
   if (isOk(result)) {
     const okFn = patterns.ok;
     return okFn(result.value);

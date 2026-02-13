@@ -74,9 +74,9 @@ async function compute(input: unknown) {
     mapWith(({ x, y }) => x / y),
   );
 
-  return match<number, ValidationError[], ValidationResult<number>>(result, {
-    ok: (value) => ({ valid: true, data: value }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (value) => ({ valid: true as const, data: value }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 }
 
@@ -90,15 +90,7 @@ Validate at boundaries, chain operations, branch once at the end. Errors propaga
 Cross-field validation + async operations:
 
 ```typescript
-import {
-  object,
-  required,
-  chain,
-  string,
-  minLength,
-  refineAt,
-  validate,
-} from '@railway-ts/pipelines/schema';
+import { object, required, chain, string, minLength, refineAt, validate } from '@railway-ts/pipelines/schema';
 import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { flatMapWith, tapWith } from '@railway-ts/pipelines/result';
 

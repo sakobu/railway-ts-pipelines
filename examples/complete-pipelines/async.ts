@@ -11,7 +11,6 @@ import {
   min,
   validate,
   type ValidationError,
-  type ValidationResult,
   type InferSchemaType,
 } from '@/schema';
 
@@ -69,9 +68,9 @@ const validateAndCreate = async (input: unknown) => {
 
   const result = await pipeAsync(validationResult, flatMapWith(createPost), flatMapWith(addTimestamp));
 
-  return match<EnrichedPost, ValidationError[], ValidationResult<EnrichedPost>>(result, {
-    ok: (post) => ({ valid: true, data: post }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (post) => ({ valid: true as const, data: post }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 };
 
@@ -81,9 +80,9 @@ const validateAndCreateWithApiFailure = async (input: unknown) => {
 
   const result = await pipeAsync(validationResult, flatMapWith(createPostFailing), flatMapWith(addTimestamp));
 
-  return match<EnrichedPost, ValidationError[], ValidationResult<EnrichedPost>>(result, {
-    ok: (post) => ({ valid: true, data: post }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (post) => ({ valid: true as const, data: post }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 };
 

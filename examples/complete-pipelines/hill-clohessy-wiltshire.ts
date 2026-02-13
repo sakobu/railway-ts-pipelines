@@ -1,18 +1,6 @@
 import { flow } from '@/composition';
 import { match, mapWith } from '@/result';
-import {
-  validate,
-  object,
-  required,
-  chain,
-  number,
-  min,
-  max,
-  formatErrors,
-  type InferSchemaType,
-  type ValidationError,
-  type ValidationResult,
-} from '@/schema';
+import { validate, object, required, chain, number, min, max, formatErrors, type InferSchemaType } from '@/schema';
 
 // Types
 type Vec3 = { x: number; y: number; z: number };
@@ -130,9 +118,6 @@ const hillsPropagation = flow(
   mapWith(addDistance),
 );
 
-// Derive the output type from the addDistance function
-type PropagatedState = ReturnType<typeof addDistance>;
-
 // Usage - ISS rendezvous scenario
 const propagationResult = hillsPropagation({
   position: vec3(0.1, 0.5, 0), // 100m radial, 500m along-track
@@ -141,13 +126,13 @@ const propagationResult = hillsPropagation({
   time: 300, // 5 minutes later
 });
 
-const result = match<PropagatedState, ValidationError[], ValidationResult<PropagatedState>>(propagationResult, {
+const result = match(propagationResult, {
   ok: (state) => ({
-    valid: true,
+    valid: true as const,
     data: state,
   }),
   err: (errors) => ({
-    valid: false,
+    valid: false as const,
     errors: formatErrors(errors),
   }),
 });
@@ -178,9 +163,6 @@ const driftAnalysis = flow(
   mapWith(trajectoryToDistances),
 );
 
-// Derive the output type from the trajectoryToDistances function
-type DriftPoint = ReturnType<typeof trajectoryToDistances>[number];
-
 const driftResult = driftAnalysis({
   position: vec3(0.01, 0, 0), // 10m radial offset
   velocity: vec3(0, 0, 0), // no initial relative velocity
@@ -188,13 +170,13 @@ const driftResult = driftAnalysis({
   time: 0, // will be overridden in the analysis
 });
 
-const drift = match<DriftPoint[], ValidationError[], ValidationResult<DriftPoint[]>>(driftResult, {
+const drift = match(driftResult, {
   ok: (points) => ({
-    valid: true,
+    valid: true as const,
     data: points,
   }),
   err: (errors) => ({
-    valid: false,
+    valid: false as const,
     errors: formatErrors(errors),
   }),
 });

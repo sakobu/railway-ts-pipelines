@@ -12,8 +12,6 @@ import {
   refine,
   formatErrors,
   type InferSchemaType,
-  type ValidationError,
-  type ValidationResult,
 } from '@/schema';
 
 // Constants
@@ -114,12 +112,12 @@ const calculateTransfer = (input: TransferInput): TransferDetails => {
 };
 
 // Main pipeline — validate at the boundary, then let it flow
-const hohmannTransfer = (input: unknown): ValidationResult<TransferDetails> => {
+const hohmannTransfer = (input: unknown) => {
   const result = flow((i: unknown) => validate(i, transferInputSchema), mapWith(calculateTransfer))(input);
 
-  return match<TransferDetails, ValidationError[], ValidationResult<TransferDetails>>(result, {
-    ok: (data) => ({ valid: true, data }),
-    err: (errors) => ({ valid: false, errors: formatErrors(errors) }),
+  return match(result, {
+    ok: (data) => ({ valid: true as const, data }),
+    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
   });
 };
 

@@ -221,13 +221,13 @@ export function tap<T>(option: Option<T>, fn: (value: T) => void): Option<T> {
  * @param patterns - An object containing handler functions for Some and None cases
  * @returns The result of calling the appropriate handler function
  */
-export function match<T, R>(
+export function match<T, R1, R2>(
   option: Option<T>,
   patterns: {
-    some: (value: T) => R;
-    none: () => R;
+    some: (value: T) => R1;
+    none: () => R2;
   },
-): R {
+): R1 | R2 {
   if (isSome(option)) {
     const someFn = patterns.some;
     return someFn(option.value);
