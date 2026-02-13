@@ -133,8 +133,10 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       return {
         ...state,
         isSubmitting: action.isSubmitting,
-        ...(action.isSubmitting ? { submitCount: state.submitCount + 1 } : {}),
       };
+
+    case 'INCREMENT_SUBMIT_COUNT':
+      return { ...state, submitCount: state.submitCount + 1 };
 
     case 'SET_FORM_VALIDATING':
       return {

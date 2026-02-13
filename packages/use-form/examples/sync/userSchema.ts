@@ -15,6 +15,7 @@ import {
   stringEnum,
   type InferSchemaType,
   array,
+  min,
 } from '@railway-ts/pipelines/schema';
 
 export const addressSchema = object({
@@ -31,7 +32,7 @@ export const userSchema = object({
   password: required(
     chain(string(), nonEmpty('Password is required'), minLength(8))
   ),
-  age: required(parseNumber()),
+  age: required(chain(parseNumber(), min(18, 'Must be 18 or older'))),
   birthdate: required(parseDate()),
   hasAcceptedTerms: required(
     chain(parseBool(), matches(true, 'You must check this field'))

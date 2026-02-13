@@ -136,7 +136,7 @@ describe('Form Workflow Integration', () => {
     await user.click(nameInput);
     await user.tab();
 
-    // Wait for error to appear
+    // In live mode, blur on untouched field should trigger validation
     await waitFor(() => {
       expect(screen.getByTestId('name-error')).toHaveTextContent(
         'Name is required'

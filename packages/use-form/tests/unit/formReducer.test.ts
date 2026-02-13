@@ -330,7 +330,7 @@ describe('formReducer', () => {
   });
 
   describe('SET_SUBMITTING', () => {
-    test('sets isSubmitting to true and increments submitCount', () => {
+    test('sets isSubmitting to true without changing submitCount', () => {
       const result = formReducer(
         initialState,
         {
@@ -341,10 +341,10 @@ describe('formReducer', () => {
       );
 
       expect(result.isSubmitting).toBe(true);
-      expect(result.submitCount).toBe(1);
+      expect(result.submitCount).toBe(0);
     });
 
-    test('sets isSubmitting to false without incrementing submitCount', () => {
+    test('sets isSubmitting to false without changing submitCount', () => {
       const submittingState: FormState<typeof initialValues> = {
         ...initialState,
         isSubmitting: true,
@@ -363,31 +363,45 @@ describe('formReducer', () => {
       expect(result.isSubmitting).toBe(false);
       expect(result.submitCount).toBe(1);
     });
+  });
 
-    test('increments submitCount on each submission start', () => {
+  describe('INCREMENT_SUBMIT_COUNT', () => {
+    test('increments submitCount by 1', () => {
+      const result = formReducer(
+        initialState,
+        { type: 'INCREMENT_SUBMIT_COUNT' },
+        initialValues
+      );
+
+      expect(result.submitCount).toBe(1);
+    });
+
+    test('increments submitCount on each dispatch', () => {
       let state = initialState;
 
-      // First submit
       state = formReducer(
         state,
-        { type: 'SET_SUBMITTING', isSubmitting: true },
-        initialValues
-      );
-      expect(state.submitCount).toBe(1);
-      state = formReducer(
-        state,
-        { type: 'SET_SUBMITTING', isSubmitting: false },
+        { type: 'INCREMENT_SUBMIT_COUNT' },
         initialValues
       );
       expect(state.submitCount).toBe(1);
 
-      // Second submit
       state = formReducer(
         state,
-        { type: 'SET_SUBMITTING', isSubmitting: true },
+        { type: 'INCREMENT_SUBMIT_COUNT' },
         initialValues
       );
       expect(state.submitCount).toBe(2);
+    });
+
+    test('does not change isSubmitting', () => {
+      const result = formReducer(
+        initialState,
+        { type: 'INCREMENT_SUBMIT_COUNT' },
+        initialValues
+      );
+
+      expect(result.isSubmitting).toBe(false);
     });
   });
 

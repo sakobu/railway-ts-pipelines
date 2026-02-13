@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { isOk } from '@railway-ts/pipelines/result';
+import { isOk, isErr } from '@railway-ts/pipelines/result';
 import { useForm } from '../../src/useForm';
 import {
   userValidator,
@@ -161,7 +161,7 @@ describe('useForm', () => {
       expect(result.current.touched.name).toBe(true);
     });
 
-    test('validates on blur in live mode', async () => {
+    test('validates on blur in live mode', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
@@ -173,9 +173,7 @@ describe('useForm', () => {
         result.current.setFieldTouched('name', true);
       });
 
-      await waitFor(() => {
-        expect(result.current.errors.name).toBe('Name is required');
-      });
+      expect(result.current.errors.name).toBe('Name is required');
     });
   });
 
@@ -266,11 +264,34 @@ describe('useForm', () => {
         result.current.handleSubmit();
       });
 
-      expect(result.current.isSubmitting).toBe(true);
+      // isSubmitting is set after async validation passes, so we need waitFor
+      await waitFor(() => {
+        expect(result.current.isSubmitting).toBe(true);
+      });
 
       await waitFor(() => {
         expect(result.current.isSubmitting).toBe(false);
       });
+    });
+
+    test('does not set isSubmitting when validation fails', async () => {
+      const onSubmit = mock((values: UserForm) => {});
+      const invalidValues = { name: '', email: '', age: 0 };
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: invalidValues,
+          onSubmit,
+        })
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      // isSubmitting should never have been set to true
+      expect(result.current.isSubmitting).toBe(false);
+      expect(onSubmit).not.toHaveBeenCalled();
     });
 
     test('clears server errors on submit', async () => {
@@ -308,6 +329,37 @@ describe('useForm', () => {
       });
 
       expect(preventDefault).toHaveBeenCalled();
+    });
+
+    test('returns err and skips submission when called concurrently', async () => {
+      const onSubmit = mock(async () => {
+        await new Promise((r) => setTimeout(r, 100));
+      });
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        })
+      );
+
+      let secondResult: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+
+      await act(async () => {
+        // Fire first submit (don't await — stays in-flight)
+        const first = result.current.handleSubmit();
+        // Second call hits the guard
+        secondResult = await result.current.handleSubmit();
+        await first;
+      });
+
+      // Second call should have returned err([])
+      expect(isErr(secondResult!)).toBe(true);
+      if (isErr(secondResult!)) {
+        expect(secondResult!.error).toEqual([]);
+      }
+      // First call should have completed normally
+      expect(onSubmit).toHaveBeenCalledTimes(1);
     });
   });
 

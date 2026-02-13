@@ -898,6 +898,10 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isSubmitting: boolean;
     }
   | {
+      /** Increments the submit attempt counter without changing isSubmitting */
+      type: 'INCREMENT_SUBMIT_COUNT';
+    }
+  | {
       /** Sets the form-level async validation state */
       type: 'SET_FORM_VALIDATING';
       /** Whether form-level async validation is currently in progress */
