@@ -6,7 +6,7 @@
       "name": "use-form",
       "devDependencies": {
         "@happy-dom/global-registrator": "^20.0.10",
-        "@railway-ts/pipelines": "^0.1.16",
+        "@railway-ts/pipelines": "^0.1.17",
         "@size-limit/preset-small-lib": "^12.0.0",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/jest-dom": "^6.9.1",
@@ -31,7 +31,7 @@
         "zod": "^4.3.6",
       },
       "peerDependencies": {
-        "@railway-ts/pipelines": "^0.1.16",
+        "@railway-ts/pipelines": "^0.1.17",
         "react": "^18.0.0 || ^19.0.0",
         "typescript": "^5",
       },
@@ -174,7 +174,7 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@railway-ts/pipelines": ["@railway-ts/pipelines@0.1.16", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-hqi15946VPB735//EOEIm/maJoHkVYcseK6MvHEt2Voec28+fd13voamupjzI0cnBGLvWoB5fZLVc2oUH91nSw=="],
+    "@railway-ts/pipelines": ["@railway-ts/pipelines@0.1.17", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-DatSUeGvR6R48gdejxxfEQXTqGKyG3xDotK+VD8IrzZa+43jvR0wa8yrc/ni2cSEwesnziUz7Yk9WiPucYe8VQ=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.52.4", "", { "os": "android", "cpu": "arm" }, "sha512-BTm2qKNnWIQ5auf4deoetINJm2JzvihvGb9R6K/ETwKLql/Bb3Eg2H1FBp1gUb4YGbydMA3jcmQTR73q7J+GAA=="],
 
