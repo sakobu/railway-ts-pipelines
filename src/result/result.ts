@@ -140,7 +140,7 @@ export function map<T, E, U>(result: Result<T, E>, fn: (value: T) => U): Result<
  * @param fn - The function to apply to the contained value, returning a Result
  * @returns The Result returned by the transformation function, or the original error if the input was an error
  */
-export function flatMap<T, E, U>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E> {
+export function flatMap<T, U, E1, E2>(result: Result<T, E1>, fn: (value: T) => Result<U, E2>): Result<U, E1 | E2> {
   return result.ok ? fn(result.value) : result;
 }
 
@@ -200,7 +200,11 @@ export function bimap<T, E, U, F>(result: Result<T, E>, okFn: (value: T) => U, e
  * @param error - The error to return if the predicate fails
  * @returns The original Result if it contains a value that satisfies the predicate, otherwise an Error
  */
-export function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E> {
+export function filter<T, E1, E2>(
+  result: Result<T, E1>,
+  predicate: (value: T) => boolean,
+  error: E2,
+): Result<T, E1 | E2> {
   if (!result.ok) return result;
   return predicate(result.value) ? result : err(error);
 }
@@ -271,7 +275,7 @@ export function tapErr<T, E>(result: Result<T, E>, fn: (error: E) => void): Resu
  * @param fn - A function that receives the Err value and returns a fallback Result
  * @returns The original Ok, or the Result of applying fn to the error
  */
-export function orElse<T, E>(result: Result<T, E>, fn: (error: E) => Result<T, E>): Result<T, E> {
+export function orElse<T1, E1, T2, E2>(result: Result<T1, E1>, fn: (error: E1) => Result<T2, E2>): Result<T1 | T2, E2> {
   return result.ok ? result : fn(result.error);
 }
 
@@ -757,14 +761,16 @@ export function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) =>
  * @param fn - The function to apply to the Ok value, returning a Result or Promise<Result>
  * @returns A function that takes a Result and returns a (possibly async) Result
  */
-export function flatMapWith<T, U, E>(
-  fn: (value: T) => Promise<Result<U, E>>,
-): (result: Result<T, E>) => Promise<Result<U, E>>;
-export function flatMapWith<T, U, E>(fn: (value: T) => Result<U, E>): (result: Result<T, E>) => Result<U, E>;
-export function flatMapWith<T, U, E>(
-  fn: (value: T) => MaybeAsync<Result<U, E>>,
-): (result: Result<T, E>) => MaybeAsync<Result<U, E>> {
-  return (result: Result<T, E>) => {
+export function flatMapWith<T, U, E2>(
+  fn: (value: T) => Promise<Result<U, E2>>,
+): <E1>(result: Result<T, E1>) => Promise<Result<U, E1 | E2>>;
+export function flatMapWith<T, U, E2>(
+  fn: (value: T) => Result<U, E2>,
+): <E1>(result: Result<T, E1>) => Result<U, E1 | E2>;
+export function flatMapWith<T, U, E2>(
+  fn: (value: T) => MaybeAsync<Result<U, E2>>,
+): <E1>(result: Result<T, E1>) => MaybeAsync<Result<U, E1 | E2>> {
+  return (result) => {
     if (!result.ok) return result;
     return fn(result.value);
   };
@@ -813,7 +819,10 @@ export function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>)
  * @param error - The error to return if the predicate fails
  * @returns A function that takes a Result and returns the original Result or an Err
  */
-export function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (result: Result<T, E>) => Result<T, E> {
+export function filterWith<T, E2>(
+  predicate: (value: T) => boolean,
+  error: E2,
+): <E1>(result: Result<T, E1>) => Result<T, E1 | E2> {
   return (result) => filter(result, predicate, error);
 }
 
@@ -839,10 +848,10 @@ export function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (r
  * @param fn - The side-effect function to execute on the Ok value
  * @returns A function that takes a Result, performs the side effect if Ok, and returns the original Result
  */
-export function tapWith<T, E>(fn: (value: T) => Promise<void>): (result: Result<T, E>) => Promise<Result<T, E>>;
-export function tapWith<T, E>(fn: (value: T) => void): (result: Result<T, E>) => Result<T, E>;
-export function tapWith<T, E>(fn: (value: T) => MaybeAsync<void>): (result: Result<T, E>) => MaybeAsync<Result<T, E>> {
-  return (result: Result<T, E>) => {
+export function tapWith<T>(fn: (value: T) => Promise<void>): <E>(result: Result<T, E>) => Promise<Result<T, E>>;
+export function tapWith<T>(fn: (value: T) => void): <E>(result: Result<T, E>) => Result<T, E>;
+export function tapWith<T>(fn: (value: T) => MaybeAsync<void>): <E>(result: Result<T, E>) => MaybeAsync<Result<T, E>> {
+  return (result) => {
     if (!result.ok) return result;
     const out = fn(result.value);
     if (out instanceof Promise) return out.then(() => result);
@@ -903,12 +912,14 @@ export function tapErrWith<E>(
  * // Point-free in a pipe — recover using the error
  * const result = pipe(
  *   err("not found"),
- *   orElseWith((e: string) => ok(`recovered from: ${e}`) as Result<string, string>)
+ *   orElseWith((e: string) => ok(`recovered from: ${e}`))
  * ); // ok("recovered from: not found")
  *
  * @param fn - A function that receives the Err value and returns a fallback Result
  * @returns A function that takes a Result and returns either the original Ok or the result of calling fn
  */
-export function orElseWith<T, E>(fn: (error: E) => Result<T, E>): (result: Result<T, E>) => Result<T, E> {
+export function orElseWith<E1, T2, E2>(
+  fn: (error: E1) => Result<T2, E2>,
+): <T1>(result: Result<T1, E1>) => Result<T1 | T2, E2> {
   return (result) => orElse(result, fn);
 }

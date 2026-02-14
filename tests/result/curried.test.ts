@@ -89,7 +89,7 @@ describe('Result curried helpers', () => {
   describe('tapWith (sync)', () => {
     test('executes side effect on Ok', () => {
       let called = false;
-      const doTap = tapWith<number, string>((x: number) => {
+      const doTap = tapWith((x: number) => {
         called = true;
         expect(x).toBe(5);
       });
@@ -100,7 +100,7 @@ describe('Result curried helpers', () => {
 
     test('no-ops on Err', () => {
       let called = false;
-      const doTap = tapWith<number, string>(() => {
+      const doTap = tapWith<number>(() => {
         called = true;
       });
       const result = doTap(err('fail'));
@@ -112,7 +112,7 @@ describe('Result curried helpers', () => {
   describe('tapWith (async)', () => {
     test('executes async side effect on Ok', async () => {
       let called = false;
-      const doTap = tapWith<number, string>(async (x: number) => {
+      const doTap = tapWith(async (x: number) => {
         called = true;
         expect(x).toBe(5);
       });
@@ -122,7 +122,7 @@ describe('Result curried helpers', () => {
     });
 
     test('returns original on Err without awaiting', () => {
-      const doTap = tapWith<number, string>(async () => {});
+      const doTap = tapWith<number>(async () => {});
       const result = doTap(err('fail'));
       // Err short-circuits synchronously even with async overload
       expect(result as unknown).toEqual(err('fail'));
@@ -184,12 +184,12 @@ describe('Result curried helpers', () => {
 
   describe('orElseWith', () => {
     test('returns original on Ok', () => {
-      const recover = orElseWith<number, string>(() => ok(0));
+      const recover = orElseWith(() => ok(0));
       expect(recover(ok(42))).toEqual(ok(42));
     });
 
     test('calls fn with error on Err', () => {
-      const recover = orElseWith<number, string>((e) => ok(e.length));
+      const recover = orElseWith((e: string) => ok(e.length));
       expect(recover(err('boom'))).toEqual(ok(4));
     });
   });

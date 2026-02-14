@@ -63,7 +63,7 @@ Transform the Ok value. Err passes through unchanged.
 #### `flatMap`
 
 ```typescript
-function flatMap<T, E, U>(result: Result<T, E>, fn: (value: T) => Result<U, E>): Result<U, E>;
+function flatMap<T, U, E1, E2>(result: Result<T, E1>, fn: (value: T) => Result<U, E2>): Result<U, E1 | E2>;
 ```
 
 Transform the Ok value with a function that returns a Result. Useful for chaining operations that can fail.
@@ -87,7 +87,7 @@ Transform both Ok and Err branches in one call.
 #### `filter`
 
 ```typescript
-function filter<T, E>(result: Result<T, E>, predicate: (value: T) => boolean, error: E): Result<T, E>;
+function filter<T, E1, E2>(result: Result<T, E1>, predicate: (value: T) => boolean, error: E2): Result<T, E1 | E2>;
 ```
 
 Keep the Ok value if the predicate passes, otherwise return the provided error. Err passes through unchanged.
@@ -115,7 +115,7 @@ Execute a side effect on the Err value without changing the Result.
 #### `orElse`
 
 ```typescript
-function orElse<T, E>(result: Result<T, E>, fn: (error: E) => Result<T, E>): Result<T, E>;
+function orElse<T1, E1, T2, E2>(result: Result<T1, E1>, fn: (error: E1) => Result<T2, E2>): Result<T1 | T2, E2>;
 ```
 
 Recover from an Err by applying `fn` to the error. Ok passes through unchanged.
@@ -258,8 +258,8 @@ function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) => Result
 #### `flatMapWith`
 
 ```typescript
-function flatMapWith<T, U, E>(fn: (value: T) => Result<U, E>): (result: Result<T, E>) => Result<U, E>;
-function flatMapWith<T, U, E>(fn: (value: T) => Promise<Result<U, E>>): (result: Result<T, E>) => Promise<Result<U, E>>;
+function flatMapWith<T, U, E2>(fn: (value: T) => Result<U, E2>): <E1>(result: Result<T, E1>) => Result<U, E1 | E2>;
+function flatMapWith<T, U, E2>(fn: (value: T) => Promise<Result<U, E2>>): <E1>(result: Result<T, E1>) => Promise<Result<U, E1 | E2>>;
 ```
 
 Supports both sync and async step functions.
@@ -273,14 +273,14 @@ function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>) => Res
 #### `filterWith`
 
 ```typescript
-function filterWith<T, E>(predicate: (value: T) => boolean, error: E): (result: Result<T, E>) => Result<T, E>;
+function filterWith<T, E2>(predicate: (value: T) => boolean, error: E2): <E1>(result: Result<T, E1>) => Result<T, E1 | E2>;
 ```
 
 #### `tapWith`
 
 ```typescript
-function tapWith<T, E>(fn: (value: T) => void): (result: Result<T, E>) => Result<T, E>;
-function tapWith<T, E>(fn: (value: T) => Promise<void>): (result: Result<T, E>) => Promise<Result<T, E>>;
+function tapWith<T>(fn: (value: T) => void): <E>(result: Result<T, E>) => Result<T, E>;
+function tapWith<T>(fn: (value: T) => Promise<void>): <E>(result: Result<T, E>) => Promise<Result<T, E>>;
 ```
 
 Supports both sync and async side effects.
@@ -295,7 +295,7 @@ function tapErrWith<E>(fn: (error: E) => Promise<void>): <T>(result: Result<T, E
 #### `orElseWith`
 
 ```typescript
-function orElseWith<T, E>(fn: (error: E) => Result<T, E>): (result: Result<T, E>) => Result<T, E>;
+function orElseWith<E1, T2, E2>(fn: (error: E1) => Result<T2, E2>): <T1>(result: Result<T1, E1>) => Result<T1 | T2, E2>;
 ```
 
 ---

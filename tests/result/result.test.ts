@@ -338,7 +338,7 @@ describe('Result', () => {
     test('preserves Err variant', () => {
       const error = 'original error';
       const result = err<string>(error);
-      const filtered = filter<number, string>(result, (x) => x > 40, 'Value too small');
+      const filtered = filter<number, string, string>(result, (x) => x > 40, 'Value too small');
 
       expect(isErr(filtered)).toBe(true);
       if (isErr(filtered)) {
