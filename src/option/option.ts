@@ -522,3 +522,22 @@ export function tapWith<T>(fn: (value: T) => MaybeAsync<void>): (option: Option<
     return option;
   };
 }
+
+/**
+ * Curried version of `mapToResult`. Returns a function that converts an Option
+ * to a Result, using the provided error if the Option is None.
+ *
+ * @example
+ * const toResult = mapToResultWith('not found');
+ * toResult(some(42));  // ok(42)
+ * toResult(none());    // err('not found')
+ *
+ * // Point-free in a pipe
+ * pipe(fromNullable(value), mapToResultWith('missing'));
+ *
+ * @param error - The error to return if the Option is None
+ * @returns A function that takes an Option and returns a Result
+ */
+export function mapToResultWith<E>(error: E): <T>(option: Option<T>) => Result<T, E> {
+  return (option) => mapToResult(option, error);
+}

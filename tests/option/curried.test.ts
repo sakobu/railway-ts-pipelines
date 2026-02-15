@@ -1,7 +1,18 @@
 import { describe, test, expect } from 'bun:test';
 
 import { pipe } from '@/composition';
-import { type Option, some, none, mapWith, flatMapWith, filterWith, tapWith } from '@/option';
+import {
+  type Option,
+  some,
+  none,
+  fromNullable,
+  mapWith,
+  flatMapWith,
+  filterWith,
+  tapWith,
+  mapToResultWith,
+} from '@/option';
+import { ok, err } from '@/result';
 
 describe('Option curried helpers', () => {
   describe('mapWith', () => {
@@ -102,6 +113,27 @@ describe('Option curried helpers', () => {
       const result = doTap(input);
       // None short-circuits synchronously even with async overload
       expect(result as unknown).toEqual(none());
+    });
+  });
+
+  describe('mapToResultWith', () => {
+    test('converts Some to Ok', () => {
+      const toResult = mapToResultWith('not found');
+      expect(toResult(some(42))).toEqual(ok(42));
+    });
+
+    test('converts None to Err with provided error', () => {
+      const toResult = mapToResultWith('not found');
+      expect(toResult(none())).toEqual(err('not found'));
+    });
+
+    test('works point-free in a pipe with fromNullable', () => {
+      const lookup = new Map([['a', 1]]);
+      const result = pipe(fromNullable(lookup.get('a')), mapToResultWith('missing'));
+      expect(result).toEqual(ok(1));
+
+      const missing = pipe(fromNullable(lookup.get('z')), mapToResultWith('missing'));
+      expect(missing).toEqual(err('missing'));
     });
   });
 

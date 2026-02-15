@@ -41,7 +41,7 @@ import { mapWith, flatMapWith, mapErrWith, filterWith, tapWith, tapErrWith } fro
 ### Option Helpers
 
 ```typescript
-import { mapWith, flatMapWith, filterWith, tapWith } from '@railway-ts/pipelines/option';
+import { mapWith, flatMapWith, filterWith, tapWith, mapToResultWith } from '@railway-ts/pipelines/option';
 ```
 
 ### Usage

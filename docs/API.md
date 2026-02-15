@@ -259,7 +259,9 @@ function mapWith<T, U>(fn: (value: T) => U): <E>(result: Result<T, E>) => Result
 
 ```typescript
 function flatMapWith<T, U, E2>(fn: (value: T) => Result<U, E2>): <E1>(result: Result<T, E1>) => Result<U, E1 | E2>;
-function flatMapWith<T, U, E2>(fn: (value: T) => Promise<Result<U, E2>>): <E1>(result: Result<T, E1>) => Promise<Result<U, E1 | E2>>;
+function flatMapWith<T, U, E2>(
+  fn: (value: T) => Promise<Result<U, E2>>,
+): <E1>(result: Result<T, E1>) => Promise<Result<U, E1 | E2>>;
 ```
 
 Supports both sync and async step functions.
@@ -273,7 +275,10 @@ function mapErrWith<E, F>(fn: (error: E) => F): <T>(result: Result<T, E>) => Res
 #### `filterWith`
 
 ```typescript
-function filterWith<T, E2>(predicate: (value: T) => boolean, error: E2): <E1>(result: Result<T, E1>) => Result<T, E1 | E2>;
+function filterWith<T, E2>(
+  predicate: (value: T) => boolean,
+  error: E2,
+): <E1>(result: Result<T, E1>) => Result<T, E1 | E2>;
 ```
 
 #### `tapWith`
@@ -487,6 +492,14 @@ function tapWith<T>(fn: (value: T) => Promise<void>): (option: Option<T>) => Pro
 ```
 
 Supports both sync and async side effects.
+
+#### `mapToResultWith`
+
+```typescript
+function mapToResultWith<E>(error: E): <T>(option: Option<T>) => Result<T, E>;
+```
+
+Curried version of `mapToResult`. Partially applies the error value, returning a function suitable for `pipe` and `flow`.
 
 ---
 
