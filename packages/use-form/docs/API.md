@@ -60,6 +60,8 @@ Configuration object.
   onSubmit?: (values: TValues) => void | Promise<void>;
   validationMode?: "live" | "blur" | "mount" | "submit";
   fieldValidators?: Partial<Record<ExtractFieldPaths<TValues>, FieldValidator>>;
+  onValuesChange?: (values: TValues, prevValues: TValues) => void;
+  onFieldChange?: (field: string, value: unknown, values: TValues) => void;
 }
 ```
 
@@ -137,6 +139,44 @@ const form = useForm(userSchema, {
 ```
 
 Field validator errors are stored in `fieldErrors` and merged into `errors` with priority above schema errors but below server errors.
+
+#### onValuesChange
+
+Type: `(values: TValues, prevValues: TValues) => void`
+Optional
+
+Callback invoked whenever form values change. Fires on field edits,
+programmatic updates via `setFieldValue`/`setValues`, form reset, and
+once on mount (where `prevValues` equals `values`). Inline functions
+are safe — the callback is stored in a ref internally.
+
+```typescript
+onValuesChange: (values, prevValues) => {
+  if (values.altitude !== prevValues.altitude) {
+    store.setAltitude(values.altitude);
+  }
+},
+```
+
+#### onFieldChange
+
+Type: `(field: string, value: unknown, values: TValues) => void`
+Optional
+
+Callback invoked when an individual field changes via `setFieldValue`.
+All native bindings route through `setFieldValue`, so this catches every
+user interaction. Does not fire for batch updates (`setValues`, `resetForm`)
+— use `onValuesChange` for those. Inline functions are safe.
+
+Array helper operations (`push`, `remove`, `insert`, `swap`, `replace`) also
+route through `setFieldValue`, so `onFieldChange` fires for them with the
+array field path (e.g., `"contacts"`) and the full new array as the value.
+
+```typescript
+onFieldChange: (field, value, values) => {
+  analytics.track('field_edited', { field });
+},
+```
 
 ## Form State
 

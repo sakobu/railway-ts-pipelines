@@ -183,7 +183,14 @@ export const useForm = <TValues extends Record<string, unknown>>(
   validatorOrSchema: FormValidator<TValues>,
   options: FormOptions<TValues>
 ) => {
-  const { initialValues, onSubmit, validationMode, fieldValidators } = options;
+  const {
+    initialValues,
+    onSubmit,
+    validationMode,
+    fieldValidators,
+    onValuesChange,
+    onFieldChange,
+  } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
@@ -234,6 +241,32 @@ export const useForm = <TValues extends Record<string, unknown>>(
   const formStateRef = useRef(formState);
   useEffect(() => {
     formStateRef.current = formState;
+  });
+
+  // =========================================================================
+  // Value change callbacks
+  // =========================================================================
+
+  // --- onValuesChange ---
+  // Ref avoids dependency-array issues with inline functions (same pattern as useDebounce).
+  const onValuesChangeRef = useRef(onValuesChange);
+  useEffect(() => {
+    onValuesChangeRef.current = onValuesChange;
+  });
+
+  // Track previous values for the second argument.
+  const prevValuesRef = useRef(formState.values);
+
+  useEffect(() => {
+    onValuesChangeRef.current?.(formState.values, prevValuesRef.current);
+    prevValuesRef.current = formState.values;
+  }, [formState.values]);
+
+  // --- onFieldChange ---
+  // Fired imperatively from setFieldValue — no effect needed.
+  const onFieldChangeRef = useRef(onFieldChange);
+  useEffect(() => {
+    onFieldChangeRef.current = onFieldChange;
   });
 
   // Sequence counter for race condition protection on async validation
@@ -502,6 +535,9 @@ export const useForm = <TValues extends Record<string, unknown>>(
         field,
         value
       );
+
+      // Fire onFieldChange with the field path, new value, and computed next state
+      onFieldChangeRef.current?.(field, value, updatedValues);
 
       // Dispatch state update
       dispatch({

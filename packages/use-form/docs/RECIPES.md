@@ -18,19 +18,21 @@ Patterns and techniques. Each recipe is self-contained.
 10. [Discriminated Unions](#discriminated-unions)
 11. [Custom Validators](#custom-validators)
 12. [Programmatic Field Updates](#programmatic-field-updates)
-13. [submitCount Patterns](#submitcount-patterns)
-14. [Understanding Error Priority](#understanding-error-priority)
-15. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
-16. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
-17. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
-18. [Custom Field Components](#custom-field-components)
-19. [Performance Patterns](#performance-patterns)
-20. [UI Library Integration](#ui-library-integration)
-21. [Testing Forms](#testing-forms)
-22. [Form State Persistence](#form-state-persistence)
-23. [Unsaved Changes Warning](#unsaved-changes-warning)
-24. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
-25. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
+13. [Syncing Values to External State](#syncing-values-to-external-state)
+14. [Reacting to Individual Field Changes](#reacting-to-individual-field-changes)
+15. [submitCount Patterns](#submitcount-patterns)
+16. [Understanding Error Priority](#understanding-error-priority)
+17. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
+18. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
+19. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
+20. [Custom Field Components](#custom-field-components)
+21. [Performance Patterns](#performance-patterns)
+22. [UI Library Integration](#ui-library-integration)
+23. [Testing Forms](#testing-forms)
+24. [Form State Persistence](#form-state-persistence)
+25. [Unsaved Changes Warning](#unsaved-changes-warning)
+26. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
+27. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
 
 ---
 
@@ -845,6 +847,74 @@ function CalculatorForm() {
   );
 }
 ```
+
+---
+
+## Syncing Values to External State
+
+**Problem:** You need to keep an external store (Zustand, Redux, URL params)
+in sync with form values without per-field `useEffect` hooks.
+
+**Solution:** Use `onValuesChange` with `prevValues` for efficient diffing.
+
+```tsx
+const form = useForm(missionSchema, {
+  initialValues: { altitude: 400, velocity: 8, name: '' },
+  onValuesChange: (values, prev) => {
+    if (values.altitude !== prev.altitude) {
+      missionStore.setAltitude(Number(values.altitude));
+    }
+    if (values.velocity !== prev.velocity) {
+      missionStore.setVelocity(Number(values.velocity));
+    }
+  },
+  onSubmit: launchMission,
+});
+```
+
+For simple cases where the sync is cheap (e.g., Zustand setters are no-ops
+when the value hasn't changed), you can skip the diff:
+
+```tsx
+onValuesChange: (values) => {
+  missionStore.setAltitude(Number(values.altitude));
+  missionStore.setVelocity(Number(values.velocity));
+},
+```
+
+> **Note:** Fires on mount with `(initialValues, initialValues)`. If your
+> store is already seeded, this is a no-op.
+
+---
+
+## Reacting to Individual Field Changes
+
+**Problem:** You want to run a side effect when a specific field changes —
+analytics tracking, conditional field visibility, dependent field updates —
+without watching the entire form.
+
+**Solution:** Use `onFieldChange` for per-field reactions.
+
+```tsx
+const form = useForm(schema, {
+  initialValues: { country: '', state: '', zip: '' },
+  onFieldChange: (field, value, values) => {
+    // Clear dependent fields when country changes
+    if (field === 'country') {
+      form.setFieldValue('state', '');
+      form.setFieldValue('zip', '');
+    }
+    // Track field interactions
+    analytics.track('field_edited', { field, formId: 'checkout' });
+  },
+  onSubmit: handleCheckout,
+});
+```
+
+`onFieldChange` fires from all native bindings (inputs, selects, checkboxes,
+sliders, radios, file inputs) and array helper operations (`push`, `remove`,
+`insert`, `swap`, `replace`). It does **not** fire for batch updates via
+`setValues` or `resetForm` — use `onValuesChange` for those.
 
 ---
 

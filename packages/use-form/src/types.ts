@@ -203,6 +203,37 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
       values: TValues
     ) => string | undefined | Promise<string | undefined>;
   };
+
+  /**
+   * Optional callback invoked whenever form values change.
+   *
+   * Fires on every value update (field edits, setFieldValue, setValues, resetForm)
+   * and once on mount with initialValues. Receives both current and previous values
+   * to enable efficient diffing without external state.
+   *
+   * The callback is stored in a ref internally, so inline functions are safe.
+   *
+   * @param values - The current form values after the change
+   * @param prevValues - The form values before the change (same as values on mount)
+   */
+  onValuesChange?: (values: TValues, prevValues: TValues) => void;
+
+  /**
+   * Optional callback invoked when an individual field value changes.
+   *
+   * Fires from setFieldValue only — not from setValues, resetForm, or other batch
+   * updates. For batch change detection, use onValuesChange with prevValues.
+   *
+   * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
+   * route through setFieldValue, so this catches every user-driven field interaction.
+   *
+   * The callback is stored in a ref internally, so inline functions are safe.
+   *
+   * @param field - The field path that changed (e.g., "email", "address.city")
+   * @param value - The new value for the field
+   * @param values - The complete form values after the change
+   */
+  onFieldChange?: (field: string, value: unknown, values: TValues) => void;
 }
 
 // =============================================================================
