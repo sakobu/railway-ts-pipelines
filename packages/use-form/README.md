@@ -174,8 +174,6 @@ export function RegistrationForm() {
     },
     fieldValidators: {
       username: async (value) => {
-        if (value.length < 3) return undefined;
-
         try {
           const { available } = await queryClient.fetchQuery({
             queryKey: ['check-username', value],
