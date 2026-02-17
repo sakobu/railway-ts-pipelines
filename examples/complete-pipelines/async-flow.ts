@@ -74,7 +74,7 @@ const processOrder = flowAsync(
   orElseWith((error: string) => {
     if (error === 'Item is out of stock') {
       console.log('[orElseWith] Recovering: placing back-order');
-      return ok({ backordered: true, message: 'Item on back-order. You will be notified.' } as const);
+      return ok({ backordered: true, message: 'Item on back-order. You will be notified.' });
     }
     return err(error);
   }),
