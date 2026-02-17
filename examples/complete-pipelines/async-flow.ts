@@ -44,15 +44,15 @@ type OrderSummary = Order & { total: number; totalWithTax: number };
 const TAX_RATE = 0.08;
 const MINIMUM_ORDER_TOTAL = 10;
 
-function formatValidationErrors(errors: ValidationError[]) {
+const formatValidationErrors = (errors: ValidationError[]) => {
   return Object.entries(formatErrors(errors))
     .map(([field, msg]) => `${field}: ${msg}`)
     .join('; ');
-}
+};
 
-function checkInventory(order: Order) {
+const checkInventory = (order: Order) => {
   return Promise.resolve(order.item === 'out-of-stock-widget' ? err('Item is out of stock') : ok(order));
-}
+};
 
 // Pipeline
 const processOrder = flowAsync(
