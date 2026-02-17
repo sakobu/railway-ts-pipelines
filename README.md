@@ -51,17 +51,7 @@ Validate untrusted input, transform it, handle the result -- in one pipeline:
 ```typescript
 import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { mapWith, match } from '@railway-ts/pipelines/result';
-import {
-  validate,
-  object,
-  required,
-  chain,
-  parseNumber,
-  min,
-  formatErrors,
-  type ValidationError,
-  type ValidationResult,
-} from '@railway-ts/pipelines/schema';
+import { validate, object, required, chain, parseNumber, min, formatErrors } from '@railway-ts/pipelines/schema';
 
 const schema = object({
   x: required(chain(parseNumber(), min(0))),
@@ -85,7 +75,7 @@ await compute({ x: '10', y: '2' }).then(console.log); // { valid: true, data: 5 
 
 Validate at boundaries, chain operations, branch once at the end. Errors propagate automatically.
 
-## Real-World Edge Case
+## Real-World Use Case
 
 Cross-field validation + async operations:
 

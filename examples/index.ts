@@ -20,6 +20,7 @@ export * from './complete-pipelines/hill-clohessy-wiltshire';
 export * from './complete-pipelines/hohmann-transfer';
 export * from './complete-pipelines/async';
 export * from './complete-pipelines/async-launch';
+export * from './complete-pipelines/async-flow';
 
 /*
 Example Categories:
@@ -60,4 +61,5 @@ COMPLETE PIPELINES:
 - Hohmann Transfer (orbital maneuvers)
 - Async API call (input validation + network request + error handling)
 - Async Launch Decision (input validation + multiple async steps + final decision)
+- Async Flow (schema validation + Result operators + flowAsync pipeline)
 */
