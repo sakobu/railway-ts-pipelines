@@ -325,13 +325,31 @@ match(validateForm(input), {
 });
 ```
 
+### `partition` -- Keep Both Sides
+
+When you need both successes and failures from a batch operation:
+
+```typescript
+import { ok, err, partition } from '@railway-ts/pipelines/result';
+
+const results = users.map((user) => validateUser(user));
+const { successes, failures } = partition(results);
+
+console.log(`${successes.length} valid, ${failures.length} invalid`);
+// Process valid users
+saveUsers(successes);
+// Report invalid ones
+reportErrors(failures);
+```
+
 ### When to Use Which
 
-|                | `combine`                              | `combineAll`                      |
-| -------------- | -------------------------------------- | --------------------------------- |
-| **Stops at**   | First error                            | Collects all                      |
-| **Error type** | `E` (single)                           | `E[]` (array of all)              |
-| **Use case**   | Parallel fetches, dependent operations | Form validation, batch processing |
+|                | `combine`                              | `combineAll`                     | `partition`                         |
+| -------------- | -------------------------------------- | -------------------------------- | ----------------------------------- |
+| **Stops at**   | First error                            | Collects all                     | Collects all                        |
+| **Returns**    | `Result<T[], E>`                       | `Result<T[], E[]>`               | `{ successes: T[]; failures: E[] }` |
+| **Error type** | `E` (single)                           | `E[]` (array of all)             | `E[]` (array of all)                |
+| **Use case**   | Parallel fetches, dependent operations | Form validation (all-or-nothing) | Batch processing (partial success)  |
 
 ---
 

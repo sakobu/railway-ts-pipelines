@@ -26,6 +26,7 @@ import {
   fromPromise,
   fromPromiseWithError,
   toPromise,
+  partition,
 } from '@/result';
 
 describe('Result', () => {
@@ -479,6 +480,70 @@ describe('Result', () => {
       if (isErr(result)) {
         expect(result.error).toEqual(['error']);
       }
+    });
+  });
+
+  describe('partition function', () => {
+    test('separates mixed results into successes and failures', () => {
+      const results = [ok(1), err('bad'), ok(3), err('worse')];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([1, 3]);
+      expect(failures).toEqual(['bad', 'worse']);
+    });
+
+    test('returns all values when all Ok', () => {
+      const results = [ok(1), ok(2), ok(3)];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([1, 2, 3]);
+      expect(failures).toEqual([]);
+    });
+
+    test('returns all errors when all Err', () => {
+      const results = [err('a'), err('b'), err('c')];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([]);
+      expect(failures).toEqual(['a', 'b', 'c']);
+    });
+
+    test('returns empty arrays for empty input', () => {
+      const results: Result<number, string>[] = [];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([]);
+      expect(failures).toEqual([]);
+    });
+
+    test('preserves order within successes and failures', () => {
+      const results = [ok(1), err('e1'), ok(2), err('e2'), ok(3)];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([1, 2, 3]);
+      expect(failures).toEqual(['e1', 'e2']);
+    });
+
+    test('works with complex value and error types', () => {
+      type User = { id: number; name: string };
+      type ApiError = { code: number; message: string };
+
+      const results: Result<User, ApiError>[] = [
+        ok({ id: 1, name: 'Alice' }),
+        err({ code: 404, message: 'Not found' }),
+        ok({ id: 2, name: 'Bob' }),
+        err({ code: 500, message: 'Server error' }),
+      ];
+      const { successes, failures } = partition(results);
+
+      expect(successes).toEqual([
+        { id: 1, name: 'Alice' },
+        { id: 2, name: 'Bob' },
+      ]);
+      expect(failures).toEqual([
+        { code: 404, message: 'Not found' },
+        { code: 500, message: 'Server error' },
+      ]);
     });
   });
 

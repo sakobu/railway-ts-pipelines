@@ -577,6 +577,21 @@ export function combineAll<T, E>(results: readonly Result<T, E>[]): Result<T[], 
   return errors.length > 0 ? err(errors) : ok(values);
 }
 
+/**
+ * Separates an array of Results into successes and failures.
+ * Unlike `combineAll` which is all-or-nothing, `partition` preserves both sides —
+ * useful for batch processing where partial success is meaningful.
+ *
+ * @example
+ * const results = [ok(1), err('bad'), ok(3), err('worse')];
+ * partition(results);
+ * // { successes: [1, 3], failures: ['bad', 'worse'] }
+ */
+export const partition = <T, E>(results: Result<T, E>[]): { successes: T[]; failures: E[] } => ({
+  successes: results.filter((r) => isOk(r)).map((r) => r.value),
+  failures: results.filter((r) => isErr(r)).map((r) => r.error),
+});
+
 // ─── Conversions ────────────────────────────────────────────
 
 /**

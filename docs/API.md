@@ -192,6 +192,19 @@ combineAll([ok(1), err('a'), err('b')]); // err(['a', 'b'])
 
 > **Implementation note: Tuple preservation.** Both `combine` and `combineAll` use 10 overloads to preserve exact tuple types instead of widening to arrays. `combine([ok(42), ok('hello')])` returns `Result<[number, string], E>`, not `Result<(number | string)[], E>`. This gives you type-safe destructuring at each position. Arrays longer than 10 elements fall back to union array types.
 
+#### `partition`
+
+```typescript
+function partition<T, E>(results: Result<T, E>[]): { successes: T[]; failures: E[] };
+```
+
+Separates an array of Results into successes and failures. Unlike `combineAll` which is all-or-nothing, `partition` preserves both sides — useful for batch processing where partial success is meaningful.
+
+```typescript
+partition([ok(1), err('a'), ok(2), err('b')]);
+// { successes: [1, 2], failures: ['a', 'b'] }
+```
+
 ### Conversions
 
 #### `mapToOption`

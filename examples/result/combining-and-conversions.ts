@@ -9,6 +9,7 @@ import {
   isErr,
   mapToOption,
   ok,
+  partition,
   toPromise,
 } from '@/result';
 
@@ -32,6 +33,18 @@ console.log('combineAll all ok:', allGood); // { ok: true, value: [10, 20, 30] }
 
 const multipleErrors = combineAll([ok(1), err('err-a'), ok(3), err('err-b')]);
 console.log('combineAll gathers errors:', multipleErrors); // { ok: false, error: ["err-a", "err-b"] }
+
+// === partition: Separate Successes and Failures ===
+console.log('\n=== partition: Separate Successes and Failures ===');
+
+const mixed = partition([ok(1), err('bad'), ok(3), err('worse')]);
+console.log('partition mixed:', mixed); // { successes: [1, 3], failures: ['bad', 'worse'] }
+
+const allSucceed = partition([ok(10), ok(20), ok(30)]);
+console.log('partition all ok:', allSucceed); // { successes: [10, 20, 30], failures: [] }
+
+const allFail = partition([err('a'), err('b')]);
+console.log('partition all err:', allFail); // { successes: [], failures: ['a', 'b'] }
 
 // === fromTry: Capture Exceptions as Results ===
 console.log('\n=== fromTry: Capture Exceptions ===');
