@@ -1,6 +1,6 @@
 {
   "name": "@railway-ts/use-form",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "React form hook that works with @railway-ts/pipelines to manage form state, validation, and submission.",
   "type": "module",
   "main": "./dist/index.mjs",
