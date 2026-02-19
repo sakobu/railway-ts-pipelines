@@ -82,7 +82,7 @@ function CreateUserForm() {
         return;
       }
 
-      window.location.href = '/users';
+      window.location.reassign = '/users';
     },
   });
 
@@ -345,15 +345,9 @@ function PreferencesForm() {
 import { chain, refine } from '@railway-ts/pipelines/schema';
 
 const fileValidator = chain(
-  refine((value: unknown) => value instanceof File, 'Must be a file'),
-  refine(
-    (value: unknown) => (value as File).size <= 5_000_000,
-    'File too large (max 5MB)'
-  ),
-  refine(
-    (value: unknown) => (value as File).type.startsWith('image/'),
-    'Must be an image'
-  )
+  refine<File>((value) => value instanceof File, 'Must be a file'),
+  refine<File>((value) => value.size <= 5_000_000, 'File too large (max 5MB)'),
+  refine<File>((value) => value.type.startsWith('image/'), 'Must be an image'),
 );
 
 const uploadSchema = object({
@@ -758,40 +752,32 @@ function PaymentForm() {
 
 **Problem:** You need reusable validation functions beyond what's built in -- strong passwords, phone numbers, credit card numbers.
 
-**Solution:** Create validators with `refine`. Use `path: ''` so the error attaches to the field being validated (the library maps it to the correct path automatically).
+**Solution:** Create validators with `refine`. The predicate receives the typed value and returns a boolean -- the library handles error creation and path resolution internally.
 
 ```typescript
 import { refine } from '@railway-ts/pipelines/schema';
-import { ok, err } from '@railway-ts/pipelines/result';
 
 const strongPassword = (message = 'Password is too weak') =>
-  refine<string>((value: unknown) => {
-    if (!value || typeof value !== 'string') return ok(value as string);
-
+  refine<string>((value) => {
     const hasUpper = /[A-Z]/.test(value);
     const hasLower = /[a-z]/.test(value);
     const hasNumber = /[0-9]/.test(value);
     const hasSpecial = /[!@#$%^&*]/.test(value);
     const isLongEnough = value.length >= 8;
 
-    if (hasUpper && hasLower && hasNumber && hasSpecial && isLongEnough) {
-      return ok(value);
-    }
-    return err([{ path: '', message }]);
-  });
+    return hasUpper && hasLower && hasNumber && hasSpecial && isLongEnough;
+  }, message);
 
 const phoneNumber = (message = 'Invalid phone number') =>
-  refine<string>((value: unknown) => {
-    if (!value || typeof value !== 'string') return ok(value as string);
+  refine<string>((value) => {
     const cleaned = value.replace(/\D/g, '');
-    return cleaned.length === 10 ? ok(value) : err([{ path: '', message }]);
-  });
+    return cleaned.length === 10;
+  }, message);
 
 const creditCard = (message = 'Invalid credit card') =>
-  refine<string>((value: unknown) => {
-    if (!value || typeof value !== 'string') return ok(value as string);
+  refine<string>((value) => {
     const cleaned = value.replace(/\s/g, '');
-    if (!/^\d{13,19}$/.test(cleaned)) return err([{ path: '', message }]);
+    if (!/^\d{13,19}$/.test(cleaned)) return false;
 
     // Luhn algorithm
     let sum = 0;
@@ -805,8 +791,8 @@ const creditCard = (message = 'Invalid credit card') =>
       sum += digit;
       isEven = !isEven;
     }
-    return sum % 10 === 0 ? ok(value) : err([{ path: '', message }]);
-  });
+    return sum % 10 === 0;
+  }, message);
 
 // Use in schemas
 const schema = object({
@@ -816,7 +802,7 @@ const schema = object({
 });
 ```
 
-The `path: ''` convention means "this field" -- the library resolves it to whatever field path this validator is nested under. See the [API Reference](./API.md#validation-paths) for the full explanation of `path: ''` vs `refineAt`.
+`refine` validates a single field -- it receives the field's value and the error attaches to that field automatically. For cross-field validation (where you need access to the entire object), use `refineAt` instead -- see the [API Reference](./API.md#refineat).
 
 ---
 
@@ -1773,7 +1759,6 @@ export function RegistrationForm() {
     },
     fieldValidators: {
       username: async (value) => {
-        if (value.length < 3) return undefined;
         const result = await checkUsername(value);
         return match(result, {
           ok: ({ available }) =>
@@ -1786,7 +1771,7 @@ export function RegistrationForm() {
       const result = await registerUser(values);
       match(result, {
         ok: () => {
-          window.location.href = '/welcome';
+          window.location.reassign = '/welcome';
         },
         err: (errors) => form.setServerErrors(errors),
       });
@@ -1930,8 +1915,6 @@ export function RegistrationForm() {
     },
     fieldValidators: {
       username: async (value) => {
-        if (value.length < 3) return undefined;
-
         try {
           const { available } = await queryClient.fetchQuery({
             queryKey: ['check-username', value],
