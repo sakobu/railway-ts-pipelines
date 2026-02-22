@@ -89,23 +89,23 @@ function CreateUserForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <div>
-        <label htmlFor="field-username">Username</label>
+        <label htmlFor={form.getFieldId('username')}>Username</label>
         <input {...form.getFieldProps('username')} />
-        {form.touched.username && form.errors.username && (
-          <span className="error">{form.errors.username}</span>
+        {form.getFieldError('username') && (
+          <span className="error">{form.getFieldError('username')}</span>
         )}
       </div>
 
       <div>
-        <label htmlFor="field-email">Email</label>
+        <label htmlFor={form.getFieldId('email')}>Email</label>
         <input type="email" {...form.getFieldProps('email')} />
-        {form.touched.email && form.errors.email && (
-          <span className="error">{form.errors.email}</span>
+        {form.getFieldError('email') && (
+          <span className="error">{form.getFieldError('email')}</span>
         )}
       </div>
 
       <div>
-        <label htmlFor="field-bio">Bio</label>
+        <label htmlFor={form.getFieldId('bio')}>Bio</label>
         <textarea {...form.getFieldProps('bio')} rows={4} />
       </div>
 
@@ -188,7 +188,7 @@ function ProfileForm() {
 }
 ```
 
-Errors and touched state also use dot notation: `form.errors['address.city']`, `form.touched['address.zip']`.
+Errors also use dot notation: `form.getFieldError('address.city')`, `form.getFieldError('address.zip')`.
 
 ---
 
@@ -373,8 +373,8 @@ function AvatarUpload() {
         accept="image/*"
         {...form.getFileFieldProps('avatar')}
       />
-      {form.touched.avatar && form.errors.avatar && (
-        <span>{form.errors.avatar}</span>
+      {form.getFieldError('avatar') && (
+        <span>{form.getFieldError('avatar')}</span>
       )}
       <button type="submit">Upload</button>
     </form>
@@ -645,13 +645,13 @@ function AccountForm() {
             {...form.getFieldProps('companyName')}
             placeholder="Company Name"
           />
-          {form.touched.companyName && form.errors.companyName && (
-            <span>{form.errors.companyName}</span>
+          {form.getFieldError('companyName') && (
+            <span>{form.getFieldError('companyName')}</span>
           )}
 
           <input {...form.getFieldProps('taxId')} placeholder="Tax ID" />
-          {form.touched.taxId && form.errors.taxId && (
-            <span>{form.errors.taxId}</span>
+          {form.getFieldError('taxId') && (
+            <span>{form.getFieldError('taxId')}</span>
           )}
         </>
       )}
@@ -988,8 +988,8 @@ function ZodForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
+      {form.getFieldError('username') && (
+        <span>{form.getFieldError('username')}</span>
       )}
       {/* ... other fields ... */}
       <button type="submit">Register</button>
@@ -1092,8 +1092,8 @@ function RegistrationForm() {
         {form.validatingFields.username && (
           <span className="validating">Checking username...</span>
         )}
-        {form.touched.username && form.errors.username && (
-          <span className="error">{form.errors.username}</span>
+        {form.getFieldError('username') && (
+          <span className="error">{form.getFieldError('username')}</span>
         )}
       </div>
 
@@ -1221,11 +1221,11 @@ type FieldProps = {
 };
 
 function Field({ form, name, label, type = 'text' }: FieldProps) {
-  const error = form.touched[name] && form.errors[name];
+  const error = form.getFieldError(name);
 
   return (
     <div className="field">
-      <label htmlFor={`field-${name}`}>{label}</label>
+      <label htmlFor={form.getFieldId(name)}>{label}</label>
       <input type={type} {...form.getFieldProps(name)} />
       {error && <span className="error">{error}</span>}
     </div>
@@ -1288,7 +1288,7 @@ const MemoField = memo(function MemoField({
   label: string;
 }) {
   const props = useMemo(() => form.getFieldProps(name), [form, name]);
-  const error = form.touched[name] && form.errors[name];
+  const error = form.getFieldError(name);
 
   return (
     <div>
@@ -1387,8 +1387,8 @@ function MuiForm() {
         value={form.values.email || ''}
         onChange={(e) => form.setFieldValue('email', e.target.value)}
         onBlur={() => form.setFieldTouched('email')}
-        error={form.touched.email && Boolean(form.errors.email)}
-        helperText={form.touched.email && form.errors.email}
+        error={Boolean(form.getFieldError('email'))}
+        helperText={form.getFieldError('email')}
         fullWidth
         margin="normal"
       />
@@ -1400,8 +1400,8 @@ function MuiForm() {
         value={form.values.password || ''}
         onChange={(e) => form.setFieldValue('password', e.target.value)}
         onBlur={() => form.setFieldTouched('password')}
-        error={form.touched.password && Boolean(form.errors.password)}
-        helperText={form.touched.password && form.errors.password}
+        error={Boolean(form.getFieldError('password'))}
+        helperText={form.getFieldError('password')}
         fullWidth
         margin="normal"
       />
@@ -1447,7 +1447,7 @@ function ChakraForm() {
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <Field.Root invalid={form.touched.email && Boolean(form.errors.email)}>
+      <Field.Root invalid={Boolean(form.getFieldError('email'))}>
         <Field.Label>Email</Field.Label>
         <Input
           name="email"
@@ -1504,18 +1504,18 @@ function ShadcnForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)} className="space-y-4">
       <div>
-        <Label htmlFor="field-email">Email</Label>
+        <Label htmlFor={form.getFieldId('email')}>Email</Label>
         <Input {...form.getFieldProps('email')} />
-        {form.touched.email && form.errors.email && (
-          <p className="text-sm text-destructive">{form.errors.email}</p>
+        {form.getFieldError('email') && (
+          <p className="text-sm text-destructive">{form.getFieldError('email')}</p>
         )}
       </div>
 
       <div>
-        <Label htmlFor="field-password">Password</Label>
+        <Label htmlFor={form.getFieldId('password')}>Password</Label>
         <Input type="password" {...form.getFieldProps('password')} />
-        {form.touched.password && form.errors.password && (
-          <p className="text-sm text-destructive">{form.errors.password}</p>
+        {form.getFieldError('password') && (
+          <p className="text-sm text-destructive">{form.getFieldError('password')}</p>
         )}
       </div>
 
@@ -1595,7 +1595,7 @@ describe('LoginForm', () => {
 - Test from the user's perspective (type, click, assert on visible text)
 - Use `waitFor` for async operations (validation, submission)
 - Mock `fetch` for server error scenarios
-- Test the `touched && errors` pattern by interacting before asserting
+- Test the `getFieldError` pattern by interacting before asserting
 
 ---
 
@@ -1782,23 +1782,23 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
+      {form.getFieldError('username') && (
+        <span>{form.getFieldError('username')}</span>
       )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
+      {form.getFieldError('email') && (
+        <span>{form.getFieldError('email')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
+      {form.getFieldError('password') && (
+        <span>{form.getFieldError('password')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.touched.confirmPassword && form.errors.confirmPassword && (
-        <span>{form.errors.confirmPassword}</span>
+      {form.getFieldError('confirmPassword') && (
+        <span>{form.getFieldError('confirmPassword')}</span>
       )}
 
       {form.errors[ROOT_ERROR_KEY] && (
@@ -1934,23 +1934,23 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
+      {form.getFieldError('username') && (
+        <span>{form.getFieldError('username')}</span>
       )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
+      {form.getFieldError('email') && (
+        <span>{form.getFieldError('email')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
+      {form.getFieldError('password') && (
+        <span>{form.getFieldError('password')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.touched.confirmPassword && form.errors.confirmPassword && (
-        <span>{form.errors.confirmPassword}</span>
+      {form.getFieldError('confirmPassword') && (
+        <span>{form.getFieldError('confirmPassword')}</span>
       )}
 
       {form.errors[ROOT_ERROR_KEY] && (

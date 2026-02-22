@@ -83,18 +83,18 @@ function LoginForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <div>
-        <label htmlFor="field-email">Email</label>
+        <label htmlFor={form.getFieldId('email')}>Email</label>
         <input type="email" {...form.getFieldProps('email')} />
-        {form.touched.email && form.errors.email && (
-          <span className="error">{form.errors.email}</span>
+        {form.getFieldError('email') && (
+          <span className="error">{form.getFieldError('email')}</span>
         )}
       </div>
 
       <div>
-        <label htmlFor="field-password">Password</label>
+        <label htmlFor={form.getFieldId('password')}>Password</label>
         <input type="password" {...form.getFieldProps('password')} />
-        {form.touched.password && form.errors.password && (
-          <span className="error">{form.errors.password}</span>
+        {form.getFieldError('password') && (
+          <span className="error">{form.getFieldError('password')}</span>
         )}
       </div>
 
@@ -106,7 +106,7 @@ function LoginForm() {
 }
 ```
 
-The error display pattern is `touched && errors` -- show the error only after the user has interacted with the field. This prevents a wall of errors before they've typed anything.
+`getFieldError(field)` returns the error message only after the user has interacted with the field (it checks `touched` internally). This prevents a wall of errors before they've typed anything.
 
 There are specialized binding helpers for other input types:
 
@@ -121,7 +121,7 @@ There are specialized binding helpers for other input types:
 | Checkbox group (array) | `getCheckboxGroupOptionProps(field, value)` | `id`, `name`, `value`, `checked`, `onChange`, `onBlur` |
 | Radio group            | `getRadioGroupOptionProps(field, value)`    | `id`, `name`, `value`, `checked`, `onChange`, `onBlur` |
 
-All of them generate a stable `id` (e.g., `field-email`) that matches `<label htmlFor>` automatically.
+All of them generate a stable `id` (the field path itself, e.g., `email`) that matches `<label htmlFor>` automatically.
 
 ---
 
@@ -237,18 +237,18 @@ function RegistrationForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
+      {form.getFieldError('username') && (
+        <span>{form.getFieldError('username')}</span>
       )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
+      {form.getFieldError('email') && (
+        <span>{form.getFieldError('email')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
+      {form.getFieldError('password') && (
+        <span>{form.getFieldError('password')}</span>
       )}
 
       <button type="submit" disabled={form.isSubmitting}>
@@ -307,12 +307,12 @@ function ProfileForm() {
         <legend>Address</legend>
         <input {...form.getFieldProps('address.street')} placeholder="Street" />
         <input {...form.getFieldProps('address.city')} placeholder="City" />
-        {form.touched['address.city'] && form.errors['address.city'] && (
-          <span>{form.errors['address.city']}</span>
+        {form.getFieldError('address.city') && (
+          <span>{form.getFieldError('address.city')}</span>
         )}
         <input {...form.getFieldProps('address.zip')} placeholder="ZIP" />
-        {form.touched['address.zip'] && form.errors['address.zip'] && (
-          <span>{form.errors['address.zip']}</span>
+        {form.getFieldError('address.zip') && (
+          <span>{form.getFieldError('address.zip')}</span>
         )}
       </fieldset>
 
@@ -365,19 +365,17 @@ function ContactsForm() {
           <h3>Contact {index + 1}</h3>
 
           <input {...helpers.getFieldProps(index, 'name')} placeholder="Name" />
-          {form.touched[`contacts.${index}.name`] &&
-            form.errors[`contacts.${index}.name`] && (
-              <span>{form.errors[`contacts.${index}.name`]}</span>
-            )}
+          {form.getFieldError(`contacts.${index}.name`) && (
+            <span>{form.getFieldError(`contacts.${index}.name`)}</span>
+          )}
 
           <input
             {...helpers.getFieldProps(index, 'email')}
             placeholder="Email"
           />
-          {form.touched[`contacts.${index}.email`] &&
-            form.errors[`contacts.${index}.email`] && (
-              <span>{form.errors[`contacts.${index}.email`]}</span>
-            )}
+          {form.getFieldError(`contacts.${index}.email`) && (
+            <span>{form.getFieldError(`contacts.${index}.email`)}</span>
+          )}
 
           <button type="button" onClick={() => helpers.remove(index)}>
             Remove

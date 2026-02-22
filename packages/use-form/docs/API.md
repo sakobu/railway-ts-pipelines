@@ -14,7 +14,7 @@ function useForm<TValues extends Record<string, unknown>>(
     | MaybeAsyncValidator<unknown, TValues>
     | StandardSchemaV1<unknown, TValues>,
   options: FormOptions<TValues>
-): FormReturn<TValues>;
+): UseFormReturn<TValues>;
 ```
 
 ### Parameters
@@ -526,6 +526,64 @@ resetForm(): void
 
 ```typescript
 <button onClick={() => form.resetForm()}>Reset</button>
+```
+
+### getFieldError
+
+Returns the error message for a field only if it has been touched, otherwise `undefined`.
+Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
+
+```typescript
+getFieldError<TField extends ExtractFieldPaths<TValues>>(
+  field: TField
+): string | undefined
+```
+
+**Parameters:**
+
+- `field` - Field path with autocomplete
+
+**Returns:** The error message string if the field is touched and has an error, otherwise `undefined`.
+
+**Example:**
+
+```typescript
+// Instead of:
+{form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
+
+// Use:
+{form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
+```
+
+### getFieldId
+
+Returns a stable HTML element ID for a field without creating onChange/onBlur handlers.
+Useful for linking `<label htmlFor>` to an input without calling a full props factory.
+
+```typescript
+getFieldId<TField extends ExtractFieldPaths<TValues>>(
+  field: TField,
+  optionValue?: string | number
+): string
+```
+
+**Parameters:**
+
+- `field` - Field path with autocomplete
+- `optionValue` - Optional value for checkbox group / radio group options
+
+**Returns:** The element ID string — the field path for simple fields, or `field-optionValue` for option fields.
+
+**Example:**
+
+```typescript
+// Simple field — returns "username"
+<label htmlFor={form.getFieldId('username')}>Username</label>
+<input {...form.getFieldProps('username')} />
+
+// Checkbox group option — returns "contacts-email"
+<label htmlFor={form.getFieldId('contacts', 'email')}>Email</label>
+<input type="checkbox" {...form.getCheckboxGroupOptionProps('contacts', 'email')} />
 ```
 
 ### validateForm
@@ -1263,6 +1321,26 @@ const schema = chain(
 ```
 
 ## Type Utilities
+
+### UseFormReturn
+
+The return type of the `useForm` hook. Use this to type variables, function parameters, or component props that accept a form instance.
+
+```typescript
+import { type UseFormReturn } from '@railway-ts/use-form';
+
+type Props = {
+  form: UseFormReturn<{ email: string; password: string }>;
+};
+
+function SubmitButton({ form }: Props) {
+  return (
+    <button disabled={form.isSubmitting || !form.isValid}>
+      Submit
+    </button>
+  );
+}
+```
 
 ### InferSchemaType
 

@@ -164,10 +164,10 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-user-name');
+      expect(props.id).toBe('user.name');
     });
 
-    test('sanitizes bracket notation in field ID', () => {
+    test('uses raw field path with bracket notation as ID', () => {
       const handleChange = mock(() => {});
       const handleBlur = mock(() => {});
       const formValues = {};
@@ -179,7 +179,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-contacts-0--email');
+      expect(props.id).toBe('contacts[0].email');
     });
 
     test('sets name prop to field path', () => {
@@ -321,7 +321,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-user-role');
+      expect(props.id).toBe('user.role');
     });
 
     test('onChange calls handleChange with field and new value', () => {
@@ -463,7 +463,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-settings-darkMode');
+      expect(props.id).toBe('settings.darkMode');
     });
 
     test('onChange calls handleChange with field and checked boolean', () => {
@@ -545,7 +545,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-settings-darkMode');
+      expect(props.id).toBe('settings.darkMode');
     });
 
     test('onChange calls handleChange with field and checked boolean', () => {
@@ -732,7 +732,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-settings-volume');
+      expect(props.id).toBe('settings.volume');
     });
 
     test('sets type to range', () => {
@@ -1020,7 +1020,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-user-interests-music');
+      expect(props.id).toBe('user.interests-music');
     });
 
     test('sets value prop to option value', () => {
@@ -1233,7 +1233,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-product-size-medium');
+      expect(props.id).toBe('product.size-medium');
     });
 
     test('sets value prop to option value', () => {
@@ -1284,7 +1284,7 @@ describe('fieldPropsFactory', () => {
         handleBlur
       );
 
-      expect(props.id).toBe('field-avatar');
+      expect(props.id).toBe('avatar');
     });
 
     test('sets name prop to field path', () => {

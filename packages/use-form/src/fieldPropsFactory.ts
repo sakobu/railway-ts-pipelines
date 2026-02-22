@@ -72,7 +72,7 @@ export const createNativeFieldProps = (
   ) as string | number;
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     value,
     onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -139,7 +139,7 @@ export const createNativeSelectFieldProps = (
         : JSON.stringify(raw);
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     value,
     onChange: (e: ChangeEvent<HTMLSelectElement>) =>
@@ -195,7 +195,7 @@ export const createNativeCheckboxProps = (
   const value = getValueByPath(formValues, field);
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     checked: !!value,
     onChange: (e: ChangeEvent<HTMLInputElement>) =>
@@ -249,7 +249,7 @@ export const createNativeSwitchProps = (
   const value = getValueByPath(formValues, field);
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     checked: !!value,
     onChange: (e: ChangeEvent<HTMLInputElement>) =>
@@ -315,7 +315,7 @@ export const createNativeSliderProps = (
   const value = Array.isArray(raw) ? toNumber(raw[0]) : toNumber(raw);
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     type: 'range',
     value,
@@ -379,7 +379,7 @@ export const createCheckboxGroupOptionProps = (
   const isChecked = current.some((v) => String(v) === String(optionValue));
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}-${String(optionValue)}`,
+    id: `${field}-${String(optionValue)}`,
     name: field,
     value: optionValue,
     checked: isChecked,
@@ -447,7 +447,7 @@ export const createNativeFileFieldProps = (
   handleBlur: (field: FieldPath, isTouched: boolean) => void
 ): NativeFileFieldProps => {
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}`,
+    id: field,
     name: field,
     onChange: (e: ChangeEvent<HTMLInputElement>) => {
       const input = e.target;
@@ -530,7 +530,7 @@ export const createRadioGroupOptionProps = (
   const checked = String(current) === String(optionValue);
 
   return {
-    id: `field-${field.replace(/[[\].]/g, '-')}-${String(optionValue)}`,
+    id: `${field}-${String(optionValue)}`,
     name: field,
     value: optionValue,
     checked,

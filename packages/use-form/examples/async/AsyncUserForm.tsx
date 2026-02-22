@@ -29,34 +29,34 @@ export default function AsyncUserForm() {
 
       {/* Username — async cross-field check with organization */}
       <div className="field">
-        <label htmlFor={form.getFieldProps('username').id}>Username *</label>
+        <label htmlFor={form.getFieldId('username')}>Username *</label>
         <input
           type="text"
           placeholder="Try 'admin' at any org, or 'alice' at acme-corp"
           {...form.getFieldProps('username')}
         />
         {form.isValidating && <span className="validating">Checking...</span>}
-        {form.touched.username && form.errors.username && (
-          <span className="error">{form.errors.username}</span>
+        {form.getFieldError('username') && (
+          <span className="error">{form.getFieldError('username')}</span>
         )}
       </div>
 
       {/* Email — standard sync validation */}
       <div className="field">
-        <label htmlFor={form.getFieldProps('email').id}>Email *</label>
+        <label htmlFor={form.getFieldId('email')}>Email *</label>
         <input
           type="email"
           placeholder="user@example.com"
           {...form.getFieldProps('email')}
         />
-        {form.touched.email && form.errors.email && (
-          <span className="error">{form.errors.email}</span>
+        {form.getFieldError('email') && (
+          <span className="error">{form.getFieldError('email')}</span>
         )}
       </div>
 
       {/* Organization — changing this re-triggers the username check */}
       <div className="field">
-        <label htmlFor={form.getSelectFieldProps('organization').id}>
+        <label htmlFor={form.getFieldId('organization')}>
           Organization *
         </label>
         <select {...form.getSelectFieldProps('organization')}>
@@ -65,8 +65,8 @@ export default function AsyncUserForm() {
           <option value="globex">Globex</option>
           <option value="initech">Initech</option>
         </select>
-        {form.touched.organization && form.errors.organization && (
-          <span className="error">{form.errors.organization}</span>
+        {form.getFieldError('organization') && (
+          <span className="error">{form.getFieldError('organization')}</span>
         )}
       </div>
 

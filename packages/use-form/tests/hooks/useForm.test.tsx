@@ -531,7 +531,7 @@ describe('useForm', () => {
 
       const props = result.current.getFieldProps('name');
 
-      expect(props.id).toBe('field-name');
+      expect(props.id).toBe('name');
       expect(props.name).toBe('name');
       expect(props.value).toBe('John');
       expect(typeof props.onChange).toBe('function');
@@ -547,7 +547,7 @@ describe('useForm', () => {
 
       const props = result.current.getCheckboxProps('newsletter');
 
-      expect(props.id).toBe('field-newsletter');
+      expect(props.id).toBe('newsletter');
       expect(props.name).toBe('newsletter');
       expect(props.checked).toBe(true);
       expect(typeof props.onChange).toBe('function');
@@ -563,7 +563,7 @@ describe('useForm', () => {
 
       const props = result.current.getSelectFieldProps('country');
 
-      expect(props.id).toBe('field-country');
+      expect(props.id).toBe('country');
       expect(props.name).toBe('country');
       expect(props.value).toBe('US');
       expect(typeof props.onChange).toBe('function');
@@ -579,7 +579,7 @@ describe('useForm', () => {
 
       const props = result.current.getSwitchProps('darkMode');
 
-      expect(props.id).toBe('field-darkMode');
+      expect(props.id).toBe('darkMode');
       expect(props.name).toBe('darkMode');
       expect(props.checked).toBe(false);
       expect(typeof props.onChange).toBe('function');
@@ -595,7 +595,7 @@ describe('useForm', () => {
 
       const props = result.current.getSliderProps('volume');
 
-      expect(props.id).toBe('field-volume');
+      expect(props.id).toBe('volume');
       expect(props.name).toBe('volume');
       expect(props.type).toBe('range');
       expect(props.value).toBe(50);
@@ -615,7 +615,7 @@ describe('useForm', () => {
         'sports'
       );
 
-      expect(props.id).toBe('field-interests-sports');
+      expect(props.id).toBe('interests-sports');
       expect(props.name).toBe('interests');
       expect(props.value).toBe('sports');
       expect(props.checked).toBe(true);
@@ -632,7 +632,7 @@ describe('useForm', () => {
 
       const props = result.current.getFileFieldProps('avatar');
 
-      expect(props.id).toBe('field-avatar');
+      expect(props.id).toBe('avatar');
       expect(props.name).toBe('avatar');
       expect(typeof props.onChange).toBe('function');
       expect(typeof props.onBlur).toBe('function');
@@ -650,12 +650,163 @@ describe('useForm', () => {
         'email'
       );
 
-      expect(props.id).toBe('field-contactMethod-email');
+      expect(props.id).toBe('contactMethod-email');
       expect(props.name).toBe('contactMethod');
       expect(props.value).toBe('email');
       expect(props.checked).toBe(true);
       expect(typeof props.onChange).toBe('function');
       expect(typeof props.onBlur).toBe('function');
+    });
+  });
+
+  describe('getFieldError', () => {
+    test('returns undefined for untouched field with error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+        })
+      );
+
+      // Field has error (empty name) but is not touched
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('returns error for touched field with error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      expect(result.current.getFieldError('name')).toBe('Name is required');
+    });
+
+    test('returns undefined for touched field without error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('returns undefined on fresh form', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { name: 'John' },
+        })
+      );
+
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('returns server error when touched', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { email: 'test@example.com' },
+        })
+      );
+
+      act(() => {
+        result.current.setServerErrors({ email: 'Email already exists' });
+        result.current.setFieldTouched('email', true);
+      });
+
+      expect(result.current.getFieldError('email')).toBe(
+        'Email already exists'
+      );
+    });
+
+    test('updates on touch state change', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+        })
+      );
+
+      // Initially untouched
+      expect(result.current.getFieldError('name')).toBeUndefined();
+
+      // Touch the field
+      act(() => {
+        result.current.setFieldTouched('name', true);
+      });
+
+      expect(result.current.getFieldError('name')).toBe('Name is required');
+
+      // Untouch the field
+      act(() => {
+        result.current.setFieldTouched('name', false);
+      });
+
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('works with nested paths', () => {
+      const { result } = renderHook(() =>
+        useForm(userWithAddressValidator, {
+          initialValues: {
+            name: 'John',
+            address: { street: '', city: '', zip: '' },
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('address.city', true);
+      });
+
+      expect(result.current.getFieldError('address.city')).toBe(
+        'City is required'
+      );
+    });
+  });
+
+  describe('getFieldId', () => {
+    test('returns field path as ID for simple fields', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        })
+      );
+
+      expect(result.current.getFieldId('name')).toBe('name');
+      expect(result.current.getFieldId('email')).toBe('email');
+    });
+
+    test('returns field-optionValue for option fields', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { interests: ['sports'] },
+        })
+      );
+
+      expect(result.current.getFieldId('interests', 'sports')).toBe(
+        'interests-sports'
+      );
+      expect(result.current.getFieldId('interests', 42)).toBe('interests-42');
+    });
+
+    test('returns nested field path as ID', () => {
+      const { result } = renderHook(() =>
+        useForm(userWithAddressValidator, {
+          initialValues: {
+            name: 'John',
+            address: { street: '123 Main', city: 'LA', zip: '10001' },
+          },
+        })
+      );
+
+      expect(result.current.getFieldId('address.city')).toBe('address.city');
     });
   });
 

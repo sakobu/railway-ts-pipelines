@@ -39,51 +39,51 @@ export default function ZodForm() {
       <h2>Zod Schema - useForm</h2>
 
       <div className="field">
-        <label htmlFor={form.getFieldProps('username').id}>Username *</label>
+        <label htmlFor={form.getFieldId('username')}>Username *</label>
         <input
           type="text"
           placeholder="Enter username"
           {...form.getFieldProps('username')}
         />
-        {form.touched.username && form.errors.username && (
-          <span className="error">{form.errors.username}</span>
+        {form.getFieldError('username') && (
+          <span className="error">{form.getFieldError('username')}</span>
         )}
       </div>
 
       <div className="field">
-        <label htmlFor={form.getFieldProps('email').id}>Email *</label>
+        <label htmlFor={form.getFieldId('email')}>Email *</label>
         <input
           type="email"
           placeholder="user@example.com"
           {...form.getFieldProps('email')}
         />
-        {form.touched.email && form.errors.email && (
-          <span className="error">{form.errors.email}</span>
+        {form.getFieldError('email') && (
+          <span className="error">{form.getFieldError('email')}</span>
         )}
       </div>
 
       <div className="field">
-        <label htmlFor={form.getFieldProps('password').id}>Password *</label>
+        <label htmlFor={form.getFieldId('password')}>Password *</label>
         <input
           type="password"
           placeholder="Minimum 8 characters"
           {...form.getFieldProps('password')}
         />
-        {form.touched.password && form.errors.password && (
-          <span className="error">{form.errors.password}</span>
+        {form.getFieldError('password') && (
+          <span className="error">{form.getFieldError('password')}</span>
         )}
       </div>
 
       <div className="field">
-        <label htmlFor={form.getFieldProps('age').id}>Age *</label>
+        <label htmlFor={form.getFieldId('age')}>Age *</label>
         <input type="number" min={0} max={120} {...form.getFieldProps('age')} />
-        {form.touched.age && form.errors.age && (
-          <span className="error">{form.errors.age}</span>
+        {form.getFieldError('age') && (
+          <span className="error">{form.getFieldError('age')}</span>
         )}
       </div>
 
       <div className="field">
-        <label htmlFor={form.getSelectFieldProps('role').id}>Role *</label>
+        <label htmlFor={form.getFieldId('role')}>Role *</label>
         <select {...form.getSelectFieldProps('role')}>
           <option value="user">User</option>
           <option value="admin">Admin</option>
