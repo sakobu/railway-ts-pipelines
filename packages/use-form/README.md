@@ -66,13 +66,13 @@ export function LoginForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
+      {form.getFieldError('email') && (
+        <span>{form.getFieldError('email')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
+      {form.getFieldError('password') && (
+        <span>{form.getFieldError('password')}</span>
       )}
 
       <button type="submit" disabled={form.isSubmitting}>
@@ -193,23 +193,23 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.touched.username && form.errors.username && (
-        <span>{form.errors.username}</span>
+      {form.getFieldError('username') && (
+        <span>{form.getFieldError('username')}</span>
       )}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.touched.email && form.errors.email && (
-        <span>{form.errors.email}</span>
+      {form.getFieldError('email') && (
+        <span>{form.getFieldError('email')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.touched.password && form.errors.password && (
-        <span>{form.errors.password}</span>
+      {form.getFieldError('password') && (
+        <span>{form.getFieldError('password')}</span>
       )}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.touched.confirmPassword && form.errors.confirmPassword && (
-        <span>{form.errors.confirmPassword}</span>
+      {form.getFieldError('confirmPassword') && (
+        <span>{form.getFieldError('confirmPassword')}</span>
       )}
 
       {form.errors[ROOT_ERROR_KEY] && (
