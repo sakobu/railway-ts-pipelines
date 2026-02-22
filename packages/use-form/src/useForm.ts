@@ -49,6 +49,7 @@ import type {
   GetArrayItemType,
   NativeFileFieldProps,
   NativeRadioGroupOptionProps,
+  UseFormReturn,
 } from './types';
 import { createArrayHelpers } from './arrayHelpersFactory';
 import {
@@ -61,111 +62,6 @@ import {
   createNativeFileFieldProps,
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
-
-// =============================================================================
-// Return Type
-// =============================================================================
-
-/**
- * The return type of the `useForm` hook.
- *
- * Provides form state, field management methods, server error management,
- * form actions, native HTML field integration, and array field helpers.
- *
- * @template TValues - The shape of form values as a record with string keys
- */
-export interface UseFormReturn<TValues extends Record<string, unknown>> {
-  // Form state
-  values: TValues;
-  touched: Record<FieldPath, boolean>;
-  errors: Record<FieldPath, string>;
-  clientErrors: Record<FieldPath, string>;
-  serverErrors: Record<FieldPath, string>;
-  isSubmitting: boolean;
-  isValidating: boolean;
-  validatingFields: Record<FieldPath, boolean>;
-  isValid: boolean;
-  isDirty: boolean;
-  submitCount: number;
-
-  // Field management
-  setFieldValue: <TValue>(
-    field: FieldPath,
-    value: TValue,
-    shouldValidate?: boolean
-  ) => void;
-  setFieldTouched: (
-    field: FieldPath,
-    isTouched?: boolean,
-    shouldValidate?: boolean
-  ) => void;
-  setValues: (values: DeepPartial<TValues>, shouldValidate?: boolean) => void;
-
-  // Server error management
-  setServerErrors: (errors: Record<FieldPath, string>) => void;
-  clearServerErrors: () => void;
-
-  // Form actions
-  handleSubmit: (e?: FormEvent) => Promise<Result<TValues, ValidationError[]>>;
-  resetForm: () => void;
-  validateForm: (
-    values: TValues
-  ) =>
-    | Result<TValues, ValidationError[]>
-    | Promise<Result<TValues, ValidationError[]>>;
-
-  // Error helper
-  getFieldError: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => string | undefined;
-
-  // ID helper
-  getFieldId: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField,
-    optionValue?: string | number
-  ) => string;
-
-  // Native HTML field integration
-  getFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeFieldProps;
-  getSelectFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSelectProps;
-  getCheckboxProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeCheckboxProps;
-  getSwitchProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSwitchProps;
-  getSliderProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSliderProps;
-  getCheckboxGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField,
-    optionValue: string | number
-  ) => NativeCheckboxGroupOptionProps;
-  getFileFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeFileFieldProps;
-  getRadioGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField,
-    optionValue: string | number
-  ) => NativeRadioGroupOptionProps;
-
-  // Array field helpers
-  arrayHelpers: {
-    <TField extends keyof TValues & string>(
-      field: TField
-    ): ArrayHelpers<
-      GetArrayItemType<TValues, TField>,
-      ExtractFieldPaths<GetArrayItemType<TValues, TField>>
-    >;
-    <TField extends ExtractFieldPaths<TValues>, TItem = unknown>(
-      field: TField
-    ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>>;
-  };
-}
 
 // =============================================================================
 // Main Hook
@@ -1300,7 +1196,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     <TField extends ExtractFieldPaths<TValues>>(
       field: TField,
       optionValue: string | number
-    ) => {
+    ): NativeCheckboxGroupOptionProps => {
       return createCheckboxGroupOptionProps(
         field as FieldPath,
         optionValue,

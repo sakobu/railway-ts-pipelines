@@ -1,4 +1,6 @@
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
+import type { Result } from '@railway-ts/pipelines/result';
+import type { ValidationError } from '@railway-ts/pipelines/schema';
 
 // =============================================================================
 // Form Types
@@ -985,3 +987,283 @@ export type FormAction<TValues extends Record<string, unknown>> =
       /** Array of field paths to mark as touched */
       fields: FieldPath[];
     };
+
+// =============================================================================
+// Return Type
+// =============================================================================
+
+/**
+ * The return type of the `useForm` hook.
+ *
+ * Provides form state, field management methods, server error management,
+ * form actions, native HTML field integration, and array field helpers.
+ *
+ * @template TValues - The shape of form values as a record with string keys
+ */
+export interface UseFormReturn<TValues extends Record<string, unknown>> {
+  // Form state
+
+  /** Current values of all form fields. */
+  values: TValues;
+
+  /** Record of which fields have been interacted with by the user. */
+  touched: Record<FieldPath, boolean>;
+
+  /** Merged validation errors (server errors take precedence over field errors, which take precedence over client errors). */
+  errors: Record<FieldPath, string>;
+
+  /** Validation errors from client-side (schema) validation only. */
+  clientErrors: Record<FieldPath, string>;
+
+  /** Validation errors set via `setServerErrors()`. Automatically cleared when the related field value changes. */
+  serverErrors: Record<FieldPath, string>;
+
+  /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
+  isSubmitting: boolean;
+
+  /** Whether any async validation (form-level or field-level) is currently in progress. */
+  isValidating: boolean;
+
+  /** Per-field async validation tracking. `true` when that field's async validator is running. */
+  validatingFields: Record<FieldPath, boolean>;
+
+  /** Whether the form is currently valid (no errors of any kind). */
+  isValid: boolean;
+
+  /** Whether any form values have changed since initialization or last reset. */
+  isDirty: boolean;
+
+  /** Number of times the form has been submitted via `handleSubmit`. Incremented at the start of each attempt. */
+  submitCount: number;
+
+  // Field management
+
+  /**
+   * Updates a single field value and optionally triggers validation. Automatically clears related server errors.
+   *
+   * @example
+   * form.setFieldValue("email", "user@example.com");
+   */
+  setFieldValue: <TValue>(
+    field: FieldPath,
+    value: TValue,
+    shouldValidate?: boolean
+  ) => void;
+
+  /**
+   * Marks a field as touched or untouched and optionally triggers validation.
+   *
+   * @example
+   * form.setFieldTouched("email");
+   */
+  setFieldTouched: (
+    field: FieldPath,
+    isTouched?: boolean,
+    shouldValidate?: boolean
+  ) => void;
+
+  /**
+   * Updates multiple field values simultaneously. More efficient than calling `setFieldValue` multiple times.
+   *
+   * @example
+   * form.setValues({ firstName: "John", lastName: "Doe" });
+   */
+  setValues: (values: DeepPartial<TValues>, shouldValidate?: boolean) => void;
+
+  // Server error management
+
+  /**
+   * Sets server-side validation errors. These take precedence over client errors and are auto-cleared on field change.
+   *
+   * @example
+   * form.setServerErrors({ email: "Email already taken" });
+   */
+  setServerErrors: (errors: Record<FieldPath, string>) => void;
+
+  /**
+   * Clears all server-side validation errors. Client-side errors are not affected.
+   *
+   * @example
+   * form.clearServerErrors();
+   */
+  clearServerErrors: () => void;
+
+  // Form actions
+
+  /**
+   * Validates all fields, marks them as touched, and calls `onSubmit` if valid. Returns a Railway `Result`.
+   *
+   * @example
+   * <form onSubmit={form.handleSubmit}>
+   *   <input {...form.getFieldProps("email")} />
+   *   <button type="submit">Submit</button>
+   * </form>
+   */
+  handleSubmit: (e?: FormEvent) => Promise<Result<TValues, ValidationError[]>>;
+
+  /**
+   * Resets the form to its initial state — clears all values, errors, and touched state.
+   *
+   * @example
+   * form.resetForm();
+   */
+  resetForm: () => void;
+
+  /**
+   * Runs the validator against the given values and returns a Railway `Result`.
+   *
+   * @example
+   * const result = form.validateForm(currentValues);
+   */
+  validateForm: (
+    values: TValues
+  ) =>
+    | Result<TValues, ValidationError[]>
+    | Promise<Result<TValues, ValidationError[]>>;
+
+  // Error helper
+
+  /**
+   * Returns the error message for a field only if it has been touched, otherwise `undefined`.
+   *
+   * @example
+   * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
+   */
+  getFieldError: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => string | undefined;
+
+  // ID helper
+
+  /**
+   * Returns a stable HTML element ID for a field. Useful for linking `<label htmlFor>` to inputs.
+   *
+   * @example
+   * <label htmlFor={form.getFieldId("username")}>Username</label>
+   * <input {...form.getFieldProps("username")} />
+   */
+  getFieldId: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField,
+    optionValue?: string | number
+  ) => string;
+
+  // Native HTML field integration
+
+  /**
+   * Returns props (`id`, `name`, `value`, `onChange`, `onBlur`) to spread onto a native text input or textarea.
+   *
+   * @example
+   * <input type="text" {...form.getFieldProps("username")} placeholder="Username" />
+   */
+  getFieldProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeFieldProps;
+
+  /**
+   * Returns props to spread onto a native `<select>` element.
+   *
+   * @example
+   * <select {...form.getSelectFieldProps("country")}>
+   *   <option value="">Select a country</option>
+   *   <option value="US">United States</option>
+   * </select>
+   */
+  getSelectFieldProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeSelectProps;
+
+  /**
+   * Returns props (`id`, `name`, `checked`, `onChange`, `onBlur`) to spread onto a native checkbox for a boolean field.
+   *
+   * @example
+   * <label>
+   *   <input type="checkbox" {...form.getCheckboxProps("acceptTerms")} />
+   *   I accept the terms and conditions
+   * </label>
+   */
+  getCheckboxProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeCheckboxProps;
+
+  /**
+   * Returns props to spread onto a checkbox styled as a toggle switch for a boolean field.
+   *
+   * @example
+   * <label className="switch">
+   *   <input type="checkbox" {...form.getSwitchProps("darkMode")} />
+   *   <span className="slider" />
+   * </label>
+   */
+  getSwitchProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeSwitchProps;
+
+  /**
+   * Returns props to spread onto a native `<input type="range">` for a numeric field.
+   *
+   * @example
+   * <input type="range" min={0} max={100} {...form.getSliderProps("volume")} />
+   */
+  getSliderProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeSliderProps;
+
+  /**
+   * Returns props for a single checkbox within a checkbox group bound to an array field.
+   *
+   * @example
+   * <label>
+   *   <input type="checkbox" {...form.getCheckboxGroupOptionProps("interests", "sports")} />
+   *   Sports
+   * </label>
+   */
+  getCheckboxGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField,
+    optionValue: string | number
+  ) => NativeCheckboxGroupOptionProps;
+
+  /**
+   * Returns props to spread onto a native `<input type="file">`. Supports single and multiple file selection.
+   *
+   * @example
+   * <input type="file" accept="image/*" {...form.getFileFieldProps("avatar")} />
+   */
+  getFileFieldProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField
+  ) => NativeFileFieldProps;
+
+  /**
+   * Returns props for a single radio button within a radio group bound to a scalar field.
+   *
+   * @example
+   * <label>
+   *   <input type="radio" {...form.getRadioGroupOptionProps("contactMethod", "email")} />
+   *   Email
+   * </label>
+   */
+  getRadioGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
+    field: TField,
+    optionValue: string | number
+  ) => NativeRadioGroupOptionProps;
+
+  // Array field helpers
+
+  /**
+   * Returns helper functions for managing array fields — add, remove, reorder, and bind HTML elements to items.
+   *
+   * @example
+   * const helpers = form.arrayHelpers("contacts");
+   * helpers.push({ name: "", email: "" });
+   */
+  arrayHelpers: {
+    <TField extends keyof TValues & string>(
+      field: TField
+    ): ArrayHelpers<
+      GetArrayItemType<TValues, TField>,
+      ExtractFieldPaths<GetArrayItemType<TValues, TField>>
+    >;
+    <TField extends ExtractFieldPaths<TValues>, TItem = unknown>(
+      field: TField
+    ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>>;
+  };
+}
