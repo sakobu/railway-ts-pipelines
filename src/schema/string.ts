@@ -123,6 +123,28 @@ export function email(message: string = 'Invalid email format'): Validator<strin
 }
 
 /**
+ * Create a validator that ensures a string is a valid URL.
+ *
+ * @example
+ * const validate = url();
+ * validate('https://example.com');  // ok("https://example.com")
+ * validate('not-a-url');            // err([{ path: [], message: 'Invalid URL format' }])
+ *
+ * @param message - Custom error message
+ * @returns A validator that checks if a string is a valid URL
+ */
+export function url(message: string = 'Invalid URL format'): Validator<string> {
+  return (value, path = []) => {
+    try {
+      new URL(value);
+      return ok(value);
+    } catch {
+      return err([{ path, message }]);
+    }
+  };
+}
+
+/**
  * Create a validator that ensures a string is a valid phone number.
  * Accepts common formats including international (+), spaces, dashes, and parentheses.
  *

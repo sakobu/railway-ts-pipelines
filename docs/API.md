@@ -878,6 +878,14 @@ function email(message?: string): Validator<string>;
 
 Ensure a string is a valid email address.
 
+#### `url`
+
+```typescript
+function url(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid URL. Uses the WHATWG URL parser.
+
 #### `phoneNumber`
 
 ```typescript

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { isErr, isOk } from '@/result';
-import { string, minLength, maxLength, pattern, nonEmpty, email, phoneNumber } from '@/schema/string';
+import { string, minLength, maxLength, pattern, nonEmpty, email, url, phoneNumber } from '@/schema/string';
 
 describe('string validators', () => {
   describe('string()', () => {
@@ -300,6 +300,62 @@ describe('string validators', () => {
       const path = ['user', 'email'];
 
       const result = validator('invalid@', path);
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error[0]?.path || []).toEqual(path);
+      }
+    });
+  });
+
+  describe('url()', () => {
+    test('should validate URL format', () => {
+      const validator = url();
+
+      // Valid cases
+      const validInputs = [
+        'https://example.com',
+        'http://example.com',
+        'https://example.com/path?query=value',
+        'https://sub.domain.example.com',
+        'ftp://files.example.com',
+        'https://example.com:8080',
+        'https://example.com/path#fragment',
+      ];
+      for (const input of validInputs) {
+        const result = validator(input);
+        expect(isOk(result)).toBe(true);
+        if (isOk(result)) {
+          expect(result.value).toBe(input);
+        }
+      }
+
+      // Invalid cases
+      const invalidInputs = ['', 'not a url', 'example.com', '://missing-scheme.com', 'http://', 'just-text'];
+      for (const input of invalidInputs) {
+        const result = validator(input);
+        expect(isErr(result)).toBe(true);
+        if (isErr(result)) {
+          expect(result.error[0]?.message || '').toBe('Invalid URL format');
+        }
+      }
+    });
+
+    test('should allow custom error message', () => {
+      const customMessage = 'Please enter a valid URL';
+      const validator = url(customMessage);
+
+      const result = validator('not-a-url');
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error[0]?.message || '').toBe(customMessage);
+      }
+    });
+
+    test('should include path in error', () => {
+      const validator = url();
+      const path = ['profile', 'website'];
+
+      const result = validator('invalid', path);
       expect(isErr(result)).toBe(true);
       if (isErr(result)) {
         expect(result.error[0]?.path || []).toEqual(path);
