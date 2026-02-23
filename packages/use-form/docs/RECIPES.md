@@ -1195,7 +1195,7 @@ match(result, {
 **Solution:** Extract a reusable `Field` component that takes the form instance, field name, and label.
 
 ```tsx
-import { useForm } from '@railway-ts/use-form';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 import {
   object,
   required,
@@ -1214,8 +1214,8 @@ const loginSchema = object({
 type LoginValues = InferSchemaType<typeof loginSchema>;
 
 type FieldProps = {
-  form: ReturnType<typeof useForm<LoginValues>>;
-  name: keyof LoginValues & string;
+  form: UseFormReturn<LoginValues>;
+  name: ExtractFieldPaths<LoginValues>;
   label: string;
   type?: string;
 };
@@ -1262,7 +1262,7 @@ Wrap field components in `React.memo` so they only re-render when their specific
 
 ```tsx
 import { memo, useMemo } from 'react';
-import { useForm } from '@railway-ts/use-form';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 import {
   object,
   required,
@@ -1283,8 +1283,8 @@ const MemoField = memo(function MemoField({
   name,
   label,
 }: {
-  form: ReturnType<typeof useForm<LargeFormValues>>;
-  name: keyof LargeFormValues & string;
+  form: UseFormReturn<LargeFormValues>;
+  name: ExtractFieldPaths<LargeFormValues>;
   label: string;
 }) {
   const props = useMemo(() => form.getFieldProps(name), [form, name]);
