@@ -1,9 +1,8 @@
 import { err, isOk, ok } from '../result';
 
+import { _getAbortEarly } from './core';
 import { string } from './string';
 import { chain } from './utils';
-
-import { _getAbortEarly } from './core';
 
 import type { MaybeAsyncValidator, ValidationError, Validator } from './core';
 

@@ -1248,8 +1248,17 @@ const validate = chainAsync(
 ```typescript
 function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
 function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[]): Result<T, ValidationError[]>;
-function validate<T>(value: unknown, validator: Validator<unknown, T>, options: ValidateOptions): Result<T, ValidationError[]>;
-function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[], options: ValidateOptions): Result<T, ValidationError[]>;
+function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  options: ValidateOptions,
+): Result<T, ValidationError[]>;
+function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  path: string[],
+  options: ValidateOptions,
+): Result<T, ValidationError[]>;
 // MaybeAsync overloads mirror the above, returning Result | Promise<Result>
 ```
 
@@ -1260,7 +1269,11 @@ Pass `{ abortEarly: true }` to stop on the first validation error instead of col
 #### `validateAndFormatResult`
 
 ```typescript
-function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>, options?: ValidateOptions): ValidationResult<T>;
+function validateAndFormatResult<T>(
+  input: unknown,
+  schema: Validator<unknown, T>,
+  options?: ValidateOptions,
+): ValidationResult<T>;
 function validateAndFormatResult<T>(
   input: unknown,
   schema: MaybeAsyncValidator<unknown, T>,

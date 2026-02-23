@@ -252,7 +252,16 @@ match(result, {
 By default, validation collects every error. Pass `{ abortEarly: true }` to stop on the first failure — useful for large forms or performance-sensitive paths:
 
 ```typescript
-import { validate, validateAndFormatResult, object, required, chain, string, minLength, email } from '@railway-ts/pipelines/schema';
+import {
+  validate,
+  validateAndFormatResult,
+  object,
+  required,
+  chain,
+  string,
+  minLength,
+  email,
+} from '@railway-ts/pipelines/schema';
 
 const userSchema = object({
   name: required(chain(string(), minLength(3))),
