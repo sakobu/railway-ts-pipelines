@@ -1,7 +1,14 @@
 /* eslint-disable unicorn/no-array-reduce */
 import { isErr, ok, err, type Result, match } from '../result';
 
+import { _withAbortEarly } from './core';
+
 import type { AsyncValidator, MaybeAsyncValidator, ValidationError, ValidationResult, Validator } from './core';
+
+/**
+ * Options for controlling validation behavior.
+ */
+export type ValidateOptions = { abortEarly?: boolean };
 
 /**
  * The key used in formatted error objects for root-level validation errors (i.e. errors with an empty path).
@@ -211,9 +218,14 @@ export function chainAsync(...validators: MaybeAsyncValidator<unknown, unknown>[
  * const result = validate(10, chain(number(), min(5)));
  * // ok(10)
  *
+ * @example
+ * // With abortEarly option — stops on first error
+ * const result = validate(input, userSchema, { abortEarly: true });
+ *
  * @param value - The value to validate
  * @param validator - The validator to apply
- * @param path - Optional base path for error reporting
+ * @param pathOrOptions - Optional base path for error reporting, or options object
+ * @param maybeOptions - Options object when path is also provided
  * @returns A Result containing either the validated value or validation errors
  */
 export function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
@@ -221,6 +233,17 @@ export function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
   path: string[],
+): Result<T, ValidationError[]>;
+export function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  options: ValidateOptions,
+): Result<T, ValidationError[]>;
+export function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  path: string[],
+  options: ValidateOptions,
 ): Result<T, ValidationError[]>;
 export function validate<T>(
   value: unknown,
@@ -234,8 +257,26 @@ export function validate<T>(
 export function validate<T>(
   value: unknown,
   validator: MaybeAsyncValidator<unknown, T>,
-  path: string[] = [],
+  options: ValidateOptions,
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
+export function validate<T>(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, T>,
+  path: string[],
+  options: ValidateOptions,
+): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
+export function validate<T>(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, T>,
+  pathOrOptions: string[] | ValidateOptions = [],
+  maybeOptions?: ValidateOptions,
 ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> {
+  const path = Array.isArray(pathOrOptions) ? pathOrOptions : [];
+  const options = Array.isArray(pathOrOptions) ? maybeOptions : pathOrOptions;
+
+  if (options?.abortEarly) {
+    return _withAbortEarly(true, () => validator(value, path));
+  }
   return validator(value, path);
 }
 
@@ -284,28 +325,41 @@ export function formatErrors(errors: ValidationError[]): Record<string, string> 
  * @param schema - The validator/schema to validate against
  * @returns An object with either `{ valid: true, data }` or `{ valid: false, errors }`
  */
-export function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>): ValidationResult<T>;
+export function validateAndFormatResult<T>(
+  input: unknown,
+  schema: Validator<unknown, T>,
+  options?: ValidateOptions,
+): ValidationResult<T>;
 export function validateAndFormatResult<T>(
   input: unknown,
   schema: MaybeAsyncValidator<unknown, T>,
+  options?: ValidateOptions,
 ): ValidationResult<T> | Promise<ValidationResult<T>>;
 export function validateAndFormatResult<T>(
   input: unknown,
   schema: MaybeAsyncValidator<unknown, T>,
+  options?: ValidateOptions,
 ): ValidationResult<T> | Promise<ValidationResult<T>> {
-  const result = schema(input);
-  if (result instanceof Promise) {
-    return result.then((r) =>
-      match(r, {
-        ok: (data) => ({ valid: true as const, data }),
-        err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
-      }),
-    );
+  const run = () => {
+    const result = schema(input);
+    if (result instanceof Promise) {
+      return result.then((r) =>
+        match(r, {
+          ok: (data) => ({ valid: true as const, data }),
+          err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
+        }),
+      );
+    }
+    return match(result, {
+      ok: (data) => ({ valid: true as const, data }),
+      err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
+    });
+  };
+
+  if (options?.abortEarly) {
+    return _withAbortEarly(true, run);
   }
-  return match(result, {
-    ok: (data) => ({ valid: true as const, data }),
-    err: (errors) => ({ valid: false as const, errors: formatErrors(errors) }),
-  });
+  return run();
 }
 
 /**

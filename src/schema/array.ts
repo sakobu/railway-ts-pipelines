@@ -3,6 +3,8 @@ import { err, isOk, ok } from '../result';
 import { string } from './string';
 import { chain } from './utils';
 
+import { _getAbortEarly } from './core';
+
 import type { MaybeAsyncValidator, ValidationError, Validator } from './core';
 
 /**
@@ -24,15 +26,19 @@ export function array<I, O>(itemValidator: MaybeAsyncValidator<I, O>): MaybeAsyn
       return err([{ path: parentPath, message: 'Expected an array' }]);
     }
 
+    const abortEarly = _getAbortEarly();
     const allErrors: ValidationError[] = [];
     const validatedItems: O[] = Array.from({ length: value.length }) as O[];
     const pendingResults: Promise<void>[] = [];
 
     for (const [i, item] of value.entries()) {
+      if (abortEarly && allErrors.length > 0) break;
+
       const itemPath = [...parentPath, i.toString()];
       const result = itemValidator(item as I, itemPath);
 
       if (result instanceof Promise) {
+        if (abortEarly && allErrors.length > 0) continue;
         const index = i;
         pendingResults.push(
           result.then((r) => {
@@ -49,6 +55,7 @@ export function array<I, O>(itemValidator: MaybeAsyncValidator<I, O>): MaybeAsyn
         validatedItems[i] = result.value;
       } else {
         allErrors.push(...result.error);
+        if (abortEarly) break;
       }
     }
 

@@ -585,6 +585,14 @@ type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: Re
 
 The result of a validation-and-format operation.
 
+#### `ValidateOptions`
+
+```typescript
+type ValidateOptions = { abortEarly?: boolean };
+```
+
+Options for controlling validation behavior. When `abortEarly` is `true`, validation stops after the first error instead of collecting all errors.
+
 #### `InferSchemaType<V>`
 
 ```typescript
@@ -1239,25 +1247,30 @@ const validate = chainAsync(
 
 ```typescript
 function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
-function validate<T>(
-  value: unknown,
-  validator: MaybeAsyncValidator<unknown, T>,
-): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
+function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[]): Result<T, ValidationError[]>;
+function validate<T>(value: unknown, validator: Validator<unknown, T>, options: ValidateOptions): Result<T, ValidationError[]>;
+function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[], options: ValidateOptions): Result<T, ValidationError[]>;
+// MaybeAsync overloads mirror the above, returning Result | Promise<Result>
 ```
 
 Run a validator against a value. Returns sync when the validator is sync.
 
+Pass `{ abortEarly: true }` to stop on the first validation error instead of collecting all errors. The third argument can be either a base `path` (string array) for error reporting, or an options object. When both are needed, pass `path` third and `options` fourth.
+
 #### `validateAndFormatResult`
 
 ```typescript
-function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>): ValidationResult<T>;
+function validateAndFormatResult<T>(input: unknown, schema: Validator<unknown, T>, options?: ValidateOptions): ValidationResult<T>;
 function validateAndFormatResult<T>(
   input: unknown,
   schema: MaybeAsyncValidator<unknown, T>,
+  options?: ValidateOptions,
 ): ValidationResult<T> | Promise<ValidationResult<T>>;
 ```
 
 Validate and format in one call. Returns `{ valid: true, data }` or `{ valid: false, errors }`.
+
+Pass `{ abortEarly: true }` as the third argument to stop on the first error.
 
 #### `formatErrors`
 

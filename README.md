@@ -186,6 +186,8 @@ const result = validate(input, userSchema);
 // Result<User, ValidationError[]>
 ```
 
+Pass `{ abortEarly: true }` to `validate()` or `validateAndFormatResult()` to stop on the first error.
+
 `object` · `array` · `tuple` · `required` · `optional` · `chain` · `string` · `parseNumber` · `email` · `min` · `max` · `union` · `discriminatedUnion` · `refine` · `refineAt` · `transform` · `validate` · `toStandardSchema` -- [full API](docs/API.md#schema)
 
 ### Composition

@@ -247,6 +247,35 @@ match(result, {
 });
 ```
 
+### Abort Early
+
+By default, validation collects every error. Pass `{ abortEarly: true }` to stop on the first failure — useful for large forms or performance-sensitive paths:
+
+```typescript
+import { validate, validateAndFormatResult, object, required, chain, string, minLength, email } from '@railway-ts/pipelines/schema';
+
+const userSchema = object({
+  name: required(chain(string(), minLength(3))),
+  email: required(chain(string(), email())),
+});
+
+const input = { name: '', email: 'bad' };
+
+// Default: collects all errors
+const all = validate(input, userSchema);
+// Err([{ path: ['name'], ... }, { path: ['email'], ... }])
+
+// Abort early: stops at first error
+const first = validate(input, userSchema, { abortEarly: true });
+// Err([{ path: ['name'], message: 'Must be at least 3 characters' }])
+
+// Works with validateAndFormatResult too
+const result = validateAndFormatResult(input, userSchema, { abortEarly: true });
+// { valid: false, errors: { name: 'Must be at least 3 characters' } }
+```
+
+`abortEarly` propagates through nested `object()`, `array()`, `tuple()`, and `tupleOf()` validators — the entire tree stops as soon as the first error is found.
+
 ### Conditional Validation
 
 ```typescript

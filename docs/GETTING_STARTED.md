@@ -236,6 +236,15 @@ match(result, {
 });
 ```
 
+> **Tip:** If you only need the first error (for performance or UX), pass `{ abortEarly: true }`:
+>
+> ```typescript
+> const result = validate(input, userSchema, { abortEarly: true });
+> // stops at the first failing field
+> ```
+>
+> See [Recipes: Abort Early](RECIPES.md#abort-early) for details.
+
 ---
 
 ## Step 7: Putting It All Together

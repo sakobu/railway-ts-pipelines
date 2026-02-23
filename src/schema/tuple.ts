@@ -1,5 +1,7 @@
 import { err, isOk, ok } from '../result';
 
+import { _getAbortEarly } from './core';
+
 import type { MaybeAsyncValidator, ValidationError, Validator } from './core';
 
 /**
@@ -48,16 +50,20 @@ export function tuple<V extends ReadonlyArray<MaybeAsyncValidator<unknown, unkno
       ]);
     }
 
+    const abortEarly = _getAbortEarly();
     const allErrors: ValidationError[] = [];
     const validatedItems: unknown[] = Array.from({ length: validators.length });
     const pendingResults: Promise<void>[] = [];
 
     for (const [i, validator] of validators.entries()) {
+      if (abortEarly && allErrors.length > 0) break;
+
       const itemPath = [...parentPath, i.toString()];
       const item = (value as unknown[]).at(i);
       const result = validator(item, itemPath);
 
       if (result instanceof Promise) {
+        if (abortEarly && allErrors.length > 0) continue;
         const index = i;
         pendingResults.push(
           result.then((r) => {
@@ -74,6 +80,7 @@ export function tuple<V extends ReadonlyArray<MaybeAsyncValidator<unknown, unkno
         validatedItems[i] = result.value;
       } else {
         allErrors.push(...result.error);
+        if (abortEarly) break;
       }
     }
 
@@ -186,15 +193,19 @@ export function tupleOf<T>(
       ]);
     }
 
+    const abortEarly = _getAbortEarly();
     const allErrors: ValidationError[] = [];
     const validatedItems: T[] = Array.from({ length }) as T[];
     const pendingResults: Promise<void>[] = [];
 
     for (const [i, item] of value.entries()) {
+      if (abortEarly && allErrors.length > 0) break;
+
       const itemPath = [...parentPath, i.toString()];
       const result = elementValidator(item, itemPath);
 
       if (result instanceof Promise) {
+        if (abortEarly && allErrors.length > 0) continue;
         const index = i;
         pendingResults.push(
           result.then((r) => {
@@ -211,6 +222,7 @@ export function tupleOf<T>(
         validatedItems[i] = result.value;
       } else {
         allErrors.push(...result.error);
+        if (abortEarly) break;
       }
     }
 

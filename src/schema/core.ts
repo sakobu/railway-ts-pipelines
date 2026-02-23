@@ -107,6 +107,25 @@ export type Schema<T = Record<string, unknown>> = {
  */
 export type ValidationResult<T> = { valid: true; data: T } | { valid: false; errors: Record<string, string> };
 
+// --- Abort-early context (internal) ---
+let _abortEarly = false;
+
+/** @internal */
+export function _getAbortEarly(): boolean {
+  return _abortEarly;
+}
+
+/** @internal - Sets abortEarly for the duration of fn's synchronous execution */
+export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
+  const prev = _abortEarly;
+  _abortEarly = enabled;
+  try {
+    return fn();
+  } finally {
+    _abortEarly = prev;
+  }
+}
+
 /**
  * Create a validator for objects based on a schema.
  *
@@ -138,6 +157,7 @@ export function object<T extends Record<string, unknown>>(
       return err([{ path: parentPath, message: 'Expected an object' }]);
     }
 
+    const abortEarly = _getAbortEarly();
     const allErrors: ValidationError[] = [];
     const validatedObj: Record<string, unknown> = {};
 
@@ -145,6 +165,9 @@ export function object<T extends Record<string, unknown>>(
       const extraKeys = Object.keys(obj as object).filter((key) => !Object.prototype.hasOwnProperty.call(schema, key));
 
       if (extraKeys.length > 0) {
+        if (abortEarly) {
+          return err([{ path: [...parentPath, extraKeys[0]!], message: `Unexpected field: '${extraKeys[0]}'` }]);
+        }
         for (const key of extraKeys) {
           allErrors.push({
             path: [...parentPath, key],
@@ -154,6 +177,8 @@ export function object<T extends Record<string, unknown>>(
       }
     }
 
+    if (abortEarly && allErrors.length > 0) return err(allErrors);
+
     const pendingResults: Promise<void>[] = [];
 
     for (const key in schema) {
@@ -162,12 +187,15 @@ export function object<T extends Record<string, unknown>>(
       const validator = schema[key];
       if (!validator) continue;
 
+      if (abortEarly && allErrors.length > 0) break;
+
       const value = (obj as Record<string, unknown>)[key];
       const fieldPath = [...parentPath, key];
 
       const result = validator(value, fieldPath);
 
       if (result instanceof Promise) {
+        if (abortEarly && allErrors.length > 0) continue;
         pendingResults.push(
           result.then((r) => {
             if (isOk(r)) {
@@ -181,6 +209,7 @@ export function object<T extends Record<string, unknown>>(
         validatedObj[key] = result.value;
       } else {
         allErrors.push(...result.error);
+        if (abortEarly) break;
       }
     }
 
