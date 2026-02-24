@@ -294,14 +294,8 @@ export function validate<T>(
  * @returns `true` if valid, `false` otherwise (or a Promise for async validators)
  */
 export function is(value: unknown, validator: Validator<unknown, unknown>): boolean;
-export function is(
-  value: unknown,
-  validator: MaybeAsyncValidator<unknown, unknown>,
-): boolean | Promise<boolean>;
-export function is(
-  value: unknown,
-  validator: MaybeAsyncValidator<unknown, unknown>,
-): boolean | Promise<boolean> {
+export function is(value: unknown, validator: MaybeAsyncValidator<unknown, unknown>): boolean | Promise<boolean>;
+export function is(value: unknown, validator: MaybeAsyncValidator<unknown, unknown>): boolean | Promise<boolean> {
   const result = _withAbortEarly(true, () => validator(value));
   if (result instanceof Promise) {
     return result.then((r) => r.ok);

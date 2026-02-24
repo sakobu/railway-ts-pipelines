@@ -132,8 +132,7 @@ describe('is()', () => {
   describe('short-circuit behavior', () => {
     test('does not call subsequent validators after first failure (sync)', () => {
       let secondCalled = false;
-      const alwaysFail: Validator<unknown, string> = (_value, path = []) =>
-        err([{ path, message: 'fail' }]);
+      const alwaysFail: Validator<unknown, string> = (_value, path = []) => err([{ path, message: 'fail' }]);
       const spy: Validator<unknown, string> = (value) => {
         secondCalled = true;
         return ok(String(value));
@@ -156,8 +155,7 @@ describe('is()', () => {
         return ok(String(value));
       };
 
-      const alwaysFail: Validator<unknown, string> = (_value, path = []) =>
-        err([{ path, message: 'fail' }]);
+      const alwaysFail: Validator<unknown, string> = (_value, path = []) => err([{ path, message: 'fail' }]);
 
       const schema = object({
         a: alwaysFail,
