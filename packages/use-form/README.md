@@ -4,7 +4,7 @@
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 
-**~3.6 kB** minified + brotli
+**~3.6 kB** minified + brotli (~8.4 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
 
 ## Why?
 
@@ -32,7 +32,7 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.24.
+Requires React 18+ and @railway-ts/pipelines ^0.1.25.
 
 ## Quick Start
 
