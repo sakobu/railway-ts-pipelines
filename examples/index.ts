@@ -16,6 +16,7 @@ export * from './schema/union';
 export * from './schema/tuple';
 export * from './schema/async-validation';
 export * from './schema/abort-early';
+export * from './schema/is';
 export * from './schema/standard-schema';
 export * from './complete-pipelines/hill-clohessy-wiltshire';
 export * from './complete-pipelines/hohmann-transfer';
@@ -56,6 +57,7 @@ SCHEMA / VALIDATION EXAMPLES:
 - Tuples (heterogeneous and homogeneous tuples)
 - Async validation (refineAsync, chainAsync, refineAtAsync)
 - Abort early (stop on first error with abortEarly option)
+- Type guard (is() — boolean shorthand for validate)
 - Standard Schema interop (toStandardSchema for tRPC, TanStack, etc.)
 
 COMPLETE PIPELINES:

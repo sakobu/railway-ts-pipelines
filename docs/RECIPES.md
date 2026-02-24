@@ -285,6 +285,33 @@ const result = validateAndFormatResult(input, userSchema, { abortEarly: true });
 
 `abortEarly` propagates through nested `object()`, `array()`, `tuple()`, and `tupleOf()` validators — the entire tree stops as soon as the first error is found.
 
+### Quick Validity Check
+
+Use `is()` when you only need a boolean — no error details, no `Result` unwrapping:
+
+```typescript
+import { is, string, chain, minLength, object, required, email } from '@railway-ts/pipelines/schema';
+
+// Primitives
+is('hello', string()); // true
+is(42, string()); // false
+
+// Composed validators
+const shortString = chain(string(), minLength(5));
+is('hello', shortString); // true
+is('hi', shortString); // false
+
+// Objects
+const userSchema = object({
+  name: required(chain(string(), minLength(2))),
+  email: required(chain(string(), email())),
+});
+is({ name: 'Alice', email: 'alice@example.com' }, userSchema); // true
+is({ name: 'Alice', email: 'nope' }, userSchema); // false
+```
+
+`is()` uses `abortEarly` internally — it short-circuits on the first error since you only need pass/fail.
+
 ### Conditional Validation
 
 ```typescript

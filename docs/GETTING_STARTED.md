@@ -245,6 +245,18 @@ match(result, {
 >
 > See [Recipes: Abort Early](RECIPES.md#abort-early) for details.
 
+> **Tip:** If you only need a boolean (pass/fail), use `is()`:
+>
+> ```typescript
+> import { is } from '@railway-ts/pipelines/schema';
+>
+> if (is(input, userSchema)) {
+>   // input is valid
+> }
+> ```
+>
+> See [API Reference: `is`](API.md#is) for details.
+
 ---
 
 ## Step 7: Putting It All Together

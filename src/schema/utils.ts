@@ -281,6 +281,35 @@ export function validate<T>(
 }
 
 /**
+ * Check whether a value satisfies a validator, returning a boolean.
+ * Always short-circuits on first error for maximum performance.
+ *
+ * @example
+ * is('hello', string());       // true
+ * is(42, string());            // false
+ * is(input, asyncValidator()); // Promise<boolean>
+ *
+ * @param value - The value to check
+ * @param validator - The validator to apply
+ * @returns `true` if valid, `false` otherwise (or a Promise for async validators)
+ */
+export function is(value: unknown, validator: Validator<unknown, unknown>): boolean;
+export function is(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, unknown>,
+): boolean | Promise<boolean>;
+export function is(
+  value: unknown,
+  validator: MaybeAsyncValidator<unknown, unknown>,
+): boolean | Promise<boolean> {
+  const result = _withAbortEarly(true, () => validator(value));
+  if (result instanceof Promise) {
+    return result.then((r) => r.ok);
+  }
+  return result.ok;
+}
+
+/**
  * Format validation errors into a user-friendly object.
  * Converts array paths to dot/bracket notation strings.
  *

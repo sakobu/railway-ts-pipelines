@@ -1266,6 +1266,23 @@ Run a validator against a value. Returns sync when the validator is sync.
 
 Pass `{ abortEarly: true }` to stop on the first validation error instead of collecting all errors. The third argument can be either a base `path` (string array) for error reporting, or an options object. When both are needed, pass `path` third and `options` fourth.
 
+#### `is`
+
+```typescript
+function is(value: unknown, validator: Validator<unknown, unknown>): boolean;
+function is(value: unknown, validator: MaybeAsyncValidator<unknown, unknown>): boolean | Promise<boolean>;
+```
+
+Check if a value passes validation. Returns `true` if valid, `false` if not. Shorthand for `isOk(validate(value, validator))`.
+
+Uses `abortEarly` internally for efficiency — stops on the first error. Returns a `Promise<boolean>` when given an async validator.
+
+```typescript
+is('hello', string()); // true
+is(42, string()); // false
+await is('dave', asyncValidator); // true (async)
+```
+
 #### `validateAndFormatResult`
 
 ```typescript

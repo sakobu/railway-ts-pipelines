@@ -4,6 +4,7 @@ import {
   chain,
   email,
   formatErrors,
+  type InferSchemaType,
   minLength,
   object,
   required,
@@ -19,6 +20,9 @@ const userSchema = object({
   email: required(chain(string(), email())),
   role: required(stringEnum(['admin', 'user'])),
 });
+
+export type User = InferSchemaType<typeof userSchema>;
+// { name: string; email: string; role: "admin" | "user" }
 
 const badInput = { name: '', email: 'nope', role: 'superadmin' };
 
@@ -53,6 +57,9 @@ const profileSchema = object({
   user: required(userSchema),
   bio: required(chain(string(), minLength(5))),
 });
+
+export type Profile = InferSchemaType<typeof profileSchema>;
+// { user: { name: string; email: string; role: "admin" | "user" }; bio: string }
 
 const badProfile = { user: { name: '', email: 'x', role: 'z' }, bio: '' };
 
