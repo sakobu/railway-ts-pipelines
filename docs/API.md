@@ -902,6 +902,46 @@ function phoneNumber(message?: string): Validator<string>;
 
 Ensure a string is a valid phone number. Accepts international formats with `+`, spaces, dashes, and parentheses.
 
+#### `uuid`
+
+```typescript
+function uuid(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid RFC 4122 UUID.
+
+#### `isoDate`
+
+```typescript
+function isoDate(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid ISO 8601 date (`YYYY-MM-DD`). Validates both format and calendar correctness (rejects Feb 30, etc.).
+
+#### `isoTime`
+
+```typescript
+function isoTime(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid ISO 8601 / RFC 3339 time. Format: `HH:mm:ss[.fractional][Z|±HH:mm]`. Timezone is optional.
+
+#### `isoDateTime`
+
+```typescript
+function isoDateTime(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid ISO 8601 / RFC 3339 datetime. Format: `YYYY-MM-DDTHH:mm:ss[.fractional][Z|±HH:mm]`. Validates both date calendar correctness and time bounds.
+
+#### `isoDuration`
+
+```typescript
+function isoDuration(message?: string): Validator<string>;
+```
+
+Ensure a string is a valid ISO 8601 duration (`PnYnMnDTnHnMnS` or `PnW`).
+
 ### Number Constraints
 
 #### `min`

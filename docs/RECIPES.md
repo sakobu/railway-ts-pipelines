@@ -645,6 +645,27 @@ const birthDate = chain(parseDate(), pastDate());
 const eventDate = chain(parseISODate(), dateRange(new Date('2025-01-01'), new Date('2025-12-31')));
 ```
 
+### String Format Validators
+
+```typescript
+import { chain, string, uuid, isoDate, isoTime, isoDateTime, isoDuration } from '@railway-ts/pipelines/schema';
+
+// UUID
+const id = chain(string(), uuid());
+
+// ISO date (YYYY-MM-DD)
+const dateStr = chain(string(), isoDate());
+
+// ISO time with optional timezone
+const timeStr = chain(string(), isoTime());
+
+// Full ISO datetime
+const timestamp = chain(string(), isoDateTime());
+
+// ISO duration (e.g. P1Y2M3DT4H5M6S)
+const duration = chain(string(), isoDuration());
+```
+
 ### Empty-String Handling
 
 `emptyAsOptional` treats empty strings (and `null`/`undefined`) as `undefined` instead of failing validation. Useful for HTML forms where blank fields submit as `""`:
