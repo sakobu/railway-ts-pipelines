@@ -647,9 +647,9 @@ export type ValidFieldPath<TForm, TField extends string> =
 export type GetArrayItemType<
   TValues extends Record<string, unknown>,
   TField extends keyof TValues,
-> = TValues[TField] extends readonly (infer TItem)[]
+> = NonNullable<TValues[TField]> extends readonly (infer TItem)[]
   ? TItem
-  : TValues[TField] extends (infer TItem)[]
+  : NonNullable<TValues[TField]> extends (infer TItem)[]
     ? TItem
     : never;
 
@@ -861,6 +861,42 @@ export interface ArrayHelpers<
     subField: TFieldPaths,
     optionValue: string | number
   ) => NativeRadioGroupOptionProps;
+
+  /**
+   * Returns the validation error for a field within an array item, but only
+   * if the field has been touched. Mirrors the top-level `form.getFieldError`
+   * behaviour using the `(index, subField)` pattern.
+   *
+   * @param index - The zero-based index of the array item
+   * @param subField - Field path within the array item (type-safe)
+   * @returns The error message string, or `undefined` if untouched / valid
+   *
+   * @example
+   * {helpers.getFieldError(index, "email") && (
+   *   <span>{helpers.getFieldError(index, "email")}</span>
+   * )}
+   */
+  getFieldError: (index: number, subField: TFieldPaths) => string | undefined;
+
+  /**
+   * Returns a stable HTML element ID for a field within an array item.
+   * Useful for linking `<label htmlFor>` to an input without calling a full
+   * props factory. Mirrors the top-level `form.getFieldId`.
+   *
+   * @param index - The zero-based index of the array item
+   * @param subField - Field path within the array item (type-safe)
+   * @param optionValue - Optional value for radio group / checkbox group options
+   * @returns The element ID string
+   *
+   * @example
+   * <label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
+   * <input {...helpers.getFieldProps(index, "name")} />
+   */
+  getFieldId: (
+    index: number,
+    subField: TFieldPaths,
+    optionValue?: string | number
+  ) => string;
 }
 
 // =============================================================================

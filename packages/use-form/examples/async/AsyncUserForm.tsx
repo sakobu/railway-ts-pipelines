@@ -56,9 +56,7 @@ export default function AsyncUserForm() {
 
       {/* Organization — changing this re-triggers the username check */}
       <div className="field">
-        <label htmlFor={form.getFieldId('organization')}>
-          Organization *
-        </label>
+        <label htmlFor={form.getFieldId('organization')}>Organization *</label>
         <select {...form.getSelectFieldProps('organization')}>
           <option value="">Select an organization...</option>
           <option value="acme-corp">Acme Corp</option>

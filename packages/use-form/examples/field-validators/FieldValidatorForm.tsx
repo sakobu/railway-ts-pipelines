@@ -117,16 +117,16 @@ export default function FieldValidatorForm() {
         <legend>Address (Optional)</legend>
 
         <div className="field">
-          <label htmlFor={form.getFieldId('address.street')}>
-            Street
-          </label>
+          <label htmlFor={form.getFieldId('address.street')}>Street</label>
           <input
             type="text"
             placeholder="123 Main St"
             {...form.getFieldProps('address.street')}
           />
           {form.getFieldError('address.street') && (
-            <span className="error">{form.getFieldError('address.street')}</span>
+            <span className="error">
+              {form.getFieldError('address.street')}
+            </span>
           )}
         </div>
 
@@ -143,16 +143,16 @@ export default function FieldValidatorForm() {
         </div>
 
         <div className="field">
-          <label htmlFor={form.getFieldId('address.zipCode')}>
-            ZIP Code
-          </label>
+          <label htmlFor={form.getFieldId('address.zipCode')}>ZIP Code</label>
           <input
             type="text"
             placeholder="12345"
             {...form.getFieldProps('address.zipCode')}
           />
           {form.getFieldError('address.zipCode') && (
-            <span className="error">{form.getFieldError('address.zipCode')}</span>
+            <span className="error">
+              {form.getFieldError('address.zipCode')}
+            </span>
           )}
         </div>
       </fieldset>
@@ -161,18 +161,14 @@ export default function FieldValidatorForm() {
       <fieldset>
         <legend>Contact Methods (Optional)</legend>
         <div className="field">
-          <label
-            htmlFor={form.getFieldId('contacts', 'email')}
-          >
+          <label htmlFor={form.getFieldId('contacts', 'email')}>
             <input
               type="checkbox"
               {...form.getCheckboxGroupOptionProps('contacts', 'email')}
             />
             Email
           </label>
-          <label
-            htmlFor={form.getFieldId('contacts', 'phone')}
-          >
+          <label htmlFor={form.getFieldId('contacts', 'phone')}>
             <input
               type="checkbox"
               {...form.getCheckboxGroupOptionProps('contacts', 'phone')}
@@ -195,7 +191,9 @@ export default function FieldValidatorForm() {
           I accept the terms and conditions *
         </label>
         {form.getFieldError('hasAcceptedTerms') && (
-          <span className="error">{form.getFieldError('hasAcceptedTerms')}</span>
+          <span className="error">
+            {form.getFieldError('hasAcceptedTerms')}
+          </span>
         )}
       </div>
 

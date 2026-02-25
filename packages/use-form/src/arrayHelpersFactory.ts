@@ -63,7 +63,9 @@ export const createArrayHelpers = <
   getRadioGroupOptionProps: (
     field: string,
     optionValue: string | number
-  ) => NativeRadioGroupOptionProps
+  ) => NativeRadioGroupOptionProps,
+  getFieldError: (field: string) => string | undefined,
+  getFieldId: (field: string, optionValue?: string | number) => string
 ): ArrayHelpers<TItem, TFieldPaths> => {
   return {
     /**
@@ -341,5 +343,14 @@ export const createArrayHelpers = <
       const path = `${field}[${index}].${subField}`;
       return getRadioGroupOptionProps(path, optionValue);
     },
+
+    getFieldError: (index: number, subField: TFieldPaths) =>
+      getFieldError(`${field}[${index}].${subField}`),
+
+    getFieldId: (
+      index: number,
+      subField: TFieldPaths,
+      optionValue?: string | number
+    ) => getFieldId(`${field}[${index}].${subField}`, optionValue),
   };
 };

@@ -6,8 +6,9 @@ import AsyncUserForm from './async/AsyncUserForm';
 import ZodForm from './standard-schema/ZodForm';
 import ValibotForm from './standard-schema/ValibotForm';
 import FieldValidatorForm from './field-validators/FieldValidatorForm';
+import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
 
-type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators';
+type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');
@@ -45,12 +46,19 @@ function App() {
         >
           Field Validators
         </button>
+        <button
+          className={tab === 'array-helpers' ? 'active' : ''}
+          onClick={() => setTab('array-helpers')}
+        >
+          Array Helpers
+        </button>
       </div>
       {tab === 'sync' && <UserForm />}
       {tab === 'async' && <AsyncUserForm />}
       {tab === 'zod' && <ZodForm />}
       {tab === 'valibot' && <ValibotForm />}
       {tab === 'field-validators' && <FieldValidatorForm />}
+      {tab === 'array-helpers' && <ArrayHelpersForm />}
     </>
   );
 }

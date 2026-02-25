@@ -1397,6 +1397,12 @@ export const useForm = <TValues extends Record<string, unknown>>(
           setFieldTouched
         );
 
+      const getFieldErrorAtPath = (path: string) =>
+        formState.touched[path] ? errors[path] : undefined;
+
+      const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
+        optionValue !== undefined ? `${path}-${String(optionValue)}` : path;
+
       const arrayValue =
         getValueByPath<TValues, TItem[]>(formState.values, field) || [];
 
@@ -1410,10 +1416,18 @@ export const useForm = <TValues extends Record<string, unknown>>(
         getCheckboxPropsAtPath,
         getSwitchPropsAtPath,
         getFileFieldPropsAtPath,
-        getRadioGroupOptionPropsAtPath
+        getRadioGroupOptionPropsAtPath,
+        getFieldErrorAtPath,
+        getFieldIdAtPath
       );
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [
+      formState.values,
+      formState.touched,
+      errors,
+      setFieldValue,
+      setFieldTouched,
+    ]
   );
 
   // Overloaded wrapper for better type inference

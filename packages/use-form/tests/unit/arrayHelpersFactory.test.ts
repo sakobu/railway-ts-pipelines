@@ -82,6 +82,10 @@ const createMockFieldProps = () => ({
       onBlur: () => {},
     })
   ),
+  getFieldError: mock((_field: string): string | undefined => undefined),
+  getFieldId: mock((field: string, optionValue?: string | number): string =>
+    optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+  ),
 });
 
 describe('arrayHelpersFactory', () => {
@@ -101,7 +105,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.push({ id: 3 });
@@ -129,7 +135,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.push({ id: 1 });
@@ -152,7 +160,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.push({ id: 2 });
@@ -179,7 +189,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(1);
@@ -205,7 +217,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(0);
@@ -228,7 +242,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(2);
@@ -254,7 +270,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(-1);
@@ -277,7 +295,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(5);
@@ -300,7 +320,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(0);
@@ -323,7 +345,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.remove(0);
@@ -349,7 +373,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(0, { id: 1 });
@@ -376,7 +402,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(1, { id: 2 });
@@ -403,7 +431,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(1, { id: 2 });
@@ -429,7 +459,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(-5, { id: 1 });
@@ -455,7 +487,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(100, { id: 2 });
@@ -481,7 +515,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(0, { id: 1 });
@@ -504,7 +540,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.insert(0, { id: 0 });
@@ -530,7 +568,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 2);
@@ -557,7 +597,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 2);
@@ -584,7 +626,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 1);
@@ -610,7 +654,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 0);
@@ -633,7 +679,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(-1, 1);
@@ -656,7 +704,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 5);
@@ -679,7 +729,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 1);
@@ -702,7 +754,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.swap(0, 1);
@@ -726,7 +780,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       // Try to swap with an undefined slot
@@ -753,7 +809,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(1, { id: 3 });
@@ -779,7 +837,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(0, { id: 0 });
@@ -805,7 +865,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(1, { id: 3 });
@@ -831,7 +893,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(-1, { id: 0 });
@@ -854,7 +918,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(5, { id: 2 });
@@ -877,7 +943,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.replace(0, { id: 2 });
@@ -910,7 +978,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getFieldProps(0, 'email');
@@ -941,7 +1011,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getSelectFieldProps(2, 'category');
@@ -973,7 +1045,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getSliderProps(1, 'volume');
@@ -1004,7 +1078,9 @@ describe('arrayHelpersFactory', () => {
         mockGetCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getCheckboxProps(0, 'active');
@@ -1035,7 +1111,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mockGetSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getSwitchProps(3, 'enabled');
@@ -1065,7 +1143,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mockGetFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getFileFieldProps(0, 'avatar');
@@ -1100,7 +1180,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mockGetRadioGroupOptionProps
+        mockGetRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getRadioGroupOptionProps(0, 'size', 'L');
@@ -1134,7 +1216,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getFieldProps(0, 'name');
@@ -1175,7 +1259,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getFieldProps(0, 'name');
@@ -1212,7 +1298,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mockGetRadioGroupOptionProps
+        mockGetRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       helpers.getRadioGroupOptionProps(0, 'priority', 5);
@@ -1240,7 +1328,9 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       expect(helpers.values).toEqual([{ id: 1 }, { id: 2 }]);
@@ -1261,10 +1351,158 @@ describe('arrayHelpersFactory', () => {
         mocks.getCheckboxProps,
         mocks.getSwitchProps,
         mocks.getFileFieldProps,
-        mocks.getRadioGroupOptionProps
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mocks.getFieldId
       );
 
       expect(helpers.values).toBe(initial);
+    });
+  });
+
+  describe('getFieldError', () => {
+    test('constructs correct path and delegates', () => {
+      type Item = { email: string };
+      const mockGetFieldError = mock(
+        (_field: string): string | undefined => 'Required'
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'email'>(
+        'contacts',
+        [{ email: '' }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps,
+        mockGetFieldError,
+        mocks.getFieldId
+      );
+
+      const result = helpers.getFieldError(0, 'email');
+
+      expect(mockGetFieldError).toHaveBeenCalledWith('contacts[0].email');
+      expect(result).toBe('Required');
+    });
+
+    test('returns undefined when delegate returns undefined', () => {
+      type Item = { name: string };
+      const mockGetFieldError = mock(
+        (_field: string): string | undefined => undefined
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'name'>(
+        'items',
+        [{ name: 'valid' }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps,
+        mockGetFieldError,
+        mocks.getFieldId
+      );
+
+      const result = helpers.getFieldError(2, 'name');
+
+      expect(mockGetFieldError).toHaveBeenCalledWith('items[2].name');
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('getFieldId', () => {
+    test('constructs correct path and delegates without optionValue', () => {
+      type Item = { name: string };
+      const mockGetFieldId = mock(
+        (field: string, _optionValue?: string | number): string => field
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'name'>(
+        'items',
+        [{ name: 'test' }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mockGetFieldId
+      );
+
+      const result = helpers.getFieldId(0, 'name');
+
+      expect(mockGetFieldId).toHaveBeenCalledWith('items[0].name', undefined);
+      expect(result).toBe('items[0].name');
+    });
+
+    test('forwards optionValue to delegate', () => {
+      type Item = { status: string };
+      const mockGetFieldId = mock(
+        (field: string, optionValue?: string | number): string =>
+          optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'status'>(
+        'items',
+        [{ status: 'active' }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mockGetFieldId
+      );
+
+      const result = helpers.getFieldId(1, 'status', 'active');
+
+      expect(mockGetFieldId).toHaveBeenCalledWith('items[1].status', 'active');
+      expect(result).toBe('items[1].status-active');
+    });
+
+    test('forwards numeric optionValue to delegate', () => {
+      type Item = { priority: number };
+      const mockGetFieldId = mock(
+        (field: string, optionValue?: string | number): string =>
+          optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+      );
+      const mocks = createMockFieldProps();
+
+      const helpers = createArrayHelpers<Item, 'priority'>(
+        'items',
+        [{ priority: 1 }],
+        () => {},
+        mocks.getFieldProps,
+        mocks.getSelectFieldProps,
+        mocks.getSliderProps,
+        mocks.getCheckboxProps,
+        mocks.getSwitchProps,
+        mocks.getFileFieldProps,
+        mocks.getRadioGroupOptionProps,
+        mocks.getFieldError,
+        mockGetFieldId
+      );
+
+      const result = helpers.getFieldId(0, 'priority', 5);
+
+      expect(mockGetFieldId).toHaveBeenCalledWith('items[0].priority', 5);
+      expect(result).toBe('items[0].priority-5');
     });
   });
 });

@@ -347,7 +347,7 @@ import { chain, refine } from '@railway-ts/pipelines/schema';
 const fileValidator = chain(
   refine<File>((value) => value instanceof File, 'Must be a file'),
   refine<File>((value) => value.size <= 5_000_000, 'File too large (max 5MB)'),
-  refine<File>((value) => value.type.startsWith('image/'), 'Must be an image'),
+  refine<File>((value) => value.type.startsWith('image/'), 'Must be an image')
 );
 
 const uploadSchema = object({
@@ -1195,7 +1195,11 @@ match(result, {
 **Solution:** Extract a reusable `Field` component that takes the form instance, field name, and label.
 
 ```tsx
-import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import {
+  useForm,
+  type UseFormReturn,
+  type ExtractFieldPaths,
+} from '@railway-ts/use-form';
 import {
   object,
   required,
@@ -1262,7 +1266,11 @@ Wrap field components in `React.memo` so they only re-render when their specific
 
 ```tsx
 import { memo, useMemo } from 'react';
-import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import {
+  useForm,
+  type UseFormReturn,
+  type ExtractFieldPaths,
+} from '@railway-ts/use-form';
 import {
   object,
   required,
@@ -1507,7 +1515,9 @@ function ShadcnForm() {
         <Label htmlFor={form.getFieldId('email')}>Email</Label>
         <Input {...form.getFieldProps('email')} />
         {form.getFieldError('email') && (
-          <p className="text-sm text-destructive">{form.getFieldError('email')}</p>
+          <p className="text-sm text-destructive">
+            {form.getFieldError('email')}
+          </p>
         )}
       </div>
 
@@ -1515,7 +1525,9 @@ function ShadcnForm() {
         <Label htmlFor={form.getFieldId('password')}>Password</Label>
         <Input type="password" {...form.getFieldProps('password')} />
         {form.getFieldError('password') && (
-          <p className="text-sm text-destructive">{form.getFieldError('password')}</p>
+          <p className="text-sm text-destructive">
+            {form.getFieldError('password')}
+          </p>
         )}
       </div>
 

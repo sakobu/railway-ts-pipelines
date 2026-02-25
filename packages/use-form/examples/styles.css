@@ -236,6 +236,39 @@ pre {
   color: white;
 }
 
+/* Array Items */
+.array-item {
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.array-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #555;
+}
+
+.array-item-actions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.array-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  flex: none;
+}
+
+.array-btn-remove {
+  color: #c00;
+}
+
 /* Responsive Design */
 @media (max-width: 640px) {
   body {

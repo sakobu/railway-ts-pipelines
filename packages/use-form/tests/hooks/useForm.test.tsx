@@ -9,6 +9,7 @@ import {
   asyncUserValidator,
   alwaysValidAsyncValidator,
   alwaysInvalidAsyncValidator,
+  userWithContactsValidator,
   type UserForm,
   type AsyncUserForm,
   type UserWithAddressForm,
@@ -1082,6 +1083,110 @@ describe('useForm', () => {
       expect(props.name).toBe('preferences[0].size');
       expect(props.value).toBe('medium');
       expect(props.checked).toBe(true);
+    });
+
+    test('arrayHelpers getFieldError returns undefined for untouched field', () => {
+      const { result } = renderHook(() =>
+        useForm(userWithContactsValidator, {
+          initialValues: {
+            name: 'John',
+            contacts: [{ type: 'email', value: '' }],
+          },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('contacts');
+      const error = helpers.getFieldError(0, 'value');
+
+      expect(error).toBeUndefined();
+    });
+
+    test('arrayHelpers getFieldError returns error string for touched field with error', () => {
+      const { result } = renderHook(() =>
+        useForm(userWithContactsValidator, {
+          initialValues: {
+            name: 'John',
+            contacts: [{ type: 'email', value: '' }],
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('contacts[0].value', true);
+      });
+
+      const helpers = result.current.arrayHelpers('contacts');
+      const error = helpers.getFieldError(0, 'value');
+
+      expect(error).toBe('Contact value is required');
+    });
+
+    test('arrayHelpers getFieldError returns undefined for touched field without error', () => {
+      const { result } = renderHook(() =>
+        useForm(userWithContactsValidator, {
+          initialValues: {
+            name: 'John',
+            contacts: [{ type: 'email', value: 'john@example.com' }],
+          },
+        })
+      );
+
+      act(() => {
+        result.current.setFieldTouched('contacts[0].value', true);
+      });
+
+      const helpers = result.current.arrayHelpers('contacts');
+      const error = helpers.getFieldError(0, 'value');
+
+      expect(error).toBeUndefined();
+    });
+
+    test('arrayHelpers getFieldId returns path without optionValue', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            contacts: [{ name: 'John' }],
+          },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('contacts');
+      // @ts-expect-error - Type inference limitation in test
+      const id = helpers.getFieldId(0, 'name');
+
+      expect(id).toBe('contacts[0].name');
+    });
+
+    test('arrayHelpers getFieldId returns path with string optionValue', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            contacts: [{ type: 'email' }],
+          },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('contacts');
+      // @ts-expect-error - Type inference limitation in test
+      const id = helpers.getFieldId(0, 'type', 'email');
+
+      expect(id).toBe('contacts[0].type-email');
+    });
+
+    test('arrayHelpers getFieldId returns path with numeric optionValue', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            items: [{ priority: 1 }, { priority: 5 }],
+          },
+        })
+      );
+
+      const helpers = result.current.arrayHelpers('items');
+      // @ts-expect-error - Type inference limitation in test
+      const id = helpers.getFieldId(1, 'priority', 5);
+
+      expect(id).toBe('items[1].priority-5');
     });
   });
 
