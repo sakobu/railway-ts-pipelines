@@ -194,6 +194,52 @@ describe('useForm', () => {
     expect(result.current.handleSubmit).toBe(firstRef);
   });
 
+  test('setFieldValue maintains stable reference across value changes', () => {
+    const { result } = renderHook(() =>
+      useForm(userValidator, {
+        initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+      })
+    );
+
+    const firstRef = result.current.setFieldValue;
+
+    act(() => {
+      result.current.setFieldValue('name', 'Alice');
+    });
+
+    expect(result.current.setFieldValue).toBe(firstRef);
+  });
+
+  test('cascading setFieldValue inside onFieldChange sees accumulated values', () => {
+    const observed: Record<string, unknown>[] = [];
+
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, {
+        initialValues: { name: '', email: '', age: 0 },
+        onFieldChange: (field, _value, values) => {
+          observed.push({ ...values });
+          if (field === 'name') {
+            // Cascading call: should see name already set
+            result.current.setFieldValue('email', 'auto@test.com', false);
+          }
+        },
+      })
+    );
+
+    act(() => {
+      result.current.setFieldValue('name', 'Alice', false);
+    });
+
+    // First callback: name is set
+    expect(observed[0]).toEqual({ name: 'Alice', email: '', age: 0 });
+    // Second (cascading) callback: both name and email are set
+    expect(observed[1]).toEqual({
+      name: 'Alice',
+      email: 'auto@test.com',
+      age: 0,
+    });
+  });
+
   describe('handleSubmit', () => {
     test('calls onSubmit with valid data', async () => {
       const onSubmit = mock((values: UserForm) => {});

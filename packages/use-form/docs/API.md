@@ -208,7 +208,7 @@ form.touched.password; // false
 
 Type: `Record<FieldPath, string>`
 
-Combined client and server errors. Server errors take precedence.
+Combined client, field validator, and server errors. Server errors take highest precedence (server > field > client).
 
 ```typescript
 form.errors.email; // "Email is required"
@@ -591,7 +591,7 @@ getFieldId<TField extends ExtractFieldPaths<TValues>>(
 Manually trigger validation.
 
 ```typescript
-validateForm(values: TValues): Result<TValues, ValidationError[]>
+validateForm(values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>>
 ```
 
 **Parameters:**
@@ -599,7 +599,7 @@ validateForm(values: TValues): Result<TValues, ValidationError[]>
 - `values` - Values to validate
 
 **Returns:**
-Railway Result type with validated data or errors.
+Railway Result type with validated data or errors. Returns a Promise when using an async validator.
 
 **Example:**
 
@@ -751,6 +751,7 @@ getSliderProps<TField extends ExtractFieldPaths<TValues>>(
 {
   id: string;
   name: string;
+  type: 'range';
   value: number;
   onChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onBlur: () => void;
@@ -1296,6 +1297,8 @@ const accountValidator = chain(
 );
 ```
 
+> **Tip:** For multiple conditional fields, consider [`when`](#when) for a more readable approach.
+
 **Example:**
 
 ```typescript
@@ -1315,6 +1318,90 @@ const bookingValidator = chain(
 
 **See also:** [Recipes - Dependent Fields](./RECIPES.md#dependent-fields--cross-field-validation) for more examples
 
+### when
+
+Conditionally apply validators based on a runtime predicate. When the predicate returns `true`, `thenValidator` runs. When `false`, `elseValidator` runs (if provided), otherwise the value passes through unchanged.
+
+```typescript
+function when<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: Validator<T, T>,
+  elseValidator?: Validator<T, T>,
+): Validator<T, T>;
+```
+
+**Parameters:**
+
+- `predicate` - Function receiving the entire object, returns `true` to apply `thenValidator`
+- `thenValidator` - Validator applied when predicate returns `true`
+- `elseValidator` - Optional validator applied when predicate returns `false`
+
+**Returns:** Validator function for use with `chain` at object level
+
+**Example:**
+
+```typescript
+import { chain, object, required, optional, string, stringEnum, refineAt, when, type InferSchemaType } from '@railway-ts/pipelines/schema';
+
+const baseSchema = object({
+  accountType: required(stringEnum(['personal', 'business'])),
+  companyName: optional(string()),
+  taxId: optional(string()),
+});
+
+type AccountData = InferSchemaType<typeof baseSchema>;
+
+const accountValidator = chain(
+  baseSchema,
+  when<AccountData>(
+    (d) => d.accountType === 'business',
+    chain(
+      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
+      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
+    ),
+  ),
+);
+```
+
+**See also:** [Recipes - Conditional Validation](./RECIPES.md#conditional-validation) for a full React example
+
+### whenAsync
+
+Async version of `when`. Use when the branch validators involve async operations (database checks, API calls, etc.).
+
+```typescript
+function whenAsync<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: MaybeAsyncValidator<T, T>,
+  elseValidator?: MaybeAsyncValidator<T, T>,
+): AsyncValidator<T, T>;
+```
+
+**Parameters:**
+
+- `predicate` - Function receiving the entire object, returns `true` to apply `thenValidator`
+- `thenValidator` - Sync or async validator applied when predicate returns `true`
+- `elseValidator` - Optional sync or async validator applied when predicate returns `false`
+
+**Returns:** Async validator function for use with `chainAsync` at object level
+
+**Example:**
+
+```typescript
+import { chainAsync, object, required, optional, string, stringEnum, refineAtAsync, whenAsync } from '@railway-ts/pipelines/schema';
+
+const staffValidator = chainAsync(
+  object({
+    role: required(stringEnum(['admin', 'doctor', 'nurse'])),
+    license: optional(string()),
+  }),
+  whenAsync<StaffData>(
+    (d) => d.role === 'doctor',
+    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
+  ),
+);
+```
+
 ### Validation Paths
 
 There are two patterns for where validation errors land:
@@ -1327,7 +1414,7 @@ There are two patterns for where validation errors land:
 
 **Cross-field validation** -- validating based on other fields:
 
-- Use `chain` at the **object level** with `refineAt`
+- Use `chain` at the **object level** with `refineAt` or `when`
 - The first argument to `refineAt` is the field path where the error should appear
 - The predicate receives the entire parent object
 - Example: `refineAt('confirmPassword', (data) => data.password === data.confirmPassword, '...')`

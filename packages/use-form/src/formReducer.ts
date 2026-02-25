@@ -1,5 +1,11 @@
 import type { FieldPath, FormAction, FormState } from './types';
-import { deepEqual, deepMerge, isPathAffected, setValueByPath } from './utils';
+import {
+  deepEqual,
+  deepMerge,
+  getValueByPath,
+  isPathAffected,
+  setValueByPath,
+} from './utils';
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
@@ -62,6 +68,9 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 ): FormState<TValues> => {
   switch (action.type) {
     case 'SET_FIELD_VALUE': {
+      if (getValueByPath(state.values, action.field) === action.value)
+        return state;
+
       const newValues = setValueByPath(
         state.values,
         action.field,

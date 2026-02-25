@@ -616,35 +616,47 @@ The key insight: `chain` at the **object level** (not the field level) gives `re
 
 **Problem:** Some fields are only required based on another field's value -- like company name and tax ID for business accounts.
 
-**Solution:** Same technique as cross-field validation. Use `refineAt` to conditionally require fields.
+**Solution:** Use `when` from `@railway-ts/pipelines/schema` to branch validation based on a runtime predicate. The `then` validator runs when the predicate returns true; the value passes through unchanged otherwise.
 
 ```tsx
-const accountSchema = chain(
-  object({
-    accountType: required(stringEnum(['personal', 'business'])),
-    companyName: optional(string()),
-    taxId: optional(string()),
-  }),
-  refineAt(
-    'companyName',
-    (data) => data.accountType === 'personal' || !!data.companyName,
-    'Company name is required for business accounts'
-  ),
-  refineAt(
-    'taxId',
-    (data) => data.accountType === 'personal' || !!data.taxId,
-    'Tax ID is required for business accounts'
-  )
-);
+import {
+  object,
+  string,
+  required,
+  optional,
+  chain,
+  refineAt,
+  stringEnum,
+  when,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
-type AccountData = InferSchemaType<typeof accountSchema>;
+const baseSchema = object({
+  accountType: required(stringEnum(['personal', 'business'])),
+  companyName: optional(string()),
+  taxId: optional(string()),
+});
+
+type AccountData = InferSchemaType<typeof baseSchema>;
+
+const accountSchema = chain(
+  baseSchema,
+  when<AccountData>(
+    (d) => d.accountType === 'business',
+    chain(
+      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
+      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
+    ),
+  ),
+);
 
 function AccountForm() {
   const form = useForm<AccountData>(accountSchema, {
     initialValues: { accountType: 'personal', companyName: '', taxId: '' },
   });
 
-  const isBusiness = form.values.accountType === 'business';
+  const isBiz = form.values.accountType === 'business';
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
@@ -653,7 +665,7 @@ function AccountForm() {
         <option value="business">Business</option>
       </select>
 
-      {isBusiness && (
+      {isBiz && (
         <>
           <input
             {...form.getFieldProps('companyName')}
@@ -675,6 +687,22 @@ function AccountForm() {
   );
 }
 ```
+
+Each `refineAt` inside `when` only checks its own field — the `when` wrapper already gates execution to business accounts. For async conditional checks, use `whenAsync` with `chainAsync`:
+
+```typescript
+import { chainAsync, whenAsync, refineAtAsync } from '@railway-ts/pipelines/schema';
+
+const staffSchema = chainAsync(
+  baseStaffSchema,
+  whenAsync<StaffData>(
+    (d) => d.role === 'doctor',
+    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
+  ),
+);
+```
+
+> **Note:** For simple single-field conditionals, chaining `refineAt` with an inverted predicate still works — see [Dependent Fields](#dependent-fields--cross-field-validation). `when` shines when you have multiple conditional fields or want the intent to read top-to-bottom without inverted logic.
 
 ---
 

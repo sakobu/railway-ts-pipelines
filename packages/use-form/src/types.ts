@@ -1055,6 +1055,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   /** Validation errors set via `setServerErrors()`. Automatically cleared when the related field value changes. */
   serverErrors: Record<FieldPath, string>;
 
+  /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
+  fieldErrors: Record<FieldPath, string>;
+
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 

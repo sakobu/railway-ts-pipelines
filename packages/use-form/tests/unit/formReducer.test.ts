@@ -71,6 +71,51 @@ describe('formReducer', () => {
       expect(result.serverErrors.email).toBe('Server error for email');
     });
 
+    test('returns same state reference when value unchanged', () => {
+      const result = formReducer(
+        initialState,
+        {
+          type: 'SET_FIELD_VALUE',
+          field: 'name',
+          value: 'John', // same as initialValues.name
+        },
+        initialValues
+      );
+
+      expect(result).toBe(initialState);
+    });
+
+    test('returns same state reference for same nested value', () => {
+      const nestedValues = {
+        user: { name: 'John', address: { city: 'NYC' } },
+      };
+      const nestedState: FormState<typeof nestedValues> = {
+        values: nestedValues,
+        touched: {},
+        clientErrors: {},
+        serverErrors: {},
+        fieldErrors: {},
+        validatingFields: {},
+        isSubmitting: false,
+        isFormValidating: false,
+        submitCount: 0,
+        isDirty: false,
+      };
+
+      const cityRef = nestedValues.user.address;
+      const result = formReducer(
+        nestedState,
+        {
+          type: 'SET_FIELD_VALUE',
+          field: 'user.address',
+          value: cityRef, // exact same reference
+        },
+        nestedValues
+      );
+
+      expect(result).toBe(nestedState);
+    });
+
     test('clears server errors for nested paths', () => {
       const nestedValues = {
         user: { name: 'John', address: { city: 'NYC' } },

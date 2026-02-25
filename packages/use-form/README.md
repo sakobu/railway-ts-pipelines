@@ -233,7 +233,7 @@ Cross-field validation, async username check, server errors, and React Query int
 - **Standard Schema v1** -- bring your own Zod, Valibot, or ArkType schema
 - **Native HTML bindings** -- spread `getFieldProps` onto inputs, selects, checkboxes, files, radios, sliders
 - **Three error layers** -- client, per-field async, and server errors with automatic priority
-- **Array helpers** -- type-safe `push`, `remove`, `swap`, `move`, `insert`, `replace` with field bindings
+- **Array helpers** -- type-safe `push`, `remove`, `swap`, `insert`, `replace` with field bindings
 - **Four validation modes** -- `live`, `blur`, `mount`, `submit`
 - **Auto-submission** -- `useFormAutoSubmission` for search/filter forms with debounced submit
 - **React 18 + 19** -- compatible with both, tree-shakeable ESM

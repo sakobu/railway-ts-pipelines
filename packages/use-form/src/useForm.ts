@@ -245,6 +245,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
     formStateRef.current = formState;
   });
 
+  // Tracks in-flight accumulated values during synchronous onFieldChange cascades.
+  // Non-null only while the onFieldChange callback is executing.
+  const pendingValuesRef = useRef<TValues | null>(null);
+
   // =========================================================================
   // Value change callbacks
   // =========================================================================
@@ -531,15 +535,19 @@ export const useForm = <TValues extends Record<string, unknown>>(
       value: TValue,
       shouldValidate = validateOnChange
     ): void => {
-      // Calculate updated values first
+      // Read from pendingValuesRef during onFieldChange cascades, otherwise from committed state
+      const baseValues =
+        pendingValuesRef.current ?? formStateRef.current.values;
       const updatedValues = setValueByPath<TValues, TValue>(
-        formState.values,
+        baseValues,
         field,
         value
       );
 
-      // Fire onFieldChange with the field path, new value, and computed next state
+      // Expose accumulated values to nested setFieldValue calls inside onFieldChange
+      pendingValuesRef.current = updatedValues;
       onFieldChangeRef.current?.(field, value, updatedValues);
+      pendingValuesRef.current = null;
 
       // Dispatch state update
       dispatch({
@@ -549,7 +557,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       // Mark touched on first change for immediate error visibility
-      if (touchOnChange && !formState.touched[field]) {
+      if (touchOnChange && !formStateRef.current.touched[field]) {
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
@@ -558,13 +566,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         runValidationPipeline(field, updatedValues);
       }
     },
-    [
-      formState.values,
-      formState.touched,
-      validateOnChange,
-      touchOnChange,
-      runValidationPipeline,
-    ]
+    [validateOnChange, touchOnChange, runValidationPipeline]
   );
 
   /**
@@ -1454,6 +1456,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     errors,
     clientErrors: formState.clientErrors,
     serverErrors: formState.serverErrors,
+    fieldErrors: formState.fieldErrors,
     isSubmitting: formState.isSubmitting,
     isValidating,
     validatingFields: formState.validatingFields,
