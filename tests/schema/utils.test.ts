@@ -741,7 +741,7 @@ describe('utils - validateAndFormatResult', () => {
 
 describe('utils - when', () => {
   interface FormData {
-    contactMethod: 'email' | 'phone';
+    contactMethod: string;
     email: string;
     phone: string;
   }
