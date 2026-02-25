@@ -269,6 +269,12 @@ pre {
   color: #c00;
 }
 
+.empty-message {
+  color: #888;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
 /* Responsive Design */
 @media (max-width: 640px) {
   body {

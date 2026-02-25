@@ -328,7 +328,7 @@ The field path autocomplete works through nested objects -- type `'address.'` an
 
 ## Step 7: Arrays
 
-Use `arrayHelpers` for dynamic lists. It gives you `push`, `remove`, `swap`, `move`, `insert`, `replace`, and its own `getFieldProps` that takes an index:
+Use `arrayHelpers` for dynamic lists. It gives you `push`, `remove`, `swap`, `insert`, `replace`, and its own `getFieldProps` that takes an index:
 
 ```tsx
 import {
@@ -406,7 +406,6 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 | `remove(index)`                     | Remove by index                 |
 | `insert(index, item)`               | Insert at position              |
 | `swap(indexA, indexB)`              | Swap two items                  |
-| `move(from, to)`                    | Move item to new position       |
 | `replace(index, item)`              | Replace item at index           |
 | `getFieldProps(index, field)`       | Get props for item field        |
 | `getFieldError(index, field)`       | Get error for item field        |

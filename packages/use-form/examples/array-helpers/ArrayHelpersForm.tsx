@@ -36,13 +36,7 @@ export default function ArrayHelpersForm() {
         <legend>Team Members</legend>
 
         {helpers.values.length === 0 && (
-          <p
-            style={{
-              color: '#888',
-              fontSize: '0.875rem',
-              marginBottom: '1rem',
-            }}
-          >
+          <p className="empty-message">
             No members yet. Click &ldquo;Add Member&rdquo; to get started.
           </p>
         )}

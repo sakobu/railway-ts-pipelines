@@ -972,20 +972,6 @@ swap(indexA: number, indexB: number): void
 helpers.swap(0, 2); // Swap first and third items
 ```
 
-#### move
-
-Move item from one position to another.
-
-```typescript
-move(from: number, to: number): void
-```
-
-**Example:**
-
-```typescript
-helpers.move(2, 0); // Move third item to first position
-```
-
 #### replace
 
 Replace item at index.
@@ -1135,7 +1121,10 @@ getRadioGroupOptionProps<TField extends ExtractFieldPaths<TItem>>(
 Get validation error for item field.
 
 ```typescript
-getFieldError(index: number, subField: TFieldPaths): string | undefined
+getFieldError<TField extends ExtractFieldPaths<TItem>>(
+  index: number,
+  field: TField
+): string | undefined
 ```
 
 **Example:**
@@ -1146,6 +1135,25 @@ getFieldError(index: number, subField: TFieldPaths): string | undefined
     <span>{helpers.getFieldError(0, 'name')}</span>
   );
 }
+```
+
+#### getFieldId
+
+Get a stable HTML element ID for an item field. Useful for `<label htmlFor>`.
+
+```typescript
+getFieldId<TField extends ExtractFieldPaths<TItem>>(
+  index: number,
+  field: TField,
+  optionValue?: string | number
+): string
+```
+
+**Example:**
+
+```tsx
+<label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
+<input {...helpers.getFieldProps(index, "name")} />
 ```
 
 ## useFormAutoSubmission
