@@ -400,16 +400,16 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 
 **All array operations:**
 
-| Method                        | What it does              |
-| ----------------------------- | ------------------------- |
-| `push(item)`                  | Add to end                |
-| `remove(index)`               | Remove by index           |
-| `insert(index, item)`         | Insert at position        |
-| `swap(indexA, indexB)`        | Swap two items            |
-| `move(from, to)`              | Move item to new position |
-| `replace(index, item)`        | Replace item at index     |
-| `getFieldProps(index, field)` | Get props for item field  |
-| `getFieldError(index, field)` | Get error for item field  |
+| Method                              | What it does                    |
+| ----------------------------------- | ------------------------------- |
+| `push(item)`                        | Add to end                      |
+| `remove(index)`                     | Remove by index                 |
+| `insert(index, item)`               | Insert at position              |
+| `swap(indexA, indexB)`              | Swap two items                  |
+| `move(from, to)`                    | Move item to new position       |
+| `replace(index, item)`              | Replace item at index           |
+| `getFieldProps(index, field)`       | Get props for item field        |
+| `getFieldError(index, field)`       | Get error for item field        |
 | `getSelectFieldProps(index, field)` | Get select props for item field |
 
 ---

@@ -8,7 +8,13 @@ import ValibotForm from './standard-schema/ValibotForm';
 import FieldValidatorForm from './field-validators/FieldValidatorForm';
 import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
 
-type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
+type Tab =
+  | 'sync'
+  | 'async'
+  | 'zod'
+  | 'valibot'
+  | 'field-validators'
+  | 'array-helpers';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');

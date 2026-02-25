@@ -1141,9 +1141,11 @@ getFieldError(index: number, subField: TFieldPaths): string | undefined
 **Example:**
 
 ```tsx
-{helpers.getFieldError(0, "name") && (
-  <span>{helpers.getFieldError(0, "name")}</span>
-)}
+{
+  helpers.getFieldError(0, 'name') && (
+    <span>{helpers.getFieldError(0, 'name')}</span>
+  );
+}
 ```
 
 ## useFormAutoSubmission

@@ -253,7 +253,11 @@ function TodoList() {
         </div>
       ))}
 
-      <button onClick={() => helpers.push({ text: '', done: false, priority: 'medium' })}>
+      <button
+        onClick={() =>
+          helpers.push({ text: '', done: false, priority: 'medium' })
+        }
+      >
         Add Todo
       </button>
     </div>

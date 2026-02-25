@@ -647,11 +647,12 @@ export type ValidFieldPath<TForm, TField extends string> =
 export type GetArrayItemType<
   TValues extends Record<string, unknown>,
   TField extends keyof TValues,
-> = NonNullable<TValues[TField]> extends readonly (infer TItem)[]
-  ? TItem
-  : NonNullable<TValues[TField]> extends (infer TItem)[]
+> =
+  NonNullable<TValues[TField]> extends readonly (infer TItem)[]
     ? TItem
-    : never;
+    : NonNullable<TValues[TField]> extends (infer TItem)[]
+      ? TItem
+      : never;
 
 /**
  * Helper functions for working with array fields in forms.
