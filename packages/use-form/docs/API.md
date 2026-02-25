@@ -1130,6 +1130,22 @@ getRadioGroupOptionProps<TField extends ExtractFieldPaths<TItem>>(
 />
 ```
 
+#### getFieldError
+
+Get validation error for item field.
+
+```typescript
+getFieldError(index: number, subField: TFieldPaths): string | undefined
+```
+
+**Example:**
+
+```tsx
+{helpers.getFieldError(0, "name") && (
+  <span>{helpers.getFieldError(0, "name")}</span>
+)}
+```
+
 ## useFormAutoSubmission
 
 Hook for auto-submitting forms after debounced changes.

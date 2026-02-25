@@ -365,16 +365,16 @@ function ContactsForm() {
           <h3>Contact {index + 1}</h3>
 
           <input {...helpers.getFieldProps(index, 'name')} placeholder="Name" />
-          {form.getFieldError(`contacts.${index}.name`) && (
-            <span>{form.getFieldError(`contacts.${index}.name`)}</span>
+          {helpers.getFieldError(index, 'name') && (
+            <span>{helpers.getFieldError(index, 'name')}</span>
           )}
 
           <input
             {...helpers.getFieldProps(index, 'email')}
             placeholder="Email"
           />
-          {form.getFieldError(`contacts.${index}.email`) && (
-            <span>{form.getFieldError(`contacts.${index}.email`)}</span>
+          {helpers.getFieldError(index, 'email') && (
+            <span>{helpers.getFieldError(index, 'email')}</span>
           )}
 
           <button type="button" onClick={() => helpers.remove(index)}>
@@ -409,6 +409,8 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 | `move(from, to)`              | Move item to new position |
 | `replace(index, item)`        | Replace item at index     |
 | `getFieldProps(index, field)` | Get props for item field  |
+| `getFieldError(index, field)` | Get error for item field  |
+| `getSelectFieldProps(index, field)` | Get select props for item field |
 
 ---
 

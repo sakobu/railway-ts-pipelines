@@ -277,6 +277,7 @@ Then open http://localhost:3000. The interactive app has tabs for:
 - **Zod** -- Standard Schema integration with Zod
 - **Valibot** -- Standard Schema integration with Valibot
 - **Field Validators** -- Per-field async validation with loading indicators
+- **Array Helpers** -- Dynamic arrays with push, remove, swap, and per-item field bindings
 
 Or try it live on [StackBlitz](https://stackblitz.com/edit/vitejs-vite-c3zpmon9?embed=1&file=src%2FApp.tsx).
 

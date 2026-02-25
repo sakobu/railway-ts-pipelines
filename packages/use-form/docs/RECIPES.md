@@ -204,6 +204,7 @@ const todosSchema = object({
     object({
       text: required(chain(string(), nonEmpty('Task is required'))),
       done: required(boolean()),
+      priority: required(stringEnum(['low', 'medium', 'high'])),
     })
   ),
 });
@@ -223,6 +224,15 @@ function TodoList() {
         <div key={index}>
           <input type="checkbox" {...helpers.getCheckboxProps(index, 'done')} />
           <input {...helpers.getFieldProps(index, 'text')} />
+          {helpers.getFieldError(index, 'text') && (
+            <span>{helpers.getFieldError(index, 'text')}</span>
+          )}
+
+          <select {...helpers.getSelectFieldProps(index, 'priority')}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
 
           <button
             onClick={() => index > 0 && helpers.swap(index, index - 1)}
@@ -243,7 +253,7 @@ function TodoList() {
         </div>
       ))}
 
-      <button onClick={() => helpers.push({ text: '', done: false })}>
+      <button onClick={() => helpers.push({ text: '', done: false, priority: 'medium' })}>
         Add Todo
       </button>
     </div>
@@ -256,8 +266,8 @@ function TodoList() {
 ```typescript
 // Add multiple items
 const newTasks = [
-  { text: 'Task 1', done: false },
-  { text: 'Task 2', done: false },
+  { text: 'Task 1', done: false, priority: 'medium' as const },
+  { text: 'Task 2', done: false, priority: 'medium' as const },
 ];
 newTasks.forEach((task) => helpers.push(task));
 
