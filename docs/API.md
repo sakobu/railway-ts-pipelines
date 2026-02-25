@@ -619,8 +619,14 @@ Extract the union of output types from a validator map. Used by `discriminatedUn
 #### `object`
 
 ```typescript
-function object<T>(schema: SyncSchema<T>, options?: { strict?: boolean }): Validator<unknown, T>;
-function object<T>(schema: Schema<T>, options?: { strict?: boolean }): MaybeAsyncValidator<unknown, T>;
+function object<T extends Record<string, unknown>>(
+  schema: SyncSchema<T>,
+  options?: { strict?: boolean },
+): Validator<unknown, T>;
+function object<T extends Record<string, unknown>>(
+  schema: Schema<T>,
+  options?: { strict?: boolean },
+): MaybeAsyncValidator<unknown, T>;
 ```
 
 Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async.
@@ -645,6 +651,9 @@ Validate arrays where each item is validated by the provided validator.
 
 ```typescript
 function tuple<V extends ReadonlyArray<Validator<unknown, unknown>>>(validators: V): Validator<unknown, TupleType<V>>;
+function tuple<V extends ReadonlyArray<MaybeAsyncValidator<unknown, unknown>>>(
+  validators: V,
+): MaybeAsyncValidator<unknown, TupleType<V>>;
 ```
 
 Validate a heterogeneous tuple where each position has its own validator.
@@ -657,7 +666,17 @@ validate(['a', 1, true]); // ok(["a", 1, true])
 #### `tupleOf`
 
 ```typescript
+function tupleOf<T>(elementValidator: Validator<unknown, T>, length: 3): Validator<unknown, [T, T, T]>;
+function tupleOf<T>(
+  elementValidator: MaybeAsyncValidator<unknown, T>,
+  length: 3,
+): MaybeAsyncValidator<unknown, [T, T, T]>;
+// Typed overloads for lengths 1–10 preserve exact tuple types; longer tuples fall back to T[]
 function tupleOf<T>(elementValidator: Validator<unknown, T>, length: number): Validator<unknown, T[]>;
+function tupleOf<T>(
+  elementValidator: MaybeAsyncValidator<unknown, T>,
+  length: number,
+): MaybeAsyncValidator<unknown, T[]>;
 ```
 
 Validate a homogeneous tuple with a fixed length. All elements share the same type.
@@ -672,6 +691,10 @@ const point3D = tupleOf(number(), 3); // [number, number, number]
 
 ```typescript
 function required<I, O>(validator: Validator<I, O>, message?: string): Validator<I | undefined | null, O>;
+function required<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+  message?: string,
+): MaybeAsyncValidator<I | undefined | null, O>;
 ```
 
 Require a value to be defined (not null or undefined).
@@ -680,6 +703,7 @@ Require a value to be defined (not null or undefined).
 
 ```typescript
 function optional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
+function optional<I, O>(validator: MaybeAsyncValidator<I, O>): MaybeAsyncValidator<I | undefined | null, O | undefined>;
 ```
 
 Allow null/undefined values. Returns `undefined` for missing values, otherwise applies the validator.
@@ -696,6 +720,9 @@ Accept only `null` values.
 
 ```typescript
 function emptyAsOptional<I, O>(validator: Validator<I, O>): Validator<I | undefined | null, O | undefined>;
+function emptyAsOptional<I, O>(
+  validator: MaybeAsyncValidator<I, O>,
+): MaybeAsyncValidator<I | undefined | null, O | undefined>;
 ```
 
 Treat empty strings, empty arrays, and empty objects as optional (returns `undefined`).
@@ -1158,11 +1185,16 @@ validate(42); // ok(42)
 #### `discriminatedUnion`
 
 ```typescript
-function discriminatedUnion<M extends Record<string, Validator<unknown, unknown>>>(
+function discriminatedUnion<const M extends Record<string, Validator<unknown, unknown>>>(
   discriminantField: string,
   validatorMap: M,
   fallbackMessage?: string,
 ): Validator<unknown, ValidatorMapOutput<M>>;
+function discriminatedUnion<const M extends Record<string, MaybeAsyncValidator<unknown, unknown>>>(
+  discriminantField: string,
+  validatorMap: M,
+  fallbackMessage?: string,
+): MaybeAsyncValidator<unknown, ValidatorMapOutput<M>>;
 ```
 
 Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects.
@@ -1278,6 +1310,57 @@ Async version of `refineAt`.
 const validate = chainAsync(
   object({ username: required(string()) }),
   refineAtAsync('username', async (d) => !(await db.users.exists({ username: d.username })), 'Taken'),
+);
+```
+
+### Conditional Validation
+
+#### `when`
+
+```typescript
+function when<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: Validator<T, T>,
+  elseValidator?: Validator<T, T>,
+): Validator<T, T>;
+```
+
+Apply different validators based on a runtime predicate. When the predicate returns `true`, `thenValidator` runs. When `false`, `elseValidator` runs (if provided), otherwise the value passes through unchanged.
+
+```typescript
+const validate = chain(
+  object({
+    contactMethod: required(stringEnum(['email', 'phone'] as const)),
+    email: required(string()),
+    phone: required(string()),
+  }),
+  when<FormData>(
+    (d) => d.contactMethod === 'email',
+    refineAt('email', (d) => d.email.includes('@'), 'Valid email required'),
+    refineAt('phone', (d) => d.phone.length >= 10, 'Phone must be at least 10 digits'),
+  ),
+);
+```
+
+#### `whenAsync`
+
+```typescript
+function whenAsync<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: MaybeAsyncValidator<T, T>,
+  elseValidator?: MaybeAsyncValidator<T, T>,
+): AsyncValidator<T, T>;
+```
+
+Async version of `when`. Use when the branch validators involve async operations (database checks, API calls, etc.).
+
+```typescript
+const validate = chainAsync(
+  object({ role: required(string()), license: required(string()) }),
+  whenAsync<StaffForm>(
+    (d) => d.role === 'doctor',
+    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid license'),
+  ),
 );
 ```
 
@@ -1422,10 +1505,9 @@ A value that may or may not be wrapped in a Promise.
 #### `pipe`
 
 ```typescript
-function pipe<A>(value: A): A;
 function pipe<A, B>(value: A, fn1: (a: A) => B): B;
 function pipe<A, B, C>(value: A, fn1: (a: A) => B, fn2: (b: B) => C): C;
-// ... up to 20 functions
+// ... up to 9 functions
 ```
 
 Execute a value through a series of functions. Each output feeds into the next.
@@ -1443,7 +1525,7 @@ const result = pipe(
 ```typescript
 function flow<A, B>(fn1: (a: A) => B): (a: A) => B;
 function flow<A, B, C>(fn1: (a: A) => B, fn2: (b: B) => C): (a: A) => C;
-// ... up to 20 functions
+// ... up to 10 functions
 ```
 
 Compose functions left-to-right into a reusable pipeline. Like `pipe` but returns a function.
@@ -1461,7 +1543,7 @@ process(5); // 11
 ```typescript
 function curry<A, B, R>(fn: (a: A, b: B) => R): (a: A) => (b: B) => R;
 function curry<A, B, C, R>(fn: (a: A, b: B, c: C) => R): (a: A) => (b: B) => (c: C) => R;
-// ... up to 4 parameters
+// ... up to 5 parameters
 ```
 
 Convert a multi-argument function into a chain of single-argument functions.
@@ -1471,7 +1553,7 @@ Convert a multi-argument function into a chain of single-argument functions.
 ```typescript
 function uncurry<A, B, R>(fn: (a: A) => (b: B) => R): (a: A, b: B) => R;
 function uncurry<A, B, C, R>(fn: (a: A) => (b: B) => (c: C) => R): (a: A, b: B, c: C) => R;
-// ... up to 4 parameters
+// ... up to 5 parameters
 ```
 
 Reverse of `curry`. Convert a curried function back to multi-argument form.
@@ -1479,7 +1561,10 @@ Reverse of `curry`. Convert a curried function back to multi-argument form.
 #### `tupled`
 
 ```typescript
-function tupled<A extends unknown[], R>(fn: (...args: A) => R): (args: A) => R;
+function tupled<A, B, R>(fn: (a: A, b: B) => R): (args: [A, B]) => R;
+function tupled<A, B, C, R>(fn: (a: A, b: B, c: C) => R): (args: [A, B, C]) => R;
+function tupled<A, B, C, D, R>(fn: (a: A, b: B, c: C, d: D) => R): (args: [A, B, C, D]) => R;
+function tupled<A, B, C, D, E, R>(fn: (a: A, b: B, c: C, d: D, e: E) => R): (args: [A, B, C, D, E]) => R;
 ```
 
 Convert a multi-argument function into one that takes a single tuple argument.
@@ -1493,7 +1578,10 @@ tupledAdd([1, 2]); // 3
 #### `untupled`
 
 ```typescript
-function untupled<A extends unknown[], R>(fn: (args: A) => R): (...args: A) => R;
+function untupled<A, B, R>(fn: (args: [A, B]) => R): (a: A, b: B) => R;
+function untupled<A, B, C, R>(fn: (args: [A, B, C]) => R): (a: A, b: B, c: C) => R;
+function untupled<A, B, C, D, R>(fn: (args: [A, B, C, D]) => R): (a: A, b: B, c: C, d: D) => R;
+function untupled<A, B, C, D, E, R>(fn: (args: [A, B, C, D, E]) => R): (a: A, b: B, c: C, d: D, e: E) => R;
 ```
 
 Reverse of `tupled`. Convert a tuple-argument function back to multi-argument form.
@@ -1503,9 +1591,8 @@ Reverse of `tupled`. Convert a tuple-argument function back to multi-argument fo
 #### `pipeAsync`
 
 ```typescript
-function pipeAsync<A>(value: MaybeAsync<A>): Promise<A>;
 function pipeAsync<A, B>(value: MaybeAsync<A>, fn1: (a: A) => MaybeAsync<B>): Promise<B>;
-// ... up to 20 functions
+// ... up to 9 functions
 ```
 
 Like `pipe`, but awaits each step. Accepts both sync and async functions.
@@ -1519,7 +1606,7 @@ const data = await pipeAsync(userId, fetchUser, validateUser, enrichProfile);
 ```typescript
 function flowAsync<A, B>(fn1: (a: A) => MaybeAsync<B>): (a: A) => Promise<B>;
 function flowAsync<A, B, C>(fn1: (a: A) => MaybeAsync<B>, fn2: (b: B) => MaybeAsync<C>): (a: A) => Promise<C>;
-// ... up to 20 functions
+// ... up to 10 functions
 ```
 
 Like `flow`, but returns an async pipeline. Accepts both sync and async functions.

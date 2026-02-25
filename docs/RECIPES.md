@@ -314,7 +314,36 @@ is({ name: 'Alice', email: 'nope' }, userSchema); // false
 
 ### Conditional Validation
 
+Use `when` to apply different validators based on runtime data. The value passes through unchanged when the predicate is false and no `elseValidator` is provided:
+
 ```typescript
+import { chain, object, required, string, stringEnum, when, refineAt } from '@railway-ts/pipelines/schema';
+
+type ContactForm = {
+  contactMethod: 'email' | 'phone';
+  email: string;
+  phone: string;
+};
+
+const contactSchema = chain(
+  object({
+    contactMethod: required(stringEnum(['email', 'phone'] as const)),
+    email: required(string()),
+    phone: required(string()),
+  }),
+  when<ContactForm>(
+    (d) => d.contactMethod === 'email',
+    refineAt('email', (d) => d.email.includes('@'), 'Valid email required'),
+    refineAt('phone', (d) => d.phone.length >= 10, 'Phone must be at least 10 digits'),
+  ),
+);
+```
+
+For more complex branching (e.g. completely different schemas per variant), use `flatMap` directly:
+
+```typescript
+import { flatMap, ok } from '@railway-ts/pipelines/result';
+
 const validateConditionally = (input: unknown) => {
   const baseResult = validate(input, baseSchema);
 
@@ -536,7 +565,7 @@ validate('active', statusValidator); // Ok(Status.Active)
 import { oneOf } from '@railway-ts/pipelines/schema';
 
 const priorityValidator = oneOf([1, 2, 3] as const);
-// Validator<unknown, 1 | 2 | 3>
+// Validator<1 | 2 | 3>
 
 validate(2, priorityValidator); // Ok(2)
 validate(5, priorityValidator); // Err(...)

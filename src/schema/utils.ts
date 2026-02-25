@@ -515,3 +515,61 @@ export function refineAtAsync<T>(
     return ok(value);
   };
 }
+
+/**
+ * Create a conditional validator that applies different validators based on a predicate.
+ * When the predicate returns true, `thenValidator` is applied.
+ * When false, `elseValidator` is applied (if provided), otherwise the value passes through.
+ *
+ * @example
+ * const validate = when<FormData>(
+ *   (data) => data.contactMethod === 'email',
+ *   refineAt('email', (d) => d.email.includes('@'), 'Valid email required'),
+ *   refineAt('phone', (d) => d.phone.length > 0, 'Phone required'),
+ * );
+ *
+ * @param predicate - A function that determines which validator to apply
+ * @param thenValidator - Validator applied when predicate returns true
+ * @param elseValidator - Optional validator applied when predicate returns false
+ * @returns A validator that conditionally applies validation
+ */
+export function when<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: Validator<T, T>,
+  elseValidator?: Validator<T, T>,
+): Validator<T, T> {
+  return (value, path = []) => {
+    if (predicate(value)) {
+      return thenValidator(value, path);
+    }
+    return elseValidator ? elseValidator(value, path) : ok(value);
+  };
+}
+
+/**
+ * Create a conditional async validator that applies different validators based on a predicate.
+ * This is the async counterpart of {@link when}.
+ *
+ * @example
+ * const validate = whenAsync<FormData>(
+ *   (data) => data.requiresVerification,
+ *   refineAtAsync('code', async (d) => await verifyCode(d.code), 'Invalid code'),
+ * );
+ *
+ * @param predicate - A function that determines which validator to apply
+ * @param thenValidator - Validator applied when predicate returns true
+ * @param elseValidator - Optional validator applied when predicate returns false
+ * @returns An async validator that conditionally applies validation
+ */
+export function whenAsync<T>(
+  predicate: (data: T) => boolean,
+  thenValidator: MaybeAsyncValidator<T, T>,
+  elseValidator?: MaybeAsyncValidator<T, T>,
+): AsyncValidator<T, T> {
+  return async (value, path = []) => {
+    if (predicate(value)) {
+      return thenValidator(value, path);
+    }
+    return elseValidator ? elseValidator(value, path) : ok(value);
+  };
+}

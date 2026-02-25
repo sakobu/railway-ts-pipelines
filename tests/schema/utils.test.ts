@@ -2,7 +2,17 @@ import { describe, test, expect } from 'bun:test';
 
 import { ok, err, isOk, isErr } from '@/result';
 import { object, required, string as stringSchema, number as numberSchema } from '@/schema';
-import { chain, validate, formatErrors, transform, refine, refineAt, validateAndFormatResult } from '@/schema/utils';
+import {
+  chain,
+  validate,
+  formatErrors,
+  transform,
+  refine,
+  refineAt,
+  validateAndFormatResult,
+  when,
+  whenAsync,
+} from '@/schema/utils';
 
 import type { Validator, ValidationError } from '@/schema/core';
 
@@ -726,5 +736,129 @@ describe('utils - validateAndFormatResult', () => {
       : { valid: false as const, errors: formatErrors(validationResult.error) };
 
     expect(helperResult).toEqual(manualResult);
+  });
+});
+
+describe('utils - when', () => {
+  interface FormData {
+    contactMethod: 'email' | 'phone';
+    email: string;
+    phone: string;
+  }
+
+  const emailValidator = refineAt<FormData>('email', (d) => d.email.includes('@'), 'Valid email required');
+
+  const phoneValidator = refineAt<FormData>('phone', (d) => d.phone.length >= 10, 'Phone must be at least 10 digits');
+
+  test('applies thenValidator when predicate is true', () => {
+    const validator = when<FormData>((d) => d.contactMethod === 'email', emailValidator);
+
+    const invalidResult = validator({ contactMethod: 'email', email: 'bad', phone: '' });
+    expect(isErr(invalidResult)).toBe(true);
+    if (isErr(invalidResult)) {
+      expect(invalidResult.error[0]?.message).toBe('Valid email required');
+    }
+
+    const validResult = validator({ contactMethod: 'email', email: 'a@b.com', phone: '' });
+    expect(isOk(validResult)).toBe(true);
+  });
+
+  test('passes through when predicate is false and no elseValidator', () => {
+    const validator = when<FormData>((d) => d.contactMethod === 'email', emailValidator);
+
+    // phone contact method, no elseValidator → passes through
+    const result = validator({ contactMethod: 'phone', email: 'bad', phone: '' });
+    expect(isOk(result)).toBe(true);
+  });
+
+  test('applies elseValidator when predicate is false', () => {
+    const validator = when<FormData>((d) => d.contactMethod === 'email', emailValidator, phoneValidator);
+
+    const result = validator({ contactMethod: 'phone', email: '', phone: '123' });
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.message).toBe('Phone must be at least 10 digits');
+    }
+  });
+
+  test('composes with chain for short-circuit behavior', () => {
+    const schema = chain(
+      object({
+        contactMethod: required(stringSchema()),
+        email: required(stringSchema()),
+        phone: required(stringSchema()),
+      }),
+      when<FormData>((d) => d.contactMethod === 'email', emailValidator, phoneValidator),
+    );
+
+    // Email path valid
+    const emailOk = schema({ contactMethod: 'email', email: 'a@b.com', phone: '' });
+    expect(isOk(emailOk)).toBe(true);
+
+    // Email path invalid
+    const emailBad = schema({ contactMethod: 'email', email: 'bad', phone: '' });
+    expect(isErr(emailBad)).toBe(true);
+
+    // Phone path valid
+    const phoneOk = schema({ contactMethod: 'phone', email: '', phone: '1234567890' });
+    expect(isOk(phoneOk)).toBe(true);
+
+    // Phone path invalid
+    const phoneBad = schema({ contactMethod: 'phone', email: '', phone: '123' });
+    expect(isErr(phoneBad)).toBe(true);
+  });
+
+  test('works with refineAt for conditional cross-field validation', () => {
+    interface PasswordForm {
+      password: string;
+      confirm: string;
+      requireConfirm: boolean;
+    }
+
+    const validator = when<PasswordForm>(
+      (d) => d.requireConfirm,
+      refineAt('confirm', (d) => d.password === d.confirm, 'Passwords must match'),
+    );
+
+    // Confirmation required and mismatched
+    const bad = validator({ password: 'abc', confirm: 'xyz', requireConfirm: true });
+    expect(isErr(bad)).toBe(true);
+    if (isErr(bad)) {
+      expect(bad.error[0]?.path).toEqual(['confirm']);
+    }
+
+    // Confirmation not required → passes through
+    const ok_ = validator({ password: 'abc', confirm: 'xyz', requireConfirm: false });
+    expect(isOk(ok_)).toBe(true);
+  });
+});
+
+describe('utils - whenAsync', () => {
+  test('applies async thenValidator when predicate is true', async () => {
+    const asyncRefine = refine<number>((n) => n > 0, 'Must be positive');
+
+    const validator = whenAsync<number>((n) => n !== 0, asyncRefine);
+
+    const bad = await validator(-5);
+    expect(isErr(bad)).toBe(true);
+    if (isErr(bad)) {
+      expect(bad.error[0]?.message).toBe('Must be positive');
+    }
+
+    const good = await validator(10);
+    expect(isOk(good)).toBe(true);
+  });
+
+  test('passes through when predicate is false', async () => {
+    const asyncRefine = refine<number>((n) => n > 0, 'Must be positive');
+
+    const validator = whenAsync<number>((n) => n !== 0, asyncRefine);
+
+    // predicate false (n === 0) → pass through
+    const result = await validator(0);
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      expect(result.value).toBe(0);
+    }
   });
 });
