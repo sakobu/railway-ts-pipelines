@@ -400,23 +400,23 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 
 **All array operations:**
 
-| Member                                          | What it does                          |
-| ----------------------------------------------- | ------------------------------------- |
-| `values`                                         | Current array items                   |
-| `push(item)`                                     | Add to end                            |
-| `remove(index)`                                  | Remove by index                       |
-| `insert(index, item)`                            | Insert at position                    |
-| `swap(indexA, indexB)`                            | Swap two items                        |
-| `replace(index, item)`                           | Replace item at index                 |
-| `getFieldProps(index, field)`                    | Get text/number input props           |
-| `getSelectFieldProps(index, field)`              | Get select element props              |
-| `getSliderProps(index, field)`                   | Get range input props                 |
-| `getCheckboxProps(index, field)`                 | Get checkbox input props              |
-| `getSwitchProps(index, field)`                   | Get switch/toggle props               |
-| `getFileFieldProps(index, field)`                | Get file input props                  |
-| `getRadioGroupOptionProps(index, field, value)`  | Get radio button props                |
-| `getFieldError(index, field)`                    | Get error for item field              |
-| `getFieldId(index, field, optionValue?)`         | Get unique ID for labels/accessibility|
+| Member                                          | What it does                           |
+| ----------------------------------------------- | -------------------------------------- |
+| `values`                                        | Current array items                    |
+| `push(item)`                                    | Add to end                             |
+| `remove(index)`                                 | Remove by index                        |
+| `insert(index, item)`                           | Insert at position                     |
+| `swap(indexA, indexB)`                          | Swap two items                         |
+| `replace(index, item)`                          | Replace item at index                  |
+| `getFieldProps(index, field)`                   | Get text/number input props            |
+| `getSelectFieldProps(index, field)`             | Get select element props               |
+| `getSliderProps(index, field)`                  | Get range input props                  |
+| `getCheckboxProps(index, field)`                | Get checkbox input props               |
+| `getSwitchProps(index, field)`                  | Get switch/toggle props                |
+| `getFileFieldProps(index, field)`               | Get file input props                   |
+| `getRadioGroupOptionProps(index, field, value)` | Get radio button props                 |
+| `getFieldError(index, field)`                   | Get error for item field               |
+| `getFieldId(index, field, optionValue?)`        | Get unique ID for labels/accessibility |
 
 ---
 

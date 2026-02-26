@@ -1326,7 +1326,7 @@ Conditionally apply validators based on a runtime predicate. When the predicate 
 function when<T>(
   predicate: (data: T) => boolean,
   thenValidator: Validator<T, T>,
-  elseValidator?: Validator<T, T>,
+  elseValidator?: Validator<T, T>
 ): Validator<T, T>;
 ```
 
@@ -1341,7 +1341,17 @@ function when<T>(
 **Example:**
 
 ```typescript
-import { chain, object, required, optional, string, stringEnum, refineAt, when, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import {
+  chain,
+  object,
+  required,
+  optional,
+  string,
+  stringEnum,
+  refineAt,
+  when,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
 
 const baseSchema = object({
   accountType: required(stringEnum(['personal', 'business'])),
@@ -1356,10 +1366,18 @@ const accountValidator = chain(
   when<AccountData>(
     (d) => d.accountType === 'business',
     chain(
-      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
-      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
-    ),
-  ),
+      refineAt(
+        'companyName',
+        (d) => !!d.companyName,
+        'Company name is required for business accounts'
+      ),
+      refineAt(
+        'taxId',
+        (d) => !!d.taxId,
+        'Tax ID is required for business accounts'
+      )
+    )
+  )
 );
 ```
 
@@ -1373,7 +1391,7 @@ Async version of `when`. Use when the branch validators involve async operations
 function whenAsync<T>(
   predicate: (data: T) => boolean,
   thenValidator: MaybeAsyncValidator<T, T>,
-  elseValidator?: MaybeAsyncValidator<T, T>,
+  elseValidator?: MaybeAsyncValidator<T, T>
 ): AsyncValidator<T, T>;
 ```
 
@@ -1388,7 +1406,16 @@ function whenAsync<T>(
 **Example:**
 
 ```typescript
-import { chainAsync, object, required, optional, string, stringEnum, refineAtAsync, whenAsync } from '@railway-ts/pipelines/schema';
+import {
+  chainAsync,
+  object,
+  required,
+  optional,
+  string,
+  stringEnum,
+  refineAtAsync,
+  whenAsync,
+} from '@railway-ts/pipelines/schema';
 
 const staffValidator = chainAsync(
   object({
@@ -1397,8 +1424,12 @@ const staffValidator = chainAsync(
   }),
   whenAsync<StaffData>(
     (d) => d.role === 'doctor',
-    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
-  ),
+    refineAtAsync(
+      'license',
+      async (d) => await verifyMedicalLicense(d.license),
+      'Invalid medical license'
+    )
+  )
 );
 ```
 
@@ -1492,7 +1523,7 @@ type UserAddresses = User['addresses']; // Address[]
 
 ### ExtractFieldPaths
 
-Extract all valid dot-notation field paths from a type. Arrays and Dates are treated as terminal values -- `ExtractFieldPaths` returns `"tags"`, not `"tags[0]"`.
+Extract all valid dot-notation field paths from a type. Dates and variable-length arrays are terminal values. Fixed-length tuples emit indexed sub-paths.
 
 ```typescript
 import { type ExtractFieldPaths } from '@railway-ts/use-form';
@@ -1508,6 +1539,11 @@ type User = {
 
 type Paths = ExtractFieldPaths<User>;
 // "name" | "address" | "address.city" | "address.zip" | "tags"
+
+// With a tuple field:
+type Form = { position: [number, number, number]; tags: string[] };
+type FormPaths = ExtractFieldPaths<Form>;
+// "position" | "position.0" | "position.1" | "position.2" | "tags"
 ```
 
 ### FieldPath

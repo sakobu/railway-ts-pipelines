@@ -645,10 +645,18 @@ const accountSchema = chain(
   when<AccountData>(
     (d) => d.accountType === 'business',
     chain(
-      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
-      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
-    ),
-  ),
+      refineAt(
+        'companyName',
+        (d) => !!d.companyName,
+        'Company name is required for business accounts'
+      ),
+      refineAt(
+        'taxId',
+        (d) => !!d.taxId,
+        'Tax ID is required for business accounts'
+      )
+    )
+  )
 );
 
 function AccountForm() {
@@ -691,14 +699,22 @@ function AccountForm() {
 Each `refineAt` inside `when` only checks its own field — the `when` wrapper already gates execution to business accounts. For async conditional checks, use `whenAsync` with `chainAsync`:
 
 ```typescript
-import { chainAsync, whenAsync, refineAtAsync } from '@railway-ts/pipelines/schema';
+import {
+  chainAsync,
+  whenAsync,
+  refineAtAsync,
+} from '@railway-ts/pipelines/schema';
 
 const staffSchema = chainAsync(
   baseStaffSchema,
   whenAsync<StaffData>(
     (d) => d.role === 'doctor',
-    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
-  ),
+    refineAtAsync(
+      'license',
+      async (d) => await verifyMedicalLicense(d.license),
+      'Invalid medical license'
+    )
+  )
 );
 ```
 

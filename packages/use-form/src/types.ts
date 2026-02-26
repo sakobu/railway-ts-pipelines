@@ -556,29 +556,43 @@ export type FieldTypeAtPath<
     ? T[P]
     : unknown;
 
+// ─── Tuple helpers ─────────────────────────────────────────────────────────
+// number["length"] is `number`; a tuple like [A,B,C]["length"] is literal 3.
+// `number extends T["length"]` is true only for variable-length arrays.
+type IsTuple<T extends readonly unknown[]> = number extends T['length']
+  ? false
+  : true;
+
+// Extract<keyof [A,B,C], number> → 0 | 1 | 2; template-literalize → "0"|"1"|"2"
+type TupleIndexPaths<T extends readonly unknown[]> =
+  `${Extract<keyof T, number>}`;
+// ───────────────────────────────────────────────────────────────────────────
+
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
   ? never
   : T extends object
     ? {
         [K in keyof T]-?: K extends string | number
-          ? NonNullable<T[K]> extends
-              | Date
-              | readonly unknown[]
-              | ((...args: never[]) => unknown)
+          ? NonNullable<T[K]> extends Date | ((...args: never[]) => unknown)
             ? `${K}`
-            : T[K] extends object | undefined
-              ? T[K] extends { type: string }
-                ? // Discriminated union case - extract from all possible types
-                  T[K] extends infer U
-                  ? U extends { type: infer Type }
-                    ? Type extends string
-                      ? // For discriminated unions, we need to extract paths from all variants
-                        `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+            : NonNullable<T[K]> extends readonly unknown[]
+              ? IsTuple<NonNullable<T[K]>> extends true
+                ? `${K}` | `${K}.${TupleIndexPaths<NonNullable<T[K]>>}`
+                : `${K}`
+              : T[K] extends object | undefined
+                ? T[K] extends { type: string }
+                  ? // Discriminated union case - extract from all possible types
+                    T[K] extends infer U
+                    ? U extends { type: infer Type }
+                      ? Type extends string
+                        ? // For discriminated unions, we need to extract paths from all variants
+                          | `${K}`
+                            | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+                        : never
                       : never
                     : never
-                  : never
-                : `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
-              : `${K}`
+                  : `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+                : `${K}`
           : never;
       }[keyof T]
     : never;

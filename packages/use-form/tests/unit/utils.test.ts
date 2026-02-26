@@ -426,3 +426,19 @@ describe('deepEqual', () => {
     expect(deepEqual(obj, obj)).toBe(true);
   });
 });
+
+describe('tuple field paths (runtime)', () => {
+  test('getValueByPath reads tuple element by dot notation', () => {
+    const obj = { position: [10, 20, 30] as [number, number, number] };
+    expect(getValueByPath<typeof obj, number>(obj, 'position.0')).toBe(10);
+    expect(getValueByPath<typeof obj, number>(obj, 'position.1')).toBe(20);
+    expect(getValueByPath<typeof obj, number>(obj, 'position.2')).toBe(30);
+  });
+
+  test('setValueByPath sets tuple element immutably', () => {
+    const obj = { position: [10, 20, 30] as [number, number, number] };
+    const updated = setValueByPath(obj, 'position.1', 99);
+    expect(updated.position[1]).toBe(99);
+    expect(obj.position[1]).toBe(20); // original untouched
+  });
+});
