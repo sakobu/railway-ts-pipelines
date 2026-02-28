@@ -1,6 +1,6 @@
 const LCOV_PATH = 'coverage/lcov.info';
 
-let data = '';
+let data: string;
 try {
   data = await Bun.file(LCOV_PATH).text();
 } catch {
@@ -12,7 +12,7 @@ export {};
 let ok = true;
 let currentFile = '';
 let lf = 0;
-let lh = 0;
+let lh: number;
 
 for (const line of data.split(/\n/)) {
   if (line.startsWith('SF:')) {

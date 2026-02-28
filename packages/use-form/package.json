@@ -76,6 +76,7 @@
     "typescript": "^5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@happy-dom/global-registrator": "^20.7.0",
     "@railway-ts/pipelines": "^0.1.27",
     "@testing-library/dom": "^10.4.1",
