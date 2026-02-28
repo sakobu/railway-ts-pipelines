@@ -32,7 +32,7 @@ Fully tree-shakable:
 - `result` -- 631 B
 - `option` -- 406 B
 - `composition` -- 233 B
-- `schema` -- 3.51 kB
+- `schema` -- 3.54 kB
 
 **~4.8 kB total** (minified + brotli)
 

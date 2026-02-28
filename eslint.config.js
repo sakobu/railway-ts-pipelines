@@ -10,7 +10,7 @@ import tseslint from 'typescript-eslint';
 export default [
   // Ignore dist folder
   {
-    ignores: ['dist/**'],
+    ignores: ['dist/**', 'coverage/**'],
   },
   {
     files: ['**/*.{js,mjs,cjs,ts}'],

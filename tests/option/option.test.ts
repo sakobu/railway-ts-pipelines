@@ -431,8 +431,7 @@ describe('Option', () => {
       expect(isNone(undefinedOption)).toBe(true);
 
       // Test with implicit undefined (missing parameter)
-      let value;
-      const implicitOption = fromNullable(value);
+      const implicitOption = fromNullable(undefined);
       expect(isNone(implicitOption)).toBe(true);
     });
   });
