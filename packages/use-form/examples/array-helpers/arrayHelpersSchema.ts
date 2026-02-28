@@ -13,15 +13,14 @@ import {
 } from '@railway-ts/pipelines/schema';
 
 const memberSchema = object({
+  id: required(string()),
   name: required(chain(string(), nonEmpty('Name is required'), minLength(2))),
   email: required(chain(string(), nonEmpty('Email is required'), email())),
   role: required(stringEnum(['developer', 'designer', 'manager'] as const)),
 });
 
 export const teamSchema = object({
-  teamName: required(
-    chain(string(), nonEmpty('Team name is required'), minLength(2))
-  ),
+  teamName: required(chain(string(), nonEmpty('Team name is required'), minLength(2))),
   teamMembers: optional(array(memberSchema)),
 });
 

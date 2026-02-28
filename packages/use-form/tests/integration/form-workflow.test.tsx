@@ -5,11 +5,7 @@ import { useForm } from '../../src/useForm';
 import { userValidator, type UserForm } from '../fixtures/validators';
 
 // Test component that uses the form hook
-function UserFormComponent({
-  onSubmitSuccess,
-}: {
-  onSubmitSuccess: (values: UserForm) => void;
-}) {
+function UserFormComponent({ onSubmitSuccess }: { onSubmitSuccess: (values: UserForm) => void | Promise<void> }) {
   const form = useForm(userValidator, {
     initialValues: { name: '', email: '', age: 0 },
     onSubmit: onSubmitSuccess,
@@ -20,46 +16,32 @@ function UserFormComponent({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        form.handleSubmit();
+        void form.handleSubmit();
       }}
     >
       <div>
         <label htmlFor="name">Name</label>
         <input {...form.getFieldProps('name')} data-testid="name-input" />
-        {form.touched.name && form.errors.name && (
-          <span data-testid="name-error">{form.errors.name}</span>
-        )}
+        {form.touched.name && form.errors.name && <span data-testid="name-error">{form.errors.name}</span>}
       </div>
 
       <div>
         <label htmlFor="email">Email</label>
         <input {...form.getFieldProps('email')} data-testid="email-input" />
-        {form.touched.email && form.errors.email && (
-          <span data-testid="email-error">{form.errors.email}</span>
-        )}
+        {form.touched.email && form.errors.email && <span data-testid="email-error">{form.errors.email}</span>}
       </div>
 
       <div>
         <label htmlFor="age">Age</label>
-        <input
-          type="number"
-          {...form.getFieldProps('age')}
-          data-testid="age-input"
-        />
-        {form.touched.age && form.errors.age && (
-          <span data-testid="age-error">{form.errors.age}</span>
-        )}
+        <input type="number" {...form.getFieldProps('age')} data-testid="age-input" />
+        {form.touched.age && form.errors.age && <span data-testid="age-error">{form.errors.age}</span>}
       </div>
 
       <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Submitting...' : 'Submit'}
       </button>
 
-      <button
-        type="button"
-        onClick={() => form.resetForm()}
-        data-testid="reset-button"
-      >
+      <button type="button" onClick={() => form.resetForm()} data-testid="reset-button">
         Reset
       </button>
     </form>
@@ -68,7 +50,7 @@ function UserFormComponent({
 
 describe('Form Workflow Integration', () => {
   test('complete form fill and submit workflow', async () => {
-    const onSubmitSuccess = mock((values: UserForm) => {});
+    const onSubmitSuccess = mock((_values: UserForm) => {});
     const user = userEvent.setup();
 
     render(<UserFormComponent onSubmitSuccess={onSubmitSuccess} />);
@@ -109,15 +91,9 @@ describe('Form Workflow Integration', () => {
 
     // Wait for errors to appear
     await waitFor(() => {
-      expect(screen.getByTestId('name-error')).toHaveTextContent(
-        'Name is required'
-      );
-      expect(screen.getByTestId('email-error')).toHaveTextContent(
-        'Email is required'
-      );
-      expect(screen.getByTestId('age-error')).toHaveTextContent(
-        'Must be 18 or older'
-      );
+      expect(screen.getByTestId('name-error')).toHaveTextContent('Name is required');
+      expect(screen.getByTestId('email-error')).toHaveTextContent('Email is required');
+      expect(screen.getByTestId('age-error')).toHaveTextContent('Must be 18 or older');
     });
 
     // onSubmit should not be called
@@ -125,7 +101,7 @@ describe('Form Workflow Integration', () => {
   });
 
   test('shows validation errors in live mode on blur', async () => {
-    const onSubmitSuccess = mock((values: UserForm) => {});
+    const onSubmitSuccess = mock((_values: UserForm) => {});
     const user = userEvent.setup();
 
     render(<UserFormComponent onSubmitSuccess={onSubmitSuccess} />);
@@ -138,9 +114,7 @@ describe('Form Workflow Integration', () => {
 
     // In live mode, blur on untouched field should trigger validation
     await waitFor(() => {
-      expect(screen.getByTestId('name-error')).toHaveTextContent(
-        'Name is required'
-      );
+      expect(screen.getByTestId('name-error')).toHaveTextContent('Name is required');
     });
   });
 
@@ -157,9 +131,7 @@ describe('Form Workflow Integration', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByTestId('name-error')).toHaveTextContent(
-        'Name is required'
-      );
+      expect(screen.getByTestId('name-error')).toHaveTextContent('Name is required');
     });
 
     // Fix the error
@@ -186,14 +158,12 @@ describe('Form Workflow Integration', () => {
 
     // Wait for error to appear
     await waitFor(() => {
-      expect(screen.getByTestId('email-error')).toHaveTextContent(
-        'Email must be valid'
-      );
+      expect(screen.getByTestId('email-error')).toHaveTextContent('Email must be valid');
     });
   });
 
   test('validates age requirements', async () => {
-    const onSubmitSuccess = mock((values: UserForm) => {});
+    const onSubmitSuccess = mock((_values: UserForm) => {});
     const user = userEvent.setup();
 
     render(<UserFormComponent onSubmitSuccess={onSubmitSuccess} />);
@@ -207,9 +177,7 @@ describe('Form Workflow Integration', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByTestId('age-error')).toHaveTextContent(
-        'Must be 18 or older'
-      );
+      expect(screen.getByTestId('age-error')).toHaveTextContent('Must be 18 or older');
     });
 
     // Fix the age
@@ -223,14 +191,14 @@ describe('Form Workflow Integration', () => {
   });
 
   test('resets form to initial values', async () => {
-    const onSubmitSuccess = mock((values: UserForm) => {});
+    const onSubmitSuccess = mock((_values: UserForm) => {});
     const user = userEvent.setup();
 
     render(<UserFormComponent onSubmitSuccess={onSubmitSuccess} />);
 
-    const nameInput = screen.getByTestId('name-input') as HTMLInputElement;
-    const emailInput = screen.getByTestId('email-input') as HTMLInputElement;
-    const ageInput = screen.getByTestId('age-input') as HTMLInputElement;
+    const nameInput = screen.getByTestId<HTMLInputElement>('name-input');
+    const emailInput = screen.getByTestId<HTMLInputElement>('email-input');
+    const ageInput = screen.getByTestId<HTMLInputElement>('age-input');
     const resetButton = screen.getByTestId('reset-button');
 
     // Fill in the form
@@ -259,7 +227,7 @@ describe('Form Workflow Integration', () => {
       resolveSubmit = resolve;
     });
 
-    const onSubmitSuccess = mock(async (values: UserForm) => {
+    const onSubmitSuccess = mock(async (_values: UserForm) => {
       await submitPromise;
     });
 

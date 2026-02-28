@@ -1,9 +1,5 @@
 import { ok, err } from '@railway-ts/pipelines/result';
-import type {
-  Validator,
-  MaybeAsyncValidator,
-  StandardSchemaV1,
-} from '@railway-ts/pipelines/schema';
+import type { Validator, MaybeAsyncValidator, StandardSchemaV1 } from '@railway-ts/pipelines/schema';
 import {
   object,
   required,
@@ -25,15 +21,8 @@ import {
  */
 export const userValidator = object({
   name: required(chain(string(), nonEmpty('Name is required'))),
-  email: required(
-    chain(string(), nonEmpty('Email is required'), email('Email must be valid'))
-  ),
-  age: required(
-    chain(
-      parseNumber('Age must be a valid number'),
-      min(18, 'Must be 18 or older')
-    )
-  ),
+  email: required(chain(string(), nonEmpty('Email is required'), email('Email must be valid'))),
+  age: required(chain(parseNumber('Age must be a valid number'), min(18, 'Must be 18 or older'))),
 });
 
 export type UserForm = InferSchemaType<typeof userValidator>;
@@ -54,9 +43,7 @@ export const userWithAddressValidator = object({
   address: required(addressSchema),
 });
 
-export type UserWithAddressForm = InferSchemaType<
-  typeof userWithAddressValidator
->;
+export type UserWithAddressForm = InferSchemaType<typeof userWithAddressValidator>;
 
 /**
  * Array form validator for testing using Railway schema builders
@@ -73,17 +60,12 @@ export const userWithContactsValidator = object({
   contacts: required(array(contactSchema)),
 });
 
-export type UserWithContactsForm = InferSchemaType<
-  typeof userWithContactsValidator
->;
+export type UserWithContactsForm = InferSchemaType<typeof userWithContactsValidator>;
 
 /**
  * Always valid validator for testing (pass-through)
  */
-export const alwaysValidValidator: Validator<
-  unknown,
-  Record<string, unknown>
-> = (input) => {
+export const alwaysValidValidator: Validator<unknown, Record<string, unknown>> = (input) => {
   return ok(input as Record<string, unknown>);
 };
 
@@ -110,18 +92,11 @@ export const asyncUserValidator = object({
       refineAsync<string>(async (value) => {
         await new Promise((resolve) => setTimeout(resolve, 10));
         return value !== 'taken';
-      }, 'Name is already taken')
-    )
+      }, 'Name is already taken'),
+    ),
   ),
-  email: required(
-    chain(string(), nonEmpty('Email is required'), email('Email must be valid'))
-  ),
-  age: required(
-    chain(
-      parseNumber('Age must be a valid number'),
-      min(18, 'Must be 18 or older')
-    )
-  ),
+  email: required(chain(string(), nonEmpty('Email is required'), email('Email must be valid'))),
+  age: required(chain(parseNumber('Age must be a valid number'), min(18, 'Must be 18 or older'))),
 });
 
 export type AsyncUserForm = InferSchemaType<typeof asyncUserValidator>;
@@ -129,10 +104,7 @@ export type AsyncUserForm = InferSchemaType<typeof asyncUserValidator>;
 /**
  * Always valid async validator for testing (pass-through)
  */
-export const alwaysValidAsyncValidator: MaybeAsyncValidator<
-  unknown,
-  Record<string, unknown>
-> = async (input) => {
+export const alwaysValidAsyncValidator: MaybeAsyncValidator<unknown, Record<string, unknown>> = async (input) => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   return ok(input as Record<string, unknown>);
 };
@@ -140,10 +112,7 @@ export const alwaysValidAsyncValidator: MaybeAsyncValidator<
 /**
  * Always invalid async validator for testing
  */
-export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<
-  unknown,
-  never
-> = async () => {
+export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<unknown, never> = async () => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   return err([{ path: ['root'], message: 'Async validation failed' }]);
 };
@@ -156,33 +125,26 @@ export const alwaysInvalidAsyncValidator: MaybeAsyncValidator<
  * Sync Standard Schema v1 mock that validates UserForm shape.
  * Does NOT depend on any external schema library.
  */
-export const standardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> =
-  {
-    '~standard': {
-      version: 1,
-      vendor: 'test',
-      validate: (value) => {
-        const v = value as Partial<UserForm>;
-        const issues: StandardSchemaV1.Issue[] = [];
-        if (!v.name)
-          issues.push({ message: 'Name is required', path: ['name'] });
-        if (!v.email?.includes('@'))
-          issues.push({ message: 'Email must be valid', path: ['email'] });
-        if (v.age == null || v.age < 18)
-          issues.push({ message: 'Must be 18 or older', path: ['age'] });
-        return issues.length ? { issues } : { value: v as UserForm };
-      },
+export const standardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> = {
+  '~standard': {
+    version: 1,
+    vendor: 'test',
+    validate: (value) => {
+      const v = value as Partial<UserForm>;
+      const issues: StandardSchemaV1.Issue[] = [];
+      if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
+      if (!v.email?.includes('@')) issues.push({ message: 'Email must be valid', path: ['email'] });
+      if (v.age == null || v.age < 18) issues.push({ message: 'Must be 18 or older', path: ['age'] });
+      return issues.length ? { issues } : { value: v as UserForm };
     },
-  };
+  },
+};
 
 /**
  * Async Standard Schema v1 mock that simulates async validation.
  * Name 'taken' is rejected.
  */
-export const asyncStandardSchemaUserValidator: StandardSchemaV1<
-  unknown,
-  UserForm
-> = {
+export const asyncStandardSchemaUserValidator: StandardSchemaV1<unknown, UserForm> = {
   '~standard': {
     version: 1,
     vendor: 'test',
@@ -191,12 +153,9 @@ export const asyncStandardSchemaUserValidator: StandardSchemaV1<
       const v = value as Partial<UserForm>;
       const issues: StandardSchemaV1.Issue[] = [];
       if (!v.name) issues.push({ message: 'Name is required', path: ['name'] });
-      if (v.name === 'taken')
-        issues.push({ message: 'Name is already taken', path: ['name'] });
-      if (!v.email?.includes('@'))
-        issues.push({ message: 'Email must be valid', path: ['email'] });
-      if (v.age == null || v.age < 18)
-        issues.push({ message: 'Must be 18 or older', path: ['age'] });
+      if (v.name === 'taken') issues.push({ message: 'Name is already taken', path: ['name'] });
+      if (!v.email?.includes('@')) issues.push({ message: 'Email must be valid', path: ['email'] });
+      if (v.age == null || v.age < 18) issues.push({ message: 'Must be 18 or older', path: ['age'] });
       return issues.length ? { issues } : { value: v as UserForm };
     },
   },
@@ -205,10 +164,7 @@ export const asyncStandardSchemaUserValidator: StandardSchemaV1<
 /**
  * Standard Schema v1 mock with nested path segments using { key } objects.
  */
-export const standardSchemaNestedPathValidator: StandardSchemaV1<
-  unknown,
-  UserWithAddressForm
-> = {
+export const standardSchemaNestedPathValidator: StandardSchemaV1<unknown, UserWithAddressForm> = {
   '~standard': {
     version: 1,
     vendor: 'test',

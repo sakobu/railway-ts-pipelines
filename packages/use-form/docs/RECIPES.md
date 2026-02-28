@@ -91,17 +91,13 @@ function CreateUserForm() {
       <div>
         <label htmlFor={form.getFieldId('username')}>Username</label>
         <input {...form.getFieldProps('username')} />
-        {form.getFieldError('username') && (
-          <span className="error">{form.getFieldError('username')}</span>
-        )}
+        {form.getFieldError('username') && <span className="error">{form.getFieldError('username')}</span>}
       </div>
 
       <div>
         <label htmlFor={form.getFieldId('email')}>Email</label>
         <input type="email" {...form.getFieldProps('email')} />
-        {form.getFieldError('email') && (
-          <span className="error">{form.getFieldError('email')}</span>
-        )}
+        {form.getFieldError('email') && <span className="error">{form.getFieldError('email')}</span>}
       </div>
 
       <div>
@@ -110,19 +106,13 @@ function CreateUserForm() {
       </div>
 
       {/* Form-level errors (not tied to a field) */}
-      {form.errors[ROOT_ERROR_KEY] && (
-        <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>
-      )}
+      {form.errors[ROOT_ERROR_KEY] && <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>}
 
       <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Saving...' : 'Create User'}
       </button>
 
-      <button
-        type="button"
-        onClick={() => form.resetForm()}
-        disabled={!form.isDirty}
-      >
+      <button type="button" onClick={() => form.resetForm()} disabled={!form.isDirty}>
         Reset
       </button>
     </form>
@@ -205,7 +195,7 @@ const todosSchema = object({
       text: required(chain(string(), nonEmpty('Task is required'))),
       done: required(boolean()),
       priority: required(stringEnum(['low', 'medium', 'high'])),
-    })
+    }),
   ),
 });
 
@@ -224,9 +214,7 @@ function TodoList() {
         <div key={index}>
           <input type="checkbox" {...helpers.getCheckboxProps(index, 'done')} />
           <input {...helpers.getFieldProps(index, 'text')} />
-          {helpers.getFieldError(index, 'text') && (
-            <span>{helpers.getFieldError(index, 'text')}</span>
-          )}
+          {helpers.getFieldError(index, 'text') && <span>{helpers.getFieldError(index, 'text')}</span>}
 
           <select {...helpers.getSelectFieldProps(index, 'priority')}>
             <option value="low">Low</option>
@@ -234,17 +222,11 @@ function TodoList() {
             <option value="high">High</option>
           </select>
 
-          <button
-            onClick={() => index > 0 && helpers.swap(index, index - 1)}
-            disabled={index === 0}
-          >
+          <button onClick={() => index > 0 && helpers.swap(index, index - 1)} disabled={index === 0}>
             Up
           </button>
           <button
-            onClick={() =>
-              index < helpers.values.length - 1 &&
-              helpers.swap(index, index + 1)
-            }
+            onClick={() => index < helpers.values.length - 1 && helpers.swap(index, index + 1)}
             disabled={index === helpers.values.length - 1}
           >
             Down
@@ -253,13 +235,7 @@ function TodoList() {
         </div>
       ))}
 
-      <button
-        onClick={() =>
-          helpers.push({ text: '', done: false, priority: 'medium' })
-        }
-      >
-        Add Todo
-      </button>
+      <button onClick={() => helpers.push({ text: '', done: false, priority: 'medium' })}>Add Todo</button>
     </div>
   );
 }
@@ -319,10 +295,7 @@ function PreferencesForm() {
         <legend>Notify me via</legend>
         {(['email', 'sms', 'push'] as const).map((method) => (
           <label key={method}>
-            <input
-              type="checkbox"
-              {...form.getCheckboxGroupOptionProps('notifications', method)}
-            />
+            <input type="checkbox" {...form.getCheckboxGroupOptionProps('notifications', method)} />
             {method.charAt(0).toUpperCase() + method.slice(1)}
           </label>
         ))}
@@ -332,10 +305,7 @@ function PreferencesForm() {
         <legend>Theme</legend>
         {(['light', 'dark', 'auto'] as const).map((theme) => (
           <label key={theme}>
-            <input
-              type="radio"
-              {...form.getRadioGroupOptionProps('theme', theme)}
-            />
+            <input type="radio" {...form.getRadioGroupOptionProps('theme', theme)} />
             {theme.charAt(0).toUpperCase() + theme.slice(1)}
           </label>
         ))}
@@ -361,7 +331,7 @@ import { chain, refine } from '@railway-ts/pipelines/schema';
 const fileValidator = chain(
   refine<File>((value) => value instanceof File, 'Must be a file'),
   refine<File>((value) => value.size <= 5_000_000, 'File too large (max 5MB)'),
-  refine<File>((value) => value.type.startsWith('image/'), 'Must be an image')
+  refine<File>((value) => value.type.startsWith('image/'), 'Must be an image'),
 );
 
 const uploadSchema = object({
@@ -382,14 +352,8 @@ function AvatarUpload() {
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
-      <input
-        type="file"
-        accept="image/*"
-        {...form.getFileFieldProps('avatar')}
-      />
-      {form.getFieldError('avatar') && (
-        <span>{form.getFieldError('avatar')}</span>
-      )}
+      <input type="file" accept="image/*" {...form.getFileFieldProps('avatar')} />
+      {form.getFieldError('avatar') && <span>{form.getFieldError('avatar')}</span>}
       <button type="submit">Upload</button>
     </form>
   );
@@ -519,10 +483,7 @@ function MultiStepForm() {
         <div>
           <h2>Personal Info</h2>
           <input {...form.getFieldProps('personal.name')} placeholder="Name" />
-          <input
-            {...form.getFieldProps('personal.email')}
-            placeholder="Email"
-          />
+          <input {...form.getFieldProps('personal.email')} placeholder="Email" />
           <button type="button" onClick={handleNext}>
             Next
           </button>
@@ -532,10 +493,7 @@ function MultiStepForm() {
       {step === 2 && (
         <div>
           <h2>Address</h2>
-          <input
-            {...form.getFieldProps('address.street')}
-            placeholder="Street"
-          />
+          <input {...form.getFieldProps('address.street')} placeholder="Street" />
           <input {...form.getFieldProps('address.city')} placeholder="City" />
           <button type="button" onClick={() => setStep(1)}>
             Back
@@ -549,10 +507,7 @@ function MultiStepForm() {
       {step === 3 && (
         <div>
           <h2>Payment</h2>
-          <input
-            {...form.getFieldProps('payment.cardNumber')}
-            placeholder="Card Number"
-          />
+          <input {...form.getFieldProps('payment.cardNumber')} placeholder="Card Number" />
           <button type="button" onClick={() => setStep(2)}>
             Back
           </button>
@@ -590,19 +545,15 @@ const registrationSchema = chain(
     startDate: required(string()),
     endDate: required(string()),
   }),
-  refineAt(
-    'confirmPassword',
-    (data) => data.password === data.confirmPassword,
-    'Passwords must match'
-  ),
+  refineAt('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
   refineAt(
     'endDate',
     (data) => {
       if (!data.startDate || !data.endDate) return true;
       return new Date(data.endDate) > new Date(data.startDate);
     },
-    'End date must be after start date'
-  )
+    'End date must be after start date',
+  ),
 );
 
 type RegistrationData = InferSchemaType<typeof registrationSchema>;
@@ -645,18 +596,10 @@ const accountSchema = chain(
   when<AccountData>(
     (d) => d.accountType === 'business',
     chain(
-      refineAt(
-        'companyName',
-        (d) => !!d.companyName,
-        'Company name is required for business accounts'
-      ),
-      refineAt(
-        'taxId',
-        (d) => !!d.taxId,
-        'Tax ID is required for business accounts'
-      )
-    )
-  )
+      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
+      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
+    ),
+  ),
 );
 
 function AccountForm() {
@@ -675,18 +618,11 @@ function AccountForm() {
 
       {isBiz && (
         <>
-          <input
-            {...form.getFieldProps('companyName')}
-            placeholder="Company Name"
-          />
-          {form.getFieldError('companyName') && (
-            <span>{form.getFieldError('companyName')}</span>
-          )}
+          <input {...form.getFieldProps('companyName')} placeholder="Company Name" />
+          {form.getFieldError('companyName') && <span>{form.getFieldError('companyName')}</span>}
 
           <input {...form.getFieldProps('taxId')} placeholder="Tax ID" />
-          {form.getFieldError('taxId') && (
-            <span>{form.getFieldError('taxId')}</span>
-          )}
+          {form.getFieldError('taxId') && <span>{form.getFieldError('taxId')}</span>}
         </>
       )}
 
@@ -699,22 +635,14 @@ function AccountForm() {
 Each `refineAt` inside `when` only checks its own field — the `when` wrapper already gates execution to business accounts. For async conditional checks, use `whenAsync` with `chainAsync`:
 
 ```typescript
-import {
-  chainAsync,
-  whenAsync,
-  refineAtAsync,
-} from '@railway-ts/pipelines/schema';
+import { chainAsync, whenAsync, refineAtAsync } from '@railway-ts/pipelines/schema';
 
 const staffSchema = chainAsync(
   baseStaffSchema,
   whenAsync<StaffData>(
     (d) => d.role === 'doctor',
-    refineAtAsync(
-      'license',
-      async (d) => await verifyMedicalLicense(d.license),
-      'Invalid medical license'
-    )
-  )
+    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
+  ),
 );
 ```
 
@@ -770,29 +698,18 @@ function PaymentForm() {
 
       {method === 'card' && (
         <>
-          <input
-            {...form.getFieldProps('cardNumber')}
-            placeholder="Card Number"
-          />
+          <input {...form.getFieldProps('cardNumber')} placeholder="Card Number" />
           <input {...form.getFieldProps('expiryDate')} placeholder="MM/YY" />
           <input {...form.getFieldProps('cvv')} placeholder="CVV" />
         </>
       )}
 
-      {method === 'paypal' && (
-        <input {...form.getFieldProps('email')} placeholder="PayPal Email" />
-      )}
+      {method === 'paypal' && <input {...form.getFieldProps('email')} placeholder="PayPal Email" />}
 
       {method === 'bank' && (
         <>
-          <input
-            {...form.getFieldProps('accountNumber')}
-            placeholder="Account Number"
-          />
-          <input
-            {...form.getFieldProps('routingNumber')}
-            placeholder="Routing Number"
-          />
+          <input {...form.getFieldProps('accountNumber')} placeholder="Account Number" />
+          <input {...form.getFieldProps('routingNumber')} placeholder="Routing Number" />
         </>
       )}
 
@@ -1046,9 +963,7 @@ function ZodForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
-      {form.getFieldError('username') && (
-        <span>{form.getFieldError('username')}</span>
-      )}
+      {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
       {/* ... other fields ... */}
       <button type="submit">Register</button>
     </form>
@@ -1063,21 +978,10 @@ import * as v from 'valibot';
 import { useForm } from '@railway-ts/use-form';
 
 const userSchema = v.object({
-  username: v.pipe(
-    v.string(),
-    v.minLength(3, 'Username must be at least 3 characters')
-  ),
+  username: v.pipe(v.string(), v.minLength(3, 'Username must be at least 3 characters')),
   email: v.pipe(v.string(), v.email('Invalid email address')),
-  password: v.pipe(
-    v.string(),
-    v.minLength(8, 'Password must be at least 8 characters')
-  ),
-  age: v.pipe(
-    v.unknown(),
-    v.transform(Number),
-    v.number(),
-    v.minValue(18, 'Must be at least 18')
-  ),
+  password: v.pipe(v.string(), v.minLength(8, 'Password must be at least 8 characters')),
+  age: v.pipe(v.unknown(), v.transform(Number), v.number(), v.minValue(18, 'Must be at least 18')),
   role: v.picklist(['admin', 'user']),
 });
 
@@ -1147,12 +1051,8 @@ function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <div>
         <input {...form.getFieldProps('username')} />
-        {form.validatingFields.username && (
-          <span className="validating">Checking username...</span>
-        )}
-        {form.getFieldError('username') && (
-          <span className="error">{form.getFieldError('username')}</span>
-        )}
+        {form.validatingFields.username && <span className="validating">Checking username...</span>}
+        {form.getFieldError('username') && <span className="error">{form.getFieldError('username')}</span>}
       </div>
 
       {/* ... other fields ... */}
@@ -1253,20 +1153,8 @@ match(result, {
 **Solution:** Extract a reusable `Field` component that takes the form instance, field name, and label.
 
 ```tsx
-import {
-  useForm,
-  type UseFormReturn,
-  type ExtractFieldPaths,
-} from '@railway-ts/use-form';
-import {
-  object,
-  required,
-  chain,
-  string,
-  email,
-  minLength,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1324,17 +1212,8 @@ Wrap field components in `React.memo` so they only re-render when their specific
 
 ```tsx
 import { memo, useMemo } from 'react';
-import {
-  useForm,
-  type UseFormReturn,
-  type ExtractFieldPaths,
-} from '@railway-ts/use-form';
-import {
-  object,
-  required,
-  string,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import { object, required, string, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const largeFormSchema = object({
   field1: required(string()),
@@ -1423,15 +1302,7 @@ UI libraries like Material-UI and Chakra UI use different prop names than native
 ```tsx
 import { TextField, Button } from '@mui/material';
 import { useForm } from '@railway-ts/use-form';
-import {
-  object,
-  required,
-  chain,
-  string,
-  email,
-  minLength,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1472,11 +1343,7 @@ function MuiForm() {
         margin="normal"
       />
 
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={form.isSubmitting || !form.isValid}
-      >
+      <Button type="submit" variant="contained" disabled={form.isSubmitting || !form.isValid}>
         Submit
       </Button>
     </form>
@@ -1489,15 +1356,7 @@ function MuiForm() {
 ```tsx
 import { Field, Input, Button } from '@chakra-ui/react';
 import { useForm } from '@railway-ts/use-form';
-import {
-  object,
-  required,
-  chain,
-  string,
-  email,
-  minLength,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1524,11 +1383,7 @@ function ChakraForm() {
         <Field.ErrorText>{form.errors.email}</Field.ErrorText>
       </Field.Root>
 
-      <Button
-        type="submit"
-        loading={form.isSubmitting}
-        disabled={!form.isValid}
-      >
+      <Button type="submit" loading={form.isSubmitting} disabled={!form.isValid}>
         Submit
       </Button>
     </form>
@@ -1545,15 +1400,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useForm } from '@railway-ts/use-form';
-import {
-  object,
-  required,
-  chain,
-  string,
-  email,
-  minLength,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1572,21 +1419,13 @@ function ShadcnForm() {
       <div>
         <Label htmlFor={form.getFieldId('email')}>Email</Label>
         <Input {...form.getFieldProps('email')} />
-        {form.getFieldError('email') && (
-          <p className="text-sm text-destructive">
-            {form.getFieldError('email')}
-          </p>
-        )}
+        {form.getFieldError('email') && <p className="text-sm text-destructive">{form.getFieldError('email')}</p>}
       </div>
 
       <div>
         <Label htmlFor={form.getFieldId('password')}>Password</Label>
         <Input type="password" {...form.getFieldProps('password')} />
-        {form.getFieldError('password') && (
-          <p className="text-sm text-destructive">
-            {form.getFieldError('password')}
-          </p>
-        )}
+        {form.getFieldError('password') && <p className="text-sm text-destructive">{form.getFieldError('password')}</p>}
       </div>
 
       <Button type="submit" disabled={form.isSubmitting || !form.isValid}>
@@ -1750,13 +1589,7 @@ This recipe combines everything: schema validation, per-field async validators, 
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
-import {
-  ok,
-  err,
-  match,
-  fromPromise,
-  type Result,
-} from '@railway-ts/pipelines/result';
+import { ok, err, match, fromPromise, type Result } from '@railway-ts/pipelines/result';
 import {
   object,
   string,
@@ -1779,11 +1612,7 @@ const schema = chain(
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt(
-    'confirmPassword',
-    (d) => d.password === d.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
 type Registration = InferSchemaType<typeof schema>;
@@ -1792,24 +1621,21 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string) =>
   fromPromise<{ available: boolean }>(
-    fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then(
-      (res) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
-    )
+    fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
+      res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
+    ),
   );
 
-const registerUser = async (
-  values: Registration
-): Promise<Result<void, Record<string, string>>> => {
+const registerUser = async (values: Registration): Promise<Result<void, Record<string, string>>> => {
   const result = await fromPromise(
     fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
-    })
+    }),
   );
 
-  if (!result.ok)
-    return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
+  if (!result.ok) return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
 
   const res = result.value;
   if (!res.ok) return err((await res.json()) as Record<string, string>);
@@ -1831,8 +1657,7 @@ export function RegistrationForm() {
       username: async (value) => {
         const result = await checkUsername(value);
         return match(result, {
-          ok: ({ available }) =>
-            available ? undefined : 'Username is already taken',
+          ok: ({ available }) => (available ? undefined : 'Username is already taken'),
           err: () => 'Unable to check username availability',
         });
       },
@@ -1852,28 +1677,18 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.getFieldError('username') && (
-        <span>{form.getFieldError('username')}</span>
-      )}
+      {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.getFieldError('email') && (
-        <span>{form.getFieldError('email')}</span>
-      )}
+      {form.getFieldError('email') && <span>{form.getFieldError('email')}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.getFieldError('password') && (
-        <span>{form.getFieldError('password')}</span>
-      )}
+      {form.getFieldError('password') && <span>{form.getFieldError('password')}</span>}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.getFieldError('confirmPassword') && (
-        <span>{form.getFieldError('confirmPassword')}</span>
-      )}
+      {form.getFieldError('confirmPassword') && <span>{form.getFieldError('confirmPassword')}</span>}
 
-      {form.errors[ROOT_ERROR_KEY] && (
-        <span>{form.errors[ROOT_ERROR_KEY]}</span>
-      )}
+      {form.errors[ROOT_ERROR_KEY] && <span>{form.errors[ROOT_ERROR_KEY]}</span>}
 
       <button type="submit" disabled={form.isSubmitting || form.isValidating}>
         {form.isSubmitting ? 'Registering...' : 'Create Account'}
@@ -1924,11 +1739,7 @@ const schema = chain(
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt(
-    'confirmPassword',
-    (d) => d.password === d.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
 type Registration = InferSchemaType<typeof schema>;
@@ -1937,7 +1748,7 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string): Promise<{ available: boolean }> =>
   fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
-    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)
+    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
   );
 
 class ApiValidationError extends Error {
@@ -2004,28 +1815,18 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.getFieldError('username') && (
-        <span>{form.getFieldError('username')}</span>
-      )}
+      {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.getFieldError('email') && (
-        <span>{form.getFieldError('email')}</span>
-      )}
+      {form.getFieldError('email') && <span>{form.getFieldError('email')}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.getFieldError('password') && (
-        <span>{form.getFieldError('password')}</span>
-      )}
+      {form.getFieldError('password') && <span>{form.getFieldError('password')}</span>}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.getFieldError('confirmPassword') && (
-        <span>{form.getFieldError('confirmPassword')}</span>
-      )}
+      {form.getFieldError('confirmPassword') && <span>{form.getFieldError('confirmPassword')}</span>}
 
-      {form.errors[ROOT_ERROR_KEY] && (
-        <span>{form.errors[ROOT_ERROR_KEY]}</span>
-      )}
+      {form.errors[ROOT_ERROR_KEY] && <span>{form.errors[ROOT_ERROR_KEY]}</span>}
 
       <button type="submit" disabled={mutation.isPending || form.isValidating}>
         {mutation.isPending ? 'Registering...' : 'Create Account'}

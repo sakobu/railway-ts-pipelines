@@ -18,9 +18,7 @@ describe('getValueByPath', () => {
   test('gets nested property with dot notation', () => {
     const obj = { user: { name: 'John', address: { city: 'NYC' } } };
     expect(getValueByPath<typeof obj, string>(obj, 'user.name')).toBe('John');
-    expect(getValueByPath<typeof obj, string>(obj, 'user.address.city')).toBe(
-      'NYC'
-    );
+    expect(getValueByPath<typeof obj, string>(obj, 'user.address.city')).toBe('NYC');
   });
 
   test('gets array element with bracket notation', () => {
@@ -36,12 +34,8 @@ describe('getValueByPath', () => {
         { name: 'Jane', email: 'jane@example.com' },
       ],
     };
-    expect(getValueByPath<typeof obj, string>(obj, 'users[0].name')).toBe(
-      'John'
-    );
-    expect(getValueByPath<typeof obj, string>(obj, 'users[1].email')).toBe(
-      'jane@example.com'
-    );
+    expect(getValueByPath<typeof obj, string>(obj, 'users[0].name')).toBe('John');
+    expect(getValueByPath<typeof obj, string>(obj, 'users[1].email')).toBe('jane@example.com');
   });
 
   test('returns undefined for non-existent path', () => {
@@ -368,12 +362,8 @@ describe('deepEqual', () => {
   });
 
   test('Date comparison: same time and different times', () => {
-    expect(deepEqual(new Date('2024-01-01'), new Date('2024-01-01'))).toBe(
-      true
-    );
-    expect(deepEqual(new Date('2024-01-01'), new Date('2024-06-15'))).toBe(
-      false
-    );
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-01-01'))).toBe(true);
+    expect(deepEqual(new Date('2024-01-01'), new Date('2024-06-15'))).toBe(false);
   });
 
   test('RegExp comparison', () => {

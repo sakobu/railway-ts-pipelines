@@ -53,10 +53,7 @@ type FormWithAutoSubmit<T> = {
  *
  * useFormAutoSubmission(form);
  */
-export const useFormAutoSubmission = <T>(
-  form: FormWithAutoSubmit<T>,
-  delay = 200
-) => {
+export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 200) => {
   const { values, isDirty, isValid, validateForm, handleSubmit } = form;
   const lastValidatedRef = useRef<T | null>(null);
 

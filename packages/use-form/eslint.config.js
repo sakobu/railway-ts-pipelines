@@ -1,27 +1,24 @@
 import eslint from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
-import reactPlugin from 'eslint-plugin-react';
+import eslintReact from '@eslint-react/eslint-plugin';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import prettierConfig from 'eslint-config-prettier';
 
 export default [
-  // Ignore patterns
+  // Ignore patterns — only generated output
   {
-    ignores: [
-      'dist/**',
-      'node_modules/**',
-      '*.config.js',
-      '*.config.ts',
-      'tests/**',
-      'scripts/**',
-    ],
+    ignores: ['dist/**', 'coverage/**'],
   },
 
   // Base ESLint recommended rules
   eslint.configs.recommended,
 
-  // Configuration for TypeScript files
+  // @eslint-react recommended-typescript preset (ESLint 10 compatible)
+  // Single flat config object; handles React rules for .ts/.tsx
+  eslintReact.configs['recommended-typescript'],
+
+  // TypeScript + React Hooks + custom overrides
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -29,10 +26,9 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        ecmaFeatures: {
-          jsx: true,
-        },
+        ecmaFeatures: { jsx: true },
         project: './tsconfig.json',
+        tsconfigRootDir: import.meta.dirname,
       },
       globals: {
         React: 'readonly',
@@ -43,41 +39,57 @@ export default [
         document: 'readonly',
         window: 'readonly',
         Bun: 'readonly',
+        crypto: 'readonly',
       },
     },
     plugins: {
       '@typescript-eslint': tseslint,
-      react: reactPlugin,
       'react-hooks': reactHooksPlugin,
     },
     rules: {
-      // TypeScript recommended rules
       ...tseslint.configs.recommended.rules,
       ...tseslint.configs['recommended-type-checked'].rules,
-
-      // React recommended rules
-      ...reactPlugin.configs.recommended.rules,
-      ...reactPlugin.configs['jsx-runtime'].rules,
-
-      // React Hooks rules
       ...reactHooksPlugin.configs.recommended.rules,
-
-      // Custom overrides
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-        },
-      ],
-      'react/prop-types': 'off', // Using TypeScript instead
-      'react/react-in-jsx-scope': 'off', // Not needed with new JSX transform
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
     settings: {
-      react: {
-        version: 'detect',
+      '@eslint-react': { version: 'detect' },
+    },
+  },
+
+  // Test file overrides — relax pedantic rules that clash with mocks/stubs
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', 'tests/**/*.ts', 'tests/**/*.tsx'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
       },
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@eslint-react/hooks-extra/no-unnecessary-use-callback': 'off',
+      'react-hooks/rules-of-hooks': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+
+  // Scripts overrides — console output and loose typing are intentional
+  {
+    files: ['scripts/**/*.ts'],
+    rules: {
+      'no-console': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 

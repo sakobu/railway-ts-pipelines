@@ -1,37 +1,9 @@
-import {
-  useReducer,
-  useCallback,
-  useMemo,
-  useEffect,
-  useRef,
-  type FormEvent,
-} from 'react';
-import {
-  isErr,
-  ok,
-  err,
-  match,
-  type Result,
-} from '@railway-ts/pipelines/result';
-import {
-  validate,
-  formatErrors,
-  type MaybeAsyncValidator,
-  type ValidationError,
-} from '@railway-ts/pipelines/schema';
+import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
+import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
+import { validate, formatErrors, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
-import {
-  deepMerge,
-  getValueByPath,
-  setValueByPath,
-  collectFieldPaths,
-  isPathAffected,
-} from './utils';
-import {
-  isStandardSchema,
-  fromStandardSchema,
-  type FormValidator,
-} from './standardSchema';
+import { deepMerge, getValueByPath, setValueByPath, collectFieldPaths, isPathAffected } from './utils';
+import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import type {
   ArrayHelpers,
   DeepPartial,
@@ -183,25 +155,15 @@ import {
  */
 export const useForm = <TValues extends Record<string, unknown>>(
   validatorOrSchema: FormValidator<TValues>,
-  options: FormOptions<TValues>
+  options: FormOptions<TValues>,
 ): UseFormReturn<TValues> => {
-  const {
-    initialValues,
-    onSubmit,
-    validationMode,
-    fieldValidators,
-    onValuesChange,
-    onFieldChange,
-  } = options;
+  const { initialValues, onSubmit, validationMode, fieldValidators, onValuesChange, onFieldChange } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
   const validator: MaybeAsyncValidator<unknown, TValues> = useMemo(
-    () =>
-      isStandardSchema(validatorOrSchema)
-        ? fromStandardSchema(validatorOrSchema)
-        : validatorOrSchema,
-    [validatorOrSchema]
+    () => (isStandardSchema(validatorOrSchema) ? fromStandardSchema(validatorOrSchema) : validatorOrSchema),
+    [validatorOrSchema],
   );
 
   // Derive behavior flags from validationMode
@@ -217,9 +179,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
   // Create a memoized reducer that captures initialValues
   const reducerFn = useCallback(
-    (state: FormState<TValues>, action: FormAction<TValues>) =>
-      formReducer(state, action, initialValues),
-    [initialValues]
+    (state: FormState<TValues>, action: FormAction<TValues>) => formReducer(state, action, initialValues),
+    [initialValues],
   );
 
   // Initial state
@@ -315,10 +276,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
-    () =>
-      formState.isFormValidating ||
-      Object.keys(formState.validatingFields).length > 0,
-    [formState.isFormValidating, formState.validatingFields]
+    () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
+    [formState.isFormValidating, formState.validatingFields],
   );
 
   // ===========================================================================
@@ -329,22 +288,19 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * Dispatches the validation result to update client errors.
    * Shared by both sync and async validation paths.
    */
-  const dispatchValidationResult = useCallback(
-    (result: Result<TValues, ValidationError[]>) => {
-      if (isErr(result)) {
-        dispatch({
-          type: 'SET_CLIENT_ERRORS',
-          errors: formatErrors(result.error),
-        });
-      } else {
-        dispatch({
-          type: 'SET_CLIENT_ERRORS',
-          errors: {},
-        });
-      }
-    },
-    []
-  );
+  const dispatchValidationResult = useCallback((result: Result<TValues, ValidationError[]>) => {
+    if (isErr(result)) {
+      dispatch({
+        type: 'SET_CLIENT_ERRORS',
+        errors: formatErrors(result.error),
+      });
+    } else {
+      dispatch({
+        type: 'SET_CLIENT_ERRORS',
+        errors: {},
+      });
+    }
+  }, []);
 
   /**
    * Validates the current form values using the Railway-oriented validator and updates error state.
@@ -359,11 +315,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * @returns Railway Result or Promise<Result> depending on the validator
    */
   const validateForm = useCallback(
-    (
-      values: TValues
-    ):
-      | Result<TValues, ValidationError[]>
-      | Promise<Result<TValues, ValidationError[]>> => {
+    (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
       const validationResult = validate(values, validator);
 
       if (validationResult instanceof Promise) {
@@ -384,7 +336,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       dispatchValidationResult(validationResult);
       return validationResult;
     },
-    [validator, dispatchValidationResult]
+    [validator, dispatchValidationResult],
   );
 
   /**
@@ -393,18 +345,14 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const runFieldValidator = useCallback(
     (field: FieldPath, values: TValues): void => {
-      const validatorFn =
-        fieldValidators?.[field as ExtractFieldPaths<TValues>];
+      const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
       if (!validatorFn) return;
 
       dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
 
       const fieldValue = getValueByPath(values, field);
       const result = (
-        validatorFn as (
-          value: unknown,
-          values: TValues
-        ) => string | undefined | Promise<string | undefined>
+        validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>
       )(fieldValue, values);
 
       if (result instanceof Promise) {
@@ -428,7 +376,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         dispatch({ type: 'SET_FIELD_ERROR', field, error: result });
       }
     },
-    [fieldValidators]
+    [fieldValidators],
   );
 
   /**
@@ -441,9 +389,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       // For sync validators, SET_CLIENT_ERRORS immediately follows so the cleared state is never rendered.
       // For async validators, this prevents the old error from flashing during the gap.
       const currentErrors = formStateRef.current.clientErrors;
-      const hasStale = Object.keys(currentErrors).some((p) =>
-        isPathAffected(p, field)
-      );
+      const hasStale = Object.keys(currentErrors).some((p) => isPathAffected(p, field));
       if (hasStale) {
         const cleaned = { ...currentErrors };
         Object.keys(cleaned).forEach((p) => {
@@ -476,7 +422,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         }
       }
     },
-    [validateForm, fieldValidators, runFieldValidator]
+    [validateForm, fieldValidators, runFieldValidator],
   );
 
   // Validate on mount if enabled
@@ -487,9 +433,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       void validateForm(initialValues);
 
       // Also mark all fields as touched (including nested and array items)
-      const allFields = collectFieldPaths(
-        initialValues as Record<string, unknown>
-      );
+      const allFields = collectFieldPaths(initialValues as Record<string, unknown>);
       dispatch({
         type: 'MARK_ALL_TOUCHED',
         fields: allFields,
@@ -530,19 +474,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const setFieldValue = useCallback(
-    <TValue>(
-      field: FieldPath,
-      value: TValue,
-      shouldValidate = validateOnChange
-    ): void => {
+    <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void => {
       // Read from pendingValuesRef during onFieldChange cascades, otherwise from committed state
-      const baseValues =
-        pendingValuesRef.current ?? formStateRef.current.values;
-      const updatedValues = setValueByPath<TValues, TValue>(
-        baseValues,
-        field,
-        value
-      );
+      const baseValues = pendingValuesRef.current ?? formStateRef.current.values;
+      const updatedValues = setValueByPath<TValues, TValue>(baseValues, field, value);
 
       // Expose accumulated values to nested setFieldValue calls inside onFieldChange
       pendingValuesRef.current = updatedValues;
@@ -566,7 +501,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         runValidationPipeline(field, updatedValues);
       }
     },
-    [validateOnChange, touchOnChange, runValidationPipeline]
+    [validateOnChange, touchOnChange, runValidationPipeline],
   );
 
   /**
@@ -597,10 +532,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const setValues = useCallback(
-    (
-      newValues: DeepPartial<TValues>,
-      shouldValidate = validateOnChange
-    ): void => {
+    (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void => {
       dispatch({
         type: 'SET_VALUES',
         values: newValues,
@@ -612,7 +544,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         void validateForm(updatedValues);
       }
     },
-    [formState.values, validateOnChange, validateForm]
+    [formState.values, validateOnChange, validateForm],
   );
 
   /**
@@ -639,11 +571,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const setFieldTouched = useCallback(
-    (
-      field: FieldPath,
-      isTouched = true,
-      shouldValidate = validateOnBlur
-    ): void => {
+    (field: FieldPath, isTouched = true, shouldValidate = validateOnBlur): void => {
       dispatch({
         type: 'SET_FIELD_TOUCHED',
         field,
@@ -661,14 +589,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         }
       }
     },
-    [
-      formState.values,
-      formState.touched,
-      validateOnBlur,
-      validateOnChange,
-      validateForm,
-      runValidationPipeline,
-    ]
+    [formState.values, formState.touched, validateOnBlur, validateOnChange, validateForm, runValidationPipeline],
   );
 
   // ===========================================================================
@@ -706,15 +627,12 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * // Set a single server error
    * form.setServerErrors({ "email": "This email is already registered" });
    */
-  const setServerErrors = useCallback(
-    (serverErrors: Record<FieldPath, string>): void => {
-      dispatch({
-        type: 'SET_SERVER_ERRORS',
-        errors: serverErrors,
-      });
-    },
-    []
-  );
+  const setServerErrors = useCallback((serverErrors: Record<FieldPath, string>): void => {
+    dispatch({
+      type: 'SET_SERVER_ERRORS',
+      errors: serverErrors,
+    });
+  }, []);
 
   /**
    * Clears all server-side validation errors.
@@ -802,11 +720,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         // Mark all fields and error paths as touched (deep)
         const valuePaths = collectFieldPaths(values as Record<string, unknown>);
         const allPaths = Array.from(
-          new Set([
-            ...valuePaths,
-            ...Object.keys(clientErrors),
-            ...Object.keys(serverErrors),
-          ])
+          new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
         );
 
         dispatch({
@@ -845,13 +759,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
             // Run all field validators in parallel before calling onSubmit
             if (fieldValidators) {
               const fieldEntries = Object.entries(fieldValidators) as Array<
-                [
-                  string,
-                  (
-                    value: unknown,
-                    values: TValues
-                  ) => string | undefined | Promise<string | undefined>,
-                ]
+                [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
               >;
 
               const fieldResults = await Promise.all(
@@ -868,7 +776,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
                     });
                   }
                   return { field, error };
-                })
+                }),
               );
 
               const hasFieldErrors = fieldResults.some((r) => r.error);
@@ -877,11 +785,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
                   type: 'SET_SUBMITTING',
                   isSubmitting: false,
                 });
-                return err(
-                  fieldResults
-                    .filter((r) => r.error)
-                    .map((r) => ({ path: [r.field], message: r.error! }))
-                );
+                return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
               }
             }
 
@@ -914,7 +818,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         isHandlingSubmitRef.current = false;
       }
     },
-    [validator, onSubmit, fieldValidators]
+    [validator, onSubmit, fieldValidators],
   );
 
   /**
@@ -976,12 +880,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
    */
   const getFieldError = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): string | undefined => {
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => {
       return formState.touched[field] ? errors[field] : undefined;
     },
-    [formState.touched, errors]
+    [formState.touched, errors],
   );
 
   // ===========================================================================
@@ -1006,15 +908,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * <input type="checkbox" {...form.getCheckboxGroupOptionProps('contacts', 'email')} />
    */
   const getFieldId = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField,
-      optionValue?: string | number
-    ): string => {
-      return optionValue !== undefined
-        ? `${field}-${String(optionValue)}`
-        : field;
+    <TField extends ExtractFieldPaths<TValues>>(field: TField, optionValue?: string | number): string => {
+      return optionValue !== undefined ? `${field}-${String(optionValue)}` : field;
     },
-    []
+    [],
   );
 
   // ===========================================================================
@@ -1047,17 +944,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * <input type="text" {...form.getFieldProps("address.city")} />
    */
   const getFieldProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeFieldProps => {
-      return createNativeFieldProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeFieldProps => {
+      return createNativeFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1076,17 +966,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </select>
    */
   const getSelectFieldProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeSelectProps => {
-      return createNativeSelectFieldProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSelectProps => {
+      return createNativeSelectFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1104,17 +987,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </label>
    */
   const getCheckboxProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeCheckboxProps => {
-      return createNativeCheckboxProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeCheckboxProps => {
+      return createNativeCheckboxProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1132,17 +1008,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </label>
    */
   const getSwitchProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeSwitchProps => {
-      return createNativeSwitchProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSwitchProps => {
+      return createNativeSwitchProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1161,17 +1030,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </div>
    */
   const getSliderProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeSliderProps => {
-      return createNativeSliderProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSliderProps => {
+      return createNativeSliderProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1197,17 +1059,17 @@ export const useForm = <TValues extends Record<string, unknown>>(
   const getCheckboxGroupOptionProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(
       field: TField,
-      optionValue: string | number
+      optionValue: string | number,
     ): NativeCheckboxGroupOptionProps => {
       return createCheckboxGroupOptionProps(
         field as FieldPath,
         optionValue,
         formState.values,
         setFieldValue,
-        setFieldTouched
+        setFieldTouched,
       );
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1228,17 +1090,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * <input type="file" multiple {...form.getFileFieldProps("documents")} />
    */
   const getFileFieldProps = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(
-      field: TField
-    ): NativeFileFieldProps => {
-      return createNativeFileFieldProps(
-        field as FieldPath,
-        formState.values,
-        setFieldValue,
-        setFieldTouched
-      );
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeFileFieldProps => {
+      return createNativeFileFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   /**
@@ -1264,17 +1119,17 @@ export const useForm = <TValues extends Record<string, unknown>>(
   const getRadioGroupOptionProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(
       field: TField,
-      optionValue: string | number
+      optionValue: string | number,
     ): NativeRadioGroupOptionProps => {
       return createRadioGroupOptionProps(
         field as FieldPath,
         optionValue,
         formState.values,
         setFieldValue,
-        setFieldTouched
+        setFieldTouched,
       );
     },
-    [formState.values, setFieldValue, setFieldTouched]
+    [formState.values, setFieldValue, setFieldTouched],
   );
 
   // ===========================================================================
@@ -1335,78 +1190,35 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const arrayHelpersImpl = useCallback(
-    <TItem = unknown>(
-      field: string
-    ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>> => {
+    <TItem = unknown>(field: string): ArrayHelpers<TItem, ExtractFieldPaths<TItem>> => {
       // Local path-based wrappers to avoid generic casts
       const getFieldPropsAtPath = (path: string) =>
-        createNativeFieldProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeFieldProps(path, formState.values, setFieldValue, setFieldTouched);
 
       const getSelectFieldPropsAtPath = (path: string) =>
-        createNativeSelectFieldProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeSelectFieldProps(path, formState.values, setFieldValue, setFieldTouched);
 
       const getSliderPropsAtPath = (path: string) =>
-        createNativeSliderProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeSliderProps(path, formState.values, setFieldValue, setFieldTouched);
 
       const getCheckboxPropsAtPath = (path: string) =>
-        createNativeCheckboxProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeCheckboxProps(path, formState.values, setFieldValue, setFieldTouched);
 
       const getSwitchPropsAtPath = (path: string) =>
-        createNativeSwitchProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeSwitchProps(path, formState.values, setFieldValue, setFieldTouched);
 
       const getFileFieldPropsAtPath = (path: string) =>
-        createNativeFileFieldProps(
-          path,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+        createNativeFileFieldProps(path, formState.values, setFieldValue, setFieldTouched);
 
-      const getRadioGroupOptionPropsAtPath = (
-        path: string,
-        opt: string | number
-      ) =>
-        createRadioGroupOptionProps(
-          path,
-          opt,
-          formState.values,
-          setFieldValue,
-          setFieldTouched
-        );
+      const getRadioGroupOptionPropsAtPath = (path: string, opt: string | number) =>
+        createRadioGroupOptionProps(path, opt, formState.values, setFieldValue, setFieldTouched);
 
-      const getFieldErrorAtPath = (path: string) =>
-        formState.touched[path] ? errors[path] : undefined;
+      const getFieldErrorAtPath = (path: string) => (formState.touched[path] ? errors[path] : undefined);
 
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
         optionValue !== undefined ? `${path}-${String(optionValue)}` : path;
 
-      const arrayValue =
-        getValueByPath<TValues, TItem[]>(formState.values, field) || [];
+      const arrayValue = getValueByPath<TValues, TItem[]>(formState.values, field) || [];
 
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(
         field,
@@ -1420,28 +1232,19 @@ export const useForm = <TValues extends Record<string, unknown>>(
         getFileFieldPropsAtPath,
         getRadioGroupOptionPropsAtPath,
         getFieldErrorAtPath,
-        getFieldIdAtPath
+        getFieldIdAtPath,
       );
     },
-    [
-      formState.values,
-      formState.touched,
-      errors,
-      setFieldValue,
-      setFieldTouched,
-    ]
+    [formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
   );
 
   // Overloaded wrapper for better type inference
   const arrayHelpers = arrayHelpersImpl as {
     <TField extends keyof TValues & string>(
-      field: TField
-    ): ArrayHelpers<
-      GetArrayItemType<TValues, TField>,
-      ExtractFieldPaths<GetArrayItemType<TValues, TField>>
-    >;
+      field: TField,
+    ): ArrayHelpers<GetArrayItemType<TValues, TField>, ExtractFieldPaths<GetArrayItemType<TValues, TField>>>;
     <TField extends ExtractFieldPaths<TValues>, TItem = unknown>(
-      field: TField
+      field: TField,
     ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>>;
   };
 

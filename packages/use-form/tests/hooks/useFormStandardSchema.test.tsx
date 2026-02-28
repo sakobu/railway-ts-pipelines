@@ -45,7 +45,7 @@ describe('isStandardSchema', () => {
     expect(
       isStandardSchema({
         '~standard': { version: 2, vendor: 'test', validate: () => ({}) },
-      })
+      }),
     ).toBe(false);
   });
 });
@@ -84,9 +84,7 @@ describe('fromStandardSchema', () => {
       const result = validator({ name: '', address: {} });
       expect(isErr(result as any)).toBe(true);
       const errors = (result as any).error;
-      const streetError = errors.find(
-        (e: any) => e.message === 'Street is required'
-      );
+      const streetError = errors.find((e: any) => e.message === 'Street is required');
       expect(streetError).toBeDefined();
       // { key: 'address' }, { key: 'street' } → ['address', 'street']
       expect(streetError.path).toEqual(['address', 'street']);
@@ -124,7 +122,7 @@ describe('useForm with Standard Schema', () => {
       const { result } = renderHook(() =>
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
-        })
+        }),
       );
 
       expect(result.current.values).toEqual({ name: '', email: '', age: 0 });
@@ -137,7 +135,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       expect(result.current.errors.name).toBe('Name is required');
@@ -150,7 +148,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'live',
-        })
+        }),
       );
 
       act(() => {
@@ -168,7 +166,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'blur',
-        })
+        }),
       );
 
       act(() => {
@@ -192,7 +190,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: validValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -209,7 +207,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -227,7 +225,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(standardSchemaUserValidator, {
           initialValues,
           validationMode: 'live',
-        })
+        }),
       );
 
       // Make changes to trigger dirty and errors
@@ -256,7 +254,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(asyncStandardSchemaUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'live',
-        })
+        }),
       );
 
       act(() => {
@@ -283,7 +281,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(asyncStandardSchemaUserValidator, {
           initialValues: validValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -300,7 +298,7 @@ describe('useForm with Standard Schema', () => {
         useForm<UserForm>(asyncStandardSchemaUserValidator, {
           initialValues: { name: 'taken', email: 'test@test.com', age: 25 },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -321,13 +319,11 @@ describe('useForm with Standard Schema', () => {
             address: { street: '', city: '', zip: '' },
           },
           validationMode: 'mount',
-        })
+        }),
       );
 
       expect(result.current.errors.name).toBe('Name is required');
-      expect(result.current.errors['address.street']).toBe(
-        'Street is required'
-      );
+      expect(result.current.errors['address.street']).toBe('Street is required');
       expect(result.current.errors['address.city']).toBe('City is required');
     });
   });

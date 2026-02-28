@@ -14,6 +14,6 @@ export function prepareForAPI<T extends Record<string, unknown>>(values: T): T {
     values,
     Object.entries,
     (entries) => entries.map(([key, value]) => [key, transformValue(value)]),
-    Object.fromEntries
+    Object.fromEntries,
   ) as T;
 }

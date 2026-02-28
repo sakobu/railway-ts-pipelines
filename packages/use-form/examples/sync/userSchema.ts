@@ -25,18 +25,12 @@ export const addressSchema = object({
 });
 
 export const userSchema = object({
-  username: required(
-    chain(string(), nonEmpty('Username is required'), minLength(3))
-  ),
+  username: required(chain(string(), nonEmpty('Username is required'), minLength(3))),
   email: required(chain(string(), nonEmpty('Email is required'), email())),
-  password: required(
-    chain(string(), nonEmpty('Password is required'), minLength(8))
-  ),
+  password: required(chain(string(), nonEmpty('Password is required'), minLength(8))),
   age: required(chain(parseNumber(), min(18, 'Must be 18 or older'))),
   birthdate: required(parseDate()),
-  hasAcceptedTerms: required(
-    chain(parseBool(), matches(true, 'You must check this field'))
-  ),
+  hasAcceptedTerms: required(chain(parseBool(), matches(true, 'You must check this field'))),
   role: required(stringEnum(['admin', 'user'])),
   address: optional(addressSchema),
   contacts: optional(array(stringEnum(['email', 'phone']))),

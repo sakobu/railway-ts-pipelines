@@ -15,7 +15,7 @@ describe('onValuesChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: 'Apollo' },
         onValuesChange: spy,
-      })
+      }),
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -29,7 +29,7 @@ describe('onValuesChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: 'Apollo' },
         onValuesChange: spy,
-      })
+      }),
     );
 
     spy.mockClear();
@@ -48,7 +48,7 @@ describe('onValuesChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: '' },
         onValuesChange: spy,
-      })
+      }),
     );
 
     spy.mockClear();
@@ -67,7 +67,7 @@ describe('onValuesChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: 'Original' },
         onValuesChange: spy,
-      })
+      }),
     );
 
     act(() => result.current.setFieldValue('name', 'Changed'));
@@ -85,7 +85,7 @@ describe('onValuesChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: '' },
         onValuesChange: spy,
-      })
+      }),
     );
 
     spy.mockClear();
@@ -104,7 +104,7 @@ describe('onValuesChange', () => {
           initialValues: { name: '' },
           onValuesChange: cb,
         }),
-      { initialProps: { cb: spy } }
+      { initialProps: { cb: spy } },
     );
 
     spy.mockClear();
@@ -117,9 +117,7 @@ describe('onValuesChange', () => {
 
   test('is optional — no error when omitted', () => {
     expect(() => {
-      renderHook(() =>
-        useForm(alwaysValidValidator, { initialValues: { name: '' } })
-      );
+      renderHook(() => useForm(alwaysValidValidator, { initialValues: { name: '' } }));
     }).not.toThrow();
   });
 });
@@ -136,7 +134,7 @@ describe('onFieldChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: 'Apollo' },
         onFieldChange: spy,
-      })
+      }),
     );
 
     expect(spy).not.toHaveBeenCalled();
@@ -149,7 +147,7 @@ describe('onFieldChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: '' },
         onFieldChange: spy,
-      })
+      }),
     );
 
     act(() => {
@@ -167,7 +165,7 @@ describe('onFieldChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: '' },
         onFieldChange: spy,
-      })
+      }),
     );
 
     act(() => {
@@ -184,7 +182,7 @@ describe('onFieldChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: 'Original' },
         onFieldChange: spy,
-      })
+      }),
     );
 
     act(() => result.current.setFieldValue('name', 'Changed'));
@@ -202,7 +200,7 @@ describe('onFieldChange', () => {
       useForm(alwaysValidValidator, {
         initialValues: { name: '' },
         onFieldChange: spy,
-      })
+      }),
     );
 
     act(() => {
@@ -217,9 +215,7 @@ describe('onFieldChange', () => {
 
   test('is optional — no error when omitted', () => {
     expect(() => {
-      renderHook(() =>
-        useForm(alwaysValidValidator, { initialValues: { name: '' } })
-      );
+      renderHook(() => useForm(alwaysValidValidator, { initialValues: { name: '' } }));
     }).not.toThrow();
   });
 });
@@ -238,7 +234,7 @@ describe('onValuesChange + onFieldChange together', () => {
         initialValues: { name: '' },
         onValuesChange: valuesSpy,
         onFieldChange: fieldSpy,
-      })
+      }),
     );
 
     valuesSpy.mockClear();
@@ -263,7 +259,7 @@ describe('onValuesChange + onFieldChange together', () => {
         initialValues: { name: '' },
         onValuesChange: valuesSpy,
         onFieldChange: fieldSpy,
-      })
+      }),
     );
 
     valuesSpy.mockClear();

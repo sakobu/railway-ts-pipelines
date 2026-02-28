@@ -27,7 +27,7 @@ describe('formReducer', () => {
           field: 'name',
           value: 'Jane',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.values.name).toBe('Jane');
@@ -42,7 +42,7 @@ describe('formReducer', () => {
           field: 'name',
           value: 'Jane',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isDirty).toBe(true);
@@ -64,7 +64,7 @@ describe('formReducer', () => {
           field: 'name',
           value: 'Jane',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.serverErrors.name).toBeUndefined();
@@ -79,7 +79,7 @@ describe('formReducer', () => {
           field: 'name',
           value: 'John', // same as initialValues.name
         },
-        initialValues
+        initialValues,
       );
 
       expect(result).toBe(initialState);
@@ -110,7 +110,7 @@ describe('formReducer', () => {
           field: 'user.address',
           value: cityRef, // exact same reference
         },
-        nestedValues
+        nestedValues,
       );
 
       expect(result).toBe(nestedState);
@@ -143,7 +143,7 @@ describe('formReducer', () => {
           field: 'user.address',
           value: { city: 'LA' },
         },
-        nestedValues
+        nestedValues,
       );
 
       // Parent change should clear child error
@@ -161,7 +161,7 @@ describe('formReducer', () => {
           type: 'SET_VALUES',
           values: { name: 'Jane', email: 'jane@example.com' },
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.values.name).toBe('Jane');
@@ -175,7 +175,7 @@ describe('formReducer', () => {
           type: 'SET_VALUES',
           values: { name: 'Jane' },
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isDirty).toBe(true);
@@ -205,7 +205,7 @@ describe('formReducer', () => {
           type: 'SET_VALUES',
           values: { address: { city: 'NYC' } },
         },
-        nestedValues
+        nestedValues,
       );
 
       expect(result.values.address.city).toBe('NYC');
@@ -229,7 +229,7 @@ describe('formReducer', () => {
           type: 'SET_VALUES',
           values: { name: 'Jane' },
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.serverErrors.name).toBeUndefined();
@@ -246,7 +246,7 @@ describe('formReducer', () => {
           field: 'name',
           isTouched: true,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.touched.name).toBe(true);
@@ -265,7 +265,7 @@ describe('formReducer', () => {
           field: 'name',
           isTouched: false,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.touched.name).toBe(false);
@@ -285,7 +285,7 @@ describe('formReducer', () => {
           type: 'SET_CLIENT_ERRORS',
           errors,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.clientErrors).toEqual(errors);
@@ -305,7 +305,7 @@ describe('formReducer', () => {
           type: 'SET_CLIENT_ERRORS',
           errors: newErrors,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.clientErrors).toEqual(newErrors);
@@ -325,7 +325,7 @@ describe('formReducer', () => {
           type: 'SET_SERVER_ERRORS',
           errors,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.serverErrors).toEqual(errors);
@@ -345,7 +345,7 @@ describe('formReducer', () => {
           type: 'SET_SERVER_ERRORS',
           errors: newErrors,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.serverErrors).toEqual(newErrors);
@@ -367,7 +367,7 @@ describe('formReducer', () => {
         {
           type: 'CLEAR_SERVER_ERRORS',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.serverErrors).toEqual({});
@@ -382,7 +382,7 @@ describe('formReducer', () => {
           type: 'SET_SUBMITTING',
           isSubmitting: true,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isSubmitting).toBe(true);
@@ -402,7 +402,7 @@ describe('formReducer', () => {
           type: 'SET_SUBMITTING',
           isSubmitting: false,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isSubmitting).toBe(false);
@@ -412,11 +412,7 @@ describe('formReducer', () => {
 
   describe('INCREMENT_SUBMIT_COUNT', () => {
     test('increments submitCount by 1', () => {
-      const result = formReducer(
-        initialState,
-        { type: 'INCREMENT_SUBMIT_COUNT' },
-        initialValues
-      );
+      const result = formReducer(initialState, { type: 'INCREMENT_SUBMIT_COUNT' }, initialValues);
 
       expect(result.submitCount).toBe(1);
     });
@@ -424,27 +420,15 @@ describe('formReducer', () => {
     test('increments submitCount on each dispatch', () => {
       let state = initialState;
 
-      state = formReducer(
-        state,
-        { type: 'INCREMENT_SUBMIT_COUNT' },
-        initialValues
-      );
+      state = formReducer(state, { type: 'INCREMENT_SUBMIT_COUNT' }, initialValues);
       expect(state.submitCount).toBe(1);
 
-      state = formReducer(
-        state,
-        { type: 'INCREMENT_SUBMIT_COUNT' },
-        initialValues
-      );
+      state = formReducer(state, { type: 'INCREMENT_SUBMIT_COUNT' }, initialValues);
       expect(state.submitCount).toBe(2);
     });
 
     test('does not change isSubmitting', () => {
-      const result = formReducer(
-        initialState,
-        { type: 'INCREMENT_SUBMIT_COUNT' },
-        initialValues
-      );
+      const result = formReducer(initialState, { type: 'INCREMENT_SUBMIT_COUNT' }, initialValues);
 
       expect(result.isSubmitting).toBe(false);
     });
@@ -470,7 +454,7 @@ describe('formReducer', () => {
         {
           type: 'RESET_FORM',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.values).toEqual(initialValues);
@@ -494,7 +478,7 @@ describe('formReducer', () => {
           type: 'MARK_ALL_TOUCHED',
           fields: ['name', 'email', 'address.city'],
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.touched.name).toBe(true);
@@ -514,7 +498,7 @@ describe('formReducer', () => {
           type: 'MARK_ALL_TOUCHED',
           fields: ['email'],
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.touched.name).toBe(true);
@@ -531,7 +515,7 @@ describe('formReducer', () => {
           field: 'name',
           isValidating: true,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.validatingFields.name).toBe(true);
@@ -550,7 +534,7 @@ describe('formReducer', () => {
           field: 'name',
           isValidating: false,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.validatingFields.name).toBeUndefined();
@@ -569,7 +553,7 @@ describe('formReducer', () => {
           field: 'name',
           isValidating: false,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.validatingFields.name).toBeUndefined();
@@ -585,7 +569,7 @@ describe('formReducer', () => {
           type: 'SET_FORM_VALIDATING',
           isFormValidating: true,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isFormValidating).toBe(true);
@@ -603,7 +587,7 @@ describe('formReducer', () => {
           type: 'SET_FORM_VALIDATING',
           isFormValidating: false,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.isFormValidating).toBe(false);
@@ -619,7 +603,7 @@ describe('formReducer', () => {
           field: 'name',
           error: 'Name is taken',
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.fieldErrors.name).toBe('Name is taken');
@@ -638,7 +622,7 @@ describe('formReducer', () => {
           field: 'name',
           error: undefined,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.fieldErrors.name).toBeUndefined();
@@ -657,7 +641,7 @@ describe('formReducer', () => {
           field: 'name',
           error: undefined,
         },
-        initialValues
+        initialValues,
       );
 
       expect(result.fieldErrors.name).toBeUndefined();
@@ -671,7 +655,7 @@ describe('formReducer', () => {
         initialState,
         // @ts-expect-error testing unknown action branch
         { type: 'UNKNOWN_ACTION' },
-        initialValues
+        initialValues,
       );
 
       expect(next).toBe(initialState);

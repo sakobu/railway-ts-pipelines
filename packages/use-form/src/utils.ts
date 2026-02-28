@@ -40,12 +40,9 @@ import type { FieldPath } from './types';
  * const user = { name: "John" };
  * getValueByPath(user, "address.city"); // undefined
  */
-export const getValueByPath = <
-  TObj extends Record<string, unknown>,
-  TValue = unknown,
->(
+export const getValueByPath = <TObj extends Record<string, unknown>, TValue = unknown>(
   obj: TObj,
-  path: FieldPath
+  path: FieldPath,
 ): TValue | undefined => {
   if (!path) return obj as unknown as TValue;
 
@@ -111,7 +108,7 @@ export const getValueByPath = <
 export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
   obj: TObj,
   path: FieldPath,
-  value: TValue
+  value: TValue,
 ): TObj => {
   if (!path) return value as unknown as TObj;
 
@@ -119,9 +116,7 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
   const parts = normalizedPath.split('.').filter(Boolean);
 
   // Clone the root (array/object)
-  const result: unknown = Array.isArray(obj)
-    ? [...(obj as unknown[])]
-    : { ...obj };
+  const result: unknown = Array.isArray(obj) ? [...(obj as unknown[])] : { ...obj };
   let currNew: Record<string, unknown> | unknown[] = Array.isArray(result)
     ? (result as unknown[])
     : (result as Record<string, unknown>);
@@ -158,9 +153,7 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
       const nextIsIndex = /^\d+$/.test(parts[i + 1] ?? '');
       nextNew = nextIsIndex ? [] : {};
     } else {
-      nextNew = Array.isArray(nextOld)
-        ? [...(nextOld as unknown[])]
-        : { ...(nextOld as Record<string, unknown>) };
+      nextNew = Array.isArray(nextOld) ? [...(nextOld as unknown[])] : { ...(nextOld as Record<string, unknown>) };
     }
 
     if (Array.isArray(currNew) && typeof key === 'number') {
@@ -223,20 +216,14 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
  * Object.keys(serverErrors).filter(path => isPathAffected(path, "address"));
  * // Returns ["address.city", "address.zip"]
  */
-export const isPathAffected = (
-  path: FieldPath,
-  changePath: FieldPath
-): boolean => {
+export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean => {
   if (path === changePath) return true;
 
   const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
   const normalizedChangePath = changePath.replace(/\[(\d+)\]/g, '.$1');
 
   // Parent affects child
-  return (
-    normalizedPath === normalizedChangePath ||
-    normalizedPath.startsWith(`${normalizedChangePath}.`)
-  );
+  return normalizedPath === normalizedChangePath || normalizedPath.startsWith(`${normalizedChangePath}.`);
 };
 
 /**
@@ -302,11 +289,7 @@ export const isPathAffected = (
 export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   const paths: FieldPath[] = [];
 
-  const isLeaf = (v: unknown) =>
-    v == null ||
-    typeof v !== 'object' ||
-    v instanceof Date ||
-    v instanceof RegExp;
+  const isLeaf = (v: unknown) => v == null || typeof v !== 'object' || v instanceof Date || v instanceof RegExp;
 
   const visit = (value: unknown, path: string) => {
     if (path) paths.push(path);
@@ -329,10 +312,7 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   return paths;
 };
 
-export const deepMerge = <T extends Record<string, unknown>>(
-  target: T,
-  source: Record<string, unknown>
-): T => {
+export const deepMerge = <T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T => {
   const result = { ...target };
 
   for (const key of Object.keys(source)) {
@@ -353,7 +333,7 @@ export const deepMerge = <T extends Record<string, unknown>>(
     ) {
       (result as Record<string, unknown>)[key] = deepMerge(
         tgtVal as Record<string, unknown>,
-        srcVal as Record<string, unknown>
+        srcVal as Record<string, unknown>,
       );
     } else {
       (result as Record<string, unknown>)[key] = srcVal;
@@ -365,10 +345,8 @@ export const deepMerge = <T extends Record<string, unknown>>(
 
 export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date)
-    return a.getTime() === b.getTime();
-  if (a instanceof RegExp && b instanceof RegExp)
-    return a.toString() === b.toString();
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
   if (a == null || b == null) return false;
   if (typeof a !== 'object' || typeof b !== 'object') return false;
 
@@ -383,9 +361,6 @@ export const deepEqual = (a: unknown, b: unknown): boolean => {
   return keysA.every(
     (key) =>
       Object.prototype.hasOwnProperty.call(b, key) &&
-      deepEqual(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key]
-      )
+      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
   );
 };

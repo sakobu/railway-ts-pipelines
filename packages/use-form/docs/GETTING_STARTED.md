@@ -10,14 +10,7 @@ Every `useForm` starts with a **schema** -- an object that describes what your f
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
-import {
-  object,
-  string,
-  required,
-  chain,
-  nonEmpty,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, string, required, chain, nonEmpty, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 // 1. Define a schema
 const loginSchema = object({
@@ -85,17 +78,13 @@ function LoginForm() {
       <div>
         <label htmlFor={form.getFieldId('email')}>Email</label>
         <input type="email" {...form.getFieldProps('email')} />
-        {form.getFieldError('email') && (
-          <span className="error">{form.getFieldError('email')}</span>
-        )}
+        {form.getFieldError('email') && <span className="error">{form.getFieldError('email')}</span>}
       </div>
 
       <div>
         <label htmlFor={form.getFieldId('password')}>Password</label>
         <input type="password" {...form.getFieldProps('password')} />
-        {form.getFieldError('password') && (
-          <span className="error">{form.getFieldError('password')}</span>
-        )}
+        {form.getFieldError('password') && <span className="error">{form.getFieldError('password')}</span>}
       </div>
 
       <button type="submit" disabled={form.isSubmitting}>
@@ -142,20 +131,8 @@ import {
 } from '@railway-ts/pipelines/schema';
 
 const signupSchema = object({
-  email: required(
-    chain(
-      string(),
-      nonEmpty('Email is required'),
-      email('Must be a valid email')
-    )
-  ),
-  password: required(
-    chain(
-      string(),
-      nonEmpty('Password is required'),
-      minLength(8, 'Must be at least 8 characters')
-    )
-  ),
+  email: required(chain(string(), nonEmpty('Email is required'), email('Must be a valid email'))),
+  password: required(chain(string(), nonEmpty('Password is required'), minLength(8, 'Must be at least 8 characters'))),
 });
 ```
 
@@ -237,19 +214,13 @@ function RegistrationForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
-      {form.getFieldError('username') && (
-        <span>{form.getFieldError('username')}</span>
-      )}
+      {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.getFieldError('email') && (
-        <span>{form.getFieldError('email')}</span>
-      )}
+      {form.getFieldError('email') && <span>{form.getFieldError('email')}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.getFieldError('password') && (
-        <span>{form.getFieldError('password')}</span>
-      )}
+      {form.getFieldError('password') && <span>{form.getFieldError('password')}</span>}
 
       <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Registering...' : 'Register'}
@@ -285,7 +256,7 @@ const profileSchema = object({
       street: required(string()),
       city: required(chain(string(), nonEmpty('City is required'))),
       zip: required(chain(string(), nonEmpty('ZIP is required'))),
-    })
+    }),
   ),
 });
 
@@ -307,13 +278,9 @@ function ProfileForm() {
         <legend>Address</legend>
         <input {...form.getFieldProps('address.street')} placeholder="Street" />
         <input {...form.getFieldProps('address.city')} placeholder="City" />
-        {form.getFieldError('address.city') && (
-          <span>{form.getFieldError('address.city')}</span>
-        )}
+        {form.getFieldError('address.city') && <span>{form.getFieldError('address.city')}</span>}
         <input {...form.getFieldProps('address.zip')} placeholder="ZIP" />
-        {form.getFieldError('address.zip') && (
-          <span>{form.getFieldError('address.zip')}</span>
-        )}
+        {form.getFieldError('address.zip') && <span>{form.getFieldError('address.zip')}</span>}
       </fieldset>
 
       <button type="submit">Save</button>
@@ -331,14 +298,7 @@ The field path autocomplete works through nested objects -- type `'address.'` an
 Use `arrayHelpers` for dynamic lists. It gives you `push`, `remove`, `swap`, `insert`, `replace`, and its own `getFieldProps` that takes an index:
 
 ```tsx
-import {
-  object,
-  string,
-  required,
-  email,
-  array,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, string, required, email, array, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const contactSchema = object({
   name: required(string()),
@@ -365,17 +325,10 @@ function ContactsForm() {
           <h3>Contact {index + 1}</h3>
 
           <input {...helpers.getFieldProps(index, 'name')} placeholder="Name" />
-          {helpers.getFieldError(index, 'name') && (
-            <span>{helpers.getFieldError(index, 'name')}</span>
-          )}
+          {helpers.getFieldError(index, 'name') && <span>{helpers.getFieldError(index, 'name')}</span>}
 
-          <input
-            {...helpers.getFieldProps(index, 'email')}
-            placeholder="Email"
-          />
-          {helpers.getFieldError(index, 'email') && (
-            <span>{helpers.getFieldError(index, 'email')}</span>
-          )}
+          <input {...helpers.getFieldProps(index, 'email')} placeholder="Email" />
+          {helpers.getFieldError(index, 'email') && <span>{helpers.getFieldError(index, 'email')}</span>}
 
           <button type="button" onClick={() => helpers.remove(index)}>
             Remove
@@ -383,10 +336,7 @@ function ContactsForm() {
         </div>
       ))}
 
-      <button
-        type="button"
-        onClick={() => helpers.push({ name: '', email: '' })}
-      >
+      <button type="button" onClick={() => helpers.push({ name: '', email: '' })}>
         Add Contact
       </button>
 

@@ -32,21 +32,13 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines ^0.1.26.
+Requires React 18+ and @railway-ts/pipelines ^0.1.27.
 
 ## Quick Start
 
 ```tsx
 import { useForm } from '@railway-ts/use-form';
-import {
-  object,
-  string,
-  required,
-  chain,
-  nonEmpty,
-  email,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import { object, string, required, chain, nonEmpty, email, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), nonEmpty('Email is required'), email())),
@@ -66,14 +58,10 @@ export function LoginForm() {
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input type="email" {...form.getFieldProps('email')} />
-      {form.getFieldError('email') && (
-        <span>{form.getFieldError('email')}</span>
-      )}
+      {form.getFieldError('email') && <span>{form.getFieldError('email')}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.getFieldError('password') && (
-        <span>{form.getFieldError('password')}</span>
-      )}
+      {form.getFieldError('password') && <span>{form.getFieldError('password')}</span>}
 
       <button type="submit" disabled={form.isSubmitting}>
         {form.isSubmitting ? 'Logging in...' : 'Log In'}
@@ -113,11 +101,7 @@ const schema = chain(
     password: required(chain(string(), nonEmpty(), minLength(8))),
     confirmPassword: required(chain(string(), nonEmpty())),
   }),
-  refineAt(
-    'confirmPassword',
-    (d) => d.password === d.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
 type Registration = InferSchemaType<typeof schema>;
@@ -126,7 +110,7 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string): Promise<{ available: boolean }> =>
   fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
-    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)
+    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
   );
 
 class ApiValidationError extends Error {
@@ -193,28 +177,18 @@ export function RegistrationForm() {
     <form onSubmit={(e) => void form.handleSubmit(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
-      {form.getFieldError('username') && (
-        <span>{form.getFieldError('username')}</span>
-      )}
+      {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
 
       <input type="email" {...form.getFieldProps('email')} />
-      {form.getFieldError('email') && (
-        <span>{form.getFieldError('email')}</span>
-      )}
+      {form.getFieldError('email') && <span>{form.getFieldError('email')}</span>}
 
       <input type="password" {...form.getFieldProps('password')} />
-      {form.getFieldError('password') && (
-        <span>{form.getFieldError('password')}</span>
-      )}
+      {form.getFieldError('password') && <span>{form.getFieldError('password')}</span>}
 
       <input type="password" {...form.getFieldProps('confirmPassword')} />
-      {form.getFieldError('confirmPassword') && (
-        <span>{form.getFieldError('confirmPassword')}</span>
-      )}
+      {form.getFieldError('confirmPassword') && <span>{form.getFieldError('confirmPassword')}</span>}
 
-      {form.errors[ROOT_ERROR_KEY] && (
-        <span>{form.errors[ROOT_ERROR_KEY]}</span>
-      )}
+      {form.errors[ROOT_ERROR_KEY] && <span>{form.errors[ROOT_ERROR_KEY]}</span>}
 
       <button type="submit" disabled={mutation.isPending || form.isValidating}>
         {mutation.isPending ? 'Registering...' : 'Create Account'}

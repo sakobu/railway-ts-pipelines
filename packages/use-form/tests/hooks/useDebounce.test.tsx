@@ -3,9 +3,9 @@ import { renderHook, act } from '@testing-library/react';
 import { useDebounce } from '../../src/useDebounce';
 
 describe('useDebounce', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Use fake timers for testing
-    mock.module('bun:test', () => ({
+    await mock.module('bun:test', () => ({
       useFakeTimers: () => {},
     }));
   });
@@ -67,12 +67,9 @@ describe('useDebounce', () => {
     const callback1 = mock((_value: string) => {});
     const callback2 = mock((_value: string) => {});
 
-    const { result, rerender } = renderHook(
-      ({ cb, delay }) => useDebounce(cb, delay),
-      {
-        initialProps: { cb: callback1, delay: 500 },
-      }
-    );
+    const { result, rerender } = renderHook(({ cb, delay }) => useDebounce(cb, delay), {
+      initialProps: { cb: callback1, delay: 500 },
+    });
 
     // Call with first callback
     act(() => {

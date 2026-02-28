@@ -59,6 +59,6 @@ export function useDebounce<
         callbackRef.current(...args);
       }, delay);
     },
-    [delay]
+    [delay],
   );
 }

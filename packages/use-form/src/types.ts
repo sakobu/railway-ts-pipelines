@@ -202,7 +202,7 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
   fieldValidators?: {
     [K in ExtractFieldPaths<TValues>]?: (
       value: FieldTypeAtPath<TValues, K>,
-      values: TValues
+      values: TValues,
     ) => string | undefined | Promise<string | undefined>;
   };
 
@@ -545,10 +545,7 @@ export type NativeCheckboxGroupOptionProps = {
  * type City = FieldTypeAtPath<User, "address.city">; // string
  * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
  */
-export type FieldTypeAtPath<
-  T,
-  P extends string,
-> = P extends `${infer K}.${infer Rest}`
+export type FieldTypeAtPath<T, P extends string> = P extends `${infer K}.${infer Rest}`
   ? K extends keyof T
     ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
     : unknown
@@ -559,13 +556,10 @@ export type FieldTypeAtPath<
 // ─── Tuple helpers ─────────────────────────────────────────────────────────
 // number["length"] is `number`; a tuple like [A,B,C]["length"] is literal 3.
 // `number extends T["length"]` is true only for variable-length arrays.
-type IsTuple<T extends readonly unknown[]> = number extends T['length']
-  ? false
-  : true;
+type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false : true;
 
 // Extract<keyof [A,B,C], number> → 0 | 1 | 2; template-literalize → "0"|"1"|"2"
-type TupleIndexPaths<T extends readonly unknown[]> =
-  `${Extract<keyof T, number>}`;
+type TupleIndexPaths<T extends readonly unknown[]> = `${Extract<keyof T, number>}`;
 // ───────────────────────────────────────────────────────────────────────────
 
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
@@ -586,8 +580,7 @@ export type ExtractFieldPaths<T> = T extends readonly unknown[]
                     ? U extends { type: infer Type }
                       ? Type extends string
                         ? // For discriminated unions, we need to extract paths from all variants
-                          | `${K}`
-                            | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+                            `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
                         : never
                       : never
                     : never
@@ -626,8 +619,7 @@ export type ExtractFieldPaths<T> = T extends readonly unknown[]
  *   return errors[field];
  * }
  */
-export type ValidFieldPath<TForm, TField extends string> =
-  TField extends ExtractFieldPaths<TForm> ? TField : never;
+export type ValidFieldPath<TForm, TField extends string> = TField extends ExtractFieldPaths<TForm> ? TField : never;
 
 /**
  * Extracts the array item type from an array field.
@@ -658,10 +650,7 @@ export type ValidFieldPath<TForm, TField extends string> =
  * // Used with arrayHelpers for type-safe array operations
  * const contactsHelpers = form.arrayHelpers<GetArrayItemType<UserForm, "contacts">>("contacts");
  */
-export type GetArrayItemType<
-  TValues extends Record<string, unknown>,
-  TField extends keyof TValues,
-> =
+export type GetArrayItemType<TValues extends Record<string, unknown>, TField extends keyof TValues> =
   NonNullable<TValues[TField]> extends readonly (infer TItem)[]
     ? TItem
     : NonNullable<TValues[TField]> extends (infer TItem)[]
@@ -702,10 +691,7 @@ export type GetArrayItemType<
  *   </div>
  * );
  */
-export interface ArrayHelpers<
-  TItem,
-  TFieldPaths extends string = ExtractFieldPaths<TItem>,
-> {
+export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPaths<TItem>> {
   /**
    * Current array values. Use this to iterate over items when rendering.
    *
@@ -796,10 +782,7 @@ export interface ArrayHelpers<
    *   <option value="personal">Personal</option>
    * </select>
    */
-  getSelectFieldProps: (
-    index: number,
-    subField: TFieldPaths
-  ) => NativeSelectProps;
+  getSelectFieldProps: (index: number, subField: TFieldPaths) => NativeSelectProps;
 
   /**
    * Gets props for a native range input bound to a field within an array item.
@@ -825,10 +808,7 @@ export interface ArrayHelpers<
    * @example
    * <input type="checkbox" {...helpers.getCheckboxProps(index, "isActive")} />
    */
-  getCheckboxProps: (
-    index: number,
-    subField: TFieldPaths
-  ) => NativeCheckboxProps;
+  getCheckboxProps: (index: number, subField: TFieldPaths) => NativeCheckboxProps;
 
   /**
    * Gets props for a native switch (checkbox styled as switch) bound to a field within an array item.
@@ -854,10 +834,7 @@ export interface ArrayHelpers<
    * @example
    * <input type="file" accept="image/*" {...helpers.getFileFieldProps(index, "avatar")} />
    */
-  getFileFieldProps: (
-    index: number,
-    subField: TFieldPaths
-  ) => NativeFileFieldProps;
+  getFileFieldProps: (index: number, subField: TFieldPaths) => NativeFileFieldProps;
 
   /**
    * Gets props for a radio group option bound to a field within an array item.
@@ -874,7 +851,7 @@ export interface ArrayHelpers<
   getRadioGroupOptionProps: (
     index: number,
     subField: TFieldPaths,
-    optionValue: string | number
+    optionValue: string | number,
   ) => NativeRadioGroupOptionProps;
 
   /**
@@ -907,11 +884,7 @@ export interface ArrayHelpers<
    * <label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
    * <input {...helpers.getFieldProps(index, "name")} />
    */
-  getFieldId: (
-    index: number,
-    subField: TFieldPaths,
-    optionValue?: string | number
-  ) => string;
+  getFieldId: (index: number, subField: TFieldPaths, optionValue?: string | number) => string;
 }
 
 // =============================================================================
@@ -1098,11 +1071,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * form.setFieldValue("email", "user@example.com");
    */
-  setFieldValue: <TValue>(
-    field: FieldPath,
-    value: TValue,
-    shouldValidate?: boolean
-  ) => void;
+  setFieldValue: <TValue>(field: FieldPath, value: TValue, shouldValidate?: boolean) => void;
 
   /**
    * Marks a field as touched or untouched and optionally triggers validation.
@@ -1110,11 +1079,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * form.setFieldTouched("email");
    */
-  setFieldTouched: (
-    field: FieldPath,
-    isTouched?: boolean,
-    shouldValidate?: boolean
-  ) => void;
+  setFieldTouched: (field: FieldPath, isTouched?: boolean, shouldValidate?: boolean) => void;
 
   /**
    * Updates multiple field values simultaneously. More efficient than calling `setFieldValue` multiple times.
@@ -1169,11 +1134,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * const result = form.validateForm(currentValues);
    */
-  validateForm: (
-    values: TValues
-  ) =>
-    | Result<TValues, ValidationError[]>
-    | Promise<Result<TValues, ValidationError[]>>;
+  validateForm: (values: TValues) => Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>>;
 
   // Error helper
 
@@ -1183,9 +1144,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
    */
-  getFieldError: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => string | undefined;
+  getFieldError: <TField extends ExtractFieldPaths<TValues>>(field: TField) => string | undefined;
 
   // ID helper
 
@@ -1196,10 +1155,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * <label htmlFor={form.getFieldId("username")}>Username</label>
    * <input {...form.getFieldProps("username")} />
    */
-  getFieldId: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField,
-    optionValue?: string | number
-  ) => string;
+  getFieldId: <TField extends ExtractFieldPaths<TValues>>(field: TField, optionValue?: string | number) => string;
 
   // Native HTML field integration
 
@@ -1209,9 +1165,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * <input type="text" {...form.getFieldProps("username")} placeholder="Username" />
    */
-  getFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeFieldProps;
+  getFieldProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeFieldProps;
 
   /**
    * Returns props to spread onto a native `<select>` element.
@@ -1222,9 +1176,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    *   <option value="US">United States</option>
    * </select>
    */
-  getSelectFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSelectProps;
+  getSelectFieldProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeSelectProps;
 
   /**
    * Returns props (`id`, `name`, `checked`, `onChange`, `onBlur`) to spread onto a native checkbox for a boolean field.
@@ -1235,9 +1187,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    *   I accept the terms and conditions
    * </label>
    */
-  getCheckboxProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeCheckboxProps;
+  getCheckboxProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeCheckboxProps;
 
   /**
    * Returns props to spread onto a checkbox styled as a toggle switch for a boolean field.
@@ -1248,9 +1198,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    *   <span className="slider" />
    * </label>
    */
-  getSwitchProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSwitchProps;
+  getSwitchProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeSwitchProps;
 
   /**
    * Returns props to spread onto a native `<input type="range">` for a numeric field.
@@ -1258,9 +1206,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * <input type="range" min={0} max={100} {...form.getSliderProps("volume")} />
    */
-  getSliderProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeSliderProps;
+  getSliderProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeSliderProps;
 
   /**
    * Returns props for a single checkbox within a checkbox group bound to an array field.
@@ -1273,7 +1219,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    */
   getCheckboxGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
     field: TField,
-    optionValue: string | number
+    optionValue: string | number,
   ) => NativeCheckboxGroupOptionProps;
 
   /**
@@ -1282,9 +1228,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    * @example
    * <input type="file" accept="image/*" {...form.getFileFieldProps("avatar")} />
    */
-  getFileFieldProps: <TField extends ExtractFieldPaths<TValues>>(
-    field: TField
-  ) => NativeFileFieldProps;
+  getFileFieldProps: <TField extends ExtractFieldPaths<TValues>>(field: TField) => NativeFileFieldProps;
 
   /**
    * Returns props for a single radio button within a radio group bound to a scalar field.
@@ -1297,7 +1241,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    */
   getRadioGroupOptionProps: <TField extends ExtractFieldPaths<TValues>>(
     field: TField,
-    optionValue: string | number
+    optionValue: string | number,
   ) => NativeRadioGroupOptionProps;
 
   // Array field helpers
@@ -1311,13 +1255,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    */
   arrayHelpers: {
     <TField extends keyof TValues & string>(
-      field: TField
-    ): ArrayHelpers<
-      GetArrayItemType<TValues, TField>,
-      ExtractFieldPaths<GetArrayItemType<TValues, TField>>
-    >;
+      field: TField,
+    ): ArrayHelpers<GetArrayItemType<TValues, TField>, ExtractFieldPaths<GetArrayItemType<TValues, TField>>>;
     <TField extends ExtractFieldPaths<TValues>, TItem = unknown>(
-      field: TField
+      field: TField,
     ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>>;
   };
 }

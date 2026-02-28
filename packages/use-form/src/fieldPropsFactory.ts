@@ -54,7 +54,7 @@ export const createNativeFieldProps = (
   field: FieldPath,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeFieldProps => {
   const raw = getValueByPath(formValues, field);
 
@@ -126,24 +126,18 @@ export const createNativeSelectFieldProps = (
   field: FieldPath,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeSelectProps => {
   const raw = getValueByPath(formValues, field);
 
   // Native select expects primitive value
-  const value =
-    raw == null
-      ? ''
-      : typeof raw === 'string' || typeof raw === 'number'
-        ? raw
-        : JSON.stringify(raw);
+  const value = raw == null ? '' : typeof raw === 'string' || typeof raw === 'number' ? raw : JSON.stringify(raw);
 
   return {
     id: field,
     name: field,
     value,
-    onChange: (e: ChangeEvent<HTMLSelectElement>) =>
-      handleChange(field, e.target.value),
+    onChange: (e: ChangeEvent<HTMLSelectElement>) => handleChange(field, e.target.value),
     onBlur: () => handleBlur(field, true),
   };
 };
@@ -190,7 +184,7 @@ export const createNativeCheckboxProps = (
   field: FieldPath,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeCheckboxProps => {
   const value = getValueByPath(formValues, field);
 
@@ -198,8 +192,7 @@ export const createNativeCheckboxProps = (
     id: field,
     name: field,
     checked: !!value,
-    onChange: (e: ChangeEvent<HTMLInputElement>) =>
-      handleChange(field, e.target.checked),
+    onChange: (e: ChangeEvent<HTMLInputElement>) => handleChange(field, e.target.checked),
     onBlur: () => handleBlur(field, true),
   };
 };
@@ -244,7 +237,7 @@ export const createNativeSwitchProps = (
   field: FieldPath,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeSwitchProps => {
   const value = getValueByPath(formValues, field);
 
@@ -252,8 +245,7 @@ export const createNativeSwitchProps = (
     id: field,
     name: field,
     checked: !!value,
-    onChange: (e: ChangeEvent<HTMLInputElement>) =>
-      handleChange(field, e.target.checked),
+    onChange: (e: ChangeEvent<HTMLInputElement>) => handleChange(field, e.target.checked),
     onBlur: () => handleBlur(field, true),
   };
 };
@@ -304,12 +296,11 @@ export const createNativeSliderProps = (
   field: FieldPath,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeSliderProps => {
   const raw = getValueByPath(formValues, field);
 
-  const toNumber = (v: unknown): number =>
-    typeof v === 'string' ? Number(v || 0) : typeof v === 'number' ? v : 0;
+  const toNumber = (v: unknown): number => (typeof v === 'string' ? Number(v || 0) : typeof v === 'number' ? v : 0);
 
   // Native range only supports single values, not arrays
   const value = Array.isArray(raw) ? toNumber(raw[0]) : toNumber(raw);
@@ -319,8 +310,7 @@ export const createNativeSliderProps = (
     name: field,
     type: 'range',
     value,
-    onChange: (e: ChangeEvent<HTMLInputElement>) =>
-      handleChange(field, Number(e.target.value)),
+    onChange: (e: ChangeEvent<HTMLInputElement>) => handleChange(field, Number(e.target.value)),
     onBlur: () => handleBlur(field, true),
   };
 };
@@ -370,12 +360,10 @@ export const createCheckboxGroupOptionProps = (
   optionValue: string | number,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeCheckboxGroupOptionProps => {
   const raw = getValueByPath(formValues, field);
-  const current = Array.isArray(raw)
-    ? (raw as (string | number)[])
-    : ([] as (string | number)[]);
+  const current = Array.isArray(raw) ? (raw as (string | number)[]) : ([] as (string | number)[]);
   const isChecked = current.some((v) => String(v) === String(optionValue));
 
   return {
@@ -444,7 +432,7 @@ export const createNativeFileFieldProps = (
   field: FieldPath,
   _formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeFileFieldProps => {
   return {
     id: field,
@@ -524,7 +512,7 @@ export const createRadioGroupOptionProps = (
   optionValue: string | number,
   formValues: Record<string, unknown>,
   handleChange: (field: FieldPath, value: unknown) => void,
-  handleBlur: (field: FieldPath, isTouched: boolean) => void
+  handleBlur: (field: FieldPath, isTouched: boolean) => void,
 ): NativeRadioGroupOptionProps => {
   const current = getValueByPath(formValues, field);
   const checked = String(current) === String(optionValue);

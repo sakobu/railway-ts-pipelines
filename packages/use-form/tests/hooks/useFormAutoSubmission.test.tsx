@@ -39,7 +39,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       expect(onSubmit).toHaveBeenCalledWith({
@@ -77,7 +77,7 @@ describe('useFormAutoSubmission', () => {
           expect(onSubmit).not.toHaveBeenCalled();
           expect(result.current.errors.name).toBe('Name is required');
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
     });
 
@@ -104,7 +104,7 @@ describe('useFormAutoSubmission', () => {
           expect(onSubmit).not.toHaveBeenCalled();
           expect(result.current.isDirty).toBe(false);
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
     });
   });
@@ -149,7 +149,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       // Should only submit once with final value
@@ -190,7 +190,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 400 } // 250ms already passed, need up to 250ms more for 500ms total
+        { timeout: 400 }, // 250ms already passed, need up to 250ms more for 500ms total
       );
     });
   });
@@ -226,7 +226,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalled();
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       // Verify it submitted with the correct values
@@ -253,7 +253,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       expect(onSubmit).toHaveBeenCalledWith({ name: 'Jane' });
@@ -281,7 +281,7 @@ describe('useFormAutoSubmission', () => {
           expect(onSubmit).not.toHaveBeenCalled();
           expect(result.current.isValid).toBe(false);
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
     });
   });
@@ -317,7 +317,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(validateCount).toBeGreaterThan(0);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       const firstValidateCount = validateCount;
@@ -328,7 +328,7 @@ describe('useFormAutoSubmission', () => {
           // Validate count should not increase if values haven't changed
           expect(validateCount).toBe(firstValidateCount);
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
     });
   });
@@ -364,7 +364,7 @@ describe('useFormAutoSubmission', () => {
           expect(onSubmit).not.toHaveBeenCalled();
           expect(result.current.isDirty).toBe(false);
         },
-        { timeout: 600 }
+        { timeout: 600 },
       );
     });
 
@@ -394,7 +394,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       // Reset form
@@ -411,7 +411,7 @@ describe('useFormAutoSubmission', () => {
           // Should still only have been called once (not called again after reset)
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
     });
   });
@@ -446,7 +446,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       expect(onSubmit).toHaveBeenCalledWith({
@@ -485,7 +485,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(result.current.isValid).toBe(false);
         },
-        { timeout: 300 }
+        { timeout: 300 },
       );
 
       // Now fix the invalid field back to valid
@@ -499,7 +499,7 @@ describe('useFormAutoSubmission', () => {
         () => {
           expect(onSubmit).toHaveBeenCalledTimes(1);
         },
-        { timeout: 500 }
+        { timeout: 500 },
       );
 
       expect(onSubmit).toHaveBeenCalledWith({

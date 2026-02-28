@@ -8,13 +8,7 @@ import ValibotForm from './standard-schema/ValibotForm';
 import FieldValidatorForm from './field-validators/FieldValidatorForm';
 import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
 
-type Tab =
-  | 'sync'
-  | 'async'
-  | 'zod'
-  | 'valibot'
-  | 'field-validators'
-  | 'array-helpers';
+type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');
@@ -22,40 +16,22 @@ function App() {
   return (
     <>
       <div className="tabs">
-        <button
-          className={tab === 'sync' ? 'active' : ''}
-          onClick={() => setTab('sync')}
-        >
+        <button className={tab === 'sync' ? 'active' : ''} onClick={() => setTab('sync')}>
           Sync
         </button>
-        <button
-          className={tab === 'async' ? 'active' : ''}
-          onClick={() => setTab('async')}
-        >
+        <button className={tab === 'async' ? 'active' : ''} onClick={() => setTab('async')}>
           Async (Cross-field)
         </button>
-        <button
-          className={tab === 'zod' ? 'active' : ''}
-          onClick={() => setTab('zod')}
-        >
+        <button className={tab === 'zod' ? 'active' : ''} onClick={() => setTab('zod')}>
           Zod
         </button>
-        <button
-          className={tab === 'valibot' ? 'active' : ''}
-          onClick={() => setTab('valibot')}
-        >
+        <button className={tab === 'valibot' ? 'active' : ''} onClick={() => setTab('valibot')}>
           Valibot
         </button>
-        <button
-          className={tab === 'field-validators' ? 'active' : ''}
-          onClick={() => setTab('field-validators')}
-        >
+        <button className={tab === 'field-validators' ? 'active' : ''} onClick={() => setTab('field-validators')}>
           Field Validators
         </button>
-        <button
-          className={tab === 'array-helpers' ? 'active' : ''}
-          onClick={() => setTab('array-helpers')}
-        >
+        <button className={tab === 'array-helpers' ? 'active' : ''} onClick={() => setTab('array-helpers')}>
           Array Helpers
         </button>
       </div>

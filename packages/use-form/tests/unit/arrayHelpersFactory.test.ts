@@ -22,7 +22,7 @@ const createMockFieldProps = () => ({
       value: '',
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getSelectFieldProps: mock(
     (_field: string): NativeSelectProps => ({
@@ -31,7 +31,7 @@ const createMockFieldProps = () => ({
       value: '',
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getSliderProps: mock(
     (_field: string): NativeSliderProps => ({
@@ -41,7 +41,7 @@ const createMockFieldProps = () => ({
       value: 0,
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getCheckboxProps: mock(
     (_field: string): NativeCheckboxProps => ({
@@ -50,7 +50,7 @@ const createMockFieldProps = () => ({
       checked: false,
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getSwitchProps: mock(
     (_field: string): NativeSwitchProps => ({
@@ -59,7 +59,7 @@ const createMockFieldProps = () => ({
       checked: false,
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getFileFieldProps: mock(
     (_field: string): NativeFileFieldProps => ({
@@ -67,24 +67,21 @@ const createMockFieldProps = () => ({
       name: 'test',
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getRadioGroupOptionProps: mock(
-    (
-      _field: string,
-      _optionValue: string | number
-    ): NativeRadioGroupOptionProps => ({
+    (_field: string, _optionValue: string | number): NativeRadioGroupOptionProps => ({
       id: 'test',
       name: 'test',
       value: 'test',
       checked: false,
       onChange: () => {},
       onBlur: () => {},
-    })
+    }),
   ),
   getFieldError: mock((_field: string): string | undefined => undefined),
   getFieldId: mock((field: string, optionValue?: string | number): string =>
-    optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+    optionValue !== undefined ? `${field}-${String(optionValue)}` : field,
   ),
 });
 
@@ -107,17 +104,13 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.push({ id: 3 });
 
       expect(setFieldValue).toHaveBeenCalledTimes(1);
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }, { id: 3 }]);
     });
 
     test('adds item to empty array', () => {
@@ -137,7 +130,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.push({ id: 1 });
@@ -162,7 +155,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.push({ id: 2 });
@@ -191,15 +184,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(1);
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 3 }]);
     });
 
     test('removes first item (index 0)', () => {
@@ -219,7 +209,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(0);
@@ -244,15 +234,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(2);
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }]);
     });
 
     test('no-op with negative index', () => {
@@ -272,7 +259,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(-1);
@@ -297,7 +284,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(5);
@@ -322,7 +309,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(0);
@@ -347,7 +334,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.remove(0);
@@ -375,16 +362,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(0, { id: 1 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }, { id: 3 }]);
     });
 
     test('inserts in middle', () => {
@@ -404,16 +387,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(1, { id: 2 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }, { id: 3 }]);
     });
 
     test('inserts at end (index === length)', () => {
@@ -433,15 +412,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(1, { id: 2 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }]);
     });
 
     test('clamps negative index to 0', () => {
@@ -461,15 +437,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(-5, { id: 1 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }]);
     });
 
     test('clamps index > length to length', () => {
@@ -489,15 +462,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(100, { id: 2 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 2 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 2 }]);
     });
 
     test('works with empty array', () => {
@@ -517,7 +487,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(0, { id: 1 });
@@ -542,7 +512,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.insert(0, { id: 0 });
@@ -570,16 +540,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 2);
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 3 },
-        { id: 2 },
-        { id: 1 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 3 }, { id: 2 }, { id: 1 }]);
     });
 
     test('swaps first and last items', () => {
@@ -599,16 +565,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 2);
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 3 },
-        { id: 2 },
-        { id: 1 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 3 }, { id: 2 }, { id: 1 }]);
     });
 
     test('swaps adjacent items', () => {
@@ -628,15 +590,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 1);
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 2 },
-        { id: 1 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 2 }, { id: 1 }]);
     });
 
     test('no-op when indices are equal', () => {
@@ -656,7 +615,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 0);
@@ -681,7 +640,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(-1, 1);
@@ -706,7 +665,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 5);
@@ -731,7 +690,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 1);
@@ -756,7 +715,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.swap(0, 1);
@@ -782,7 +741,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       // Try to swap with an undefined slot
@@ -811,15 +770,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(1, { id: 3 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 3 }]);
     });
 
     test('replaces first item', () => {
@@ -839,15 +795,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(0, { id: 0 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 0 },
-        { id: 2 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 0 }, { id: 2 }]);
     });
 
     test('replaces last item', () => {
@@ -867,15 +820,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(1, { id: 3 });
 
-      expect(setFieldValue).toHaveBeenCalledWith('items', [
-        { id: 1 },
-        { id: 3 },
-      ]);
+      expect(setFieldValue).toHaveBeenCalledWith('items', [{ id: 1 }, { id: 3 }]);
     });
 
     test('no-op with negative index', () => {
@@ -895,7 +845,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(-1, { id: 0 });
@@ -920,7 +870,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(5, { id: 2 });
@@ -945,7 +895,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.replace(0, { id: 2 });
@@ -964,7 +914,7 @@ describe('arrayHelpersFactory', () => {
           value: '',
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -980,7 +930,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getFieldProps(0, 'email');
@@ -997,7 +947,7 @@ describe('arrayHelpersFactory', () => {
           value: '',
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1013,7 +963,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getSelectFieldProps(2, 'category');
@@ -1031,7 +981,7 @@ describe('arrayHelpersFactory', () => {
           value: 0,
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1047,7 +997,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getSliderProps(1, 'volume');
@@ -1064,7 +1014,7 @@ describe('arrayHelpersFactory', () => {
           checked: false,
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1080,7 +1030,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getCheckboxProps(0, 'active');
@@ -1097,7 +1047,7 @@ describe('arrayHelpersFactory', () => {
           checked: false,
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1113,7 +1063,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getSwitchProps(3, 'enabled');
@@ -1129,7 +1079,7 @@ describe('arrayHelpersFactory', () => {
           name: 'test',
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1145,7 +1095,7 @@ describe('arrayHelpersFactory', () => {
         mockGetFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getFileFieldProps(0, 'avatar');
@@ -1156,17 +1106,14 @@ describe('arrayHelpersFactory', () => {
     test('getRadioGroupOptionProps constructs correct path and delegates with optionValue', () => {
       type Item = { size: string };
       const mockGetRadioGroupOptionProps = mock(
-        (
-          _field: string,
-          _optionValue: string | number
-        ): NativeRadioGroupOptionProps => ({
+        (_field: string, _optionValue: string | number): NativeRadioGroupOptionProps => ({
           id: 'test',
           name: 'test',
           value: 'test',
           checked: false,
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1182,15 +1129,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mockGetRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getRadioGroupOptionProps(0, 'size', 'L');
 
-      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith(
-        'items[0].size',
-        'L'
-      );
+      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items[0].size', 'L');
     });
 
     test('field props methods work with different indices', () => {
@@ -1202,7 +1146,7 @@ describe('arrayHelpersFactory', () => {
           value: '',
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1218,7 +1162,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getFieldProps(0, 'name');
@@ -1240,7 +1184,7 @@ describe('arrayHelpersFactory', () => {
           value: '',
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1261,7 +1205,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getFieldProps(0, 'name');
@@ -1274,17 +1218,14 @@ describe('arrayHelpersFactory', () => {
     test('getRadioGroupOptionProps with number values', () => {
       type Item = { priority: number };
       const mockGetRadioGroupOptionProps = mock(
-        (
-          _field: string,
-          _optionValue: string | number
-        ): NativeRadioGroupOptionProps => ({
+        (_field: string, _optionValue: string | number): NativeRadioGroupOptionProps => ({
           id: 'test',
           name: 'test',
           value: 'test',
           checked: false,
           onChange: () => {},
           onBlur: () => {},
-        })
+        }),
       );
       const mocks = createMockFieldProps();
 
@@ -1300,15 +1241,12 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mockGetRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       helpers.getRadioGroupOptionProps(0, 'priority', 5);
 
-      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith(
-        'items[0].priority',
-        5
-      );
+      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items[0].priority', 5);
     });
   });
 
@@ -1330,7 +1268,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       expect(helpers.values).toEqual([{ id: 1 }, { id: 2 }]);
@@ -1353,7 +1291,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       expect(helpers.values).toBe(initial);
@@ -1363,9 +1301,7 @@ describe('arrayHelpersFactory', () => {
   describe('getFieldError', () => {
     test('constructs correct path and delegates', () => {
       type Item = { email: string };
-      const mockGetFieldError = mock(
-        (_field: string): string | undefined => 'Required'
-      );
+      const mockGetFieldError = mock((_field: string): string | undefined => 'Required');
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'email'>(
@@ -1380,7 +1316,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mockGetFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       const result = helpers.getFieldError(0, 'email');
@@ -1391,9 +1327,7 @@ describe('arrayHelpersFactory', () => {
 
     test('returns undefined when delegate returns undefined', () => {
       type Item = { name: string };
-      const mockGetFieldError = mock(
-        (_field: string): string | undefined => undefined
-      );
+      const mockGetFieldError = mock((_field: string): string | undefined => undefined);
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'name'>(
@@ -1408,7 +1342,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mockGetFieldError,
-        mocks.getFieldId
+        mocks.getFieldId,
       );
 
       const result = helpers.getFieldError(2, 'name');
@@ -1421,9 +1355,7 @@ describe('arrayHelpersFactory', () => {
   describe('getFieldId', () => {
     test('constructs correct path and delegates without optionValue', () => {
       type Item = { name: string };
-      const mockGetFieldId = mock(
-        (field: string, _optionValue?: string | number): string => field
-      );
+      const mockGetFieldId = mock((field: string, _optionValue?: string | number): string => field);
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'name'>(
@@ -1438,7 +1370,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mockGetFieldId
+        mockGetFieldId,
       );
 
       const result = helpers.getFieldId(0, 'name');
@@ -1449,9 +1381,8 @@ describe('arrayHelpersFactory', () => {
 
     test('forwards optionValue to delegate', () => {
       type Item = { status: string };
-      const mockGetFieldId = mock(
-        (field: string, optionValue?: string | number): string =>
-          optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+      const mockGetFieldId = mock((field: string, optionValue?: string | number): string =>
+        optionValue !== undefined ? `${field}-${String(optionValue)}` : field,
       );
       const mocks = createMockFieldProps();
 
@@ -1467,7 +1398,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mockGetFieldId
+        mockGetFieldId,
       );
 
       const result = helpers.getFieldId(1, 'status', 'active');
@@ -1478,9 +1409,8 @@ describe('arrayHelpersFactory', () => {
 
     test('forwards numeric optionValue to delegate', () => {
       type Item = { priority: number };
-      const mockGetFieldId = mock(
-        (field: string, optionValue?: string | number): string =>
-          optionValue !== undefined ? `${field}-${String(optionValue)}` : field
+      const mockGetFieldId = mock((field: string, optionValue?: string | number): string =>
+        optionValue !== undefined ? `${field}-${String(optionValue)}` : field,
       );
       const mocks = createMockFieldProps();
 
@@ -1496,7 +1426,7 @@ describe('arrayHelpersFactory', () => {
         mocks.getFileFieldProps,
         mocks.getRadioGroupOptionProps,
         mocks.getFieldError,
-        mockGetFieldId
+        mockGetFieldId,
       );
 
       const result = helpers.getFieldId(0, 'priority', 5);

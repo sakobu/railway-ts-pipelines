@@ -4,10 +4,7 @@ import type { ReactElement } from 'react';
 /**
  * Custom render function that can be extended with providers
  */
-export function customRender(
-  ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
-) {
+export function customRender(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
   return render(ui, { ...options });
 }
 

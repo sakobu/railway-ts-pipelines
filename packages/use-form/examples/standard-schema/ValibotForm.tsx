@@ -9,22 +9,10 @@ import { useForm } from '../../src/';
 // ── Your existing Valibot schema — nothing special here ─────
 
 const userSchema = v.object({
-  username: v.pipe(
-    v.string(),
-    v.minLength(3, 'Username must be at least 3 characters')
-  ),
+  username: v.pipe(v.string(), v.minLength(3, 'Username must be at least 3 characters')),
   email: v.pipe(v.string(), v.email('Invalid email address')),
-  password: v.pipe(
-    v.string(),
-    v.minLength(8, 'Password must be at least 8 characters')
-  ),
-  age: v.pipe(
-    v.unknown(),
-    v.transform(Number),
-    v.number(),
-    v.minValue(18, 'Must be at least 18'),
-    v.maxValue(120)
-  ),
+  password: v.pipe(v.string(), v.minLength(8, 'Password must be at least 8 characters')),
+  age: v.pipe(v.unknown(), v.transform(Number), v.number(), v.minValue(18, 'Must be at least 18'), v.maxValue(120)),
   role: v.picklist(['admin', 'user']),
 });
 
@@ -52,46 +40,26 @@ export default function ValibotForm() {
 
       <div className="field">
         <label htmlFor={form.getFieldId('username')}>Username *</label>
-        <input
-          type="text"
-          placeholder="Enter username"
-          {...form.getFieldProps('username')}
-        />
-        {form.getFieldError('username') && (
-          <span className="error">{form.getFieldError('username')}</span>
-        )}
+        <input type="text" placeholder="Enter username" {...form.getFieldProps('username')} />
+        {form.getFieldError('username') && <span className="error">{form.getFieldError('username')}</span>}
       </div>
 
       <div className="field">
         <label htmlFor={form.getFieldId('email')}>Email *</label>
-        <input
-          type="email"
-          placeholder="user@example.com"
-          {...form.getFieldProps('email')}
-        />
-        {form.getFieldError('email') && (
-          <span className="error">{form.getFieldError('email')}</span>
-        )}
+        <input type="email" placeholder="user@example.com" {...form.getFieldProps('email')} />
+        {form.getFieldError('email') && <span className="error">{form.getFieldError('email')}</span>}
       </div>
 
       <div className="field">
         <label htmlFor={form.getFieldId('password')}>Password *</label>
-        <input
-          type="password"
-          placeholder="Minimum 8 characters"
-          {...form.getFieldProps('password')}
-        />
-        {form.getFieldError('password') && (
-          <span className="error">{form.getFieldError('password')}</span>
-        )}
+        <input type="password" placeholder="Minimum 8 characters" {...form.getFieldProps('password')} />
+        {form.getFieldError('password') && <span className="error">{form.getFieldError('password')}</span>}
       </div>
 
       <div className="field">
         <label htmlFor={form.getFieldId('age')}>Age *</label>
         <input type="number" min={0} max={120} {...form.getFieldProps('age')} />
-        {form.getFieldError('age') && (
-          <span className="error">{form.getFieldError('age')}</span>
-        )}
+        {form.getFieldError('age') && <span className="error">{form.getFieldError('age')}</span>}
       </div>
 
       <div className="field">
@@ -108,18 +76,12 @@ export default function ValibotForm() {
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 
-        <button
-          type="button"
-          onClick={form.resetForm}
-          disabled={form.isSubmitting}
-        >
+        <button type="button" onClick={form.resetForm} disabled={form.isSubmitting}>
           Reset
         </button>
       </div>
 
-      <pre>
-        {JSON.stringify({ values: form.values, errors: form.errors }, null, 2)}
-      </pre>
+      <pre>{JSON.stringify({ values: form.values, errors: form.errors }, null, 2)}</pre>
     </form>
   );
 }

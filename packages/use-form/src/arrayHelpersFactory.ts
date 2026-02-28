@@ -47,10 +47,7 @@ import type {
  *   <input {...helpers.getFieldProps(index, "street")} />
  * ));
  */
-export const createArrayHelpers = <
-  TItem = unknown,
-  TFieldPaths extends string = ExtractFieldPaths<TItem>,
->(
+export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string = ExtractFieldPaths<TItem>>(
   field: FieldPath,
   arrayValue: TItem[],
   setFieldValue: (field: FieldPath, value: unknown) => void,
@@ -60,12 +57,9 @@ export const createArrayHelpers = <
   getCheckboxProps: (field: string) => NativeCheckboxProps,
   getSwitchProps: (field: string) => NativeSwitchProps,
   getFileFieldProps: (field: string) => NativeFileFieldProps,
-  getRadioGroupOptionProps: (
-    field: string,
-    optionValue: string | number
-  ) => NativeRadioGroupOptionProps,
+  getRadioGroupOptionProps: (field: string, optionValue: string | number) => NativeRadioGroupOptionProps,
   getFieldError: (field: string) => string | undefined,
-  getFieldId: (field: string, optionValue?: string | number) => string
+  getFieldId: (field: string, optionValue?: string | number) => string,
 ): ArrayHelpers<TItem, TFieldPaths> => {
   return {
     /**
@@ -157,13 +151,7 @@ export const createArrayHelpers = <
      * };
      */
     swap: (indexA: number, indexB: number) => {
-      if (
-        indexA === indexB ||
-        indexA < 0 ||
-        indexB < 0 ||
-        indexA >= arrayValue.length ||
-        indexB >= arrayValue.length
-      ) {
+      if (indexA === indexB || indexA < 0 || indexB < 0 || indexA >= arrayValue.length || indexB >= arrayValue.length) {
         return;
       }
       const newArray = [...arrayValue];
@@ -335,22 +323,14 @@ export const createArrayHelpers = <
      *   Phone
      * </label>
      */
-    getRadioGroupOptionProps: (
-      index: number,
-      subField: TFieldPaths,
-      optionValue: string | number
-    ) => {
+    getRadioGroupOptionProps: (index: number, subField: TFieldPaths, optionValue: string | number) => {
       const path = `${field}[${index}].${subField}`;
       return getRadioGroupOptionProps(path, optionValue);
     },
 
-    getFieldError: (index: number, subField: TFieldPaths) =>
-      getFieldError(`${field}[${index}].${subField}`),
+    getFieldError: (index: number, subField: TFieldPaths) => getFieldError(`${field}[${index}].${subField}`),
 
-    getFieldId: (
-      index: number,
-      subField: TFieldPaths,
-      optionValue?: string | number
-    ) => getFieldId(`${field}[${index}].${subField}`, optionValue),
+    getFieldId: (index: number, subField: TFieldPaths, optionValue?: string | number) =>
+      getFieldId(`${field}[${index}].${subField}`, optionValue),
   };
 };

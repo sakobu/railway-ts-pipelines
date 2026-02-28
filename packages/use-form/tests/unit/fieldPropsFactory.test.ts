@@ -16,7 +16,7 @@ const createMockChangeEvent = <T extends HTMLElement>(
   value: string | boolean | FileList | null,
   checked?: boolean,
   files?: FileList | null,
-  multiple?: boolean
+  multiple?: boolean,
 ): ChangeEvent<T> => {
   return {
     target: {
@@ -35,12 +35,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { name: null };
 
-      const props = createNativeFieldProps(
-        'name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('name', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('');
     });
@@ -50,12 +45,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFieldProps(
-        'name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('name', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('');
     });
@@ -65,12 +55,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { name: 'John Doe' };
 
-      const props = createNativeFieldProps(
-        'name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('name', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('John Doe');
     });
@@ -80,12 +65,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { age: 25 };
 
-      const props = createNativeFieldProps(
-        'age',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('age', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(25);
     });
@@ -96,12 +76,7 @@ describe('fieldPropsFactory', () => {
       const date = new Date('2024-03-15T10:30:00.000Z');
       const formValues = { birthDate: date };
 
-      const props = createNativeFieldProps(
-        'birthDate',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('birthDate', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('2024-03-15');
     });
@@ -112,12 +87,7 @@ describe('fieldPropsFactory', () => {
       const invalidDate = new Date('invalid');
       const formValues = { birthDate: invalidDate };
 
-      const props = createNativeFieldProps(
-        'birthDate',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('birthDate', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('');
     });
@@ -127,12 +97,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { metadata: { foo: 'bar', count: 42 } };
 
-      const props = createNativeFieldProps(
-        'metadata',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('metadata', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('{"foo":"bar","count":42}');
     });
@@ -142,12 +107,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { tags: ['react', 'typescript'] };
 
-      const props = createNativeFieldProps(
-        'tags',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('tags', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('["react","typescript"]');
     });
@@ -157,12 +117,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFieldProps(
-        'user.name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('user.name', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('user.name');
     });
@@ -172,12 +127,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFieldProps(
-        'contacts[0].email',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('contacts[0].email', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('contacts[0].email');
     });
@@ -187,12 +137,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFieldProps(
-        'user.email',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('user.email', formValues, handleChange, handleBlur);
 
       expect(props.name).toBe('user.email');
     });
@@ -202,12 +147,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { name: 'John' };
 
-      const props = createNativeFieldProps(
-        'name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('name', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('Jane');
       props.onChange(event);
@@ -220,12 +160,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { name: 'John' };
 
-      const props = createNativeFieldProps(
-        'name',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFieldProps('name', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -239,12 +174,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { role: null };
 
-      const props = createNativeSelectFieldProps(
-        'role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('role', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('');
     });
@@ -254,12 +184,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeSelectFieldProps(
-        'role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('role', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('');
     });
@@ -269,12 +194,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { role: 'admin' };
 
-      const props = createNativeSelectFieldProps(
-        'role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('role', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('admin');
     });
@@ -284,12 +204,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { priority: 1 };
 
-      const props = createNativeSelectFieldProps(
-        'priority',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('priority', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(1);
     });
@@ -299,12 +214,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { data: { type: 'complex' } };
 
-      const props = createNativeSelectFieldProps(
-        'data',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('data', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('{"type":"complex"}');
     });
@@ -314,12 +224,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeSelectFieldProps(
-        'user.role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('user.role', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('user.role');
     });
@@ -329,12 +234,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { role: 'user' };
 
-      const props = createNativeSelectFieldProps(
-        'role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('role', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLSelectElement>('admin');
       props.onChange(event);
@@ -347,12 +247,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { role: 'user' };
 
-      const props = createNativeSelectFieldProps(
-        'role',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSelectFieldProps('role', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -366,12 +261,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: true };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -381,12 +271,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: false };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -396,12 +281,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: null };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -411,12 +291,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -426,12 +301,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: 'yes' };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -441,12 +311,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: '' };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -456,12 +321,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeCheckboxProps(
-        'settings.darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('settings.darkMode', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('settings.darkMode');
     });
@@ -471,12 +331,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: false };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
@@ -489,12 +344,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { newsletter: false };
 
-      const props = createNativeCheckboxProps(
-        'newsletter',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeCheckboxProps('newsletter', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -508,12 +358,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { darkMode: true };
 
-      const props = createNativeSwitchProps(
-        'darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSwitchProps('darkMode', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -523,12 +368,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { darkMode: false };
 
-      const props = createNativeSwitchProps(
-        'darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSwitchProps('darkMode', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -538,12 +378,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeSwitchProps(
-        'settings.darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSwitchProps('settings.darkMode', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('settings.darkMode');
     });
@@ -553,12 +388,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { darkMode: false };
 
-      const props = createNativeSwitchProps(
-        'darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSwitchProps('darkMode', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
@@ -571,12 +401,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { darkMode: false };
 
-      const props = createNativeSwitchProps(
-        'darkMode',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSwitchProps('darkMode', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -590,12 +415,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: null };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(0);
     });
@@ -605,12 +425,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(0);
     });
@@ -620,12 +435,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: 75 };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(75);
     });
@@ -635,12 +445,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: '50' };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(50);
     });
@@ -650,12 +455,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: '' };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(0);
     });
@@ -665,12 +465,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: 'abc' };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBeNaN();
     });
@@ -680,12 +475,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: [25, 75] };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(25);
     });
@@ -695,12 +485,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: ['60', '80'] };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(60);
     });
@@ -710,12 +495,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: [] };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe(0);
     });
@@ -725,12 +505,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeSliderProps(
-        'settings.volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('settings.volume', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('settings.volume');
     });
@@ -740,12 +515,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: 50 };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       expect(props.type).toBe('range');
     });
@@ -755,12 +525,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: 50 };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('75');
       props.onChange(event);
@@ -773,12 +538,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { volume: 50 };
 
-      const props = createNativeSliderProps(
-        'volume',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeSliderProps('volume', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -792,13 +552,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: ['sports', 'music'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -808,13 +562,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: ['sports'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -824,13 +572,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: [] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -840,13 +582,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: null };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -856,13 +592,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -872,13 +602,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { ids: [1, 2, 3] };
 
-      const props = createCheckboxGroupOptionProps(
-        'ids',
-        '2',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('ids', '2', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -888,13 +612,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { ids: ['1', '2', '3'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'ids',
-        2,
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('ids', 2, formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -904,21 +622,12 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: ['sports'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
 
-      expect(handleChange).toHaveBeenCalledWith('interests', [
-        'sports',
-        'music',
-      ]);
+      expect(handleChange).toHaveBeenCalledWith('interests', ['sports', 'music']);
     });
 
     test('does not add duplicate when checking already present value', () => {
@@ -926,13 +635,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: ['sports', 'music'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
@@ -946,21 +649,12 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: ['sports', 'music', 'reading'] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', false);
       props.onChange(event);
 
-      expect(handleChange).toHaveBeenCalledWith('interests', [
-        'sports',
-        'reading',
-      ]);
+      expect(handleChange).toHaveBeenCalledWith('interests', ['sports', 'reading']);
     });
 
     test('maintains immutability when adding value', () => {
@@ -969,13 +663,7 @@ describe('fieldPropsFactory', () => {
       const originalArray = ['sports'];
       const formValues = { interests: originalArray };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
@@ -991,13 +679,7 @@ describe('fieldPropsFactory', () => {
       const originalArray = ['sports', 'music'];
       const formValues = { interests: originalArray };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', false);
       props.onChange(event);
@@ -1012,13 +694,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: [] };
 
-      const props = createCheckboxGroupOptionProps(
-        'user.interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('user.interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('user.interests-music');
     });
@@ -1028,13 +704,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: [] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('music');
     });
@@ -1044,13 +714,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { interests: [] };
 
-      const props = createCheckboxGroupOptionProps(
-        'interests',
-        'music',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createCheckboxGroupOptionProps('interests', 'music', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -1063,21 +727,9 @@ describe('fieldPropsFactory', () => {
       // Mixed type array - this is technically type-unsafe but tests runtime behavior
       const formValues = { flags: [true, 'yes', 1] as unknown as string[] };
 
-      const propsYes = createCheckboxGroupOptionProps(
-        'flags',
-        'yes',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const propsYes = createCheckboxGroupOptionProps('flags', 'yes', formValues, handleChange, handleBlur);
 
-      const propsNo = createCheckboxGroupOptionProps(
-        'flags',
-        'no',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const propsNo = createCheckboxGroupOptionProps('flags', 'no', formValues, handleChange, handleBlur);
 
       // String coercion should find 'yes' in the array
       expect(propsYes.checked).toBe(true);
@@ -1091,13 +743,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'medium' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -1107,13 +753,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'small' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -1123,13 +763,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: null };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -1139,13 +773,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(false);
     });
@@ -1155,13 +783,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { priority: 1 };
 
-      const props = createRadioGroupOptionProps(
-        'priority',
-        '1',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('priority', '1', formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -1171,13 +793,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { priority: '2' };
 
-      const props = createRadioGroupOptionProps(
-        'priority',
-        2,
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('priority', 2, formValues, handleChange, handleBlur);
 
       expect(props.checked).toBe(true);
     });
@@ -1187,13 +803,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'small' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', true);
       props.onChange(event);
@@ -1206,13 +816,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'medium' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       const event = createMockChangeEvent<HTMLInputElement>('', false);
       props.onChange(event);
@@ -1225,13 +829,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'small' };
 
-      const props = createRadioGroupOptionProps(
-        'product.size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('product.size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('product.size-medium');
     });
@@ -1241,13 +839,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'small' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       expect(props.value).toBe('medium');
     });
@@ -1257,13 +849,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = { size: 'small' };
 
-      const props = createRadioGroupOptionProps(
-        'size',
-        'medium',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createRadioGroupOptionProps('size', 'medium', formValues, handleChange, handleBlur);
 
       props.onBlur();
 
@@ -1277,12 +863,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'avatar',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('avatar', formValues, handleChange, handleBlur);
 
       expect(props.id).toBe('avatar');
     });
@@ -1292,12 +873,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'document',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('document', formValues, handleChange, handleBlur);
 
       expect(props.name).toBe('document');
     });
@@ -1307,12 +883,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'avatar',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('avatar', formValues, handleChange, handleBlur);
 
       const mockFile = new File(['content'], 'test.jpg', {
         type: 'image/jpeg',
@@ -1322,12 +893,7 @@ describe('fieldPropsFactory', () => {
         length: 1,
         item: () => mockFile,
       } as FileList;
-      const event = createMockChangeEvent<HTMLInputElement>(
-        '',
-        false,
-        mockFiles,
-        false
-      );
+      const event = createMockChangeEvent<HTMLInputElement>('', false, mockFiles, false);
 
       props.onChange(event);
 
@@ -1339,12 +905,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'documents',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('documents', formValues, handleChange, handleBlur);
 
       const mockFile1 = new File(['content1'], 'test1.pdf', {
         type: 'application/pdf',
@@ -1358,19 +919,11 @@ describe('fieldPropsFactory', () => {
         length: 2,
         item: (i: number) => [mockFile1, mockFile2][i],
       } as FileList;
-      const event = createMockChangeEvent<HTMLInputElement>(
-        '',
-        false,
-        mockFiles,
-        true
-      );
+      const event = createMockChangeEvent<HTMLInputElement>('', false, mockFiles, true);
 
       props.onChange(event);
 
-      expect(handleChange).toHaveBeenCalledWith('documents', [
-        mockFile1,
-        mockFile2,
-      ]);
+      expect(handleChange).toHaveBeenCalledWith('documents', [mockFile1, mockFile2]);
     });
 
     test('onChange with no files and single mode calls handleChange with null', () => {
@@ -1378,19 +931,9 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'avatar',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('avatar', formValues, handleChange, handleBlur);
 
-      const event = createMockChangeEvent<HTMLInputElement>(
-        '',
-        false,
-        null,
-        false
-      );
+      const event = createMockChangeEvent<HTMLInputElement>('', false, null, false);
 
       props.onChange(event);
 
@@ -1402,19 +945,9 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'documents',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('documents', formValues, handleChange, handleBlur);
 
-      const event = createMockChangeEvent<HTMLInputElement>(
-        '',
-        false,
-        null,
-        true
-      );
+      const event = createMockChangeEvent<HTMLInputElement>('', false, null, true);
 
       props.onChange(event);
 
@@ -1426,12 +959,7 @@ describe('fieldPropsFactory', () => {
       const handleBlur = mock(() => {});
       const formValues = {};
 
-      const props = createNativeFileFieldProps(
-        'avatar',
-        formValues,
-        handleChange,
-        handleBlur
-      );
+      const props = createNativeFileFieldProps('avatar', formValues, handleChange, handleBlur);
 
       props.onBlur();
 

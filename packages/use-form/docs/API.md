@@ -10,10 +10,8 @@ Main hook for form management.
 
 ```typescript
 function useForm<TValues extends Record<string, unknown>>(
-  validator:
-    | MaybeAsyncValidator<unknown, TValues>
-    | StandardSchemaV1<unknown, TValues>,
-  options: FormOptions<TValues>
+  validator: MaybeAsyncValidator<unknown, TValues> | StandardSchemaV1<unknown, TValues>,
+  options: FormOptions<TValues>,
 ): UseFormReturn<TValues>;
 ```
 
@@ -1132,9 +1130,7 @@ getFieldError<TField extends ExtractFieldPaths<TItem>>(
 
 ```tsx
 {
-  helpers.getFieldError(0, 'name') && (
-    <span>{helpers.getFieldError(0, 'name')}</span>
-  );
+  helpers.getFieldError(0, 'name') && <span>{helpers.getFieldError(0, 'name')}</span>;
 }
 ```
 
@@ -1166,10 +1162,7 @@ is dirty, valid, and values have changed since the last validation.
 ### Signature
 
 ```typescript
-function useFormAutoSubmission<T>(
-  form: FormWithAutoSubmit<T>,
-  delay?: number
-): null;
+function useFormAutoSubmission<T>(form: FormWithAutoSubmit<T>, delay?: number): null;
 ```
 
 ### Parameters
@@ -1207,10 +1200,7 @@ Hook for debouncing a callback function.
 ### Signature
 
 ```typescript
-function useDebounce<T extends (...args: Param) => Return>(
-  callback: T,
-  delay: number
-): (...args: Param) => void;
+function useDebounce<T extends (...args: Param) => Return>(callback: T, delay: number): (...args: Param) => void;
 ```
 
 ### Parameters
@@ -1242,11 +1232,7 @@ Functions from `@railway-ts/pipelines/schema` for cross-field validation.
 Create validators that target specific fields with errors while accessing the entire object.
 
 ```typescript
-function refineAt<T>(
-  targetPath: string | string[],
-  predicate: (value: T) => boolean,
-  message: string
-): Validator<T, T>;
+function refineAt<T>(targetPath: string | string[], predicate: (value: T) => boolean, message: string): Validator<T, T>;
 ```
 
 **Parameters:**
@@ -1268,11 +1254,7 @@ const validator = chain(
     password: required(string()),
     confirmPassword: required(string()),
   }),
-  refineAt(
-    'confirmPassword',
-    (data) => data.password === data.confirmPassword,
-    'Passwords must match'
-  )
+  refineAt('confirmPassword', (data) => data.password === data.confirmPassword, 'Passwords must match'),
 );
 ```
 
@@ -1292,8 +1274,8 @@ const accountValidator = chain(
   refineAt<AccountData>(
     'taxId',
     (data) => data.accountType === 'personal' || !!data.taxId,
-    'Tax ID is required for business accounts'
-  )
+    'Tax ID is required for business accounts',
+  ),
 );
 ```
 
@@ -1308,11 +1290,7 @@ const bookingValidator = chain(
     checkIn: required(parseDate()),
     checkOut: required(parseDate()),
   }),
-  refineAt(
-    'checkOut',
-    (data) => data.checkOut > data.checkIn,
-    'Check-out must be after check-in'
-  )
+  refineAt('checkOut', (data) => data.checkOut > data.checkIn, 'Check-out must be after check-in'),
 );
 ```
 
@@ -1326,7 +1304,7 @@ Conditionally apply validators based on a runtime predicate. When the predicate 
 function when<T>(
   predicate: (data: T) => boolean,
   thenValidator: Validator<T, T>,
-  elseValidator?: Validator<T, T>
+  elseValidator?: Validator<T, T>,
 ): Validator<T, T>;
 ```
 
@@ -1366,18 +1344,10 @@ const accountValidator = chain(
   when<AccountData>(
     (d) => d.accountType === 'business',
     chain(
-      refineAt(
-        'companyName',
-        (d) => !!d.companyName,
-        'Company name is required for business accounts'
-      ),
-      refineAt(
-        'taxId',
-        (d) => !!d.taxId,
-        'Tax ID is required for business accounts'
-      )
-    )
-  )
+      refineAt('companyName', (d) => !!d.companyName, 'Company name is required for business accounts'),
+      refineAt('taxId', (d) => !!d.taxId, 'Tax ID is required for business accounts'),
+    ),
+  ),
 );
 ```
 
@@ -1391,7 +1361,7 @@ Async version of `when`. Use when the branch validators involve async operations
 function whenAsync<T>(
   predicate: (data: T) => boolean,
   thenValidator: MaybeAsyncValidator<T, T>,
-  elseValidator?: MaybeAsyncValidator<T, T>
+  elseValidator?: MaybeAsyncValidator<T, T>,
 ): AsyncValidator<T, T>;
 ```
 
@@ -1424,12 +1394,8 @@ const staffValidator = chainAsync(
   }),
   whenAsync<StaffData>(
     (d) => d.role === 'doctor',
-    refineAtAsync(
-      'license',
-      async (d) => await verifyMedicalLicense(d.license),
-      'Invalid medical license'
-    )
-  )
+    refineAtAsync('license', async (d) => await verifyMedicalLicense(d.license), 'Invalid medical license'),
+  ),
 );
 ```
 
@@ -1460,7 +1426,7 @@ const strongPassword = refine<string>((value) => {
 // Cross-field: error lands on the specified target
 const schema = chain(
   object({ password: required(string()), confirm: required(string()) }),
-  refineAt('confirm', (d) => d.password === d.confirm, 'Must match') // target = 'confirm'
+  refineAt('confirm', (d) => d.password === d.confirm, 'Must match'), // target = 'confirm'
 );
 ```
 
@@ -1575,10 +1541,7 @@ Railway result type representing success or failure.
 ### Validator
 
 ```typescript
-type Validator<TInput, TOutput> = (
-  value: TInput,
-  path?: string[]
-) => Result<TOutput, ValidationError[]>;
+type Validator<TInput, TOutput> = (value: TInput, path?: string[]) => Result<TOutput, ValidationError[]>;
 ```
 
 Function that validates input and returns typed output or errors.

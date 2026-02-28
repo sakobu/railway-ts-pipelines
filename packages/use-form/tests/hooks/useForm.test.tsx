@@ -21,7 +21,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: {},
-        })
+        }),
       );
 
       expect(result.current.values).toEqual({});
@@ -38,9 +38,7 @@ describe('useForm', () => {
         email: 'john@example.com',
         age: 25,
       };
-      const { result } = renderHook(() =>
-        useForm(userValidator, { initialValues })
-      );
+      const { result } = renderHook(() => useForm(userValidator, { initialValues }));
 
       expect(result.current.values).toEqual(initialValues);
     });
@@ -50,7 +48,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       expect(result.current.errors.name).toBe('Name is required');
@@ -64,7 +62,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -80,7 +78,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'live',
-        })
+        }),
       );
 
       act(() => {
@@ -92,12 +90,12 @@ describe('useForm', () => {
       });
     });
 
-    test('does not validate on change in blur mode', async () => {
+    test('does not validate on change in blur mode', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'blur',
-        })
+        }),
       );
 
       act(() => {
@@ -114,7 +112,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -132,9 +130,7 @@ describe('useForm', () => {
         address: { street: '123 Main', city: 'LA', zip: '10001' },
       };
 
-      const { result } = renderHook(() =>
-        useForm(userWithAddressValidator, { initialValues })
-      );
+      const { result } = renderHook(() => useForm(userWithAddressValidator, { initialValues }));
 
       act(() => {
         result.current.setValues({ address: { city: 'NYC' } });
@@ -152,7 +148,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -167,7 +163,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'live',
-        })
+        }),
       );
 
       act(() => {
@@ -182,7 +178,7 @@ describe('useForm', () => {
     const { result } = renderHook(() =>
       useForm(userValidator, {
         initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-      })
+      }),
     );
 
     const firstRef = result.current.handleSubmit;
@@ -198,7 +194,7 @@ describe('useForm', () => {
     const { result } = renderHook(() =>
       useForm(userValidator, {
         initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-      })
+      }),
     );
 
     const firstRef = result.current.setFieldValue;
@@ -223,7 +219,7 @@ describe('useForm', () => {
             result.current.setFieldValue('email', 'auto@test.com', false);
           }
         },
-      })
+      }),
     );
 
     act(() => {
@@ -242,14 +238,14 @@ describe('useForm', () => {
 
   describe('handleSubmit', () => {
     test('calls onSubmit with valid data', async () => {
-      const onSubmit = mock((values: UserForm) => {});
+      const onSubmit = mock((_values: UserForm) => {});
       const validValues = { name: 'John', email: 'john@example.com', age: 25 };
 
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: validValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -260,14 +256,14 @@ describe('useForm', () => {
     });
 
     test('does not call onSubmit with invalid data', async () => {
-      const onSubmit = mock((values: UserForm) => {});
+      const onSubmit = mock((_values: UserForm) => {});
       const invalidValues = { name: '', email: '', age: 0 };
 
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: invalidValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -283,7 +279,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       await act(async () => {
@@ -296,7 +292,7 @@ describe('useForm', () => {
     });
 
     test('sets isSubmitting during submission', async () => {
-      const onSubmit = mock(async (values: UserForm) => {
+      const onSubmit = mock(async (_values: UserForm) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       });
 
@@ -304,11 +300,11 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
           onSubmit,
-        })
+        }),
       );
 
       act(() => {
-        result.current.handleSubmit();
+        void result.current.handleSubmit();
       });
 
       // isSubmitting is set after async validation passes, so we need waitFor
@@ -322,14 +318,14 @@ describe('useForm', () => {
     });
 
     test('does not set isSubmitting when validation fails', async () => {
-      const onSubmit = mock((values: UserForm) => {});
+      const onSubmit = mock((_values: UserForm) => {});
       const invalidValues = { name: '', email: '', age: 0 };
 
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: invalidValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -345,7 +341,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -365,7 +361,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       const preventDefault = mock(() => {});
@@ -387,7 +383,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
           onSubmit,
-        })
+        }),
       );
 
       let secondResult: Awaited<ReturnType<typeof result.current.handleSubmit>>;
@@ -403,7 +399,7 @@ describe('useForm', () => {
       // Second call should have returned err([])
       expect(isErr(secondResult!)).toBe(true);
       if (isErr(secondResult!)) {
-        expect(secondResult!.error).toEqual([]);
+        expect(secondResult.error).toEqual([]);
       }
       // First call should have completed normally
       expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -417,9 +413,7 @@ describe('useForm', () => {
         email: 'john@example.com',
         age: 25,
       };
-      const { result } = renderHook(() =>
-        useForm(userValidator, { initialValues })
-      );
+      const { result } = renderHook(() => useForm(userValidator, { initialValues }));
 
       // Modify the form
       act(() => {
@@ -446,7 +440,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -464,7 +458,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -485,7 +479,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
-        })
+        }),
       );
 
       // Trigger validation to get client errors
@@ -508,7 +502,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -532,9 +526,7 @@ describe('useForm', () => {
         address: { street: '123 Main St', city: 'NYC', zip: '10001' },
       };
 
-      const { result } = renderHook(() =>
-        useForm(userWithAddressValidator, { initialValues })
-      );
+      const { result } = renderHook(() => useForm(userWithAddressValidator, { initialValues }));
 
       act(() => {
         result.current.setFieldValue('address.city', 'LA');
@@ -553,17 +545,13 @@ describe('useForm', () => {
         useForm(userWithAddressValidator, {
           initialValues,
           validationMode: 'mount',
-        })
+        }),
       );
 
       await waitFor(() => {
-        expect(result.current.errors['address.street']).toBe(
-          'Street is required'
-        );
+        expect(result.current.errors['address.street']).toBe('Street is required');
         expect(result.current.errors['address.city']).toBe('City is required');
-        expect(result.current.errors['address.zip']).toBe(
-          'ZIP code is required'
-        );
+        expect(result.current.errors['address.zip']).toBe('ZIP code is required');
       });
     });
   });
@@ -573,7 +561,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       const props = result.current.getFieldProps('name');
@@ -589,7 +577,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { newsletter: true },
-        })
+        }),
       );
 
       const props = result.current.getCheckboxProps('newsletter');
@@ -605,7 +593,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { country: 'US' },
-        })
+        }),
       );
 
       const props = result.current.getSelectFieldProps('country');
@@ -621,7 +609,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { darkMode: false },
-        })
+        }),
       );
 
       const props = result.current.getSwitchProps('darkMode');
@@ -637,7 +625,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { volume: 50 },
-        })
+        }),
       );
 
       const props = result.current.getSliderProps('volume');
@@ -654,13 +642,10 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { interests: ['sports'] },
-        })
+        }),
       );
 
-      const props = result.current.getCheckboxGroupOptionProps(
-        'interests',
-        'sports'
-      );
+      const props = result.current.getCheckboxGroupOptionProps('interests', 'sports');
 
       expect(props.id).toBe('interests-sports');
       expect(props.name).toBe('interests');
@@ -674,7 +659,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { avatar: null },
-        })
+        }),
       );
 
       const props = result.current.getFileFieldProps('avatar');
@@ -689,13 +674,10 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { contactMethod: 'email' },
-        })
+        }),
       );
 
-      const props = result.current.getRadioGroupOptionProps(
-        'contactMethod',
-        'email'
-      );
+      const props = result.current.getRadioGroupOptionProps('contactMethod', 'email');
 
       expect(props.id).toBe('contactMethod-email');
       expect(props.name).toBe('contactMethod');
@@ -711,7 +693,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
-        })
+        }),
       );
 
       // Field has error (empty name) but is not touched
@@ -722,7 +704,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
-        })
+        }),
       );
 
       act(() => {
@@ -736,7 +718,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       act(() => {
@@ -750,7 +732,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { name: 'John' },
-        })
+        }),
       );
 
       expect(result.current.getFieldError('name')).toBeUndefined();
@@ -760,7 +742,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { email: 'test@example.com' },
-        })
+        }),
       );
 
       act(() => {
@@ -768,16 +750,14 @@ describe('useForm', () => {
         result.current.setFieldTouched('email', true);
       });
 
-      expect(result.current.getFieldError('email')).toBe(
-        'Email already exists'
-      );
+      expect(result.current.getFieldError('email')).toBe('Email already exists');
     });
 
     test('updates on touch state change', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
-        })
+        }),
       );
 
       // Initially untouched
@@ -805,16 +785,14 @@ describe('useForm', () => {
             name: 'John',
             address: { street: '', city: '', zip: '' },
           },
-        })
+        }),
       );
 
       act(() => {
         result.current.setFieldTouched('address.city', true);
       });
 
-      expect(result.current.getFieldError('address.city')).toBe(
-        'City is required'
-      );
+      expect(result.current.getFieldError('address.city')).toBe('City is required');
     });
   });
 
@@ -823,7 +801,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       expect(result.current.getFieldId('name')).toBe('name');
@@ -834,12 +812,10 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { interests: ['sports'] },
-        })
+        }),
       );
 
-      expect(result.current.getFieldId('interests', 'sports')).toBe(
-        'interests-sports'
-      );
+      expect(result.current.getFieldId('interests', 'sports')).toBe('interests-sports');
       expect(result.current.getFieldId('interests', 42)).toBe('interests-42');
     });
 
@@ -850,7 +826,7 @@ describe('useForm', () => {
             name: 'John',
             address: { street: '123 Main', city: 'LA', zip: '10001' },
           },
-        })
+        }),
       );
 
       expect(result.current.getFieldId('address.city')).toBe('address.city');
@@ -863,7 +839,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       // Modify the form to valid values
@@ -900,7 +876,7 @@ describe('useForm', () => {
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -908,10 +884,7 @@ describe('useForm', () => {
       });
 
       expect(onSubmit).toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Form submission error:',
-        expect.any(Error)
-      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
 
       console.error = originalConsoleError;
     });
@@ -920,7 +893,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       const submitResult = await act(async () => {
@@ -944,7 +917,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: [] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -961,7 +934,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: ['first', 'second', 'third'] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -977,7 +950,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: ['a', 'b', 'c'] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -993,7 +966,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: ['a', 'b', 'c'] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -1010,7 +983,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: ['a', 'c'] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -1029,7 +1002,7 @@ describe('useForm', () => {
           initialValues: {
             contacts: [{ name: 'John', email: 'john@example.com' }],
           },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1044,7 +1017,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { items: [{ category: 'electronics' }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -1059,7 +1032,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { settings: [{ volume: 75 }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('settings');
@@ -1075,7 +1048,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { settings: [{ enabled: true }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('settings');
@@ -1090,7 +1063,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { features: [{ active: false }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('features');
@@ -1105,7 +1078,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { uploads: [{ file: null }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('uploads');
@@ -1119,7 +1092,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { preferences: [{ size: 'medium' }] },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('preferences');
@@ -1138,7 +1111,7 @@ describe('useForm', () => {
             name: 'John',
             contacts: [{ type: 'email', value: '' }],
           },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1154,7 +1127,7 @@ describe('useForm', () => {
             name: 'John',
             contacts: [{ type: 'email', value: '' }],
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1174,7 +1147,7 @@ describe('useForm', () => {
             name: 'John',
             contacts: [{ type: 'email', value: 'john@example.com' }],
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1193,7 +1166,7 @@ describe('useForm', () => {
           initialValues: {
             contacts: [{ name: 'John' }],
           },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1209,7 +1182,7 @@ describe('useForm', () => {
           initialValues: {
             contacts: [{ type: 'email' }],
           },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1225,7 +1198,7 @@ describe('useForm', () => {
           initialValues: {
             items: [{ priority: 1 }, { priority: 5 }],
           },
-        })
+        }),
       );
 
       const helpers = result.current.arrayHelpers('items');
@@ -1242,7 +1215,7 @@ describe('useForm', () => {
         useForm(asyncUserValidator, {
           initialValues: { name: '', email: '', age: 0 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       await waitFor(() => {
@@ -1257,7 +1230,7 @@ describe('useForm', () => {
         useForm(asyncUserValidator, {
           initialValues: { name: 'taken', email: 'a@b.com', age: 25 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       await waitFor(() => {
@@ -1270,7 +1243,7 @@ describe('useForm', () => {
         useForm(asyncUserValidator, {
           initialValues: { name: 'valid', email: 'a@b.com', age: 25 },
           validationMode: 'mount',
-        })
+        }),
       );
 
       await waitFor(() => {
@@ -1280,14 +1253,14 @@ describe('useForm', () => {
     });
 
     test('handleSubmit works with async validator — valid case', async () => {
-      const onSubmit = mock((values: AsyncUserForm) => {});
+      const onSubmit = mock((_values: AsyncUserForm) => {});
       const validValues = { name: 'John', email: 'john@example.com', age: 25 };
 
       const { result } = renderHook(() =>
         useForm(asyncUserValidator, {
           initialValues: validValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -1298,14 +1271,14 @@ describe('useForm', () => {
     });
 
     test('handleSubmit works with async validator — invalid case', async () => {
-      const onSubmit = mock((values: AsyncUserForm) => {});
+      const onSubmit = mock((_values: AsyncUserForm) => {});
       const invalidValues = { name: 'taken', email: 'a@b.com', age: 25 };
 
       const { result } = renderHook(() =>
         useForm(asyncUserValidator, {
           initialValues: invalidValues,
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -1320,7 +1293,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       let validationResult: ReturnType<typeof result.current.validateForm>;
@@ -1337,7 +1310,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(asyncUserValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-        })
+        }),
       );
 
       let validationResult: ReturnType<typeof result.current.validateForm>;
@@ -1353,7 +1326,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidAsyncValidator, {
           initialValues: { name: 'test' },
-        })
+        }),
       );
 
       expect(result.current.isValidating).toBe(false);
@@ -1375,7 +1348,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidAsyncValidator, {
           initialValues: { value: 'initial' },
-        })
+        }),
       );
 
       // Rapidly trigger multiple validations
@@ -1406,7 +1379,7 @@ describe('useForm', () => {
         useForm(alwaysInvalidAsyncValidator, {
           initialValues: { value: 'anything' },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -1424,7 +1397,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
-        })
+        }),
       );
 
       expect(result.current.isDirty).toBe(false);
@@ -1434,7 +1407,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
-        })
+        }),
       );
 
       act(() => {
@@ -1448,7 +1421,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
-        })
+        }),
       );
 
       act(() => {
@@ -1464,9 +1437,7 @@ describe('useForm', () => {
 
     test('isDirty resets to false when setValues restores all fields to initial', () => {
       const initialValues = { name: 'Alice', email: 'alice@test.com', age: 30 };
-      const { result } = renderHook(() =>
-        useForm(userValidator, { initialValues })
-      );
+      const { result } = renderHook(() => useForm(userValidator, { initialValues }));
 
       act(() => {
         result.current.setValues({ name: 'Bob', email: 'bob@test.com' });
@@ -1483,7 +1454,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'Alice', email: 'alice@test.com', age: 30 },
-        })
+        }),
       );
 
       act(() => {
@@ -1502,7 +1473,7 @@ describe('useForm', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
           initialValues: { startDate: initialDate },
-        })
+        }),
       );
 
       expect(result.current.isDirty).toBe(false);
@@ -1531,7 +1502,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Change name field - should trigger field validator
@@ -1554,7 +1525,7 @@ describe('useForm', () => {
       expect(result.current.isValidating).toBe(false);
     });
 
-    test('sync-only field changes do not trigger isValidating', async () => {
+    test('sync-only field changes do not trigger isValidating', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@test.com', age: 25 },
@@ -1565,7 +1536,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Change email field (no field validator) - should NOT trigger isValidating
@@ -1588,7 +1559,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1614,7 +1585,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Set name to empty string (schema will produce "Name is required" error)
@@ -1631,20 +1602,20 @@ describe('useForm', () => {
     });
 
     test('race condition protection - rapid changes to same field', async () => {
-      let callCount = 0;
+      let _callCount = 0;
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@test.com', age: 25 },
           validationMode: 'live',
           fieldValidators: {
             name: async (value) => {
-              callCount++;
+              _callCount++;
               const delay = value === 'first' ? 100 : 10;
               await new Promise((r) => setTimeout(r, delay));
               return value === 'first' ? 'First error' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Rapid changes - first one takes longer
@@ -1676,7 +1647,7 @@ describe('useForm', () => {
             },
           },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -1699,7 +1670,7 @@ describe('useForm', () => {
             },
           },
           onSubmit,
-        })
+        }),
       );
 
       await act(async () => {
@@ -1720,7 +1691,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Trigger field validation
@@ -1752,7 +1723,7 @@ describe('useForm', () => {
               return 'Name is taken (field)';
             },
           },
-        })
+        }),
       );
 
       // First, get a schema error for name (too short - "Jo" might not trigger, let's use an empty one)
@@ -1786,16 +1757,14 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       // Change triggers field validator
       act(() => {
         result.current.setFieldValue('name', 'valid');
       });
-      await waitFor(() =>
-        expect(result.current.validatingFields.name).toBeUndefined()
-      );
+      await waitFor(() => expect(result.current.validatingFields.name).toBeUndefined());
       expect(callCount).toBe(1);
 
       // Blur should NOT re-trigger field validator
@@ -1817,7 +1786,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1841,7 +1810,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1865,7 +1834,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1892,7 +1861,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {
@@ -1918,7 +1887,7 @@ describe('useForm', () => {
               return value === 'taken' ? 'Name is taken' : undefined;
             },
           },
-        })
+        }),
       );
 
       act(() => {

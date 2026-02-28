@@ -1,10 +1,6 @@
 import { ok, err } from '@railway-ts/pipelines/result';
 import type { Result } from '@railway-ts/pipelines/result';
-import type {
-  StandardSchemaV1,
-  MaybeAsyncValidator,
-  ValidationError,
-} from '@railway-ts/pipelines/schema';
+import type { StandardSchemaV1, MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
 
 // =============================================================================
 // Type Guard
@@ -19,12 +15,7 @@ export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
     return false;
   }
   const standard = value['~standard'];
-  return (
-    standard != null &&
-    typeof standard === 'object' &&
-    'version' in standard &&
-    standard.version === 1
-  );
+  return standard != null && typeof standard === 'object' && 'version' in standard && standard.version === 1;
 }
 
 // =============================================================================
@@ -35,15 +26,9 @@ export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
  * Converts Standard Schema paths (PropertyKey | { key: PropertyKey }) to
  * the string[] format used by railway-ts ValidationError paths.
  */
-function convertPath(
-  path: ReadonlyArray<PropertyKey | { key: PropertyKey }> | undefined
-): string[] {
+function convertPath(path: ReadonlyArray<PropertyKey | { key: PropertyKey }> | undefined): string[] {
   if (!path) return [];
-  return path.map((s) =>
-    typeof s === 'object' && s !== null && 'key' in s
-      ? String(s.key)
-      : String(s)
-  );
+  return path.map((s) => (typeof s === 'object' && s !== null && 'key' in s ? String(s.key) : String(s)));
 }
 
 // =============================================================================
@@ -54,9 +39,7 @@ function convertPath(
  * Maps a Standard Schema v1 result to a Railway Result.
  * `{ value }` → `ok(value)`, `{ issues }` → `err(ValidationError[])`.
  */
-function convertResult<T>(
-  result: StandardSchemaV1.Result<T>
-): Result<T, ValidationError[]> {
+function convertResult<T>(result: StandardSchemaV1.Result<T>): Result<T, ValidationError[]> {
   if ('issues' in result && result.issues) {
     const errors: ValidationError[] = result.issues.map((issue) => ({
       path: convertPath(issue.path),
@@ -77,11 +60,9 @@ function convertResult<T>(
  * any Standard Schema v1 compliant validator (Valibot, ArkType, etc.).
  */
 export function fromStandardSchema<T extends Record<string, unknown>>(
-  schema: StandardSchemaV1<unknown, T>
+  schema: StandardSchemaV1<unknown, T>,
 ): MaybeAsyncValidator<unknown, T> {
-  return (
-    value: unknown
-  ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> => {
+  return (value: unknown): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> => {
     const result = schema['~standard'].validate(value);
     if (result instanceof Promise) {
       return result.then((r) => convertResult<T>(r));

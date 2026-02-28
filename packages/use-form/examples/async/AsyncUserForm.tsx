@@ -36,22 +36,14 @@ export default function AsyncUserForm() {
           {...form.getFieldProps('username')}
         />
         {form.isValidating && <span className="validating">Checking...</span>}
-        {form.getFieldError('username') && (
-          <span className="error">{form.getFieldError('username')}</span>
-        )}
+        {form.getFieldError('username') && <span className="error">{form.getFieldError('username')}</span>}
       </div>
 
       {/* Email — standard sync validation */}
       <div className="field">
         <label htmlFor={form.getFieldId('email')}>Email *</label>
-        <input
-          type="email"
-          placeholder="user@example.com"
-          {...form.getFieldProps('email')}
-        />
-        {form.getFieldError('email') && (
-          <span className="error">{form.getFieldError('email')}</span>
-        )}
+        <input type="email" placeholder="user@example.com" {...form.getFieldProps('email')} />
+        {form.getFieldError('email') && <span className="error">{form.getFieldError('email')}</span>}
       </div>
 
       {/* Organization — changing this re-triggers the username check */}
@@ -63,9 +55,7 @@ export default function AsyncUserForm() {
           <option value="globex">Globex</option>
           <option value="initech">Initech</option>
         </select>
-        {form.getFieldError('organization') && (
-          <span className="error">{form.getFieldError('organization')}</span>
-        )}
+        {form.getFieldError('organization') && <span className="error">{form.getFieldError('organization')}</span>}
       </div>
 
       {/* Form Actions */}
@@ -74,11 +64,7 @@ export default function AsyncUserForm() {
           {form.isSubmitting ? 'Submitting...' : 'Register'}
         </button>
 
-        <button
-          type="button"
-          onClick={form.resetForm}
-          disabled={form.isSubmitting}
-        >
+        <button type="button" onClick={form.resetForm} disabled={form.isSubmitting}>
           Reset
         </button>
       </div>
@@ -91,7 +77,7 @@ export default function AsyncUserForm() {
             isValidating: form.isValidating,
           },
           null,
-          2
+          2,
         )}
       </pre>
     </form>
