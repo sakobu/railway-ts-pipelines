@@ -18,7 +18,12 @@
 
     // Stricter for build
     "allowJs": false,
-    "stripInternal": true
+    "stripInternal": true,
+
+    // tsup injects `baseUrl: "."` into the DTS compiler options
+    // (see node_modules/tsup/dist/rollup.js), which TS 6 flags as deprecated.
+    // Silence until tsup patches.
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["**/*.test.ts", "tests/**", "examples/**", "scripts/**", "coverage/**", "dist/**", "node_modules/**"]
