@@ -8,7 +8,12 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "allowJs": false,
-    "stripInternal": true
+    "stripInternal": true,
+
+    // tsup injects `baseUrl: "."` into the DTS compiler options
+    // (see node_modules/tsup/dist/rollup.js), which TS 6 flags as deprecated.
+    // Silence until tsup patches.
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "**/*.test.*", "**/__tests__/**"]

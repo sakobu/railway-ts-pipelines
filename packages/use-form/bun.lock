@@ -8,7 +8,7 @@
         "@eslint-react/eslint-plugin": "^2.13.0",
         "@eslint/js": "^10.0.1",
         "@happy-dom/global-registrator": "^20.7.0",
-        "@railway-ts/pipelines": "^0.1.27",
+        "@railway-ts/pipelines": "^0.1.28",
         "@size-limit/preset-small-lib": "^12.0.0",
         "@testing-library/dom": "^10.4.1",
         "@testing-library/jest-dom": "^6.9.1",
@@ -27,14 +27,14 @@
         "react-dom": "^19.2.4",
         "size-limit": "^12.0.0",
         "tsup": "^8.5.1",
-        "typescript": "^5.0.0",
+        "typescript": "^6.0.0",
         "valibot": "^1.2.0",
         "zod": "^4.3.6",
       },
       "peerDependencies": {
         "@railway-ts/pipelines": "^0.1.27",
         "react": "^18.0.0 || ^19.0.0",
-        "typescript": "^5",
+        "typescript": ">=5.0",
       },
     },
   },
@@ -179,7 +179,7 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@railway-ts/pipelines": ["@railway-ts/pipelines@0.1.27", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-B/rTdJ+zCJMG/cdZCs1puuOayX//HP8bZsNwCYn0nLwv6LkAhuoCNo25PucOjBQOOpUsz41ocY7N56fJTgkV1A=="],
+    "@railway-ts/pipelines": ["@railway-ts/pipelines@0.1.28", "", { "peerDependencies": { "typescript": ">=5.0" } }, "sha512-64L8U2d36P4WRw7Ipgaa/EqXOfMonvSw5Hck1U0J3/DpN65pnn9VWpXFUnwCbsYL68rqEl7tNpsAbHDF5f2nHw=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.52.4", "", { "os": "android", "cpu": "arm" }, "sha512-BTm2qKNnWIQ5auf4deoetINJm2JzvihvGb9R6K/ETwKLql/Bb3Eg2H1FBp1gUb4YGbydMA3jcmQTR73q7J+GAA=="],
 
@@ -593,7 +593,7 @@
 
     "type-check": ["type-check@0.4.0", "", { "dependencies": { "prelude-ls": "^1.2.1" } }, "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew=="],
 
-    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "ufo": ["ufo@1.6.1", "", {}, "sha512-9a4/uxlTWJ4+a5i0ooc1rU7C7YOw3wT+UGqdeNNHWnOF9qcMBgLRS+4IYUqbczewFx4mLEig6gawh7X6mFlEkA=="],
 

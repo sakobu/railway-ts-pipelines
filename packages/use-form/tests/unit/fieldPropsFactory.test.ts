@@ -892,7 +892,7 @@ describe('fieldPropsFactory', () => {
         0: mockFile,
         length: 1,
         item: () => mockFile,
-      } as FileList;
+      } as unknown as FileList;
       const event = createMockChangeEvent<HTMLInputElement>('', false, mockFiles, false);
 
       props.onChange(event);
@@ -918,7 +918,7 @@ describe('fieldPropsFactory', () => {
         1: mockFile2,
         length: 2,
         item: (i: number) => [mockFile1, mockFile2][i],
-      } as FileList;
+      } as unknown as FileList;
       const event = createMockChangeEvent<HTMLInputElement>('', false, mockFiles, true);
 
       props.onChange(event);
