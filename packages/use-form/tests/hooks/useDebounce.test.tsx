@@ -1,19 +1,8 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 import { renderHook, act } from '@testing-library/react';
 import { useDebounce } from '../../src/useDebounce';
 
 describe('useDebounce', () => {
-  beforeEach(async () => {
-    // Use fake timers for testing
-    await mock.module('bun:test', () => ({
-      useFakeTimers: () => {},
-    }));
-  });
-
-  afterEach(() => {
-    mock.restore();
-  });
-
   test('calls callback after delay', async () => {
     const callback = mock((_value: string) => {});
     const { result } = renderHook(() => useDebounce(callback, 500));

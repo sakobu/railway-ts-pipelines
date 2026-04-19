@@ -2,6 +2,8 @@ import { useForm } from '../../src/';
 import { userSchema, type User } from './userSchema';
 import { prepareForAPI } from '../utils';
 
+const DEFAULT_BIRTHDATE = new Date();
+
 export default function UserForm() {
   const form = useForm<User>(userSchema, {
     initialValues: {
@@ -9,7 +11,7 @@ export default function UserForm() {
       email: '',
       password: '',
       age: 0,
-      birthdate: new Date(),
+      birthdate: DEFAULT_BIRTHDATE,
       hasAcceptedTerms: false,
       role: 'user',
       contacts: [],

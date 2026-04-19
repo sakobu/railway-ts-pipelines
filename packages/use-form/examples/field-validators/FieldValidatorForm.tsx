@@ -6,6 +6,8 @@ import { useForm } from '../../src/';
 import { fieldValidatorUserSchema, checkUsernameAvailable, type FieldValidatorUser } from './fieldValidatorSchema';
 import { prepareForAPI } from '../utils';
 
+const DEFAULT_BIRTHDATE = new Date();
+
 export default function FieldValidatorForm() {
   const form = useForm<FieldValidatorUser>(fieldValidatorUserSchema, {
     initialValues: {
@@ -13,7 +15,7 @@ export default function FieldValidatorForm() {
       email: '',
       password: '',
       age: 0,
-      birthdate: new Date(),
+      birthdate: DEFAULT_BIRTHDATE,
       hasAcceptedTerms: false,
       role: 'user',
       contacts: [],
