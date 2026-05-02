@@ -1,5 +1,5 @@
 import type { FieldPath, FormAction, FormState } from './types';
-import { deepEqual, deepMerge, getValueByPath, isPathAffected, setValueByPath } from './utils';
+import { deepEqual, deepMerge, getValueByPath, isPathAffected, normalizePath, normalizePathKeys, setValueByPath } from './utils';
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
@@ -105,20 +105,20 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...state,
         touched: {
           ...state.touched,
-          [action.field]: action.isTouched,
+          [normalizePath(action.field)]: action.isTouched,
         },
       };
 
     case 'SET_CLIENT_ERRORS':
       return {
         ...state,
-        clientErrors: action.errors,
+        clientErrors: normalizePathKeys(action.errors),
       };
 
     case 'SET_SERVER_ERRORS':
       return {
         ...state,
-        serverErrors: action.errors,
+        serverErrors: normalizePathKeys(action.errors),
       };
 
     case 'CLEAR_SERVER_ERRORS':
@@ -143,11 +143,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       };
 
     case 'SET_FIELD_VALIDATING': {
+      const key = normalizePath(action.field);
       const newValidatingFields = { ...state.validatingFields };
       if (action.isValidating) {
-        newValidatingFields[action.field] = true;
+        newValidatingFields[key] = true;
       } else {
-        delete newValidatingFields[action.field];
+        delete newValidatingFields[key];
       }
       return {
         ...state,
@@ -156,11 +157,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     }
 
     case 'SET_FIELD_ERROR': {
+      const key = normalizePath(action.field);
       const newFieldErrors = { ...state.fieldErrors };
       if (action.error) {
-        newFieldErrors[action.field] = action.error;
+        newFieldErrors[key] = action.error;
       } else {
-        delete newFieldErrors[action.field];
+        delete newFieldErrors[key];
       }
       return {
         ...state,
@@ -185,7 +187,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'MARK_ALL_TOUCHED': {
       const allTouched: Record<FieldPath, boolean> = {};
       action.fields.forEach((path) => {
-        allTouched[path] = true;
+        allTouched[normalizePath(path)] = true;
       });
 
       return {

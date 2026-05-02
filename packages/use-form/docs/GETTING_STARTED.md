@@ -368,6 +368,12 @@ Array helpers provide full type safety -- `helpers.getFieldProps(index, 'name')`
 | `getFieldError(index, field)`                   | Get error for item field               |
 | `getFieldId(index, field, optionValue?)`        | Get unique ID for labels/accessibility |
 
+For **fixed-length tuples** (e.g. `[number, number, number]` from `tupleOf`),
+skip `arrayHelpers` entirely — `ExtractFieldPaths` emits per-index dot
+paths (`position.0`, `position.1`, …) that you bind directly with
+`getFieldProps('position.0')`. See
+[Recipes › Tuple Fields](./RECIPES.md#tuple-fields-vec3-coordinates-fixed-length-arrays).
+
 ---
 
 ## What's Next

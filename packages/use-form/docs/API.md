@@ -1520,11 +1520,39 @@ String type for field paths.
 type FieldPath = string;
 ```
 
-Supports dot notation and bracket notation:
+**Canonical form is dot notation.** Form state — `form.touched`, `form.errors`,
+`form.clientErrors`, `form.serverErrors`, `form.fieldErrors`,
+`form.validatingFields` — is always keyed in dot form, including numeric array
+and tuple indices:
 
 - `"user.name"`
-- `"addresses[0]"`
-- `"users[2].email"`
+- `"addresses.0"`
+- `"users.2.email"`
+- `"position.0"` (for a `[number, number, number]` tuple)
+
+`ExtractFieldPaths<TValues>` only emits dot-form paths, so type-checked
+callers always pass dot form to `getFieldProps`, `setFieldValue`,
+`getFieldError`, etc.
+
+**Bracket notation is accepted at API boundaries** for back-compat. When you
+pass `"addresses[0]"` to a method (`setFieldValue`, `setFieldTouched`,
+`getFieldError`, `setServerErrors`, …), it is normalized to `"addresses.0"`
+before being written to or read from form state. So:
+
+```typescript
+form.setFieldTouched('addresses[0]', true); // OK — stored as touched["addresses.0"]
+form.getFieldError('addresses[0]'); // OK — resolves to errors["addresses.0"]
+```
+
+**Direct map reads must use dot form**, because keys are stored canonically:
+
+```typescript
+form.errors['addresses.0.city']; // ✓ canonical
+form.errors['addresses[0].city']; // ✗ undefined — keys aren't stored bracket-form
+```
+
+When in doubt, prefer the method-based accessors (`getFieldError`) — they
+normalize the input — or the dot-form key from `ExtractFieldPaths`.
 
 ## Railway Types
 
@@ -1555,4 +1583,9 @@ type ValidationError = {
 };
 ```
 
-Validation error with field path (as array) and message. The `formatErrors` function converts the path array to dot notation string for display.
+Validation error with field path (as array) and message. The `formatErrors`
+helper from `@railway-ts/pipelines/schema` joins these path arrays into
+string keys, using bracket notation for numeric segments
+(`["users", "0", "name"] → "users[0].name"`). `useForm` normalizes those
+keys to canonical dot form before storing them in `form.errors`, so what
+you read off the form is always `"users.0.name"`.

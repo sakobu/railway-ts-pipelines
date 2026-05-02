@@ -8,31 +8,32 @@ Patterns and techniques. Each recipe is self-contained.
 
 1. [CRUD Form with Server Errors](#crud-form-with-server-errors)
 2. [Nested Objects](#nested-objects)
-3. [Dynamic Arrays](#dynamic-arrays)
-4. [Checkbox and Radio Groups](#checkbox-and-radio-groups)
-5. [File Uploads](#file-uploads)
-6. [Auto-Submit and Debounced Search](#auto-submit-and-debounced-search)
-7. [Multi-Step Wizard](#multi-step-wizard)
-8. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
-9. [Conditional Validation](#conditional-validation)
-10. [Discriminated Unions](#discriminated-unions)
-11. [Custom Validators](#custom-validators)
-12. [Programmatic Field Updates](#programmatic-field-updates)
-13. [Syncing Values to External State](#syncing-values-to-external-state)
-14. [Reacting to Individual Field Changes](#reacting-to-individual-field-changes)
-15. [submitCount Patterns](#submitcount-patterns)
-16. [Understanding Error Priority](#understanding-error-priority)
-17. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
-18. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
-19. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
-20. [Custom Field Components](#custom-field-components)
-21. [Performance Patterns](#performance-patterns)
-22. [UI Library Integration](#ui-library-integration)
-23. [Testing Forms](#testing-forms)
-24. [Form State Persistence](#form-state-persistence)
-25. [Unsaved Changes Warning](#unsaved-changes-warning)
-26. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
-27. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
+3. [Tuple Fields (vec3, coordinates, fixed-length arrays)](#tuple-fields-vec3-coordinates-fixed-length-arrays)
+4. [Dynamic Arrays](#dynamic-arrays)
+5. [Checkbox and Radio Groups](#checkbox-and-radio-groups)
+6. [File Uploads](#file-uploads)
+7. [Auto-Submit and Debounced Search](#auto-submit-and-debounced-search)
+8. [Multi-Step Wizard](#multi-step-wizard)
+9. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
+10. [Conditional Validation](#conditional-validation)
+11. [Discriminated Unions](#discriminated-unions)
+12. [Custom Validators](#custom-validators)
+13. [Programmatic Field Updates](#programmatic-field-updates)
+14. [Syncing Values to External State](#syncing-values-to-external-state)
+15. [Reacting to Individual Field Changes](#reacting-to-individual-field-changes)
+16. [submitCount Patterns](#submitcount-patterns)
+17. [Understanding Error Priority](#understanding-error-priority)
+18. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
+19. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
+20. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
+21. [Custom Field Components](#custom-field-components)
+22. [Performance Patterns](#performance-patterns)
+23. [UI Library Integration](#ui-library-integration)
+24. [Testing Forms](#testing-forms)
+25. [Form State Persistence](#form-state-persistence)
+26. [Unsaved Changes Warning](#unsaved-changes-warning)
+27. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
+28. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
 
 ---
 
@@ -179,6 +180,128 @@ function ProfileForm() {
 ```
 
 Errors also use dot notation: `form.getFieldError('address.city')`, `form.getFieldError('address.zip')`.
+
+---
+
+## Tuple Fields (vec3, coordinates, fixed-length arrays)
+
+**Problem:** A field is a fixed-length tuple — three numbers for a position
+vector, two for lat/long, four for a CMYK color — and each element needs its
+own input with its own error message. This is *not* the dynamic-array case
+(no push/remove/reorder); the shape is part of the schema.
+
+**Solution:** Use `tupleOf(elementValidator, length)` from
+`@railway-ts/pipelines/schema`. `ExtractFieldPaths<TValues>` automatically
+emits per-index sub-paths in dot form (`r1.0`, `r1.1`, `r1.2`), which you
+bind directly with `getFieldProps`. No `arrayHelpers` involved.
+
+```tsx
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import {
+  object,
+  required,
+  tupleOf,
+  parseNumber,
+  chain,
+  positive,
+  type InferSchemaType,
+} from '@railway-ts/pipelines/schema';
+
+const vec3 = tupleOf(chain(parseNumber(), positive('Must be positive')), 3);
+
+const lambertSchema = object({
+  r1: required(vec3),
+  r2: required(vec3),
+});
+
+type LambertValues = InferSchemaType<typeof lambertSchema>;
+
+function LambertForm() {
+  const form = useForm<LambertValues>(lambertSchema, {
+    initialValues: {
+      r1: [7000, 0, 0],
+      r2: [0, 7000, 0],
+    },
+    validationMode: 'blur',
+  });
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)} noValidate>
+      <VecFieldset
+        label="r₁"
+        unit="km"
+        form={form}
+        names={['r1.0', 'r1.1', 'r1.2']}
+      />
+      <VecFieldset
+        label="r₂"
+        unit="km"
+        form={form}
+        names={['r2.0', 'r2.1', 'r2.2']}
+      />
+
+      <button type="submit">Solve</button>
+    </form>
+  );
+}
+```
+
+The `VecFieldset` component is a thin wrapper that renders three inputs and
+surfaces the first error. Because `form.errors` is dot-keyed, you read it
+directly with the same path you'd pass to `getFieldProps`:
+
+```tsx
+type VecFieldsetProps<TValues extends Record<string, unknown>> = {
+  label: React.ReactNode;
+  unit?: React.ReactNode;
+  form: UseFormReturn<TValues>;
+  names: readonly ExtractFieldPaths<TValues>[];
+};
+
+function VecFieldset<TValues extends Record<string, unknown>>({
+  label,
+  unit,
+  form,
+  names,
+}: VecFieldsetProps<TValues>) {
+  const errors = names.map((n) => (form.touched[n] ? form.errors[n] : undefined));
+  const firstError = errors.find((e): e is string => Boolean(e));
+
+  return (
+    <fieldset>
+      <legend>
+        {label}
+        {unit && <span> ({unit})</span>}
+      </legend>
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        {names.map((name, i) => (
+          <input
+            key={name}
+            type="number"
+            step="any"
+            aria-invalid={Boolean(errors[i])}
+            {...form.getFieldProps(name)}
+          />
+        ))}
+      </div>
+      {firstError && <span role="alert">{firstError}</span>}
+    </fieldset>
+  );
+}
+```
+
+**Key points:**
+
+- `form.errors['r1.0']` is the canonical key. Pre-0.1.31 builds keyed errors
+  in bracket form (`r1[0]`); on those versions you'd have to translate the
+  path before reading. Upgrade if you're on an older release.
+- `ExtractFieldPaths<LambertValues>` includes `'r1' | 'r1.0' | 'r1.1' |
+  'r1.2' | 'r2' | …`, so the `names` array is type-checked against the
+  schema. Renaming a tuple field or changing its arity surfaces as a type
+  error at the call site.
+- For dynamic-length arrays (`array(...)`, not `tupleOf`), use
+  [`arrayHelpers`](#dynamic-arrays) instead — `ExtractFieldPaths` treats
+  variable-length arrays as terminal and won't generate per-index paths.
 
 ---
 

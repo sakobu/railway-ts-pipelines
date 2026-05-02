@@ -2,7 +2,15 @@ import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } f
 import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
 import { validate, formatErrors, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
 import { formReducer } from './formReducer';
-import { deepMerge, getValueByPath, setValueByPath, collectFieldPaths, isPathAffected } from './utils';
+import {
+  deepMerge,
+  getValueByPath,
+  setValueByPath,
+  collectFieldPaths,
+  isPathAffected,
+  normalizePath,
+  normalizePathKeys,
+} from './utils';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import type {
   ArrayHelpers,
@@ -356,14 +364,15 @@ export const useForm = <TValues extends Record<string, unknown>>(
       )(fieldValue, values);
 
       if (result instanceof Promise) {
-        if (!fieldValidationSeqRef.current[field]) {
-          fieldValidationSeqRef.current[field] = 0;
+        const seqKey = normalizePath(field);
+        if (!fieldValidationSeqRef.current[seqKey]) {
+          fieldValidationSeqRef.current[seqKey] = 0;
         }
-        const seq = ++fieldValidationSeqRef.current[field];
+        const seq = ++fieldValidationSeqRef.current[seqKey];
         dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: true });
 
         void result.then((error) => {
-          if (seq === fieldValidationSeqRef.current[field]) {
+          if (seq === fieldValidationSeqRef.current[seqKey]) {
             dispatch({ type: 'SET_FIELD_ERROR', field, error });
             dispatch({
               type: 'SET_FIELD_VALIDATING',
@@ -402,8 +411,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
       if (fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
         const afterSchema = (result: Result<TValues, ValidationError[]>) => {
-          const schemaErrors = isErr(result) ? formatErrors(result.error) : {};
-          if (!schemaErrors[field]) {
+          const schemaErrors = isErr(result) ? normalizePathKeys(formatErrors(result.error)) : {};
+          if (!schemaErrors[normalizePath(field)]) {
             runFieldValidator(field, values);
           } else {
             dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
@@ -492,7 +501,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       });
 
       // Mark touched on first change for immediate error visibility
-      if (touchOnChange && !formStateRef.current.touched[field]) {
+      if (touchOnChange && !formStateRef.current.touched[normalizePath(field)]) {
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
@@ -582,7 +591,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         if (!validateOnChange) {
           // In non-live modes, run field validators on blur
           runValidationPipeline(field, formState.values);
-        } else if (!formState.touched[field]) {
+        } else if (!formState.touched[normalizePath(field)]) {
           // Live mode: only validate on first touch (focus→blur without typing).
           // After onChange has run (which sets touched), blur is redundant.
           void validateForm(formState.values);
@@ -881,7 +890,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getFieldError = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => {
-      return formState.touched[field] ? errors[field] : undefined;
+      const key = normalizePath(field);
+      return formState.touched[key] ? errors[key] : undefined;
     },
     [formState.touched, errors],
   );
@@ -1213,7 +1223,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
       const getRadioGroupOptionPropsAtPath = (path: string, opt: string | number) =>
         createRadioGroupOptionProps(path, opt, formState.values, setFieldValue, setFieldTouched);
 
-      const getFieldErrorAtPath = (path: string) => (formState.touched[path] ? errors[path] : undefined);
+      const getFieldErrorAtPath = (path: string) => {
+        const key = normalizePath(path);
+        return formState.touched[key] ? errors[key] : undefined;
+      };
 
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
         optionValue !== undefined ? `${path}-${String(optionValue)}` : path;

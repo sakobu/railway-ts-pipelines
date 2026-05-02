@@ -1009,7 +1009,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getFieldProps(0, 'name');
 
-      expect(props.name).toBe('contacts[0].name');
+      expect(props.name).toBe('contacts.0.name');
       expect(props.value).toBe('John');
     });
 
@@ -1024,7 +1024,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getSelectFieldProps(0, 'category');
 
-      expect(props.name).toBe('items[0].category');
+      expect(props.name).toBe('items.0.category');
       expect(props.value).toBe('electronics');
     });
 
@@ -1039,7 +1039,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getSliderProps(0, 'volume');
 
-      expect(props.name).toBe('settings[0].volume');
+      expect(props.name).toBe('settings.0.volume');
       expect(props.value).toBe(75);
       expect(props.type).toBe('range');
     });
@@ -1055,7 +1055,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getCheckboxProps(0, 'enabled');
 
-      expect(props.name).toBe('settings[0].enabled');
+      expect(props.name).toBe('settings.0.enabled');
       expect(props.checked).toBe(true);
     });
 
@@ -1070,7 +1070,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getSwitchProps(0, 'active');
 
-      expect(props.name).toBe('features[0].active');
+      expect(props.name).toBe('features.0.active');
       expect(props.checked).toBe(false);
     });
 
@@ -1085,7 +1085,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getFileFieldProps(0, 'file');
 
-      expect(props.name).toBe('uploads[0].file');
+      expect(props.name).toBe('uploads.0.file');
     });
 
     test('arrayHelpers getRadioGroupOptionProps returns props for array item radio', () => {
@@ -1099,7 +1099,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const props = helpers.getRadioGroupOptionProps(0, 'size', 'medium');
 
-      expect(props.name).toBe('preferences[0].size');
+      expect(props.name).toBe('preferences.0.size');
       expect(props.value).toBe('medium');
       expect(props.checked).toBe(true);
     });
@@ -1131,7 +1131,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setFieldTouched('contacts[0].value', true);
+        result.current.setFieldTouched('contacts.0.value', true);
       });
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1151,7 +1151,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setFieldTouched('contacts[0].value', true);
+        result.current.setFieldTouched('contacts.0.value', true);
       });
 
       const helpers = result.current.arrayHelpers('contacts');
@@ -1173,7 +1173,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const id = helpers.getFieldId(0, 'name');
 
-      expect(id).toBe('contacts[0].name');
+      expect(id).toBe('contacts.0.name');
     });
 
     test('arrayHelpers getFieldId returns path with string optionValue', () => {
@@ -1189,7 +1189,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const id = helpers.getFieldId(0, 'type', 'email');
 
-      expect(id).toBe('contacts[0].type-email');
+      expect(id).toBe('contacts.0.type-email');
     });
 
     test('arrayHelpers getFieldId returns path with numeric optionValue', () => {
@@ -1205,7 +1205,7 @@ describe('useForm', () => {
       // @ts-expect-error - Type inference limitation in test
       const id = helpers.getFieldId(1, 'priority', 5);
 
-      expect(id).toBe('items[1].priority-5');
+      expect(id).toBe('items.1.priority-5');
     });
   });
 

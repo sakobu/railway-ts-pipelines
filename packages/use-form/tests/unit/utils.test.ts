@@ -210,9 +210,9 @@ describe('collectFieldPaths', () => {
     };
     const paths = collectFieldPaths(obj);
     expect(paths).toContain('items');
-    expect(paths).toContain('items[0]');
-    expect(paths).toContain('items[1]');
-    expect(paths).toContain('items[2]');
+    expect(paths).toContain('items.0');
+    expect(paths).toContain('items.1');
+    expect(paths).toContain('items.2');
   });
 
   test('collects nested paths in arrays', () => {
@@ -224,12 +224,12 @@ describe('collectFieldPaths', () => {
     };
     const paths = collectFieldPaths(obj);
     expect(paths).toContain('users');
-    expect(paths).toContain('users[0]');
-    expect(paths).toContain('users[0].name');
-    expect(paths).toContain('users[0].email');
-    expect(paths).toContain('users[1]');
-    expect(paths).toContain('users[1].name');
-    expect(paths).toContain('users[1].email');
+    expect(paths).toContain('users.0');
+    expect(paths).toContain('users.0.name');
+    expect(paths).toContain('users.0.email');
+    expect(paths).toContain('users.1');
+    expect(paths).toContain('users.1.name');
+    expect(paths).toContain('users.1.email');
   });
 
   test('handles empty objects', () => {
@@ -267,12 +267,12 @@ describe('collectFieldPaths', () => {
     expect(paths).toContain('user');
     expect(paths).toContain('user.name');
     expect(paths).toContain('user.contacts');
-    expect(paths).toContain('user.contacts[0]');
-    expect(paths).toContain('user.contacts[0].type');
-    expect(paths).toContain('user.contacts[0].value');
-    expect(paths).toContain('user.contacts[1]');
-    expect(paths).toContain('user.contacts[1].type');
-    expect(paths).toContain('user.contacts[1].value');
+    expect(paths).toContain('user.contacts.0');
+    expect(paths).toContain('user.contacts.0.type');
+    expect(paths).toContain('user.contacts.0.value');
+    expect(paths).toContain('user.contacts.1');
+    expect(paths).toContain('user.contacts.1.type');
+    expect(paths).toContain('user.contacts.1.value');
   });
 });
 

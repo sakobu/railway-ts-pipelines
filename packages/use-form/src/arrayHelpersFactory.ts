@@ -202,7 +202,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * ))
      */
     getFieldProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getFieldProps(path);
     },
 
@@ -223,7 +223,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * </select>
      */
     getSelectFieldProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getSelectFieldProps(path);
     },
 
@@ -241,7 +241,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * <input type="range" min={0} max={10} {...helpers.getSliderProps(index, "priority")} />
      */
     getSliderProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getSliderProps(path);
     },
 
@@ -259,7 +259,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * <input type="checkbox" {...helpers.getCheckboxProps(index, "isFavorite")} />
      */
     getCheckboxProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getCheckboxProps(path);
     },
 
@@ -280,7 +280,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * </label>
      */
     getSwitchProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getSwitchProps(path);
     },
 
@@ -298,7 +298,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * <input type="file" accept="image/*" {...helpers.getFileFieldProps(index, "avatar")} />
      */
     getFileFieldProps: (index: number, subField: TFieldPaths) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getFileFieldProps(path);
     },
 
@@ -324,13 +324,13 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * </label>
      */
     getRadioGroupOptionProps: (index: number, subField: TFieldPaths, optionValue: string | number) => {
-      const path = `${field}[${index}].${subField}`;
+      const path = `${field}.${index}.${subField}`;
       return getRadioGroupOptionProps(path, optionValue);
     },
 
-    getFieldError: (index: number, subField: TFieldPaths) => getFieldError(`${field}[${index}].${subField}`),
+    getFieldError: (index: number, subField: TFieldPaths) => getFieldError(`${field}.${index}.${subField}`),
 
     getFieldId: (index: number, subField: TFieldPaths, optionValue?: string | number) =>
-      getFieldId(`${field}[${index}].${subField}`, optionValue),
+      getFieldId(`${field}.${index}.${subField}`, optionValue),
   };
 };

@@ -1,6 +1,29 @@
 import type { FieldPath } from './types';
 
 /**
+ * Canonical (dot) form for a field path. Numeric bracket segments are
+ * rewritten as dot segments: "users[0].name" → "users.0.name".
+ *
+ * Path-keyed maps stored in form state (touched, clientErrors, fieldErrors,
+ * serverErrors) are keyed by this canonical form, so lookups using either
+ * "r1.0" or "r1[0]" resolve to the same entry once normalized.
+ */
+export const normalizePath = (path: FieldPath): FieldPath => path.replace(/\[(\d+)\]/g, '.$1');
+
+/**
+ * Returns a new map whose keys have been rewritten to canonical dot form.
+ * Used at boundaries where bracket-keyed errors enter form state (e.g. the
+ * output of `formatErrors` from `@railway-ts/pipelines/schema`).
+ */
+export const normalizePathKeys = <T>(map: Record<FieldPath, T>): Record<FieldPath, T> => {
+  const out: Record<FieldPath, T> = {};
+  for (const k of Object.keys(map)) {
+    out[normalizePath(k)] = map[k] as T;
+  }
+  return out;
+};
+
+/**
  * Retrieves a value from a nested object using a path string.
  * Supports both dot notation for object properties and bracket notation for array indices.
  * Returns undefined if any part of the path doesn't exist.
@@ -46,8 +69,7 @@ export const getValueByPath = <TObj extends Record<string, unknown>, TValue = un
 ): TValue | undefined => {
   if (!path) return obj as unknown as TValue;
 
-  const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
-  const parts = normalizedPath.split('.').filter(Boolean);
+  const parts = normalizePath(path).split('.').filter(Boolean);
 
   let current: unknown = obj;
   for (const part of parts) {
@@ -112,8 +134,7 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
 ): TObj => {
   if (!path) return value as unknown as TObj;
 
-  const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
-  const parts = normalizedPath.split('.').filter(Boolean);
+  const parts = normalizePath(path).split('.').filter(Boolean);
 
   // Clone the root (array/object)
   const result: unknown = Array.isArray(obj) ? [...(obj as unknown[])] : { ...obj };
@@ -219,8 +240,8 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
 export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean => {
   if (path === changePath) return true;
 
-  const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
-  const normalizedChangePath = changePath.replace(/\[(\d+)\]/g, '.$1');
+  const normalizedPath = normalizePath(path);
+  const normalizedChangePath = normalizePath(changePath);
 
   // Parent affects child
   return normalizedPath === normalizedChangePath || normalizedPath.startsWith(`${normalizedChangePath}.`);
@@ -237,7 +258,8 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
  * - Iterating over all form values
  *
  * Leaf values (primitives, Date, RegExp, null, undefined) are treated as terminal nodes.
- * Arrays are traversed with bracket notation, objects with dot notation.
+ * All segments are joined with dot notation; numeric array indices appear as their
+ * canonical dot form (e.g. "contacts.0.email"), matching the rest of form state.
  *
  * @param obj - The object to collect paths from (typically form values)
  * @param prefix - Internal parameter for recursion, starting path prefix (default: "")
@@ -260,7 +282,7 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
  * // Arrays with objects
  * const form = { contacts: [{ email: "a@example.com" }, { email: "b@example.com" }] };
  * collectFieldPaths(form);
- * // Returns: ["contacts", "contacts[0]", "contacts[0].email", "contacts[1]", "contacts[1].email"]
+ * // Returns: ["contacts", "contacts.0", "contacts.0.email", "contacts.1", "contacts.1.email"]
  *
  * @example
  * // Mixed nesting
@@ -269,7 +291,7 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
  *   tags: ["react", "typescript"]
  * };
  * collectFieldPaths(form);
- * // Returns: ["user", "user.name", "tags", "tags[0]", "tags[1]"]
+ * // Returns: ["user", "user.name", "tags", "tags.0", "tags.1"]
  *
  * @example
  * // Practical use: marking all fields as touched on submit
@@ -297,7 +319,7 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
     if (isLeaf(value)) return;
 
     if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, `${path}[${i}]`));
+      value.forEach((item, i) => visit(item, path ? `${path}.${i}` : `${i}`));
       return;
     }
 

@@ -935,7 +935,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getFieldProps(0, 'email');
 
-      expect(mockGetFieldProps).toHaveBeenCalledWith('contacts[0].email');
+      expect(mockGetFieldProps).toHaveBeenCalledWith('contacts.0.email');
     });
 
     test('getSelectFieldProps constructs correct path and delegates', () => {
@@ -968,7 +968,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getSelectFieldProps(2, 'category');
 
-      expect(mockGetSelectFieldProps).toHaveBeenCalledWith('items[2].category');
+      expect(mockGetSelectFieldProps).toHaveBeenCalledWith('items.2.category');
     });
 
     test('getSliderProps constructs correct path and delegates', () => {
@@ -1002,7 +1002,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getSliderProps(1, 'volume');
 
-      expect(mockGetSliderProps).toHaveBeenCalledWith('items[1].volume');
+      expect(mockGetSliderProps).toHaveBeenCalledWith('items.1.volume');
     });
 
     test('getCheckboxProps constructs correct path and delegates', () => {
@@ -1035,7 +1035,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getCheckboxProps(0, 'active');
 
-      expect(mockGetCheckboxProps).toHaveBeenCalledWith('items[0].active');
+      expect(mockGetCheckboxProps).toHaveBeenCalledWith('items.0.active');
     });
 
     test('getSwitchProps constructs correct path and delegates', () => {
@@ -1068,7 +1068,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getSwitchProps(3, 'enabled');
 
-      expect(mockGetSwitchProps).toHaveBeenCalledWith('items[3].enabled');
+      expect(mockGetSwitchProps).toHaveBeenCalledWith('items.3.enabled');
     });
 
     test('getFileFieldProps constructs correct path and delegates', () => {
@@ -1100,7 +1100,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getFileFieldProps(0, 'avatar');
 
-      expect(mockGetFileFieldProps).toHaveBeenCalledWith('items[0].avatar');
+      expect(mockGetFileFieldProps).toHaveBeenCalledWith('items.0.avatar');
     });
 
     test('getRadioGroupOptionProps constructs correct path and delegates with optionValue', () => {
@@ -1134,7 +1134,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getRadioGroupOptionProps(0, 'size', 'L');
 
-      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items[0].size', 'L');
+      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items.0.size', 'L');
     });
 
     test('field props methods work with different indices', () => {
@@ -1169,9 +1169,9 @@ describe('arrayHelpersFactory', () => {
       helpers.getFieldProps(1, 'name');
       helpers.getFieldProps(2, 'name');
 
-      expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'items[0].name');
-      expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'items[1].name');
-      expect(mockGetFieldProps).toHaveBeenNthCalledWith(3, 'items[2].name');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'items.0.name');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'items.1.name');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(3, 'items.2.name');
     });
 
     test('field props methods work with deeply nested objects', () => {
@@ -1211,8 +1211,8 @@ describe('arrayHelpersFactory', () => {
       helpers.getFieldProps(0, 'name');
       helpers.getFieldProps(1, 'members');
 
-      expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'teams[0].name');
-      expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'teams[1].members');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(1, 'teams.0.name');
+      expect(mockGetFieldProps).toHaveBeenNthCalledWith(2, 'teams.1.members');
     });
 
     test('getRadioGroupOptionProps with number values', () => {
@@ -1246,7 +1246,7 @@ describe('arrayHelpersFactory', () => {
 
       helpers.getRadioGroupOptionProps(0, 'priority', 5);
 
-      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items[0].priority', 5);
+      expect(mockGetRadioGroupOptionProps).toHaveBeenCalledWith('items.0.priority', 5);
     });
   });
 
@@ -1321,7 +1321,7 @@ describe('arrayHelpersFactory', () => {
 
       const result = helpers.getFieldError(0, 'email');
 
-      expect(mockGetFieldError).toHaveBeenCalledWith('contacts[0].email');
+      expect(mockGetFieldError).toHaveBeenCalledWith('contacts.0.email');
       expect(result).toBe('Required');
     });
 
@@ -1347,7 +1347,7 @@ describe('arrayHelpersFactory', () => {
 
       const result = helpers.getFieldError(2, 'name');
 
-      expect(mockGetFieldError).toHaveBeenCalledWith('items[2].name');
+      expect(mockGetFieldError).toHaveBeenCalledWith('items.2.name');
       expect(result).toBeUndefined();
     });
   });
@@ -1375,8 +1375,8 @@ describe('arrayHelpersFactory', () => {
 
       const result = helpers.getFieldId(0, 'name');
 
-      expect(mockGetFieldId).toHaveBeenCalledWith('items[0].name', undefined);
-      expect(result).toBe('items[0].name');
+      expect(mockGetFieldId).toHaveBeenCalledWith('items.0.name', undefined);
+      expect(result).toBe('items.0.name');
     });
 
     test('forwards optionValue to delegate', () => {
@@ -1403,8 +1403,8 @@ describe('arrayHelpersFactory', () => {
 
       const result = helpers.getFieldId(1, 'status', 'active');
 
-      expect(mockGetFieldId).toHaveBeenCalledWith('items[1].status', 'active');
-      expect(result).toBe('items[1].status-active');
+      expect(mockGetFieldId).toHaveBeenCalledWith('items.1.status', 'active');
+      expect(result).toBe('items.1.status-active');
     });
 
     test('forwards numeric optionValue to delegate', () => {
@@ -1431,8 +1431,8 @@ describe('arrayHelpersFactory', () => {
 
       const result = helpers.getFieldId(0, 'priority', 5);
 
-      expect(mockGetFieldId).toHaveBeenCalledWith('items[0].priority', 5);
-      expect(result).toBe('items[0].priority-5');
+      expect(mockGetFieldId).toHaveBeenCalledWith('items.0.priority', 5);
+      expect(result).toBe('items.0.priority-5');
     });
   });
 });
