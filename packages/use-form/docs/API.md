@@ -528,7 +528,15 @@ resetForm(): void
 
 ### getFieldError
 
-Returns the error message for a field only if it has been touched, otherwise `undefined`.
+Returns the error message for a field path, gated on user interaction.
+
+- **Leaf paths**: returns the error iff the field itself has been touched.
+- **Group / parent paths**: returns the error iff *any* descendant field has been
+  touched. Cross-field validation errors that schemas attach to a non-leaf path
+  (e.g. `S.refineAt("confirm", v => v.password === v.confirm, …)` or
+  `S.refineAt("r2", …)` over a tuple) surface naturally on the group container,
+  without callers having to read `form.errors` and `form.touched` directly.
+
 Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
 
 ```typescript
@@ -539,11 +547,11 @@ getFieldError<TField extends ExtractFieldPaths<TValues>>(
 
 **Parameters:**
 
-- `field` - Field path with autocomplete
+- `field` - Field path with autocomplete (leaf or parent)
 
-**Returns:** The error message string if the field is touched and has an error, otherwise `undefined`.
+**Returns:** The error message string if visible per the rules above, otherwise `undefined`.
 
-**Example:**
+**Example — leaf:**
 
 ```typescript
 // Instead of:
@@ -552,6 +560,27 @@ getFieldError<TField extends ExtractFieldPaths<TValues>>(
 // Use:
 {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
 ```
+
+**Example — group / parent path:**
+
+```typescript
+const schema = S.chain(
+  S.object({
+    password: S.required(S.string()),
+    confirm: S.required(S.string()),
+  }),
+  S.refineAt('confirm', (v) => v.password === v.confirm, 'Passwords must match'),
+);
+
+// In a fieldset that owns both inputs — error becomes visible once any
+// descendant of `confirm` is touched (or `confirm` itself, for a leaf).
+{form.getFieldError('confirm') && <p className="err">{form.getFieldError('confirm')}</p>}
+```
+
+The descendant scan uses a path-prefix check that guards against sibling
+collisions — `r2` does not match a touch on `r20`. `getFieldError` never
+aggregates *across* paths: it only returns an error attached at the queried
+path, gated on touch of the path or any of its descendants.
 
 ### getFieldId
 

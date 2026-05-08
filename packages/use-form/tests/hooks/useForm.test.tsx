@@ -794,6 +794,127 @@ describe('useForm', () => {
 
       expect(result.current.getFieldError('address.city')).toBe('City is required');
     });
+
+    test('group path: returns undefined when no descendant is touched', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({ r2: 'Vectors must differ' });
+      });
+
+      // Error exists but no descendant touched — invisible.
+      expect(result.current.getFieldError('r2')).toBeUndefined();
+    });
+
+    test('group path: bubbles error once a descendant is touched', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        result.current.setFieldTouched('r2.0', true);
+      });
+
+      expect(result.current.getFieldError('r2')).toBe('Vectors must differ');
+    });
+
+    test('group path: ignores sibling-prefix touches (r20.0 must not satisfy "r2." scan)', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            r2: [0, 0, 0],
+            r20: [0, 0, 0],
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        result.current.setFieldTouched('r20.0', true);
+      });
+
+      // r20.0 starts with "r20." not "r2." — the trailing-dot guard.
+      expect(result.current.getFieldError('r2')).toBeUndefined();
+    });
+
+    test('group path: nested descendant satisfies the scan', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            secondary: { position: [0, 0, 0], velocity: [0, 0, 0] },
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({
+          secondary: 'Primary and secondary must differ',
+        });
+        result.current.setFieldTouched('secondary.position.0', true);
+      });
+
+      expect(result.current.getFieldError('secondary')).toBe('Primary and secondary must differ');
+    });
+
+    test('group path: descendant touched but no error at path → undefined', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldTouched('r2.0', true);
+      });
+
+      // Short-circuit: no error at "r2", scan never runs.
+      expect(result.current.getFieldError('r2')).toBeUndefined();
+    });
+
+    test('leaf path: behavior unchanged when descendants are touched', () => {
+      // Ensures the new branch doesn't accidentally affect leaf semantics.
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: { name: '' },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({ name: 'Name is required' });
+        result.current.setFieldTouched('name', true);
+      });
+
+      expect(result.current.getFieldError('name')).toBe('Name is required');
+    });
+
+    test("group path: error at one parent does not bubble through a sibling parent's descendant touch", () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: {
+            primary: { position: [0, 0, 0] },
+            secondary: { position: [0, 0, 0] },
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors({
+          primary: 'primary error',
+          secondary: 'secondary error',
+        });
+        result.current.setFieldTouched('primary.position.0', true);
+      });
+
+      expect(result.current.getFieldError('primary')).toBe('primary error');
+      expect(result.current.getFieldError('secondary')).toBeUndefined();
+    });
   });
 
   describe('getFieldId', () => {

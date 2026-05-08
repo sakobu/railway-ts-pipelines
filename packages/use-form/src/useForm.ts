@@ -874,24 +874,45 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // ===========================================================================
 
   /**
-   * Returns the error message for a field only if it has been touched, otherwise `undefined`.
-   * Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
+   * Returns the error message for a field path, gated on user interaction.
+   *
+   * - Leaf paths: returns the error iff the field itself has been touched.
+   * - Group / parent paths: returns the error iff *any* descendant field has
+   *   been touched. This makes cross-field validation errors that schemas
+   *   attach to a non-leaf path (e.g. `S.refineAt("confirm", v => v.password
+   *   === v.confirm, …)` or `S.refineAt("r2", …)` over a tuple) surface
+   *   naturally on the group container, without callers having to read
+   *   `form.errors` and `form.touched` directly.
+   *
+   * Eliminates the common `touched[field] ? errors[field] : undefined`
+   * boilerplate and removes the leaf-only constraint that previously hid
+   * group-level errors.
    *
    * @template TField - The field path type (auto-inferred with autocomplete)
    * @param field - The field path (with type-safe autocomplete)
-   * @returns The error message string if the field is touched and has an error, otherwise `undefined`
+   * @returns The error message string if visible per the rules above, otherwise `undefined`
    *
    * @example
-   * // Instead of:
-   * {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
-   *
-   * // Use:
+   * // Leaf:
    * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
+   *
+   * @example
+   * // Group — schema has `refineAt("r2", v => !equal(v.r1, v.r2), "must differ")`:
+   * {form.getFieldError("r2") && <Banner msg={form.getFieldError("r2")} />}
    */
   const getFieldError = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => {
       const key = normalizePath(field);
-      return formState.touched[key] ? errors[key] : undefined;
+      const err = errors[key];
+      if (!err) return undefined;
+      // Visible iff the queried path itself or any descendant has been touched.
+      // `isPathAffected(touchedKey, key)` already encodes "same path or
+      // descendant," reusing the same semantics used for cascading error
+      // clears (see utils.ts).
+      for (const touchedKey in formState.touched) {
+        if (formState.touched[touchedKey] && isPathAffected(touchedKey, key)) return err;
+      }
+      return undefined;
     },
     [formState.touched, errors],
   );
