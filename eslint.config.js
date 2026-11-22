@@ -72,7 +72,24 @@ export default [
       'prettier/prettier': 'error',
       'arrow-body-style': 'off',
       'prefer-arrow-callback': 'off',
-      'unicorn/prevent-abbreviations': 'off',
+      'unicorn/name-replacements': 'off',
+      'unicorn/no-asterisk-prefix-in-documentation-comments': 'off',
+      // Flags idiomatic schema composition, e.g. object({ a: optional(chain(string(), min(1))) })
+      'unicorn/max-nested-calls': 'off',
+      // Flags public API (`is`, `_getAbortEarly`) and standard names like `predicate`
+      'unicorn/consistent-boolean-name': 'off',
+      // Folds guard clauses (`if (bad) return err(...); return ok(...)`) into ternaries
+      'unicorn/prefer-ternary': 'off',
+      // Combinators return T | Promise<T>; `await` would force the sync path async
+      'unicorn/prefer-await': 'off',
+      // Not equivalent: Number('') === 0, Number('12px') is NaN, unlike parseInt/parseFloat
+      'unicorn/prefer-number-coercion': 'off',
+      // Would change what the public integer() validator and parseBigInt accept
+      'unicorn/prefer-number-is-safe-integer': 'off',
+      // One-line JSDoc (`/** @internal */`, `/** @type {...} */`) is standard
+      'unicorn/single-line-block-comment-style': 'off',
+      // `x || fallback` treats '' as missing; a default parameter does not
+      'unicorn/prefer-default-parameters': 'off',
     },
   },
 
@@ -107,6 +124,19 @@ export default [
       'unicorn/no-array-for-each': 'off',
       'unicorn/no-array-reduce': 'off',
 
+      // Allow `expect(isOk(x)).toBe(true); if (isOk(x)) { ... }` narrowing idiom
+      'unicorn/prefer-early-return': 'off',
+      'unicorn/prefer-continue': 'off',
+
+      // Test data and fixtures are deliberate (3.14, 'http://...', '   ', Date mocks)
+      'unicorn/prefer-math-constants': 'off',
+      'unicorn/prefer-https': 'off',
+      'unicorn/prefer-string-repeat': 'off',
+      'unicorn/no-global-object-property-assignment': 'off',
+      'unicorn/no-unsafe-string-replacement': 'off',
+      'unicorn/no-unnecessary-parameters': 'off',
+      'unicorn/prefer-smaller-scope': 'off',
+
       // Allow for better test readability
       'prefer-const': 'warn',
       'import/order': 'warn',
@@ -137,6 +167,12 @@ export default [
       'unicorn/no-array-for-each': 'off',
       'unicorn/no-array-reduce': 'off',
       'unicorn/prefer-spread': 'off',
+      'unicorn/prefer-early-return': 'off',
+      'unicorn/prefer-continue': 'off',
+      'unicorn/prefer-math-constants': 'off',
+      'unicorn/prefer-https': 'off',
+      'unicorn/prefer-string-repeat': 'off',
+      'unicorn/no-unnecessary-parameters': 'off',
 
       // Make examples more readable
       'prefer-const': 'warn',

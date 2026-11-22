@@ -81,7 +81,9 @@ const validateAge = (input: string) =>
     parseStrict(input),
     flatMapWith((n: number) => (Number.isInteger(n) ? ok(n) : err('age must be a whole number'))),
     flatMapWith((n: number) => (n >= 0 && n <= 150 ? ok(n) : err('age out of range'))),
-    tapErrWith((e) => errors.push(e)),
+    tapErrWith((e) => {
+      errors.push(e);
+    }),
     mapWith((age) => ({ age, category: age >= 18 ? 'adult' : 'minor' })),
   );
 

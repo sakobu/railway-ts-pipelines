@@ -356,9 +356,8 @@ describe('tupled', () => {
 
   describe('integration with curry/uncurry', () => {
     test('should work with curry for flexible APIs', () => {
-      const between = curry(
-        (min: number, max: number, value: number): Result<number, string> =>
-          value >= min && value <= max ? ok(value) : err(`Must be between ${min} and ${max}`),
+      const between = curry((min: number, max: number, value: number): Result<number, string> =>
+        value >= min && value <= max ? ok(value) : err(`Must be between ${min} and ${max}`),
       );
 
       // Use tupled to handle all three at once

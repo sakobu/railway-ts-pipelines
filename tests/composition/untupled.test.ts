@@ -371,9 +371,8 @@ describe('untupled', () => {
 
   describe('integration with curry/uncurry', () => {
     test('should combine with curry for flexible APIs', () => {
-      const curriedValidate = curry(
-        (min: number, max: number, value: number): Result<number, string> =>
-          value >= min && value <= max ? ok(value) : err('Out of range'),
+      const curriedValidate = curry((min: number, max: number, value: number): Result<number, string> =>
+        value >= min && value <= max ? ok(value) : err('Out of range'),
       );
 
       // Create different interfaces

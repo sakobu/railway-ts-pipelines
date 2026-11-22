@@ -26,7 +26,6 @@ const launchSchema = object({
 });
 
 type LaunchParams = InferSchemaType<typeof launchSchema>;
-type VehicleType = LaunchParams['vehicleType'];
 
 // Weather API types
 type WeatherData = {
@@ -45,7 +44,7 @@ const toJsonIfOk = (res: Response) => (res.ok ? res.json() : Promise.reject(`HTT
 
 // Fetch daily forecast for the launch window date
 const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<LaunchContext, ValidationError[]>> => {
-  const date = params.windowStart.toISOString().split('T')[0]!;
+  const date = params.windowStart.toISOString().split('T', 1)[0]!;
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.append('latitude', params.latitude.toString());
   url.searchParams.append('longitude', params.longitude.toString());
@@ -54,7 +53,7 @@ const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<Laun
   url.searchParams.append('start_date', date);
   url.searchParams.append('end_date', date);
 
-  const result = await fromPromise(fetch(url.toString()).then(toJsonIfOk));
+  const result = await fromPromise(fetch(url.href).then(toJsonIfOk));
 
   return match(result, {
     ok: (data) =>
@@ -72,6 +71,7 @@ const fetchWeatherWithParams = async (params: LaunchParams): Promise<Result<Laun
 
 // Business rule check — can fail, so flatMapWith
 const assessLaunchConditions = (context: LaunchContext): Result<LaunchDecision, ValidationError[]> => {
+  type VehicleType = LaunchParams['vehicleType'];
   const windLimits: Record<VehicleType, number> = {
     falcon9: 15,
     atlas5: 12,

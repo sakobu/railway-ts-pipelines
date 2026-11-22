@@ -305,10 +305,9 @@ export function match<T, E, R1, R2>(
   if (isOk(result)) {
     const okFn = patterns.ok;
     return okFn(result.value);
-  } else {
-    const errFn = patterns.err;
-    return errFn(result.error);
   }
+  const errFn = patterns.err;
+  return errFn(result.error);
 }
 
 // ─── Unwrap ─────────────────────────────────────────────────
@@ -340,9 +339,8 @@ export function match<T, E, R1, R2>(
 export function unwrap<T, E>(result: Result<T, E>, errorMsg?: string): T {
   if (result.ok) {
     return result.value;
-  } else {
-    throw new Error(errorMsg || `Cannot unwrap an error Result: ${String(result.error)}`);
   }
+  throw new Error(errorMsg || `Cannot unwrap an error Result: ${String(result.error)}`);
 }
 
 /**

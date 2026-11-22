@@ -278,5 +278,6 @@ const injectionResult = processValidation(extraFieldsInjection);
 console.log(injectionResult);
 
 console.log("Does a fresh object have 'injected'? ->", ({} as any).injected); // undefined
+// eslint-disable-next-line unicorn/no-nonstandard-builtin-properties -- demonstrates prototype was not polluted
 console.log("Does Object.prototype have 'injected'? ->", (Object.prototype as any).injected); // undefined
 console.log('Note: Extra fields should be rejected in strict mode');

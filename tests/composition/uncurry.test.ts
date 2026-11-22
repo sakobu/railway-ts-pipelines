@@ -184,7 +184,7 @@ describe('uncurry', () => {
     test('should work with complex Option pipelines', () => {
       const curriedParseWithFallback = (radix: number) => (fallback: number) => (str: string) => {
         const n = Number.parseInt(str, radix);
-        return Number.isNaN(n) ? some(fallback) : some(n);
+        return some(Number.isNaN(n) ? fallback : n);
       };
 
       const parseWithFallback = uncurry(curriedParseWithFallback);

@@ -40,7 +40,7 @@ describe('bigint validators', () => {
         undefined,
         {},
         [],
-        Number.NaN,
+        NaN,
         Infinity,
         3.14,
       ];

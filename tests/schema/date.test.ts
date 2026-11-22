@@ -8,7 +8,7 @@ import type { ValidationError, Validator } from '@/schema/core';
 
 // Helper function to mock Date for testing date validators
 const createDateMock = (mockDateString = '2023-06-15T12:00:00.000Z') => {
-  const originalDate = globalThis.Date;
+  const originalDate = Date;
   const mockDate = new Date(mockDateString);
 
   // Override the Date constructor with our mock version
@@ -155,7 +155,7 @@ describe('date - validators', () => {
       expect(isErr(beforeResult)).toBe(true);
       if (isErr(beforeResult)) {
         expect(beforeResult.error[0]?.message || '').toBe(
-          `Must be between ${min.toISOString().split('T')[0]} and ${max.toISOString().split('T')[0]}`,
+          `Must be between ${min.toISOString().split('T', 1)[0]} and ${max.toISOString().split('T', 1)[0]}`,
         );
       }
 
@@ -164,7 +164,7 @@ describe('date - validators', () => {
       expect(isErr(afterResult)).toBe(true);
       if (isErr(afterResult)) {
         expect(afterResult.error[0]?.message || '').toBe(
-          `Must be between ${min.toISOString().split('T')[0]} and ${max.toISOString().split('T')[0]}`,
+          `Must be between ${min.toISOString().split('T', 1)[0]} and ${max.toISOString().split('T', 1)[0]}`,
         );
       }
     });

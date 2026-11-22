@@ -317,6 +317,7 @@ export function isoDuration(message: string = 'Invalid ISO duration format'): Va
   // eslint-disable-next-line security/detect-unsafe-regex
   const isoDurationRegex = /^P(?:\d+W|(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)$/;
   return (value, path = []) => {
+    // eslint-disable-next-line unicorn/prefer-simple-condition-first -- regex test must run first: it rejects non-string input that .endsWith() would throw on
     if (!isoDurationRegex.test(value) || value === 'P' || value.endsWith('T')) {
       return err([{ path, message }]);
     }
