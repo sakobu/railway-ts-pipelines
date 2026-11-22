@@ -59,7 +59,7 @@ describe('getValueByPath', () => {
 describe('setValueByPath', () => {
   test('clones an array root without mutating it', () => {
     const root = [{ name: 'Ann' }, { name: 'Bob' }];
-    const result = setValueByPath(root as unknown as Record<string, unknown>, '1.name', 'Cy');
+    const result: unknown = setValueByPath(root as unknown as Record<string, unknown>, '1.name', 'Cy');
     expect(result).toEqual([{ name: 'Ann' }, { name: 'Cy' }]);
     expect(result).not.toBe(root);
     expect(root[1]!.name).toBe('Bob');
