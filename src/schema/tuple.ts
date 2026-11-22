@@ -6,7 +6,8 @@ import type { MaybeAsyncValidator, ValidationError, Validator } from './core';
 
 /**
  * Extracts output types from an array of validators into a tuple type.
- * @internal
+ * Not exported, but kept in the published declarations because `tuple()`'s
+ * signature uses it.
  */
 type TupleType<V extends ReadonlyArray<MaybeAsyncValidator<unknown, unknown>>> = {
   [K in keyof V]: V[K] extends Validator<unknown, infer O>

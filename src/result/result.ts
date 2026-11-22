@@ -7,9 +7,15 @@ import type { MaybeAsync } from '@/composition';
 /**
  * Symbol used to identify Result objects.
  *
- * @internal
+ * Not meant to be used directly, but it must stay in the published type
+ * declarations: `Result` refers to it, and without it a plain
+ * `{ ok: true, value }` object would type-check as a `Result`.
+ *
+ * `Symbol.for` makes every copy of this module (each entry point, and the
+ * ESM and CommonJS builds) share one symbol, so Results compare equal no
+ * matter which entry point created them.
  */
-export const RESULT_BRAND = Symbol('RESULT_BRAND');
+export const RESULT_BRAND: unique symbol = Symbol.for('@railway-ts/pipelines/RESULT_BRAND');
 
 /**
  * Represents a Result type.

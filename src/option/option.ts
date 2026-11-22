@@ -7,9 +7,15 @@ import type { MaybeAsync } from '@/composition';
 /**
  * Symbol used to identify Option objects.
  *
- * @internal
+ * Not meant to be used directly, but it must stay in the published type
+ * declarations: `Option` refers to it, and without it a plain
+ * `{ some: true, value }` object would type-check as an `Option`.
+ *
+ * `Symbol.for` makes every copy of this module (each entry point, and the
+ * ESM and CommonJS builds) share one symbol, so Options compare equal no
+ * matter which entry point created them.
  */
-export const OPTION_BRAND = Symbol('OPTION_BRAND');
+export const OPTION_BRAND: unique symbol = Symbol.for('@railway-ts/pipelines/OPTION_BRAND');
 
 /**
  * Represents an Option type.
