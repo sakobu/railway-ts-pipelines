@@ -1,15 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "import",
-    "react"
-  ],
-  "jsPlugins": [
-    "eslint-plugin-security",
-    "@eslint-react/eslint-plugin"
-  ],
+  "plugins": ["typescript", "unicorn", "import", "react"],
+  "jsPlugins": ["eslint-plugin-security", "@eslint-react/eslint-plugin"],
   "categories": {
     "correctness": "off"
   },
@@ -23,18 +15,13 @@
       "polymorphicPropName": "as"
     }
   },
-  "ignorePatterns": [
-    "**/dist/**",
-    "**/coverage/**"
-  ],
+  "ignorePatterns": ["**/dist/**", "**/coverage/**"],
   "options": {
     "typeAware": true
   },
   "overrides": [
     {
-      "files": [
-        "packages/pipelines/**"
-      ],
+      "files": ["packages/pipelines/**"],
       "env": {
         "es2026": true
       },
@@ -283,9 +270,7 @@
       }
     },
     {
-      "files": [
-        "packages/pipelines/**/*.{js,mjs,cjs,ts}"
-      ],
+      "files": ["packages/pipelines/**/*.{js,mjs,cjs,ts}"],
       "env": {
         "browser": true
       }
@@ -321,10 +306,7 @@
       }
     },
     {
-      "files": [
-        "packages/pipelines/**/*.test.ts",
-        "packages/pipelines/**/tests/**/*.ts"
-      ],
+      "files": ["packages/pipelines/**/*.test.ts", "packages/pipelines/**/tests/**/*.ts"],
       "rules": {
         "unicorn/consistent-function-scoping": "off",
         "unicorn/no-null": "off",
@@ -341,18 +323,14 @@
         "typescript/no-non-null-assertion": "off",
         "typescript/ban-ts-comment": "off"
       },
-      "jsPlugins": [
-        "eslint-plugin-security"
-      ],
+      "jsPlugins": ["eslint-plugin-security"],
       "env": {
         "browser": true,
         "jest": true
       }
     },
     {
-      "files": [
-        "packages/pipelines/**/examples/**/*.{ts,tsx}"
-      ],
+      "files": ["packages/pipelines/**/examples/**/*.{ts,tsx}"],
       "rules": {
         "unicorn/consistent-function-scoping": "off",
         "unicorn/no-null": "off",
@@ -370,14 +348,10 @@
         "typescript/no-explicit-any": "off",
         "typescript/no-non-null-assertion": "off"
       },
-      "jsPlugins": [
-        "eslint-plugin-security"
-      ]
+      "jsPlugins": ["eslint-plugin-security"]
     },
     {
-      "files": [
-        "packages/use-form/**"
-      ],
+      "files": ["packages/use-form/**"],
       "rules": {
         "constructor-super": "error",
         "for-direction": "error",
@@ -504,10 +478,7 @@
       }
     },
     {
-      "files": [
-        "packages/use-form/**/*.ts",
-        "packages/use-form/**/*.tsx"
-      ],
+      "files": ["packages/use-form/**/*.ts", "packages/use-form/**/*.tsx"],
       "rules": {
         "no-array-constructor": "error",
         "no-unused-expressions": "error",
@@ -588,10 +559,7 @@
         "Bun": "readonly",
         "crypto": "readonly"
       },
-      "plugins": [
-        "typescript",
-        "react"
-      ]
+      "plugins": ["typescript", "react"]
     },
     {
       "files": [
@@ -618,22 +586,15 @@
         "beforeAll": "readonly",
         "afterAll": "readonly"
       },
-      "plugins": [
-        "typescript",
-        "react"
-      ]
+      "plugins": ["typescript", "react"]
     },
     {
-      "files": [
-        "packages/use-form/scripts/**/*.ts"
-      ],
+      "files": ["packages/use-form/scripts/**/*.ts"],
       "rules": {
         "no-console": "off",
         "typescript/no-explicit-any": "off"
       },
-      "plugins": [
-        "typescript"
-      ]
+      "plugins": ["typescript"]
     }
   ]
 }

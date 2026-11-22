@@ -44,7 +44,6 @@ Patterns and techniques. Each recipe is self-contained.
 **Solution:** Use `onSubmit` to call the API, and `setServerErrors` to display backend validation errors. Server errors auto-clear when the user edits the affected field.
 
 ```tsx
-import { useForm } from '@railway-ts/use-form';
 import {
   object,
   string,
@@ -57,6 +56,7 @@ import {
   ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 const userSchema = object({
   username: required(chain(string(), nonEmpty(), minLength(3))),
@@ -187,7 +187,7 @@ Errors also use dot notation: `form.getFieldError('address.city')`, `form.getFie
 
 **Problem:** A field is a fixed-length tuple — three numbers for a position
 vector, two for lat/long, four for a CMYK color — and each element needs its
-own input with its own error message. This is *not* the dynamic-array case
+own input with its own error message. This is _not_ the dynamic-array case
 (no push/remove/reorder); the shape is part of the schema.
 
 **Solution:** Use `tupleOf(elementValidator, length)` from
@@ -196,7 +196,6 @@ emits per-index sub-paths in dot form (`r1.0`, `r1.1`, `r1.2`), which you
 bind directly with `getFieldProps`. No `arrayHelpers` involved.
 
 ```tsx
-import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 import {
   object,
   required,
@@ -206,6 +205,7 @@ import {
   positive,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 
 const vec3 = tupleOf(chain(parseNumber(), positive('Must be positive')), 3);
 
@@ -227,18 +227,8 @@ function LambertForm() {
 
   return (
     <form onSubmit={(e) => void form.handleSubmit(e)} noValidate>
-      <VecFieldset
-        label="r₁"
-        unit="km"
-        form={form}
-        names={['r1.0', 'r1.1', 'r1.2']}
-      />
-      <VecFieldset
-        label="r₂"
-        unit="km"
-        form={form}
-        names={['r2.0', 'r2.1', 'r2.2']}
-      />
+      <VecFieldset label="r₁" unit="km" form={form} names={['r1.0', 'r1.1', 'r1.2']} />
+      <VecFieldset label="r₂" unit="km" form={form} names={['r2.0', 'r2.1', 'r2.2']} />
 
       <button type="submit">Solve</button>
     </form>
@@ -258,12 +248,7 @@ type VecFieldsetProps<TValues extends Record<string, unknown>> = {
   names: readonly ExtractFieldPaths<TValues>[];
 };
 
-function VecFieldset<TValues extends Record<string, unknown>>({
-  label,
-  unit,
-  form,
-  names,
-}: VecFieldsetProps<TValues>) {
+function VecFieldset<TValues extends Record<string, unknown>>({ label, unit, form, names }: VecFieldsetProps<TValues>) {
   const errors = names.map((n) => (form.touched[n] ? form.errors[n] : undefined));
   const firstError = errors.find((e): e is string => Boolean(e));
 
@@ -275,13 +260,7 @@ function VecFieldset<TValues extends Record<string, unknown>>({
       </legend>
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         {names.map((name, i) => (
-          <input
-            key={name}
-            type="number"
-            step="any"
-            aria-invalid={Boolean(errors[i])}
-            {...form.getFieldProps(name)}
-          />
+          <input key={name} type="number" step="any" aria-invalid={Boolean(errors[i])} {...form.getFieldProps(name)} />
         ))}
       </div>
       {firstError && <span role="alert">{firstError}</span>}
@@ -570,8 +549,8 @@ function SearchBox() {
 **Solution:** Use a single `useForm` with all fields. Validate on each "Next" click with `validateForm`, advance only if valid.
 
 ```tsx
-import { useState } from 'react';
 import { isOk } from '@railway-ts/pipelines/result';
+import { useState } from 'react';
 
 function MultiStepForm() {
   const [step, setStep] = useState(1);
@@ -1010,9 +989,7 @@ sliders, radios, file inputs) and array helper operations (`push`, `remove`,
 
 ```tsx
 const form = useForm(schema, {
-  initialValues: {
-    /* ... */
-  },
+  initialValues: {/* ... */},
   validationMode: 'submit',
 });
 
@@ -1058,8 +1035,8 @@ For the full technical details, see the [API Reference: Error Priority](./API.md
 ### Zod
 
 ```tsx
-import { z } from 'zod';
 import { useForm } from '@railway-ts/use-form';
+import { z } from 'zod';
 
 const userSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -1097,8 +1074,8 @@ function ZodForm() {
 ### Valibot
 
 ```tsx
-import * as v from 'valibot';
 import { useForm } from '@railway-ts/use-form';
+import * as v from 'valibot';
 
 const userSchema = v.object({
   username: v.pipe(v.string(), v.minLength(3, 'Username must be at least 3 characters')),
@@ -1251,9 +1228,7 @@ You can also combine `onSubmit` (for the main action) with the returned `Result`
 
 ```typescript
 const form = useForm(schema, {
-  initialValues: {
-    /* ... */
-  },
+  initialValues: {/* ... */},
   onSubmit: async (values) => {
     await api.createUser(values);
   },
@@ -1276,8 +1251,8 @@ match(result, {
 **Solution:** Extract a reusable `Field` component that takes the form instance, field name, and label.
 
 ```tsx
-import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1334,9 +1309,9 @@ For more control, accept `children` or render props instead of hard-coding `<inp
 Wrap field components in `React.memo` so they only re-render when their specific field changes:
 
 ```tsx
-import { memo, useMemo } from 'react';
-import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
 import { object, required, string, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm, type UseFormReturn, type ExtractFieldPaths } from '@railway-ts/use-form';
+import { memo, useMemo } from 'react';
 
 const largeFormSchema = object({
   field1: required(string()),
@@ -1388,9 +1363,7 @@ For forms with many fields, `validationMode: 'blur'` avoids re-validating on eve
 
 ```typescript
 const form = useForm(schema, {
-  initialValues: {
-    /* ... */
-  },
+  initialValues: {/* ... */},
   validationMode: 'blur',
 });
 ```
@@ -1424,8 +1397,8 @@ UI libraries like Material-UI and Chakra UI use different prop names than native
 
 ```tsx
 import { TextField, Button } from '@mui/material';
-import { useForm } from '@railway-ts/use-form';
 import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1478,8 +1451,8 @@ function MuiForm() {
 
 ```tsx
 import { Field, Input, Button } from '@chakra-ui/react';
-import { useForm } from '@railway-ts/use-form';
 import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1519,11 +1492,12 @@ function ChakraForm() {
 Shadcn components use native HTML under the hood, so `getFieldProps` works directly:
 
 ```tsx
+import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
+
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { useForm } from '@railway-ts/use-form';
-import { object, required, chain, string, email, minLength, type InferSchemaType } from '@railway-ts/pipelines/schema';
 
 const loginSchema = object({
   email: required(chain(string(), email())),
@@ -1676,9 +1650,7 @@ function PersistentForm() {
 ```tsx
 function FormWithWarning() {
   const form = useForm(schema, {
-    initialValues: {
-      /* ... */
-    },
+    initialValues: {/* ... */},
   });
 
   useEffect(() => {
@@ -1711,7 +1683,6 @@ For React Router or Next.js navigation, you'll also need to hook into the router
 This recipe combines everything: schema validation, per-field async validators, server errors, cross-field validation (password confirmation), and Result pattern-matching on submit.
 
 ```tsx
-import { useForm } from '@railway-ts/use-form';
 import { ok, err, match, fromPromise, type Result } from '@railway-ts/pipelines/result';
 import {
   object,
@@ -1725,6 +1696,7 @@ import {
   ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 // --- Schema ---
 
@@ -1837,9 +1809,6 @@ This form demonstrates:
 The same registration form using React Query for server state and React Router for navigation -- no Result types, just idiomatic React patterns.
 
 ```tsx
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from '@railway-ts/use-form';
 import {
   object,
   string,
@@ -1852,6 +1821,9 @@ import {
   ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 // --- Schema ---
 

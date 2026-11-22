@@ -1,7 +1,9 @@
 import { describe, test, expect, mock } from 'bun:test';
-import { render, screen, waitFor } from '../fixtures/test-utils';
+
 import { userEvent } from '@testing-library/user-event';
+
 import { useForm } from '../../src/useForm';
+import { render, screen, waitFor } from '../fixtures/test-utils';
 import { userValidator, type UserForm } from '../fixtures/validators';
 
 // Test component that uses the form hook

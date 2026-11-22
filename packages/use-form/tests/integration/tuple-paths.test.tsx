@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { renderHook, act } from '@testing-library/react';
+
 import * as S from '@railway-ts/pipelines/schema';
+import { renderHook, act } from '@testing-library/react';
+
 import { useForm } from '../../src/useForm';
 
 const tupleSchema = S.object({
@@ -13,9 +15,7 @@ describe('tuple/array path keys', () => {
   const failingValues: TupleValues = { r1: [-1, 0, 0] };
 
   test('schema errors land at canonical dot keys after submit', async () => {
-    const { result } = renderHook(() =>
-      useForm(tupleSchema, { initialValues: failingValues }),
-    );
+    const { result } = renderHook(() => useForm(tupleSchema, { initialValues: failingValues }));
 
     await act(async () => {
       await result.current.handleSubmit();
@@ -26,9 +26,7 @@ describe('tuple/array path keys', () => {
   });
 
   test('getFieldError finds the schema error using the dot-form path', async () => {
-    const { result } = renderHook(() =>
-      useForm(tupleSchema, { initialValues: failingValues }),
-    );
+    const { result } = renderHook(() => useForm(tupleSchema, { initialValues: failingValues }));
 
     await act(async () => {
       await result.current.handleSubmit();
@@ -39,9 +37,7 @@ describe('tuple/array path keys', () => {
   });
 
   test('bracket-form callers still resolve to the same canonical entry', () => {
-    const { result } = renderHook(() =>
-      useForm(tupleSchema, { initialValues: failingValues }),
-    );
+    const { result } = renderHook(() => useForm(tupleSchema, { initialValues: failingValues }));
 
     act(() => {
       result.current.setFieldTouched('r1[0]', true);
@@ -52,9 +48,7 @@ describe('tuple/array path keys', () => {
   });
 
   test('getFieldError accepts bracket-form input and resolves to the canonical entry', async () => {
-    const { result } = renderHook(() =>
-      useForm(tupleSchema, { initialValues: failingValues }),
-    );
+    const { result } = renderHook(() => useForm(tupleSchema, { initialValues: failingValues }));
 
     await act(async () => {
       await result.current.handleSubmit();

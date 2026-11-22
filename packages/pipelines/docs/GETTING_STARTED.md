@@ -200,8 +200,8 @@ So far we've been starting pipelines with `ok(10)` -- a known good value. In the
 The schema system validates untrusted data and returns a `Result`:
 
 ```typescript
-import { validate, object, required, chain, string, parseNumber, min } from '@railway-ts/pipelines/schema';
 import { match } from '@railway-ts/pipelines/result';
+import { validate, object, required, chain, string, parseNumber, min } from '@railway-ts/pipelines/schema';
 
 const userSchema = object({
   name: required(string()),

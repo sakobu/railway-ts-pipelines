@@ -3,8 +3,9 @@
 // validatingFields tracking instead of form-wide isValidating.
 
 import { useForm } from '../../src/';
-import { fieldValidatorUserSchema, checkUsernameAvailable, type FieldValidatorUser } from './fieldValidatorSchema';
 import { prepareForAPI } from '../utils';
+
+import { fieldValidatorUserSchema, checkUsernameAvailable, type FieldValidatorUser } from './fieldValidatorSchema';
 
 const DEFAULT_BIRTHDATE = new Date();
 

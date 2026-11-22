@@ -82,9 +82,9 @@ Validate at boundaries, chain operations, branch once at the end. Errors propaga
 Cross-field validation + async operations:
 
 ```typescript
-import { object, required, chain, string, minLength, refineAt, validate } from '@railway-ts/pipelines/schema';
 import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { flatMapWith, tapWith } from '@railway-ts/pipelines/result';
+import { object, required, chain, string, minLength, refineAt, validate } from '@railway-ts/pipelines/schema';
 
 const signupSchema = chain(
   object({

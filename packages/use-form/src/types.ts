@@ -1,6 +1,6 @@
-import type { ChangeEvent, FormEvent } from 'react';
 import type { Result } from '@railway-ts/pipelines/result';
 import type { ValidationError } from '@railway-ts/pipelines/schema';
+import type { ChangeEvent, FormEvent } from 'react';
 
 // =============================================================================
 // Form Types
@@ -580,7 +580,7 @@ export type ExtractFieldPaths<T> = T extends readonly unknown[]
                     ? U extends { type: infer Type }
                       ? Type extends string
                         ? // For discriminated unions, we need to extract paths from all variants
-                            `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
+                          `${K}` | `${K}.${ExtractFieldPaths<NonNullable<T[K]>>}`
                         : never
                       : never
                     : never

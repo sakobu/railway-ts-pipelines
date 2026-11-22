@@ -1,5 +1,4 @@
 import { ok, err } from '@railway-ts/pipelines/result';
-import type { Validator, MaybeAsyncValidator, StandardSchemaV1 } from '@railway-ts/pipelines/schema';
 import {
   object,
   required,
@@ -15,6 +14,8 @@ import {
   stringEnum,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+
+import type { Validator, MaybeAsyncValidator, StandardSchemaV1 } from '@railway-ts/pipelines/schema';
 
 /**
  * Simple user validator for testing using Railway schema builders

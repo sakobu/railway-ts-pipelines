@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'bun:test';
+
 import { formReducer } from '../../src/formReducer';
+
 import type { FormState } from '../../src/types';
 
 describe('formReducer', () => {

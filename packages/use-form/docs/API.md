@@ -531,7 +531,7 @@ resetForm(): void
 Returns the error message for a field path, gated on user interaction.
 
 - **Leaf paths**: returns the error iff the field itself has been touched.
-- **Group / parent paths**: returns the error iff *any* descendant field has been
+- **Group / parent paths**: returns the error iff _any_ descendant field has been
   touched. Cross-field validation errors that schemas attach to a non-leaf path
   (e.g. `S.refineAt("confirm", v => v.password === v.confirm, …)` or
   `S.refineAt("r2", …)` over a tuple) surface naturally on the group container,
@@ -579,7 +579,7 @@ const schema = S.chain(
 
 The descendant scan uses a path-prefix check that guards against sibling
 collisions — `r2` does not match a touch on `r20`. `getFieldError` never
-aggregates *across* paths: it only returns an error attached at the queried
+aggregates _across_ paths: it only returns an error attached at the queried
 path, gated on touch of the path or any of its descendants.
 
 ### getFieldId

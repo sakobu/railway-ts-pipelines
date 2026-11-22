@@ -9,8 +9,8 @@ A guided walkthrough. Each step introduces one concept, building to a complete f
 Every `useForm` starts with a **schema** -- an object that describes what your form data looks like and how to validate it. The schema is the single source of truth: it defines both the validation rules and the TypeScript types at the same time.
 
 ```tsx
-import { useForm } from '@railway-ts/use-form';
 import { object, string, required, chain, nonEmpty, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 // 1. Define a schema
 const loginSchema = object({
@@ -158,9 +158,7 @@ By default, validation runs on every change. That's great for short forms, but i
 ```typescript
 // Validate only when a field loses focus
 const form = useForm(validator, {
-  initialValues: {
-    /* ... */
-  },
+  initialValues: {/* ... */},
   validationMode: 'blur',
 });
 ```
@@ -176,9 +174,7 @@ const form = useForm(validator, {
 ```typescript
 // Don't bother the user until they submit
 const form = useForm(validator, {
-  initialValues: {
-    /* ... */
-  },
+  initialValues: {/* ... */},
   validationMode: 'submit',
 });
 ```

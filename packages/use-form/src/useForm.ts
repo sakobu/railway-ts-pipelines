@@ -1,7 +1,20 @@
-import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
 import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
 import { validate, formatErrors, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
+import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
+
+import { createArrayHelpers } from './arrayHelpersFactory';
+import {
+  createNativeCheckboxProps,
+  createNativeSelectFieldProps,
+  createNativeSliderProps,
+  createNativeSwitchProps,
+  createNativeFieldProps,
+  createCheckboxGroupOptionProps,
+  createNativeFileFieldProps,
+  createRadioGroupOptionProps,
+} from './fieldPropsFactory';
 import { formReducer } from './formReducer';
+import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import {
   deepMerge,
   getValueByPath,
@@ -11,7 +24,7 @@ import {
   normalizePath,
   normalizePathKeys,
 } from './utils';
-import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
+
 import type {
   ArrayHelpers,
   DeepPartial,
@@ -30,17 +43,6 @@ import type {
   NativeRadioGroupOptionProps,
   UseFormReturn,
 } from './types';
-import { createArrayHelpers } from './arrayHelpersFactory';
-import {
-  createNativeCheckboxProps,
-  createNativeSelectFieldProps,
-  createNativeSliderProps,
-  createNativeSwitchProps,
-  createNativeFieldProps,
-  createCheckboxGroupOptionProps,
-  createNativeFileFieldProps,
-  createRadioGroupOptionProps,
-} from './fieldPropsFactory';
 
 // =============================================================================
 // Main Hook
@@ -1091,13 +1093,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       field: TField,
       optionValue: string | number,
     ): NativeCheckboxGroupOptionProps => {
-      return createCheckboxGroupOptionProps(
-        field,
-        optionValue,
-        formState.values,
-        setFieldValue,
-        setFieldTouched,
-      );
+      return createCheckboxGroupOptionProps(field, optionValue, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1151,13 +1147,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       field: TField,
       optionValue: string | number,
     ): NativeRadioGroupOptionProps => {
-      return createRadioGroupOptionProps(
-        field,
-        optionValue,
-        formState.values,
-        setFieldValue,
-        setFieldTouched,
-      );
+      return createRadioGroupOptionProps(field, optionValue, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );

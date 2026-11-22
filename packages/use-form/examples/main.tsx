@@ -1,12 +1,13 @@
 import './styles.css';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import UserForm from './sync/UserForm';
-import AsyncUserForm from './async/AsyncUserForm';
-import ZodForm from './standard-schema/ZodForm';
-import ValibotForm from './standard-schema/ValibotForm';
-import FieldValidatorForm from './field-validators/FieldValidatorForm';
+
 import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
+import AsyncUserForm from './async/AsyncUserForm';
+import FieldValidatorForm from './field-validators/FieldValidatorForm';
+import ValibotForm from './standard-schema/ValibotForm';
+import ZodForm from './standard-schema/ZodForm';
+import UserForm from './sync/UserForm';
 
 type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
 

@@ -1,7 +1,9 @@
 import { describe, test, expect, mock } from 'bun:test';
+
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
+
 import { useForm } from '../../src/useForm';
+import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
 import {
   userValidator,
   alwaysValidValidator,

@@ -37,8 +37,8 @@ Requires React 18+ and @railway-ts/pipelines ^0.1.29.
 ## Quick Start
 
 ```tsx
-import { useForm } from '@railway-ts/use-form';
 import { object, string, required, chain, nonEmpty, email, type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
 
 const loginSchema = object({
   email: required(chain(string(), nonEmpty('Email is required'), email())),
@@ -76,9 +76,6 @@ export function LoginForm() {
 Registration form with cross-field validation (`refineAt` for password confirmation), per-field async validation (`fieldValidators` for username availability), and server errors -- all in one component:
 
 ```tsx
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from '@railway-ts/use-form';
 import {
   object,
   string,
@@ -91,6 +88,9 @@ import {
   ROOT_ERROR_KEY,
   type InferSchemaType,
 } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 // --- Schema ---
 

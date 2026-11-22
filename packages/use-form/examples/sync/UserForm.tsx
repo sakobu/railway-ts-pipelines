@@ -1,6 +1,7 @@
 import { useForm } from '../../src/';
-import { userSchema, type User } from './userSchema';
 import { prepareForAPI } from '../utils';
+
+import { userSchema, type User } from './userSchema';
 
 const DEFAULT_BIRTHDATE = new Date();
 

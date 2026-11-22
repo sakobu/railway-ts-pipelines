@@ -1,4 +1,5 @@
-import type { ChangeEvent } from 'react';
+import { getValueByPath } from './utils';
+
 import type {
   FieldPath,
   NativeFieldProps,
@@ -10,7 +11,7 @@ import type {
   NativeFileFieldProps,
   NativeRadioGroupOptionProps,
 } from './types';
-import { getValueByPath } from './utils';
+import type { ChangeEvent } from 'react';
 
 // =============================================================================
 // Native HTML Field Props Factories

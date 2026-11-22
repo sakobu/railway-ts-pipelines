@@ -4,6 +4,7 @@
 // Valibot v1+ implements Standard Schema v1 natively.
 
 import * as v from 'valibot';
+
 import { useForm } from '../../src/';
 
 // ── Your existing Valibot schema — nothing special here ─────

@@ -1,5 +1,14 @@
+import {
+  deepEqual,
+  deepMerge,
+  getValueByPath,
+  isPathAffected,
+  normalizePath,
+  normalizePathKeys,
+  setValueByPath,
+} from './utils';
+
 import type { FieldPath, FormAction, FormState } from './types';
-import { deepEqual, deepMerge, getValueByPath, isPathAffected, normalizePath, normalizePathKeys, setValueByPath } from './utils';
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.

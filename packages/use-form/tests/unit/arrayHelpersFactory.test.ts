@@ -1,5 +1,7 @@
 import { describe, test, expect, mock } from 'bun:test';
+
 import { createArrayHelpers } from '../../src/arrayHelpersFactory';
+
 import type {
   NativeFieldProps,
   NativeSelectProps,
@@ -15,70 +17,56 @@ type TestItem = { id: number; name?: string };
 
 // Helper to create mock field prop functions
 const createMockFieldProps = () => ({
-  getFieldProps: mock(
-    (_field: string): NativeFieldProps => ({
-      id: 'test',
-      name: 'test',
-      value: '',
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getSelectFieldProps: mock(
-    (_field: string): NativeSelectProps => ({
-      id: 'test',
-      name: 'test',
-      value: '',
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getSliderProps: mock(
-    (_field: string): NativeSliderProps => ({
-      id: 'test',
-      name: 'test',
-      type: 'range',
-      value: 0,
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getCheckboxProps: mock(
-    (_field: string): NativeCheckboxProps => ({
-      id: 'test',
-      name: 'test',
-      checked: false,
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getSwitchProps: mock(
-    (_field: string): NativeSwitchProps => ({
-      id: 'test',
-      name: 'test',
-      checked: false,
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getFileFieldProps: mock(
-    (_field: string): NativeFileFieldProps => ({
-      id: 'test',
-      name: 'test',
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
-  getRadioGroupOptionProps: mock(
-    (_field: string, _optionValue: string | number): NativeRadioGroupOptionProps => ({
-      id: 'test',
-      name: 'test',
-      value: 'test',
-      checked: false,
-      onChange: () => {},
-      onBlur: () => {},
-    }),
-  ),
+  getFieldProps: mock((_field: string): NativeFieldProps => ({
+    id: 'test',
+    name: 'test',
+    value: '',
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getSelectFieldProps: mock((_field: string): NativeSelectProps => ({
+    id: 'test',
+    name: 'test',
+    value: '',
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getSliderProps: mock((_field: string): NativeSliderProps => ({
+    id: 'test',
+    name: 'test',
+    type: 'range',
+    value: 0,
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getCheckboxProps: mock((_field: string): NativeCheckboxProps => ({
+    id: 'test',
+    name: 'test',
+    checked: false,
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getSwitchProps: mock((_field: string): NativeSwitchProps => ({
+    id: 'test',
+    name: 'test',
+    checked: false,
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getFileFieldProps: mock((_field: string): NativeFileFieldProps => ({
+    id: 'test',
+    name: 'test',
+    onChange: () => {},
+    onBlur: () => {},
+  })),
+  getRadioGroupOptionProps: mock((_field: string, _optionValue: string | number): NativeRadioGroupOptionProps => ({
+    id: 'test',
+    name: 'test',
+    value: 'test',
+    checked: false,
+    onChange: () => {},
+    onBlur: () => {},
+  })),
   getFieldError: mock((_field: string): string | undefined => undefined),
   getFieldId: mock((field: string, optionValue?: string | number): string =>
     optionValue !== undefined ? `${field}-${String(optionValue)}` : field,
@@ -907,15 +895,13 @@ describe('arrayHelpersFactory', () => {
   describe('field props methods', () => {
     test('getFieldProps constructs correct path and delegates', () => {
       type Contact = { email: string };
-      const mockGetFieldProps = mock(
-        (_field: string): NativeFieldProps => ({
-          id: 'test',
-          name: 'test',
-          value: '',
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetFieldProps = mock((_field: string): NativeFieldProps => ({
+        id: 'test',
+        name: 'test',
+        value: '',
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Contact, 'email'>(
@@ -940,15 +926,13 @@ describe('arrayHelpersFactory', () => {
 
     test('getSelectFieldProps constructs correct path and delegates', () => {
       type Item = { category: string };
-      const mockGetSelectFieldProps = mock(
-        (_field: string): NativeSelectProps => ({
-          id: 'test',
-          name: 'test',
-          value: '',
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetSelectFieldProps = mock((_field: string): NativeSelectProps => ({
+        id: 'test',
+        name: 'test',
+        value: '',
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'category'>(
@@ -973,16 +957,14 @@ describe('arrayHelpersFactory', () => {
 
     test('getSliderProps constructs correct path and delegates', () => {
       type Item = { volume: number };
-      const mockGetSliderProps = mock(
-        (_field: string): NativeSliderProps => ({
-          id: 'test',
-          name: 'test',
-          type: 'range',
-          value: 0,
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetSliderProps = mock((_field: string): NativeSliderProps => ({
+        id: 'test',
+        name: 'test',
+        type: 'range',
+        value: 0,
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'volume'>(
@@ -1007,15 +989,13 @@ describe('arrayHelpersFactory', () => {
 
     test('getCheckboxProps constructs correct path and delegates', () => {
       type Item = { active: boolean };
-      const mockGetCheckboxProps = mock(
-        (_field: string): NativeCheckboxProps => ({
-          id: 'test',
-          name: 'test',
-          checked: false,
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetCheckboxProps = mock((_field: string): NativeCheckboxProps => ({
+        id: 'test',
+        name: 'test',
+        checked: false,
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'active'>(
@@ -1040,15 +1020,13 @@ describe('arrayHelpersFactory', () => {
 
     test('getSwitchProps constructs correct path and delegates', () => {
       type Item = { enabled: boolean };
-      const mockGetSwitchProps = mock(
-        (_field: string): NativeSwitchProps => ({
-          id: 'test',
-          name: 'test',
-          checked: false,
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetSwitchProps = mock((_field: string): NativeSwitchProps => ({
+        id: 'test',
+        name: 'test',
+        checked: false,
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'enabled'>(
@@ -1073,14 +1051,12 @@ describe('arrayHelpersFactory', () => {
 
     test('getFileFieldProps constructs correct path and delegates', () => {
       type Item = { avatar: File | null };
-      const mockGetFileFieldProps = mock(
-        (_field: string): NativeFileFieldProps => ({
-          id: 'test',
-          name: 'test',
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetFileFieldProps = mock((_field: string): NativeFileFieldProps => ({
+        id: 'test',
+        name: 'test',
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'avatar'>(
@@ -1139,15 +1115,13 @@ describe('arrayHelpersFactory', () => {
 
     test('field props methods work with different indices', () => {
       type Item = { name: string };
-      const mockGetFieldProps = mock(
-        (_field: string): NativeFieldProps => ({
-          id: 'test',
-          name: 'test',
-          value: '',
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetFieldProps = mock((_field: string): NativeFieldProps => ({
+        id: 'test',
+        name: 'test',
+        value: '',
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Item, 'name'>(
@@ -1177,15 +1151,13 @@ describe('arrayHelpersFactory', () => {
     test('field props methods work with deeply nested objects', () => {
       type Member = { email: string; phone: string };
       type Team = { name: string; members: Member[] };
-      const mockGetFieldProps = mock(
-        (_field: string): NativeFieldProps => ({
-          id: 'test',
-          name: 'test',
-          value: '',
-          onChange: () => {},
-          onBlur: () => {},
-        }),
-      );
+      const mockGetFieldProps = mock((_field: string): NativeFieldProps => ({
+        id: 'test',
+        name: 'test',
+        value: '',
+        onChange: () => {},
+        onBlur: () => {},
+      }));
       const mocks = createMockFieldProps();
 
       const helpers = createArrayHelpers<Team, 'name' | 'members'>(

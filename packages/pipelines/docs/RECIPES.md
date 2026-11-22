@@ -67,8 +67,8 @@ const processData = flow(
 ### Sequential Steps
 
 ```typescript
-import { flatMapWith } from '@railway-ts/pipelines/result';
 import { pipeAsync } from '@railway-ts/pipelines/composition';
+import { flatMapWith } from '@railway-ts/pipelines/result';
 
 const processOrder = async (input: unknown) => {
   const result = await pipeAsync(
@@ -224,8 +224,8 @@ const result = validate({ password: 'abc', confirmPassword: 'xyz' }, signupSchem
 `formatErrors` flattens `ValidationError[]` into `Record<string, string>` keyed by dot-path. `ROOT_ERROR_KEY` (`"_root"`) is used for errors without a field path:
 
 ```typescript
-import { validate, formatErrors, ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
 import { match } from '@railway-ts/pipelines/result';
+import { validate, formatErrors, ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
 
 const result = validate(input, schema);
 
@@ -793,8 +793,8 @@ Convert between multi-argument and tuple-accepting functions. Pairs naturally wi
 
 ```typescript
 import { tupled, untupled } from '@railway-ts/pipelines/composition';
-import { combine, mapWith, match } from '@railway-ts/pipelines/result';
 import { pipe } from '@railway-ts/pipelines/composition';
+import { combine, mapWith, match } from '@railway-ts/pipelines/result';
 
 const createUser = (name: string, age: number) => ({ name, age });
 
