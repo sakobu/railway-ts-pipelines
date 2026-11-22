@@ -26,7 +26,6 @@ import type {
   FormState,
   NativeSwitchProps,
   NativeFieldProps,
-  GetArrayItemType,
   NativeFileFieldProps,
   NativeRadioGroupOptionProps,
   UseFormReturn,
@@ -442,7 +441,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       void validateForm(initialValues);
 
       // Also mark all fields as touched (including nested and array items)
-      const allFields = collectFieldPaths(initialValues as Record<string, unknown>);
+      const allFields = collectFieldPaths(initialValues);
       dispatch({
         type: 'MARK_ALL_TOUCHED',
         fields: allFields,
@@ -727,7 +726,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
         const { values, clientErrors, serverErrors } = formStateRef.current;
 
         // Mark all fields and error paths as touched (deep)
-        const valuePaths = collectFieldPaths(values as Record<string, unknown>);
+        const valuePaths = collectFieldPaths(values);
         const allPaths = Array.from(
           new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
         );
@@ -976,7 +975,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getFieldProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeFieldProps => {
-      return createNativeFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeFieldProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -998,7 +997,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getSelectFieldProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSelectProps => {
-      return createNativeSelectFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeSelectFieldProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1019,7 +1018,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getCheckboxProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeCheckboxProps => {
-      return createNativeCheckboxProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeCheckboxProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1040,7 +1039,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getSwitchProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSwitchProps => {
-      return createNativeSwitchProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeSwitchProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1062,7 +1061,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getSliderProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeSliderProps => {
-      return createNativeSliderProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeSliderProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1093,7 +1092,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       optionValue: string | number,
     ): NativeCheckboxGroupOptionProps => {
       return createCheckboxGroupOptionProps(
-        field as FieldPath,
+        field,
         optionValue,
         formState.values,
         setFieldValue,
@@ -1122,7 +1121,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    */
   const getFileFieldProps = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): NativeFileFieldProps => {
-      return createNativeFileFieldProps(field as FieldPath, formState.values, setFieldValue, setFieldTouched);
+      return createNativeFileFieldProps(field, formState.values, setFieldValue, setFieldTouched);
     },
     [formState.values, setFieldValue, setFieldTouched],
   );
@@ -1153,7 +1152,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
       optionValue: string | number,
     ): NativeRadioGroupOptionProps => {
       return createRadioGroupOptionProps(
-        field as FieldPath,
+        field,
         optionValue,
         formState.values,
         setFieldValue,
@@ -1273,14 +1272,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
   );
 
   // Overloaded wrapper for better type inference
-  const arrayHelpers = arrayHelpersImpl as {
-    <TField extends keyof TValues & string>(
-      field: TField,
-    ): ArrayHelpers<GetArrayItemType<TValues, TField>, ExtractFieldPaths<GetArrayItemType<TValues, TField>>>;
-    <TField extends ExtractFieldPaths<TValues>, TItem = unknown>(
-      field: TField,
-    ): ArrayHelpers<TItem, ExtractFieldPaths<TItem>>;
-  };
+  const arrayHelpers = arrayHelpersImpl;
 
   // ===========================================================================
   // Return

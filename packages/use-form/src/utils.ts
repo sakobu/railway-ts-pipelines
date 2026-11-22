@@ -151,9 +151,9 @@ export const setValueByPath = <TObj extends Record<string, unknown>, TValue>(
     if (i === parts.length - 1) {
       // Final set
       if (Array.isArray(currNew) && typeof key === 'number') {
-        currNew[key] = value as unknown;
+        currNew[key] = value;
       } else if (!Array.isArray(currNew) && typeof key === 'string') {
-        currNew[key] = value as unknown;
+        currNew[key] = value;
       }
       break;
     }
@@ -377,8 +377,8 @@ export const deepEqual = (a: unknown, b: unknown): boolean => {
     return a.every((item, i) => deepEqual(item, b[i]));
   }
 
-  const keysA = Object.keys(a as Record<string, unknown>);
-  const keysB = Object.keys(b as Record<string, unknown>);
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
   if (keysA.length !== keysB.length) return false;
   return keysA.every(
     (key) =>
