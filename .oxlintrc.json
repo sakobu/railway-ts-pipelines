@@ -266,7 +266,8 @@
         "typescript/triple-slash-reference": "error",
         "unicorn/no-array-for-each": "error",
         "unicorn/no-hex-escape": "error",
-        "unicorn/prefer-dom-node-dataset": "error"
+        "unicorn/prefer-dom-node-dataset": "error",
+        "no-useless-assignment": "error"
       }
     },
     {
@@ -475,7 +476,8 @@
         "@eslint-react/web-api-no-leaked-timeout": "warn",
         "@eslint-react/naming-convention-context-name": "warn",
         "@eslint-react/naming-convention-id-name": "warn",
-        "@eslint-react/naming-convention-ref-name": "warn"
+        "@eslint-react/naming-convention-ref-name": "warn",
+        "no-useless-assignment": "error"
       }
     },
     {
