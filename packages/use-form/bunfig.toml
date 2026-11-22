@@ -1,2 +1,3 @@
 [test]
 preload = ["./tests/happydom.ts", "./tests/testing-library.ts"]
+coveragePathIgnorePatterns = ["../pipelines/**"]
