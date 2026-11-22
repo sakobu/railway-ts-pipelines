@@ -1,0 +1,15 @@
+{
+  // Type-checks tests/package/*.{ts,cts} against the BUILT package (dist/),
+  // resolved by name through package.json "exports", the way a consumer sees it.
+  // skipLibCheck is off so broken published declarations fail here.
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "target": "ES2022",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": []
+  },
+  "include": ["*.ts", "*.cts"]
+}

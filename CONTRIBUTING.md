@@ -146,19 +146,16 @@ export function myValidator(config: Config): Validator<Input, Output> {
 
 ## Build System
 
-Uses tsup with multiple entry points:
+Uses [tsdown](https://tsdown.dev) (`tsdown.config.ts`) with four entry points:
 
-- `src/index.ts` → `dist/index.{mjs,cjs}`
 - `src/option/index.ts` → `dist/option/index.{mjs,cjs}`
 - `src/result/index.ts` → `dist/result/index.{mjs,cjs}`
 - `src/composition/index.ts` → `dist/composition/index.{mjs,cjs}`
 - `src/schema/index.ts` → `dist/schema/index.{mjs,cjs}`
 
-Each generates:
+Each generates ESM (`.mjs`, types in `.d.mts`) and CommonJS (`.cjs`, types in `.d.cts`). Code shared between entries (Option and Result) goes into one shared chunk. Declarations come from Oxc's isolated-declarations emitter, so exported functions need explicit return types; the build fails if one is missing.
 
-- ESM (`.mjs`)
-- CJS (`.cjs`)
-- TypeScript declarations (`.d.ts`)
+The build also runs publint and arethetypeswrong (`node16` profile) and fails on any problem. `bun run test:package` builds, then checks the result the way consumers see it: `tests/package` type-checks ESM and CommonJS consumer files against `dist/` with `skipLibCheck` off, and runs runtime checks in Node.
 
 ## Commit Format
 

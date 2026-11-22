@@ -5,24 +5,44 @@
   "type": "module",
   "exports": {
     "./option": {
-      "types": "./dist/option/index.d.ts",
-      "import": "./dist/option/index.mjs",
-      "require": "./dist/option/index.cjs"
+      "import": {
+        "types": "./dist/option/index.d.mts",
+        "default": "./dist/option/index.mjs"
+      },
+      "require": {
+        "types": "./dist/option/index.d.cts",
+        "default": "./dist/option/index.cjs"
+      }
     },
     "./result": {
-      "types": "./dist/result/index.d.ts",
-      "import": "./dist/result/index.mjs",
-      "require": "./dist/result/index.cjs"
+      "import": {
+        "types": "./dist/result/index.d.mts",
+        "default": "./dist/result/index.mjs"
+      },
+      "require": {
+        "types": "./dist/result/index.d.cts",
+        "default": "./dist/result/index.cjs"
+      }
     },
     "./composition": {
-      "types": "./dist/composition/index.d.ts",
-      "import": "./dist/composition/index.mjs",
-      "require": "./dist/composition/index.cjs"
+      "import": {
+        "types": "./dist/composition/index.d.mts",
+        "default": "./dist/composition/index.mjs"
+      },
+      "require": {
+        "types": "./dist/composition/index.d.cts",
+        "default": "./dist/composition/index.cjs"
+      }
     },
     "./schema": {
-      "types": "./dist/schema/index.d.ts",
-      "import": "./dist/schema/index.mjs",
-      "require": "./dist/schema/index.cjs"
+      "import": {
+        "types": "./dist/schema/index.d.mts",
+        "default": "./dist/schema/index.mjs"
+      },
+      "require": {
+        "types": "./dist/schema/index.d.cts",
+        "default": "./dist/schema/index.cjs"
+      }
     }
   },
   "files": [
@@ -35,9 +55,9 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "bunx tsup",
-    "build:watch": "bunx tsup --watch",
-    "dev": "bunx tsup --watch",
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
+    "dev": "tsdown --watch",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
@@ -53,8 +73,9 @@
     "format:check": "bunx prettier --check .",
     "typecheck": "bunx tsc --noEmit",
     "size": "bunx size-limit",
-    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && bun run build && bun run size",
-    "check": "bun run typecheck && bun run lint && bun run test"
+    "prepublishOnly": "bun run typecheck && bun run lint && bun run test && bun run test:package && bun run size",
+    "check": "bun run typecheck && bun run lint && bun run test",
+    "test:package": "bun run build && tsc -p tests/package && node tests/package/runtime.mjs"
   },
   "size-limit": [
     {
@@ -104,6 +125,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@arethetypeswrong/core": "0.18.5",
     "@eslint/js": "^10.0.1",
     "@size-limit/preset-small-lib": "^14.3.0",
     "@types/bun": "1.4.5",
@@ -115,8 +137,9 @@
     "eslint-plugin-unicorn": "^80.0.0",
     "globals": "^17.14.0",
     "prettier": "^3.10.1",
+    "publint": "0.3.25",
     "size-limit": "^14.3.0",
-    "tsup": "^9.0.0",
+    "tsdown": "0.23.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.73.0"
   },
