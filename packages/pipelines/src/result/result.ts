@@ -11,9 +11,9 @@ import type { MaybeAsync } from '@/composition';
  * declarations: `Result` refers to it, and without it a plain
  * `{ ok: true, value }` object would type-check as a `Result`.
  *
- * `Symbol.for` makes every copy of this module (each entry point, and the
- * ESM and CommonJS builds) share one symbol, so Results compare equal no
- * matter which entry point created them.
+ * `Symbol.for` makes every copy of this module (each entry point, or a second
+ * installed copy of the package) share one symbol, so Results compare equal no
+ * matter which copy created them.
  */
 export const RESULT_BRAND: unique symbol = Symbol.for('@railway-ts/pipelines/RESULT_BRAND');
 

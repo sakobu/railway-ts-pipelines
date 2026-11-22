@@ -118,14 +118,14 @@ export function myValidator(config: Config): Validator<Input, Output> {
 
 Uses [tsdown](https://tsdown.dev) (`tsdown.config.ts`) with four entry points:
 
-- `src/option/index.ts` → `dist/option/index.{mjs,cjs}`
-- `src/result/index.ts` → `dist/result/index.{mjs,cjs}`
-- `src/composition/index.ts` → `dist/composition/index.{mjs,cjs}`
-- `src/schema/index.ts` → `dist/schema/index.{mjs,cjs}`
+- `src/option/index.ts` → `dist/option/index.mjs`
+- `src/result/index.ts` → `dist/result/index.mjs`
+- `src/composition/index.ts` → `dist/composition/index.mjs`
+- `src/schema/index.ts` → `dist/schema/index.mjs`
 
-Each generates ESM (`.mjs`, types in `.d.mts`) and CommonJS (`.cjs`, types in `.d.cts`). Code shared between entries (Option and Result) goes into one shared chunk. Declarations come from Oxc's isolated-declarations emitter, so exported functions need explicit return types; the build fails if one is missing.
+The package is ESM-only: each entry is an `.mjs` file with types in `.d.mts`, and CommonJS consumers load it through Node's `require(esm)`. Code shared between entries (Option and Result) goes into one shared chunk. Declarations come from Oxc's isolated-declarations emitter, so exported functions need explicit return types; the build fails if one is missing.
 
-The build also runs publint and arethetypeswrong (`node16` profile) and fails on any problem. `bun run test:package` builds, then checks the result the way consumers see it: `tests/package` type-checks ESM and CommonJS consumer files against `dist/` with `skipLibCheck` off, and runs runtime checks in Node.
+The build also runs publint and arethetypeswrong (`esm-only` profile) and fails on any problem. `bun run test:package` builds, then checks the result the way consumers see it: `tests/package` type-checks ESM and CommonJS consumer files against `dist/` with `skipLibCheck` off (`module: nodenext`), and runs runtime checks in Node, including that `require()` returns the same module as `import`.
 
 ## Good Contributions
 

@@ -11,9 +11,9 @@ import type { MaybeAsync } from '@/composition';
  * declarations: `Option` refers to it, and without it a plain
  * `{ some: true, value }` object would type-check as an `Option`.
  *
- * `Symbol.for` makes every copy of this module (each entry point, and the
- * ESM and CommonJS builds) share one symbol, so Options compare equal no
- * matter which entry point created them.
+ * `Symbol.for` makes every copy of this module (each entry point, or a second
+ * installed copy of the package) share one symbol, so Options compare equal no
+ * matter which copy created them.
  */
 export const OPTION_BRAND: unique symbol = Symbol.for('@railway-ts/pipelines/OPTION_BRAND');
 

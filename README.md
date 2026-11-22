@@ -4,10 +4,10 @@
 
 Railway-oriented programming for TypeScript. `@railway-ts/pipelines` gives you typed `Result` and `Option` values, composition helpers and a schema layer that validates untrusted input into a `Result`. `@railway-ts/use-form` builds schema-first React forms on top of it. Errors are values, not exceptions, from the schema all the way to the form.
 
-| Package                                        | Description                                                                       | npm                                                                                                                   |
-| ---------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [`@railway-ts/pipelines`](packages/pipelines/) | `Result`/`Option` pipelines, composition and schema validation. ESM and CommonJS. | [![npm](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) |
-| [`@railway-ts/use-form`](packages/use-form/)   | React form hook driven by a pipelines schema or any Standard Schema. ESM only.    | [![npm](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form)   |
+| Package                                        | Description                                                                    | npm                                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| [`@railway-ts/pipelines`](packages/pipelines/) | `Result`/`Option` pipelines, composition and schema validation. ESM only.      | [![npm](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) |
+| [`@railway-ts/use-form`](packages/use-form/)   | React form hook driven by a pipelines schema or any Standard Schema. ESM only. | [![npm](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form)   |
 
 ## Development
 
