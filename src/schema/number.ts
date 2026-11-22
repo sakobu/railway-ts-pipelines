@@ -209,7 +209,7 @@ export function precision(
 ): Validator<number> {
   return (value, path = []) => {
     const str = value.toString();
-    const decimalPlaces = (str.split('.')[1] || '').length;
+    const decimalPlaces = (str.split('.', 2)[1] || '').length;
 
     if (decimalPlaces > maxDecimalPlaces) {
       return err([{ path, message }]);

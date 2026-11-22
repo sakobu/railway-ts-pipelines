@@ -20,8 +20,7 @@ declare namespace StandardSchemaV1 {
   }
 
   type Result<Output> =
-    | { readonly value: Output; readonly issues?: undefined }
-    | { readonly issues: ReadonlyArray<Issue> };
+    { readonly value: Output; readonly issues?: undefined } | { readonly issues: ReadonlyArray<Issue> };
 
   interface Issue {
     readonly message: string;

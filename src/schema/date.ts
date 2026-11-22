@@ -49,7 +49,7 @@ export function date(message: string = 'Must be a Date object'): Validator<unkno
 export function dateRange(
   min: Date,
   max: Date,
-  message: string = `Must be between ${min.toISOString().split('T')[0]} and ${max.toISOString().split('T')[0]}`,
+  message: string = `Must be between ${min.toISOString().split('T', 1)[0]} and ${max.toISOString().split('T', 1)[0]}`,
 ): Validator<Date> {
   return (value, path = []) => {
     if (value < min || value > max) {

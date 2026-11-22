@@ -74,7 +74,7 @@ match(bob, {
 console.log('\n=== Mixing Sync and Async Steps ===');
 
 // pipeAsync/flowAsync can mix sync and async steps freely
-const formatUserName = (result: Result<EnrichedUser, string>) => {
+const formatUsername = (result: Result<EnrichedUser, string>) => {
   if (!result.ok) return result;
   return ok({ ...result.value, name: result.value.name.toUpperCase() });
 };
@@ -83,7 +83,7 @@ const mixedPipeline = flowAsync(
   fetchUser,
   validateUser,
   enrichWithPermissions,
-  formatUserName, // sync step — works seamlessly
+  formatUsername, // sync step — works seamlessly
 );
 
 const formatted = await mixedPipeline(1);

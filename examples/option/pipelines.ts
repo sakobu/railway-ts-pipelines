@@ -87,7 +87,9 @@ const processUser = (deptName: string) =>
   pipe(
     getDepartment(deptName),
     flatMapWith(getManager),
-    tapWith((user) => auditLog.push(`Accessed: ${user.name}`)),
+    tapWith((user) => {
+      auditLog.push(`Accessed: ${user.name}`);
+    }),
     mapWith((user) => user.name),
     (opt) => unwrapOr(opt, 'Unknown'),
   );

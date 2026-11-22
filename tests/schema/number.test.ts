@@ -43,7 +43,7 @@ describe('number - validators', () => {
       // Invalid cases
       const invalidInputs = [
         '42', // string
-        Number.NaN, // NaN
+        NaN, // NaN
         null,
         undefined,
         {},
@@ -94,7 +94,7 @@ describe('number - validators', () => {
         false,
         {},
         [],
-        Number.NaN, // NaN is technically a number type but not a valid number
+        NaN, // NaN is technically a number type but not a valid number
       ];
 
       for (const input of invalidInputs) {
@@ -546,7 +546,7 @@ describe('number - validators', () => {
       }
 
       // Invalid cases
-      const invalidInputs = [1.123, 0.001, -1.999, 3.141_59];
+      const invalidInputs = [1.123, 0.001, -1.999, 3.14159];
       for (const input of invalidInputs) {
         const result = validator(input);
         expect(isErr(result)).toBe(true);

@@ -164,9 +164,7 @@ export function parseDate(message: string = 'Must be a valid date'): Validator<u
 
     let dateValue: Date;
 
-    if (typeof value === 'string') {
-      dateValue = new Date(value);
-    } else if (typeof value === 'number') {
+    if (typeof value === 'string' || typeof value === 'number') {
       dateValue = new Date(value);
     } else {
       return err([{ path, message }]);
@@ -202,10 +200,10 @@ export function parseBool(message: string = 'Must be a valid boolean value'): Va
 
     if (typeof value === 'string') {
       const normalized = value.toLowerCase().trim();
-      if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+      if (['true', '1', 'yes'].includes(normalized)) {
         return ok(true);
       }
-      if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+      if (['false', '0', 'no'].includes(normalized)) {
         return ok(false);
       }
     }

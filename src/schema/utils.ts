@@ -323,9 +323,8 @@ export function formatErrors(errors: ValidationError[]): Record<string, string> 
       const formattedPath = error.path.reduce((path, segment, index) => {
         if (/^\d+$/.test(segment)) {
           return `${path}[${segment}]`;
-        } else {
-          return index === 0 ? segment : `${path}.${segment}`;
         }
+        return index === 0 ? segment : `${path}.${segment}`;
       }, '');
 
       acc[formattedPath || ROOT_ERROR_KEY] = error.message;

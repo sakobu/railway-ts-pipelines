@@ -10,7 +10,6 @@ try {
 let ok = true;
 let currentFile = '';
 let lf = 0;
-let lh: number;
 
 for (const line of data.split(/\n/)) {
   if (line.startsWith('SF:')) {
@@ -20,7 +19,7 @@ for (const line of data.split(/\n/)) {
     lf = Number.isNaN(n) ? 0 : n;
   } else if (line.startsWith('LH:')) {
     const n = Number.parseInt(line.slice(3), 10);
-    lh = Number.isNaN(n) ? 0 : n;
+    const lh = Number.isNaN(n) ? 0 : n;
     if (lf !== lh) {
       console.error(`Coverage < 100% for ${currentFile}: LH ${lh} / LF ${lf}`);
       ok = false;

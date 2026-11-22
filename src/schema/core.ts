@@ -118,10 +118,12 @@ export function _getAbortEarly(): boolean {
 /** @internal - Sets abortEarly for the duration of fn's synchronous execution */
 export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
   const prev = _abortEarly;
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- deliberate module-level abort-early context
   _abortEarly = enabled;
   try {
     return fn();
   } finally {
+    // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- restore previous context
     _abortEarly = prev;
   }
 }
@@ -275,7 +277,6 @@ export function optional<I, O>(
 ): MaybeAsyncValidator<I | undefined | null, O | undefined> {
   return (value, path = []) => {
     if (value === undefined || value === null) {
-      // eslint-disable-next-line unicorn/no-useless-undefined
       return ok(undefined);
     }
     return validator(value, path);
@@ -330,7 +331,6 @@ export function emptyAsOptional<I, O>(
       (Array.isArray(value) && value.length === 0) ||
       (typeof value === 'object' && value !== null && Object.keys(value).length === 0)
     ) {
-      // eslint-disable-next-line unicorn/no-useless-undefined
       return ok(undefined);
     }
 

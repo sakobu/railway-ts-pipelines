@@ -231,10 +231,9 @@ export function match<T, R1, R2>(
   if (isSome(option)) {
     const someFn = patterns.some;
     return someFn(option.value);
-  } else {
-    const noneFn = patterns.none;
-    return noneFn();
   }
+  const noneFn = patterns.none;
+  return noneFn();
 }
 
 // ─── Unwrap ─────────────────────────────────────────────────
@@ -257,9 +256,8 @@ export function match<T, R1, R2>(
 export function unwrap<T>(option: Option<T>, errorMsg?: string): T {
   if (option.some) {
     return option.value;
-  } else {
-    throw new Error(errorMsg || 'Cannot unwrap a none Option');
   }
+  throw new Error(errorMsg || 'Cannot unwrap a none Option');
 }
 
 /**
