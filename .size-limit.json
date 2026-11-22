@@ -1,0 +1,28 @@
+[
+  {
+    "name": "@railway-ts/pipelines/option",
+    "path": "packages/pipelines/dist/option/index.mjs",
+    "limit": "2 kB"
+  },
+  {
+    "name": "@railway-ts/pipelines/result",
+    "path": "packages/pipelines/dist/result/index.mjs",
+    "limit": "4 kB"
+  },
+  {
+    "name": "@railway-ts/pipelines/composition",
+    "path": "packages/pipelines/dist/composition/index.mjs",
+    "limit": "2 kB"
+  },
+  {
+    "name": "@railway-ts/pipelines/schema",
+    "path": "packages/pipelines/dist/schema/index.mjs",
+    "limit": "10 kB"
+  },
+  {
+    "name": "@railway-ts/use-form",
+    "path": "packages/use-form/dist/index.mjs",
+    "limit": "10 kB",
+    "ignore": ["react", "react-dom", "@railway-ts/pipelines"]
+  }
+]

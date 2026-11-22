@@ -1,164 +1,67 @@
 # Contributing
 
+This repo holds two packages. Each has its own contributing notes for code rules, structure and tests:
+
+- [`packages/pipelines/CONTRIBUTING.md`](packages/pipelines/CONTRIBUTING.md)
+- [`packages/use-form/CONTRIBUTING.md`](packages/use-form/CONTRIBUTING.md)
+
+This file covers what applies to both.
+
 ## Setup
 
 ```bash
-git clone https://github.com/sakobu/railway-ts-pipelines.git
-cd railway-ts-pipelines
+git clone https://github.com/sakobu/railway-ts.git
+cd railway-ts
 bun install
 ```
 
-**Prerequisites:** Bun, TypeScript knowledge, functional programming basics.
+**Prerequisites:** Bun (the version pinned in `package.json` under `packageManager`), Node 22.18+ or 24.11+ (tsdown and the package checks run on Node), and TypeScript knowledge.
 
 ## Commands
 
-```bash
-bun test                    # Run tests
-bun test --watch            # Watch mode
-bun test --coverage         # With coverage
-bun run typecheck           # Type check
-bun run lint                # Lint
-bun run lint:fix            # Auto-fix
-bun run format              # Format code
-bun run format:check        # Check formatting
-bun run build               # Build library
-bun run check               # typecheck + lint + test
-```
+Run these from the repo root. Each one builds what it needs first.
 
-## Project Structure
+| Command                 | What it does                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `bun run build`         | Build both packages with [tsdown](https://tsdown.dev), pipelines first               |
+| `bun run dev`           | Rebuild pipelines on change                                                          |
+| `bun run typecheck`     | Type-check every package and the repo scripts with `tsc`                             |
+| `bun run test`          | Run both test suites with `bun test`                                                 |
+| `bun run test:coverage` | Run the tests with coverage and enforce 100% line coverage per package               |
+| `bun run test:package`  | Build pipelines and check it the way consumers see it (types and runtime)            |
+| `bun run lint`          | Lint with [oxlint](https://oxc.rs/docs/guide/usage/linter), type-aware               |
+| `bun run lint:fix`      | Lint and apply safe fixes                                                            |
+| `bun run format`        | Format with [oxfmt](https://oxc.rs/docs/guide/usage/formatter) and sort imports      |
+| `bun run format:check`  | Check formatting                                                                     |
+| `bun run size`          | Check bundle sizes with [size-limit](https://github.com/ai/size-limit) (build first) |
+| `bun run check`         | Everything CI checks: build, typecheck, lint, format, tests, package checks, size    |
+| `bun run changeset`     | Record a release note and version bump with [Changesets](https://changesets.dev)     |
 
-```
-src/
-├── option/           # Option<T>
-├── result/           # Result<T, E>
-├── schema/           # Validators
-├── composition/      # pipe, flow, curry
-└── index.ts          # Root exports
+use-form imports pipelines through its built output, exactly as npm users do. To run a command inside one package (for example `cd packages/use-form && bun test`), build pipelines first with `bun run build`, or keep `bun run dev` running.
 
-tests/                # Mirrors src/
-examples/             # Working examples
-docs/                 # Documentation
-```
+## Changesets
 
-## Code Rules
+Every pull request that changes a published package needs a changeset. Run `bun run changeset`, pick the packages and the bump, and write the summary users will read in the changelog:
 
-### No Exceptions
+- **patch:** bug fixes and internal changes
+- **minor:** new features, and, while the packages are 0.x, changes that can break existing code
+- **major:** reserved for 1.0 and later
 
-- `any` types forbidden - use `unknown` for untrusted input
-- Pure functions only - no side effects except in examples
-- Data-last parameters for composition
-- Explicit returns (except arrow functions)
+**A pipelines minor must widen use-form's peer range in the same PR.** While pipelines is 0.x, a minor bump is outside a `^0.y` range, and Changesets would otherwise rewrite use-form's peer range to the new minor alone, dropping every version users have. Add the new minor to `peerDependencies` in `packages/use-form/package.json` (for example `^0.1.27 || ^0.2.0 || ^0.3.0`). `bun run ci:version` fails if a range would narrow.
 
-### TypeScript
+Commit the generated file in `.changeset/` with your change. Changes that publish nothing (docs outside the packages, CI, repo tooling) don't need one.
 
-- Use `readonly` for object properties
-- Prefer `const` over `let`
-- Type guards with predicates: `(x): x is Type`
-- All public APIs need JSDoc with examples
-
-### Composition Functions
-
-Must use `this: void` for referential transparency:
-
-```typescript
-export function myFunction<A, B>(this: void, input: A, transform: (this: void, a: A) => B): B {
-  return transform(input);
-}
-```
-
-### JSDoc Format
-
-```typescript
-/**
- * Brief description of what the function does.
- *
- * @example
- * const result = map(some(5), (x) => x * 2);
- * // some(10)
- *
- * @param option - Description
- * @param fn - Description
- * @returns Description
- */
-export function map<T, U>(option: Option<T>, fn: (value: T) => U): Option<U> {
-  return option.some ? some(fn(option.value)) : none();
-}
-```
-
-## Testing
-
-Tests mirror `src/` structure. Test both success and error paths.
-
-```typescript
-import { describe, test, expect } from 'bun:test';
-
-describe('Option.map', () => {
-  test('transforms Some values', () => {
-    const result = map(some(5), (x) => x * 2);
-    expect(result).toEqual(some(10));
-  });
-
-  test('preserves None', () => {
-    const result = map(none<number>(), (x) => x * 2);
-    expect(result).toEqual(none());
-  });
-
-  test('does not call function on None', () => {
-    let called = false;
-    map(none<number>(), () => {
-      called = true;
-      return 0;
-    });
-    expect(called).toBe(false);
-  });
-});
-```
+After a merge to `main`, the release workflow collects pending changesets into a "Version Packages" pull request. Merging that pull request publishes the new versions to npm, tags them `@railway-ts/<name>@<version>` and creates the GitHub Releases.
 
 ## Pull Requests
 
-1. Open issue first for new features
+1. Open an issue first for new features
 2. One feature/fix per PR
 3. Add tests for all new code
 4. Update docs if behavior changes
-5. Run `bun run check` before submitting
-6. Clear PR description with issue references
-
-## Adding Validators
-
-When adding schema validators:
-
-1. Add to appropriate file in `src/schema/`
-2. Export from `src/schema/index.ts`
-3. Add JSDoc with examples
-4. Add tests in `tests/schema/`
-5. Add example in `examples/schema/`
-
-```typescript
-export function myValidator(config: Config): Validator<Input, Output> {
-  return (value, path = []) => {
-    if (!isValid(value)) {
-      return err([{ path, message: 'error message' }]);
-    }
-    return ok(transform(value));
-  };
-}
-```
-
-## Build System
-
-Uses tsup with multiple entry points:
-
-- `src/index.ts` → `dist/index.{mjs,cjs}`
-- `src/option/index.ts` → `dist/option/index.{mjs,cjs}`
-- `src/result/index.ts` → `dist/result/index.{mjs,cjs}`
-- `src/composition/index.ts` → `dist/composition/index.{mjs,cjs}`
-- `src/schema/index.ts` → `dist/schema/index.{mjs,cjs}`
-
-Each generates:
-
-- ESM (`.mjs`)
-- CJS (`.cjs`)
-- TypeScript declarations (`.d.ts`)
+5. Add a changeset if a package changes
+6. Run `bun run check` before submitting
+7. Clear PR description with issue references
 
 ## Commit Format
 
@@ -179,30 +82,16 @@ Fixes #123
 ```
 feat(result): add mapErr function
 fix(schema): correct type inference for nested optional fields
-docs(readme): update installation instructions
+feat(form): add fieldValidators option for per-field async validation
+fix(reducer): correct server error auto-clear for nested paths
+docs(recipes): add Standard Schema examples
 test(option): add tests for combine() with mixed Some/None
 ```
 
-## Good Contributions
-
-- Bug fixes with test cases
-- New validators (email, url, date ranges)
-- Performance improvements with benchmarks
-- Documentation improvements
-- Example pipelines
-
-## Think Twice
-
-- New core abstractions (open issue first)
-- Breaking changes (probably not pre-1.0)
-- API bloat
-- Anything requiring `any` types
-
 ## Questions
 
-- Bug reports: [Open issue](https://github.com/sakobu/railway-ts-pipelines/issues)
-- Feature ideas: [Open issue](https://github.com/sakobu/railway-ts-pipelines/issues) (discuss first)
-- Questions: [GitHub Discussions](https://github.com/sakobu/railway-ts-pipelines/discussions)
+- Bug reports: [Open issue](https://github.com/sakobu/railway-ts/issues)
+- Feature ideas and questions: [Open issue](https://github.com/sakobu/railway-ts/issues) (discuss first)
 
 ## License
 

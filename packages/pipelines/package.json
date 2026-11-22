@@ -1,0 +1,101 @@
+{
+  "name": "@railway-ts/pipelines",
+  "version": "0.1.30",
+  "description": "Railway-oriented pipelines for TypeScript: a lightweight fp-style Result/Option and schema layer for handling errors and validating boundaries.",
+  "type": "module",
+  "exports": {
+    "./option": {
+      "import": {
+        "types": "./dist/option/index.d.mts",
+        "default": "./dist/option/index.mjs"
+      },
+      "require": {
+        "types": "./dist/option/index.d.cts",
+        "default": "./dist/option/index.cjs"
+      }
+    },
+    "./result": {
+      "import": {
+        "types": "./dist/result/index.d.mts",
+        "default": "./dist/result/index.mjs"
+      },
+      "require": {
+        "types": "./dist/result/index.d.cts",
+        "default": "./dist/result/index.cjs"
+      }
+    },
+    "./composition": {
+      "import": {
+        "types": "./dist/composition/index.d.mts",
+        "default": "./dist/composition/index.mjs"
+      },
+      "require": {
+        "types": "./dist/composition/index.d.cts",
+        "default": "./dist/composition/index.cjs"
+      }
+    },
+    "./schema": {
+      "import": {
+        "types": "./dist/schema/index.d.mts",
+        "default": "./dist/schema/index.mjs"
+      },
+      "require": {
+        "types": "./dist/schema/index.d.cts",
+        "default": "./dist/schema/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:coverage": "mkdir -p coverage && bun test --coverage --coverage-reporter=lcov",
+    "test:package": "bun run build && tsc -p tests/package && node tests/package/runtime.mjs"
+  },
+  "keywords": [
+    "railway",
+    "railway-oriented",
+    "pipeline",
+    "pipelines",
+    "error-handling",
+    "result",
+    "option",
+    "functional-programming",
+    "fp-ts",
+    "effect-ts",
+    "composition",
+    "pipe",
+    "flow",
+    "typescript",
+    "schema-validation",
+    "validation",
+    "runtime-validation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakobu/railway-ts.git",
+    "directory": "packages/pipelines"
+  },
+  "homepage": "https://github.com/sakobu/railway-ts/tree/main/packages/pipelines#readme",
+  "bugs": {
+    "url": "https://github.com/sakobu/railway-ts/issues"
+  },
+  "author": "Sarkis Melkonian",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0"
+  }
+}

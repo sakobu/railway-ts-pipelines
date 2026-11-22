@@ -1,0 +1,57 @@
+import './styles.css';
+import { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
+import AsyncUserForm from './async/AsyncUserForm';
+import FieldValidatorForm from './field-validators/FieldValidatorForm';
+import ValibotForm from './standard-schema/ValibotForm';
+import ZodForm from './standard-schema/ZodForm';
+import UserForm from './sync/UserForm';
+
+type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
+
+function App() {
+  const [tab, setTab] = useState<Tab>('sync');
+
+  return (
+    <>
+      <div className="tabs">
+        <button className={tab === 'sync' ? 'active' : ''} onClick={() => setTab('sync')}>
+          Sync
+        </button>
+        <button className={tab === 'async' ? 'active' : ''} onClick={() => setTab('async')}>
+          Async (Cross-field)
+        </button>
+        <button className={tab === 'zod' ? 'active' : ''} onClick={() => setTab('zod')}>
+          Zod
+        </button>
+        <button className={tab === 'valibot' ? 'active' : ''} onClick={() => setTab('valibot')}>
+          Valibot
+        </button>
+        <button className={tab === 'field-validators' ? 'active' : ''} onClick={() => setTab('field-validators')}>
+          Field Validators
+        </button>
+        <button className={tab === 'array-helpers' ? 'active' : ''} onClick={() => setTab('array-helpers')}>
+          Array Helpers
+        </button>
+      </div>
+      {tab === 'sync' && <UserForm />}
+      {tab === 'async' && <AsyncUserForm />}
+      {tab === 'zod' && <ZodForm />}
+      {tab === 'valibot' && <ValibotForm />}
+      {tab === 'field-validators' && <FieldValidatorForm />}
+      {tab === 'array-helpers' && <ArrayHelpersForm />}
+    </>
+  );
+}
+
+const rootElement = document.getElementById('root');
+
+if (!rootElement) {
+  throw new Error('Root element not found');
+}
+
+const root = createRoot(rootElement);
+
+root.render(<App />);
