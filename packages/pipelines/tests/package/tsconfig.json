@@ -3,8 +3,8 @@
   // resolved by name through package.json "exports", the way a consumer sees it.
   // skipLibCheck is off so broken published declarations fail here.
   "compilerOptions": {
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "target": "ES2022",
     "strict": true,
     "noEmit": true,

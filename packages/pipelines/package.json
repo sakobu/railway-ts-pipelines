@@ -5,44 +5,20 @@
   "type": "module",
   "exports": {
     "./option": {
-      "import": {
-        "types": "./dist/option/index.d.mts",
-        "default": "./dist/option/index.mjs"
-      },
-      "require": {
-        "types": "./dist/option/index.d.cts",
-        "default": "./dist/option/index.cjs"
-      }
+      "types": "./dist/option/index.d.mts",
+      "default": "./dist/option/index.mjs"
     },
     "./result": {
-      "import": {
-        "types": "./dist/result/index.d.mts",
-        "default": "./dist/result/index.mjs"
-      },
-      "require": {
-        "types": "./dist/result/index.d.cts",
-        "default": "./dist/result/index.cjs"
-      }
+      "types": "./dist/result/index.d.mts",
+      "default": "./dist/result/index.mjs"
     },
     "./composition": {
-      "import": {
-        "types": "./dist/composition/index.d.mts",
-        "default": "./dist/composition/index.mjs"
-      },
-      "require": {
-        "types": "./dist/composition/index.d.cts",
-        "default": "./dist/composition/index.cjs"
-      }
+      "types": "./dist/composition/index.d.mts",
+      "default": "./dist/composition/index.mjs"
     },
     "./schema": {
-      "import": {
-        "types": "./dist/schema/index.d.mts",
-        "default": "./dist/schema/index.mjs"
-      },
-      "require": {
-        "types": "./dist/schema/index.d.cts",
-        "default": "./dist/schema/index.cjs"
-      }
+      "types": "./dist/schema/index.d.mts",
+      "default": "./dist/schema/index.mjs"
     }
   },
   "files": [
