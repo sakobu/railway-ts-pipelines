@@ -14,12 +14,22 @@
     "test": "bun run build:deps && bun run --filter './packages/*' test",
     "test:coverage": "bun run build:deps && bun run --filter './packages/*' test:coverage && bun scripts/check-coverage.ts packages/pipelines packages/use-form",
     "test:package": "bun run --filter @railway-ts/pipelines test:package",
-    "size": "size-limit"
+    "size": "size-limit",
+    "lint": "bun run build:deps && oxlint --type-aware",
+    "lint:fix": "bun run build:deps && oxlint --type-aware --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check": "bun run build && bun run --filter './packages/*' typecheck && oxlint --type-aware && oxfmt --check && bun run --filter './packages/*' test && bun run test:package && size-limit"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
+    "@eslint-react/eslint-plugin": "^4.2.3",
     "@size-limit/preset-small-lib": "^14.3.0",
     "@types/bun": "1.4.5",
+    "eslint-plugin-security": "^4.2.1",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
+    "oxlint-tsgolint": "7.0.2008",
     "publint": "^0.3.25",
     "size-limit": "^14.3.0",
     "tsdown": "0.23.7",
