@@ -1,10 +1,10 @@
 # @railway-ts/use-form
 
-[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![Build Status](https://github.com/sakobu/railway-ts-use-form/workflows/CI/badge.svg)](https://github.com/sakobu/railway-ts-use-form/actions) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/) [![Coverage](https://img.shields.io/codecov/c/github/sakobu/railway-ts-use-form)](https://codecov.io/gh/sakobu/railway-ts-use-form)
+[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![Coverage](https://codecov.io/gh/sakobu/railway-ts/branch/main/graph/badge.svg?flag=use-form)](https://codecov.io/gh/sakobu/railway-ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 
-**~3.6 kB** minified + brotli (~8.4 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
+**~3.6 kB** minified + brotli (~8.4 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
 
 ## Why?
 
@@ -17,7 +17,7 @@ This library treats the **schema as the single source of truth**. One declaratio
 - Field bindings (spread onto native HTML elements)
 - Error handling (three layers with deterministic priority)
 
-Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com/standard-schema/standard-schema), or use [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) natively for cross-field validation, targeted error placement, and `Result` types.
+Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com/standard-schema/standard-schema), or use [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) natively for cross-field validation, targeted error placement, and `Result` types.
 
 ## Design
 
@@ -225,7 +225,7 @@ See [Recipes: Standard Schema](./docs/RECIPES.md#standard-schema-bring-your-own-
 
 ## Ecosystem
 
-`@railway-ts/use-form` is built on [@railway-ts/pipelines](https://github.com/sakobu/railway-ts-pipelines) -- composable, type-safe validation with Railway-oriented Result types. Use pipelines standalone for backend validation, or pair it with this hook for full-stack type safety.
+`@railway-ts/use-form` is built on [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- composable, type-safe validation with Railway-oriented Result types. Use pipelines standalone for backend validation, or pair it with this hook for full-stack type safety.
 
 ## Documentation
 
@@ -235,12 +235,14 @@ See [Recipes: Standard Schema](./docs/RECIPES.md#standard-schema-bring-your-own-
 
 ## Examples
 
-Clone and run:
+Clone the monorepo, build both packages (the examples use the built pipelines), and run:
 
 ```bash
-git clone https://github.com/sakobu/railway-ts-use-form.git
-cd railway-ts-use-form
+git clone https://github.com/sakobu/railway-ts.git
+cd railway-ts
 bun install
+bun run build
+cd packages/use-form
 bun run example
 ```
 

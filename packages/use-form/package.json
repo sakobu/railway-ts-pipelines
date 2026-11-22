@@ -39,10 +39,14 @@
     "typescript",
     "type-safe"
   ],
-  "repository": "github:sakobu/railway-ts-use-form",
-  "homepage": "https://github.com/sakobu/railway-ts-use-form#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakobu/railway-ts.git",
+    "directory": "packages/use-form"
+  },
+  "homepage": "https://github.com/sakobu/railway-ts/tree/main/packages/use-form#readme",
   "bugs": {
-    "url": "https://github.com/sakobu/railway-ts-use-form/issues"
+    "url": "https://github.com/sakobu/railway-ts/issues"
   },
   "author": "Sarkis Melkonian",
   "license": "MIT",

@@ -1,30 +1,8 @@
-# Contributing
+# Contributing to @railway-ts/use-form
 
-## Setup
+Setup, commands, changesets, pull requests and commit format are in the [repo-wide CONTRIBUTING.md](../../CONTRIBUTING.md). This file covers what is specific to `@railway-ts/use-form`.
 
-```bash
-git clone https://github.com/sakobu/railway-ts-use-form.git
-cd railway-ts-use-form
-bun install
-```
-
-**Prerequisites:** Bun, TypeScript knowledge, React basics.
-
-## Commands
-
-| Command                | What it does              |
-| ---------------------- | ------------------------- |
-| `bun test`             | Run tests                 |
-| `bun test --watch`     | Watch mode                |
-| `bun test --coverage`  | With coverage             |
-| `bun run build`        | Build library             |
-| `bun run typecheck`    | Type check                |
-| `bun run lint`         | Lint                      |
-| `bun run lint:fix`     | Auto-fix lint issues      |
-| `bun run format`       | Format code               |
-| `bun run format:check` | Check formatting          |
-| `bun run example`      | Run examples (hot reload) |
-| `bun run check`        | typecheck + lint + test   |
+**Prerequisites:** React basics.
 
 ## Project Structure
 
@@ -78,34 +56,6 @@ describe('useForm', () => {
 });
 ```
 
-## Pull Requests
-
-1. Open an issue first for new features
-2. One feature/fix per PR
-3. Add tests for all new code
-4. Update docs if behavior changes
-5. Run `bun run check` before submitting
-6. Clear PR description with issue references
-
-## Commit Format
-
-Use conventional commits:
-
-```
-type(scope): brief description
-```
-
-**Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
-
-**Examples:**
-
-```
-feat(form): add fieldValidators option for per-field async validation
-fix(reducer): correct server error auto-clear for nested paths
-docs(recipes): add Standard Schema examples
-test(form): add tests for submit validation mode
-```
-
 ## Good Contributions
 
 - Bug fixes with test cases
@@ -121,11 +71,12 @@ test(form): add tests for submit validation mode
 - Adding peer dependencies
 - Anything requiring `any` types
 
-## Questions
+## Examples
 
-- Bug reports: [Open issue](https://github.com/sakobu/railway-ts-use-form/issues)
-- Feature ideas: [Open issue](https://github.com/sakobu/railway-ts-use-form/issues) (discuss first)
+The interactive example app imports the built pipelines, so build first. From the repo root:
 
-## License
-
-By contributing, you agree your contributions will be licensed under MIT.
+```bash
+bun run build
+cd packages/use-form
+bun run example   # http://localhost:3000, hot reload
+```

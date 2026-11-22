@@ -1,29 +1,8 @@
-# Contributing
+# Contributing to @railway-ts/pipelines
 
-## Setup
+Setup, commands, changesets, pull requests and commit format are in the [repo-wide CONTRIBUTING.md](../../CONTRIBUTING.md). This file covers what is specific to `@railway-ts/pipelines`.
 
-```bash
-git clone https://github.com/sakobu/railway-ts-pipelines.git
-cd railway-ts-pipelines
-bun install
-```
-
-**Prerequisites:** Bun, TypeScript knowledge, functional programming basics.
-
-## Commands
-
-```bash
-bun test                    # Run tests
-bun test --watch            # Watch mode
-bun test --coverage         # With coverage
-bun run typecheck           # Type check
-bun run lint                # Lint
-bun run lint:fix            # Auto-fix
-bun run format              # Format code
-bun run format:check        # Check formatting
-bun run build               # Build library
-bun run check               # typecheck + lint + test
-```
+**Prerequisites:** functional programming basics.
 
 ## Project Structure
 
@@ -114,15 +93,6 @@ describe('Option.map', () => {
 });
 ```
 
-## Pull Requests
-
-1. Open issue first for new features
-2. One feature/fix per PR
-3. Add tests for all new code
-4. Update docs if behavior changes
-5. Run `bun run check` before submitting
-6. Clear PR description with issue references
-
 ## Adding Validators
 
 When adding schema validators:
@@ -157,29 +127,6 @@ Each generates ESM (`.mjs`, types in `.d.mts`) and CommonJS (`.cjs`, types in `.
 
 The build also runs publint and arethetypeswrong (`node16` profile) and fails on any problem. `bun run test:package` builds, then checks the result the way consumers see it: `tests/package` type-checks ESM and CommonJS consumer files against `dist/` with `skipLibCheck` off, and runs runtime checks in Node.
 
-## Commit Format
-
-Use conventional commits:
-
-```
-type(scope): brief description
-
-Longer description if needed
-
-Fixes #123
-```
-
-**Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
-
-**Examples:**
-
-```
-feat(result): add mapErr function
-fix(schema): correct type inference for nested optional fields
-docs(readme): update installation instructions
-test(option): add tests for combine() with mixed Some/None
-```
-
 ## Good Contributions
 
 - Bug fixes with test cases
@@ -194,13 +141,3 @@ test(option): add tests for combine() with mixed Some/None
 - Breaking changes (probably not pre-1.0)
 - API bloat
 - Anything requiring `any` types
-
-## Questions
-
-- Bug reports: [Open issue](https://github.com/sakobu/railway-ts-pipelines/issues)
-- Feature ideas: [Open issue](https://github.com/sakobu/railway-ts-pipelines/issues) (discuss first)
-- Questions: [GitHub Discussions](https://github.com/sakobu/railway-ts-pipelines/discussions)
-
-## License
-
-By contributing, you agree your contributions will be licensed under MIT.

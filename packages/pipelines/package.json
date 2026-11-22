@@ -81,10 +81,14 @@
     "validation",
     "runtime-validation"
   ],
-  "repository": "github:sakobu/railway-ts-pipelines",
-  "homepage": "https://github.com/sakobu/railway-ts-pipelines#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakobu/railway-ts.git",
+    "directory": "packages/pipelines"
+  },
+  "homepage": "https://github.com/sakobu/railway-ts/tree/main/packages/pipelines#readme",
   "bugs": {
-    "url": "https://github.com/sakobu/railway-ts-pipelines/issues"
+    "url": "https://github.com/sakobu/railway-ts/issues"
   },
   "author": "Sarkis Melkonian",
   "license": "MIT",

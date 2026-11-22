@@ -56,7 +56,7 @@ function LoginForm() {
 
 The form validates and submits, but the inputs aren't wired up yet. That's the next step.
 
-> **Want the full theory on schemas, Result types, and pipelines?** See the [@railway-ts/pipelines Getting Started](https://github.com/sakobu/railway-ts-pipelines/blob/main/docs/GETTING_STARTED.md). You don't need to read it first -- we'll explain enough here to follow along.
+> **Want the full theory on schemas, Result types, and pipelines?** See the [@railway-ts/pipelines Getting Started](https://github.com/sakobu/railway-ts/blob/main/packages/pipelines/docs/GETTING_STARTED.md). You don't need to read it first -- we'll explain enough here to follow along.
 
 ---
 
@@ -140,7 +140,7 @@ If a user submits with an empty email and a 3-character password, they see both 
 
 Under the hood, validators return a `Result` -- either `Ok` with the validated value, or `Err` with an array of errors. You don't need to work with `Result` directly for basic forms (the hook handles it), but it's there when you want more control. See [Pattern-Matching Submit Results](./RECIPES.md#pattern-matching-submit-results) for an example.
 
-> **Deep dive:** The [@railway-ts/pipelines Getting Started](https://github.com/sakobu/railway-ts-pipelines/blob/main/docs/GETTING_STARTED.md) explains `Result`, `chain`, `pipe`, and the full validation model.
+> **Deep dive:** The [@railway-ts/pipelines Getting Started](https://github.com/sakobu/railway-ts/blob/main/packages/pipelines/docs/GETTING_STARTED.md) explains `Result`, `chain`, `pipe`, and the full validation model.
 
 ---
 
