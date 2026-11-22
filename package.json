@@ -1,0 +1,28 @@
+{
+  "name": "railway-ts",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.5",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:deps": "bun run --filter @railway-ts/pipelines build",
+    "build": "bun run --filter './packages/*' build",
+    "dev": "bun run --filter @railway-ts/pipelines dev",
+    "typecheck": "bun run build:deps && bun run --filter './packages/*' typecheck",
+    "test": "bun run build:deps && bun run --filter './packages/*' test",
+    "test:coverage": "bun run build:deps && bun run --filter './packages/*' test:coverage && bun scripts/check-coverage.ts packages/pipelines packages/use-form",
+    "test:package": "bun run --filter @railway-ts/pipelines test:package",
+    "size": "size-limit"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "^0.18.5",
+    "@size-limit/preset-small-lib": "^14.3.0",
+    "@types/bun": "1.4.5",
+    "publint": "^0.3.25",
+    "size-limit": "^14.3.0",
+    "tsdown": "0.23.7",
+    "typescript": "~6.0.3"
+  }
+}
