@@ -22,7 +22,7 @@
     "check": "bun run build && bun run --filter './packages/*' typecheck && tsc --noEmit && oxlint --type-aware && oxfmt --check && bun run --filter './packages/*' test && bun run test:package && size-limit",
     "changeset": "changeset",
     "ci:version": "changeset version && bun scripts/check-peer-ranges.ts && bun install",
-    "ci:publish": "bun run build && bun scripts/publish.ts"
+    "ci:publish": "bun run check && bun scripts/publish.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
