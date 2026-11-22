@@ -47,6 +47,8 @@ Every pull request that changes a published package needs a changeset. Run `bun 
 - **minor:** new features, and, while the packages are 0.x, changes that can break existing code
 - **major:** reserved for 1.0 and later
 
+**A pipelines minor must widen use-form's peer range in the same PR.** While pipelines is 0.x, a minor bump is outside a `^0.y` range, and Changesets would otherwise rewrite use-form's peer range to the new minor alone, dropping every version users have. Add the new minor to `peerDependencies` in `packages/use-form/package.json` (for example `^0.1.27 || ^0.2.0 || ^0.3.0`). `bun run ci:version` fails if a range would narrow.
+
 Commit the generated file in `.changeset/` with your change. Changes that publish nothing (docs outside the packages, CI, repo tooling) don't need one.
 
 After a merge to `main`, the release workflow collects pending changesets into a "Version Packages" pull request. Merging that pull request publishes the new versions to npm, tags them `@railway-ts/<name>@<version>` and creates the GitHub Releases.
