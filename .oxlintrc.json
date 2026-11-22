@@ -21,7 +21,7 @@
   },
   "overrides": [
     {
-      "files": ["packages/pipelines/**"],
+      "files": ["packages/pipelines/**", "scripts/**"],
       "env": {
         "es2026": true
       },
@@ -280,7 +280,8 @@
         "packages/pipelines/**/*.ts",
         "packages/pipelines/**/*.tsx",
         "packages/pipelines/**/*.mts",
-        "packages/pipelines/**/*.cts"
+        "packages/pipelines/**/*.cts",
+        "scripts/**/*.ts"
       ],
       "rules": {
         "constructor-super": "off",

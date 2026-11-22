@@ -1,0 +1,5 @@
+{
+  // Repo-level scripts (scripts/*.ts). Each package has its own tsconfig.json.
+  "extends": "./tsconfig.base.json",
+  "include": ["scripts"]
+}

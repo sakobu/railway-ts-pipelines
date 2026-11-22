@@ -7,48 +7,107 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  checks:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
+      # Bun's version comes from "packageManager" in the root package.json.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
-      # tsdown needs Node ^22.18 || ^24.11 || >=26, and tests/package runs its
-      # runtime checks in Node, as consumers would.
+      # tsdown needs Node ^22.18 || ^24.11 || >=26, and pipelines' tests/package
+      # runs its runtime checks in Node, as consumers would.
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Type check
-        run: bun run typecheck
+      - name: Format
+        run: bun run format:check
 
       - name: Lint
         run: bun run lint
 
+      - name: Type check
+        run: bun run typecheck
+
+      # Runs both suites with coverage, enforces 100% per package and writes
+      # packages/<name>/coverage/lcov.repo.info with repo-relative paths.
       - name: Test with coverage
-        run: bun run test:coverage:lcov
+        run: bun run test:coverage
 
-      - name: Enforce 100% coverage
-        run: bun run scripts/check-coverage.ts
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload pipelines coverage to Codecov
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
+          files: packages/pipelines/coverage/lcov.repo.info
+          disable_search: true
+          flags: pipelines
           fail_ci_if_error: true
 
-      - name: Build and check the package as consumers see it
+      - name: Upload use-form coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/use-form/coverage/lcov.repo.info
+          disable_search: true
+          flags: use-form
+          fail_ci_if_error: true
+
+      - name: Check pipelines as consumers see it
         run: bun run test:package
+
+      - name: Build
+        run: bun run build
 
       - name: Check bundle size
         run: bun run size
+
+  # use-form must keep working with the lowest pipelines version its peer range
+  # allows, installed from npm rather than linked from the workspace.
+  use-form-min-pipelines:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build use-form
+        run: bun run --filter @railway-ts/use-form build
+
+      - name: Install the lowest supported pipelines from npm
+        working-directory: packages/use-form
+        run: |
+          MIN=$(node -p "require('./package.json').peerDependencies['@railway-ts/pipelines'].match(/\d+\.\d+\.\d+/)[0]")
+          echo "Lowest supported @railway-ts/pipelines: $MIN"
+          bun add -d "@railway-ts/pipelines@$MIN"
+          # When MIN equals the workspace version, Bun links packages/pipelines
+          # instead of installing from npm. Fail unless npm's copy is installed.
+          MIN=$MIN node -e "const d=require('./package.json').devDependencies['@railway-ts/pipelines'], i=require('./node_modules/@railway-ts/pipelines/package.json').version; if (d !== process.env.MIN || i !== process.env.MIN) { console.error('expected', process.env.MIN, 'got', d, i); process.exit(1); }"
+
+      - name: Type check use-form
+        working-directory: packages/use-form
+        run: bun run typecheck
+
+      - name: Test use-form
+        working-directory: packages/use-form
+        run: bun test

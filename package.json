@@ -10,7 +10,7 @@
     "build:deps": "bun run --filter @railway-ts/pipelines build",
     "build": "bun run --filter './packages/*' build",
     "dev": "bun run --filter @railway-ts/pipelines dev",
-    "typecheck": "bun run build:deps && bun run --filter './packages/*' typecheck",
+    "typecheck": "bun run build:deps && bun run --filter './packages/*' typecheck && tsc --noEmit",
     "test": "bun run build:deps && bun run --filter './packages/*' test",
     "test:coverage": "bun run build:deps && bun run --filter './packages/*' test:coverage && bun scripts/check-coverage.ts packages/pipelines packages/use-form",
     "test:package": "bun run --filter @railway-ts/pipelines test:package",
@@ -19,7 +19,7 @@
     "lint:fix": "bun run build:deps && oxlint --type-aware --fix",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "check": "bun run build && bun run --filter './packages/*' typecheck && oxlint --type-aware && oxfmt --check && bun run --filter './packages/*' test && bun run test:package && size-limit"
+    "check": "bun run build && bun run --filter './packages/*' typecheck && tsc --noEmit && oxlint --type-aware && oxfmt --check && bun run --filter './packages/*' test && bun run test:package && size-limit"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
