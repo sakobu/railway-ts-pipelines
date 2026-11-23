@@ -1012,6 +1012,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
       submitError?: string;
     }
   | {
+      /** Sets the submit error without touching per-path server errors (used when a submission fails) */
+      type: 'SET_SUBMIT_ERROR';
+      /** The submit error message; replaces any existing one */
+      submitError: string;
+    }
+  | {
       /** Clears all server-side validation errors */
       type: 'CLEAR_SERVER_ERRORS';
     }

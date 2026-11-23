@@ -837,9 +837,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       } catch (error) {
         console.error('Form submission error:', error);
 
-        const submitErrors: ValidationError[] = [{ path: [], message: SUBMIT_ERROR_MESSAGE }];
-        placeServerErrors(submitErrors);
-        return err(submitErrors);
+        // Sets only the submit error: field errors placed during the submission stay
+        dispatch({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
+        return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
       }
     },
     [validator, onSubmit, fieldValidators, placeServerErrors],

@@ -411,6 +411,17 @@ describe('formReducer', () => {
     });
   });
 
+  describe('SET_SUBMIT_ERROR', () => {
+    test('SET_SUBMIT_ERROR sets the submit error and keeps per-path server errors', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, serverErrors: { email: 'Taken' } };
+
+      const result = formReducer(state, { type: 'SET_SUBMIT_ERROR', submitError: 'Down' }, initialValues);
+
+      expect(result.submitError).toBe('Down');
+      expect(result.serverErrors).toEqual({ email: 'Taken' });
+    });
+  });
+
   describe('CLEAR_SERVER_ERRORS', () => {
     test('CLEAR_SERVER_ERRORS clears the submit error', () => {
       const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };

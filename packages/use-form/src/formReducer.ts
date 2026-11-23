@@ -139,6 +139,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       };
     }
 
+    case 'SET_SUBMIT_ERROR':
+      return {
+        ...state,
+        submitError: action.submitError,
+      };
+
     case 'CLEAR_SERVER_ERRORS': {
       const { submitError: _submitError, ...rest } = state;
       return {

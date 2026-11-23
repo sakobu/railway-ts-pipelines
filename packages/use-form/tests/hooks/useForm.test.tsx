@@ -1392,6 +1392,28 @@ describe('useForm', () => {
       expect(result.current.isValid).toBe(true);
     });
 
+    test('field errors set during onSubmit survive a later throw', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+            throw new Error('Request failed');
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValid).toBe(false);
+      expect(result.current.isSubmitting).toBe(false);
+    });
+
     test('a rejected async onSubmit returns the generic submit error', async () => {
       const consoleError = silenceConsoleError();
       const { result } = renderHook(() =>
