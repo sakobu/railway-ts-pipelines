@@ -170,6 +170,12 @@ describe('Result', () => {
       expect(isResult('ok')).toBe(false);
       expect(isResult(some(1))).toBe(false);
     });
+
+    test('isResult recognizes a Result built with the Symbol.for brand key, as another package copy would', () => {
+      const brand = Symbol.for('@railway-ts/pipelines/RESULT_BRAND');
+      expect(isResult({ ok: true, value: 1, [brand]: 'ok' })).toBe(true);
+      expect(isResult({ ok: true, value: 1, [brand]: 'yes' })).toBe(false);
+    });
   });
 
   describe('isOk and isErr type guards', () => {
