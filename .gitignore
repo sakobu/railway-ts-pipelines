@@ -38,3 +38,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 !.vscode/launch.json
 !.vscode/tasks.json
 !.vscode/settings.json
+
+# Local planning notes (design specs, plans). Anchored, so packages/*/docs stays tracked.
+/docs/
