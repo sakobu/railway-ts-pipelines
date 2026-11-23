@@ -273,8 +273,10 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
    * route through setFieldValue, so this catches every user-driven field interaction.
    *
-   * It runs after the field's new value is stored, so setFieldValue calls made inside it
-   * apply after this change, and the field's validation sees their values.
+   * It runs after the field's new value is stored, so any form call made inside it applies on top
+   * of this change, and the field's validation sees the result. A resetForm() or setValues() made
+   * here can override the field that just changed. To reset the other fields when one changes,
+   * call setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *

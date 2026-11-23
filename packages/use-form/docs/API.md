@@ -193,6 +193,17 @@ Array helper operations (`push`, `remove`, `insert`, `swap`, `replace`) also
 route through `setFieldValue`, so `onFieldChange` fires for them with the
 array field path (e.g., `"contacts"`) and the full new array as the value.
 
+It runs after the field's new value is stored, so any form call made inside it
+applies on top of the change, and the field's validation sees the result. A
+`resetForm()` or `setValues()` made here can override the field that just
+changed. To reset the other fields when one changes, pass the new value along:
+
+```typescript
+onFieldChange: (field, value) => {
+  if (field === 'type') form.setValues({ ...defaults, type: value });
+},
+```
+
 ```typescript
 onFieldChange: (field, value, values) => {
   analytics.track('field_edited', { field });
