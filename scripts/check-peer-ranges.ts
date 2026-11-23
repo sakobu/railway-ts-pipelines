@@ -1,58 +1,92 @@
-// Fails if `changeset version` narrowed a peer range between workspace packages:
+// Fails if a package is about to drop support for a peer version without a breaking release:
 //
 //   bun scripts/check-peer-ranges.ts   (run by `bun run ci:version`, after `changeset version`)
 //
-// While pipelines is 0.x, every minor is outside a `^0.y` range, so Changesets rewrites
-// use-form's peer range to the new minor only (e.g. `^0.1.27 || ^0.2.0` becomes `^0.3.0`) and
-// patch-bumps use-form. That release would silently drop every pipelines version users have.
-// Widen the range in the PR that bumps pipelines instead (`^0.1.27 || ^0.2.0 || ^0.3.0`); then
-// the new version is in range and Changesets leaves it alone.
+// Compares each publishable package's peer dependencies with those of its latest release on
+// npm. Narrowing a peer range, adding a peer, or making an optional peer required can leave a
+// user's existing install unsatisfiable, so the new version must be a breaking release: outside
+// `^<latest>`, which is a minor while the package is 0.x and a major from 1.0.
 //
-// Compares each package.json in the working tree with the committed one (HEAD): every
-// version a committed range names must still satisfy the new range.
+// The usual cause: a pipelines minor is outside use-form's `^0.y.0` peer range, so Changesets
+// moves the range to the new minor but gives use-form only a patch. Add a minor changeset for
+// use-form in the same PR.
 
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import { $ } from 'bun';
+import { major, satisfies, subset } from 'semver';
 
-type Manifest = { name: string; peerDependencies?: Record<string, string> };
+type Release = {
+  version: string;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+};
+type Manifest = Release & { name: string; private?: boolean };
+type Peer = { range: string; optional: boolean };
 
-const entries = await readdir('packages', { withFileTypes: true });
-const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => path.join('packages', entry.name));
-const manifests = new Map<string, Manifest>();
-for (const dir of dirs) {
-  const file = Bun.file(path.join(dir, 'package.json'));
-  if (await file.exists()) {
-    manifests.set(dir, (await file.json()) as Manifest);
+// The latest release of `name` on npm, or undefined if it was never published. `npm view`
+// exits 1 with E404 for an unpublished package; any other failure stops the check.
+async function latestRelease(name: string): Promise<Release | undefined> {
+  const result = await $`npm view ${`${name}@latest`} version peerDependencies peerDependenciesMeta --json`
+    .nothrow()
+    .quiet();
+  if (result.exitCode !== 0) {
+    const output = `${result.stdout.toString()}\n${result.stderr.toString()}`.trim();
+    if (output.includes('E404')) {
+      return undefined;
+    }
+    throw new Error(`npm view ${name}@latest failed (exit ${result.exitCode}):\n${output}`);
   }
+  // With only `version` set, npm prints it as a bare string instead of an object.
+  const release = JSON.parse(result.stdout.toString()) as string | Release;
+  return typeof release === 'string' ? { version: release } : release;
 }
-const workspaceNames = new Set([...manifests.values()].map((manifest) => manifest.name));
 
-let narrowed = false;
-for (const [dir, manifest] of manifests) {
-  const committed = await $`git show HEAD:${dir}/package.json`.nothrow().quiet();
-  if (committed.exitCode !== 0) {
-    continue; // a package added in this change has no previous range
+// Each peer a release declares. A peer it doesn't declare accepts any version, or none.
+function peersOf(release: Release): Map<string, Peer> {
+  const meta = new Map(Object.entries(release.peerDependenciesMeta ?? {}));
+  return new Map(
+    Object.entries(release.peerDependencies ?? {}).map(([name, range]) => [
+      name,
+      { range, optional: meta.get(name)?.optional === true },
+    ]),
+  );
+}
+
+const ANY: Peer = { range: '*', optional: true };
+const describe = (peer: Peer): string =>
+  peer === ANY ? 'not a peer' : `"${peer.range}"${peer.optional ? ' (optional)' : ''}`;
+
+let failed = false;
+for (const entry of await readdir('packages', { withFileTypes: true })) {
+  const file = Bun.file(path.join('packages', entry.name, 'package.json'));
+  if (!entry.isDirectory() || !(await file.exists())) {
+    continue;
   }
-  const before = new Map(Object.entries((JSON.parse(committed.stdout.toString()) as Manifest).peerDependencies ?? {}));
-  for (const [dependency, range] of Object.entries(manifest.peerDependencies ?? {})) {
-    const previous = before.get(dependency);
-    if (!workspaceNames.has(dependency) || previous === undefined) {
+  const next = (await file.json()) as Manifest;
+  const latest = next.private ? undefined : await latestRelease(next.name);
+  // Nothing to compare with, or a breaking release, which may drop any peer version.
+  if (latest === undefined || !satisfies(next.version, `^${latest.version}`)) {
+    continue;
+  }
+  const before = peersOf(latest);
+  const after = peersOf(next);
+  for (const name of new Set([...before.keys(), ...after.keys()])) {
+    const was = before.get(name) ?? ANY;
+    const now = after.get(name) ?? ANY;
+    if (subset(was.range, now.range) && (now.optional || !was.optional)) {
       continue;
     }
-    const dropped = (previous.match(/\d+\.\d+\.\d+/g) ?? []).filter((version) => !Bun.semver.satisfies(version, range));
-    if (dropped.length > 0) {
-      console.error(
-        `${manifest.name}: changeset version would narrow its peer range on ${dependency} ` +
-          `from "${previous}" to "${range}", dropping ${dropped.join(', ')}. ` +
-          `Widen the range in package.json in the same PR as the ${dependency} bump.`,
-      );
-      narrowed = true;
-    }
+    console.error(
+      `${next.name} ${next.version} drops ${name} versions that its latest release, ${latest.version}, accepts: ` +
+        `${describe(was)} becomes ${describe(now)}. That is a breaking change, so add a ` +
+        `${major(latest.version) === 0 ? 'minor' : 'major'} changeset for ${next.name}, or keep the old range.`,
+    );
+    failed = true;
   }
 }
 
-if (narrowed) {
+if (failed) {
   process.exitCode = 1;
 }

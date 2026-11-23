@@ -109,3 +109,29 @@ jobs:
       - name: Test use-form
         working-directory: packages/use-form
         run: bun test
+
+  # Runs the release workflow's versioning step (`changeset version` and its checks)
+  # without opening a pull request, so a changeset that would break it fails in the
+  # PR that adds it instead of in the release workflow after the merge.
+  release-plan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      # check-peer-ranges compares against each package's latest release with npm.
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Version packages
+        run: bun run ci:version
