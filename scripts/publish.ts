@@ -1,4 +1,4 @@
-// Publishes every workspace package whose version is not on npm yet, then tags the release:
+// Publishes each package in PACKAGES whose version is not on npm yet, then tags the release:
 //
 //   bun scripts/publish.ts [--dry-run]
 //
@@ -11,15 +11,34 @@
 // Afterwards `changeset git-tag` creates the @railway-ts/<name>@<version> tags and reports them
 // through $CHANGESETS_OUTPUT, so changesets/action pushes them and creates the GitHub Releases.
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { $ } from 'bun';
 
-// Dependency order: use-form depends on pipelines.
+// Dependency order: use-form depends on pipelines. A new publishable package must be added here.
 const PACKAGES = ['packages/pipelines', 'packages/use-form'];
 const dryRun = process.argv.includes('--dry-run');
+
+// Refuse to publish anything if a publishable workspace package is missing from PACKAGES,
+// so a new package can't be silently left out of a release.
+const entries = await readdir('packages', { withFileTypes: true });
+const unlisted: string[] = [];
+for (const entry of entries) {
+  const dir = path.join('packages', entry.name);
+  const manifest = Bun.file(path.join(dir, 'package.json'));
+  if (!entry.isDirectory() || PACKAGES.includes(dir) || !(await manifest.exists())) {
+    continue;
+  }
+  const { private: isPrivate } = (await manifest.json()) as { private?: boolean };
+  if (!isPrivate) {
+    unlisted.push(dir);
+  }
+}
+if (unlisted.length > 0) {
+  throw new Error(`Publishable packages missing from PACKAGES in scripts/publish.ts: ${unlisted.join(', ')}`);
+}
 
 // True when name@version is on npm. `npm view` exits 1 with E404 for an unpublished
 // version; any other failure (network, auth, registry) stops the release.
