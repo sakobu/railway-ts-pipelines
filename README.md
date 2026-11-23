@@ -8,7 +8,7 @@ Typed errors, schemas, pipelines and React forms for TypeScript. One error model
 
 A typical TypeScript app stitches this together from separate libraries: Zod or Valibot for schemas, neverthrow or try/catch for errors, React Hook Form and a resolver for forms. Each has its own error shape, and much of the code that translates between them is yours to write and keep in sync.
 
-railway-ts covers the same ground with one model. `validate()` returns a `Result`, your async steps chain on that `Result`, and the form's `handleSubmit` returns one too. Errors are values, not exceptions, from the schema all the way to the form.
+railway-ts covers the same ground with one model. `validate()` returns a `Result`, your async steps chain on that `Result`, and the form's `onSubmit` and `handleSubmit` return one too. Errors are values, not exceptions, from the schema all the way to the form.
 
 ## One schema, end to end
 
@@ -52,23 +52,27 @@ export async function handleSignup(request: Request): Promise<Response> {
 
   return match(result, {
     ok: (user) => Response.json(user, { status: 201 }),
-    err: (errors) => Response.json(S.formatErrors(errors), { status: 422 }),
+    err: (errors) => Response.json(errors, { status: 422 }),
   });
 }
 ```
 
 ```tsx
 // SignupForm.tsx
+import { err, ok } from '@railway-ts/pipelines/result';
+import * as S from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
-import { signupSchema, type Signup } from './signupSchema';
+import { signupSchema } from './signupSchema';
 
 export function SignupForm() {
-  const form = useForm<Signup>(signupSchema, {
+  const form = useForm(signupSchema, {
     initialValues: { email: '', password: '', confirmPassword: '' },
     onSubmit: async (values) => {
       const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
-      if (res.status === 422) form.setServerErrors((await res.json()) as Record<string, string>);
+      if (res.status === 422) return err((await res.json()) as S.ValidationError[]);
+      if (!res.ok) return err([{ path: [], message: 'Sign-up failed. Please try again.' }]);
+      return ok((await res.json()) as { id: string });
     },
   });
 
@@ -80,13 +84,16 @@ export function SignupForm() {
       {form.getFieldError('password')}
       <input type="password" {...form.getFieldProps('confirmPassword')} />
       {form.getFieldError('confirmPassword')}
+      {form.errors[S.ROOT_ERROR_KEY]}
       <button type="submit">Sign up</button>
     </form>
   );
 }
 ```
 
-A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, `formatErrors` turns that into `{ email: 'Email already registered' }`, and `setServerErrors` shows it under the email field, with no glue code in between. (`handleSubmit`'s own `Result` covers the client-side check; the server's answer arrives through `setServerErrors`.) Even a request body that isn't JSON comes back as an error value, not an exception.
+A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the errors as they are, and `onSubmit` returns them as an `err`. `useForm` puts each one under its field, with no glue code in between. `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
+
+Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, any other failed response becomes one error at path `[]`, which the form shows at `S.ROOT_ERROR_KEY`. If the request itself fails, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
 
 ## What's in the box
 
@@ -102,7 +109,7 @@ Two packages, five pieces. Each piece is its own import, so you only ship what y
 bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
 ```
 
-`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only. use-form needs React 18 or later and `@railway-ts/pipelines` 0.2.
+`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only and need TypeScript 6.0+ and Node.js 22.12+. use-form also needs React 19 and `@railway-ts/pipelines` 0.3.
 
 ## Works with what you have
 
