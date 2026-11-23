@@ -118,12 +118,12 @@ export function _getAbortEarly(): boolean {
 /** @internal - Sets abortEarly for the duration of fn's synchronous execution */
 export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
   const prev = _abortEarly;
-  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- deliberate module-level abort-early context
+  // Deliberately sets the module-level abort-early context.
   _abortEarly = enabled;
   try {
     return fn();
   } finally {
-    // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- restore previous context
+    // Restore the previous context.
     _abortEarly = prev;
   }
 }
