@@ -14,6 +14,8 @@ Typed success/failure. No exceptions, no try-catch pyramids.
 
 > **Implementation note: Symbol branding.** `Result` uses a unique symbol brand (`RESULT_BRAND`) to prevent structural typing issues. Plain objects like `{ ok: true, value: 42 }` won't satisfy the `Result` type — only values created through `ok()` and `err()` are valid. This prevents subtle bugs from accidental duck typing.
 
+> **JSON form.** `JSON.stringify` of a `Result` gives `{ "ok": true, "value": … }` or `{ "ok": false, "error": … }`, without the brand (a symbol key). That is the wire format [`decodeResult`](#decoderesult) (schema module) reads back into a `Result`.
+
 ### Constructors
 
 #### `ok`
@@ -580,10 +582,10 @@ A schema where all validators are synchronous. Preserves sync return types.
 #### `ValidationError`
 
 ```typescript
-type ValidationError = { path: string[]; message: string };
+type ValidationError = { path: string[]; message: string; cause?: ValidationError[] };
 ```
 
-A validation error with path information and a message.
+A validation error with path information and a message. `cause` holds the errors that explain this one, like `Error.cause`. [`decodeResult`](#decoderesult) sets it, and the rest of the library ignores it.
 
 #### `ValidationResult<T>`
 
@@ -1448,6 +1450,43 @@ formatErrors([
 ]);
 // { name: 'Required', 'items[1]': 'Invalid' }
 ```
+
+#### `decodeResult`
+
+```typescript
+function decodeResult<T>(
+  value: unknown,
+  schema: Validator<unknown, T>,
+  message?: string, // default 'Unexpected response'
+): Result<T, ValidationError[]>;
+```
+
+Read a `Result` that crossed the wire as JSON back into a typed `Result`, with no cast. A `Result` serializes to `{ ok: true, value }` or `{ ok: false, error }`, so the server sends it as is:
+
+- `{ ok: true, value }`, where `schema` accepts `value`: `ok` with the parsed value.
+- `{ ok: false, error }`, where `error` is a non-empty `ValidationError[]`: `err` with those errors, keeping only `path` and `message` from each.
+- Anything else, such as an error page's JSON or a value `schema` rejects: one error at path `[]` with `message`. Its `cause` lists why, with paths into the response, for example `[{ path: ['value', 'createdAt'], message: 'Must be a Date object' }]`.
+
+```typescript
+// shared
+import * as S from '@railway-ts/pipelines/schema';
+
+// Non-strict, so the server can add fields without breaking clients that don't know them yet
+export const createdUser = S.object({ id: S.required(S.string()) }, { strict: false });
+
+// server: result is a Result<{ id: string }, S.ValidationError[]>
+return Response.json(result, { status: result.ok ? 201 : 422 });
+
+// client
+const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
+const decoded = S.decodeResult(await res.json(), createdUser); // Result<{ id: string }, S.ValidationError[]>
+```
+
+- The status code isn't read: the body says whether it's `ok`.
+- A body that isn't JSON makes `res.json()` throw before `decodeResult` runs. use-form's `handleSubmit` turns that throw into its generic submit error.
+- With use-form, the form shows only the message. To see why a response was rejected, log the `err`'s `cause`.
+- Write each `S.object` in a response schema with `{ strict: false }`. A strict one rejects any field the server adds later, so every reply becomes "Unexpected response", even when the request succeeded. Non-strict still outputs only the declared keys.
+- JSON sends a `Date` as an ISO string, so use `S.parseISODate()` for dates in response schemas, not `S.date()`.
 
 #### `ROOT_ERROR_KEY`
 

@@ -32,7 +32,7 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 19, TypeScript 6.0+, Node.js 22.12+ and @railway-ts/pipelines 0.3.
+Requires React 19, TypeScript 6.0+, Node.js 22.12+ and @railway-ts/pipelines 0.4.
 
 ## Quick Start
 

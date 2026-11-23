@@ -67,6 +67,13 @@ describe('Result', () => {
     });
   });
   describe('ok and err constructors', () => {
+    test('a Result serializes to its wire format, without the brand', () => {
+      expect(JSON.stringify(ok({ id: 'u1' }))).toBe('{"ok":true,"value":{"id":"u1"}}');
+      expect(JSON.stringify(err([{ path: ['email'], message: 'Taken' }]))).toBe(
+        '{"ok":false,"error":[{"path":["email"],"message":"Taken"}]}',
+      );
+    });
+
     test('ok creates a Result with a value', () => {
       const result = ok(42);
       expect(result.ok).toBe(true);
