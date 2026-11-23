@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Typed errors, schemas, pipelines and React forms for TypeScript. One error model from the request to the form, in under 10 kB minified and brotli-compressed, with no runtime.
+Typed errors, schemas, pipelines and React forms for TypeScript. One error model from the request to the form, in under 11 kB minified and brotli-compressed, with no runtime.
 
 ## Why
 
