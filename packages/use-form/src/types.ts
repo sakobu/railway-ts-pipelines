@@ -154,7 +154,7 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    * Initial values for the form fields.
    * These values are used when the form is reset.
    */
-  initialValues: TValues;
+  initialValues: NoInfer<TValues>;
 
   /**
    * Callback function that runs when the form is submitted with valid data.

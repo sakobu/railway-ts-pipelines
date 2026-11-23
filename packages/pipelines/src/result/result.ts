@@ -118,6 +118,28 @@ export function isErr<T, E>(
   return !result.ok;
 }
 
+/**
+ * Type guard that checks if any value is a Result.
+ *
+ * Checks the runtime brand, not the shape, so look-alikes such as a fetch
+ * `Response` (which also has `.ok`) and Options are rejected.
+ *
+ * @example
+ * const value: unknown = ok(1);
+ * if (isResult(value)) {
+ *   // value is Result<unknown, unknown>
+ *   console.log(value.ok);
+ * }
+ *
+ * @param value - The value to check
+ * @returns A type predicate indicating if the value is a Result
+ */
+export function isResult(value: unknown): value is Result<unknown, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const brand = Reflect.get(value, RESULT_BRAND) as unknown;
+  return brand === 'ok' || brand === 'error';
+}
+
 // ─── Transformations ────────────────────────────────────────
 
 /**

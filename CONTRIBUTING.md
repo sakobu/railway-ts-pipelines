@@ -41,6 +41,8 @@ use-form imports pipelines through its built output, exactly as npm users do. To
 
 **TypeScript stays on 6.x for now.** TypeScript 7 no longer ships the JavaScript compiler API that `@eslint-react/eslint-plugin` loads (through typescript-eslint) inside oxlint, so with 7 installed `bun run lint` fails with "Failed to load JS plugin". Type-aware lint rules already run on TypeScript 7 through `oxlint-tsgolint`. Move `typescript` to 7 once `@eslint-react/eslint-plugin` supports it.
 
+Support floors are tested. The `typescript` peer floor in both packages is the repo's TypeScript minor, so the repo's own type check tests it; raise them together. `engines.node` is tested by CI's `node-floor` job; change its `node-version` with it.
+
 ## Changesets
 
 Every pull request that changes a published package needs a changeset. Run `bun run changeset`, pick the packages and the bump, and write the summary users will read in the changelog:

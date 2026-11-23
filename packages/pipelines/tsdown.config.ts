@@ -7,7 +7,7 @@ export default defineConfig({
     'composition/index': 'src/composition/index.ts',
     'schema/index': 'src/schema/index.ts',
   },
-  // ESM only. CommonJS consumers load it with require(esm) (Node 20.19+/22.12+).
+  // ESM only. CommonJS consumers load it with require(esm) (Node 22.12+).
   format: ['esm'],
   sourcemap: true,
   // Declarations come from Oxc's isolated-declarations emitter: no TypeScript

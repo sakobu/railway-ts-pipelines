@@ -1499,7 +1499,7 @@ describe('useForm', () => {
     test('async validation failure with alwaysInvalidAsyncValidator', async () => {
       const onSubmit = mock(() => {});
       const { result } = renderHook(() =>
-        useForm(alwaysInvalidAsyncValidator, {
+        useForm<{ value: string }>(alwaysInvalidAsyncValidator, {
           initialValues: { value: 'anything' },
           onSubmit,
         }),

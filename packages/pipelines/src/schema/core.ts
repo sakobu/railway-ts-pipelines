@@ -53,6 +53,14 @@ type AtomicType = string | number | boolean | Date | null | undefined | bigint;
 
 type RemoveUndefined<T> = T extends undefined ? never : T;
 
+type ObjectOutput<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: RemoveUndefined<T[K]>;
+} extends infer O
+  ? { [K in keyof O]: O[K] }
+  : never;
+
 type ProcessType<T> = T extends AtomicType
   ? T
   : T extends readonly [unknown, ...unknown[]]
@@ -62,13 +70,7 @@ type ProcessType<T> = T extends AtomicType
       : T extends Array<infer U>
         ? Array<ProcessType<U>>
         : T extends object
-          ? {
-              [K in keyof T as undefined extends T[K] ? never : K]: ProcessType<T[K]>;
-            } & {
-              [K in keyof T as undefined extends T[K] ? K : never]?: ProcessType<RemoveUndefined<T[K]>>;
-            } extends infer O
-            ? { [K in keyof O]: O[K] }
-            : never
+          ? ObjectOutput<{ [K in keyof T]: ProcessType<T[K]> }>
           : T;
 
 // Infer the output type of a validator or schema
@@ -131,6 +133,9 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
 /**
  * Create a validator for objects based on a schema.
  *
+ * A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output:
+ * `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+ *
  * @example
  * const userSchema = object({
  *   name: required(string()),
@@ -145,11 +150,11 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
 export function object<T extends Record<string, unknown>>(
   schema: SyncSchema<T>,
   options?: { strict?: boolean },
-): Validator<unknown, T>;
+): Validator<unknown, ObjectOutput<T>>;
 export function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
   options?: { strict?: boolean },
-): MaybeAsyncValidator<unknown, T>;
+): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 export function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
   { strict = true }: { strict?: boolean } = {},

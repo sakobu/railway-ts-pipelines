@@ -44,7 +44,7 @@ See how it compares at [schemabenchmarks.dev](https://schemabenchmarks.dev) — 
 bun add @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-ESM-only. Requires TypeScript 5.0+ and Node.js 18+. CommonJS code can `require()` it on Node.js 20.19+ or 22.12+ (with TypeScript, use `module: nodenext` and TypeScript 5.8+).
+ESM-only. Requires TypeScript 6.0+ and Node.js 22.12+. CommonJS code can `require()` it (with TypeScript, use `module: nodenext`).
 
 ## Quick Start
 

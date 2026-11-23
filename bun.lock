@@ -26,7 +26,7 @@
       "name": "@railway-ts/pipelines",
       "version": "0.2.1",
       "peerDependencies": {
-        "typescript": ">=5.0",
+        "typescript": ">=6.0",
       },
       "optionalPeers": [
         "typescript",
@@ -51,9 +51,9 @@
         "zod": "^4.6.7",
       },
       "peerDependencies": {
-        "@railway-ts/pipelines": "^0.2.0",
-        "react": "^18.0.0 || ^19.0.0",
-        "typescript": ">=5.0",
+        "@railway-ts/pipelines": "^0.3.0",
+        "react": "^19.0.0",
+        "typescript": ">=6.0",
       },
       "optionalPeers": [
         "typescript",

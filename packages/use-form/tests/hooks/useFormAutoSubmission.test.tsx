@@ -265,7 +265,7 @@ describe('useFormAutoSubmission', () => {
       const onSubmit = mock(() => {});
 
       const { result } = renderHook(() => {
-        const form = useForm(alwaysInvalidValidator, {
+        const form = useForm<{ name: string }>(alwaysInvalidValidator, {
           initialValues: { name: 'John' },
           onSubmit,
         });
