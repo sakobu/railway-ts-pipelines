@@ -1209,7 +1209,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
    *   helpers.replace(index, { name: "Updated", email: "new@example.com" });
    * };
    */
-  const arrayHelpersImpl = useCallback(
+  const arrayHelpers = useCallback(
     <TItem = unknown>(field: string): ArrayHelpers<TItem, ExtractFieldPaths<TItem>> => {
       // Local path-based wrappers to avoid generic casts
       const getFieldPropsAtPath = (path: string) =>
@@ -1260,9 +1260,6 @@ export const useForm = <TValues extends Record<string, unknown>>(
     },
     [formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
   );
-
-  // Overloaded wrapper for better type inference
-  const arrayHelpers = arrayHelpersImpl;
 
   // ===========================================================================
   // Return
