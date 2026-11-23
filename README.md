@@ -16,46 +16,43 @@ Define the schema once. The server validates requests with it, and the form is d
 
 ```ts
 // signupSchema.ts
-import {
-  chain,
-  email,
-  minLength,
-  object,
-  refineAt,
-  required,
-  string,
-  type InferSchemaType,
-} from '@railway-ts/pipelines/schema';
+import * as S from '@railway-ts/pipelines/schema';
 
-export const signupSchema = chain(
-  object({
-    email: required(chain(string(), email())),
-    password: required(chain(string(), minLength(8))),
-    confirmPassword: required(string()),
+export const signupSchema = S.chain(
+  S.object({
+    email: S.required(S.chain(S.string(), S.email())),
+    password: S.required(S.chain(S.string(), S.minLength(8))),
+    confirmPassword: S.required(S.string()),
   }),
-  refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
+  S.refineAt('confirmPassword', (d) => d.password === d.confirmPassword, 'Passwords must match'),
 );
 
-export type Signup = InferSchemaType<typeof signupSchema>;
+export type Signup = S.InferSchemaType<typeof signupSchema>;
 ```
 
 ```ts
 // server.ts
 import { pipeAsync } from '@railway-ts/pipelines/composition';
-import { flatMapWith, match, type Result } from '@railway-ts/pipelines/result';
-import { formatErrors, validate, type ValidationError } from '@railway-ts/pipelines/schema';
+import { flatMapWith, fromPromiseWithError, match, type Result } from '@railway-ts/pipelines/result';
+import * as S from '@railway-ts/pipelines/schema';
 
 import { signupSchema, type Signup } from './signupSchema';
 
 // Your data layer. A taken email returns err([{ path: ['email'], message: 'Email already registered' }]).
-declare function createUser(input: Signup): Promise<Result<{ id: string }, ValidationError[]>>;
+declare function createUser(input: Signup): Promise<Result<{ id: string }, S.ValidationError[]>>;
+
+const notJson = (): S.ValidationError[] => [{ path: [], message: 'Request body must be JSON' }];
 
 export async function handleSignup(request: Request): Promise<Response> {
-  const result = await pipeAsync(validate(await request.json(), signupSchema), flatMapWith(createUser));
+  const result = await pipeAsync(
+    fromPromiseWithError(request.json(), notJson),
+    flatMapWith((body) => S.validate(body, signupSchema)),
+    flatMapWith(createUser),
+  );
 
   return match(result, {
     ok: (user) => Response.json(user, { status: 201 }),
-    err: (errors) => Response.json(formatErrors(errors), { status: 422 }),
+    err: (errors) => Response.json(S.formatErrors(errors), { status: 422 }),
   });
 }
 ```
@@ -89,7 +86,7 @@ export function SignupForm() {
 }
 ```
 
-A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, `formatErrors` turns that into `{ email: 'Email already registered' }`, and `setServerErrors` shows it under the email field, with no glue code in between. (`handleSubmit`'s own `Result` covers the client-side check; the server's answer arrives through `setServerErrors`.)
+A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, `formatErrors` turns that into `{ email: 'Email already registered' }`, and `setServerErrors` shows it under the email field, with no glue code in between. (`handleSubmit`'s own `Result` covers the client-side check; the server's answer arrives through `setServerErrors`.) Even a request body that isn't JSON comes back as an error value, not an exception.
 
 ## What's in the box
 
@@ -105,13 +102,13 @@ Two packages, five pieces. Each piece is its own import, so you only ship what y
 bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
 ```
 
-`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only, and use-form needs React 18 or later.
+`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only. use-form needs React 18 or later and `@railway-ts/pipelines` 0.2.
 
 ## Works with what you have
 
 Both packages support [Standard Schema](https://standardschema.dev), so choosing railway-ts doesn't lock you in either direction:
 
-- **Out:** wrap a pipelines schema with `toStandardSchema(signupSchema)` and hand it to tRPC, TanStack Form, React Hook Form or any other Standard Schema consumer.
+- **Out:** wrap a pipelines schema with `S.toStandardSchema(signupSchema)` and hand it to tRPC, TanStack Form, React Hook Form or any other Standard Schema consumer.
 - **In:** pass a Zod, Valibot or ArkType schema straight to `useForm`. Its errors come back through the same `Result` from `handleSubmit`.
 
 ## How it compares
@@ -127,7 +124,7 @@ Both packages support [Standard Schema](https://standardschema.dev), so choosing
 | Standard Schema                 | in and out   | Zod out, RHF in                    | Schema out     |
 | Runtime required                | none         | none                               | Effect runtime |
 
-Effect is a full effect system and covers far more than this table. railway-ts stays small on purpose: plain functions over plain values.
+Zod and React Hook Form both work alongside railway-ts through Standard Schema, so it doesn't have to be all or nothing (see [Works with what you have](#works-with-what-you-have)). Effect is a full effect system and covers far more than this table. railway-ts stays small on purpose: plain functions over plain values.
 
 ## Packages
 
