@@ -7,12 +7,10 @@
       "@tests/*": ["./tests/*"]
     },
 
-    // Stricter flags
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    // Stricter than the base
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["src", "tests", "examples", "*.ts", "*.js"],
+  "include": ["src", "tests", "examples", "*.ts"],
   // tests/package type-checks the built package with its own tsconfig.json
   "exclude": ["tests/package"]
 }

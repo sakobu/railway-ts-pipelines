@@ -1,6 +1,6 @@
 {
   // Compiler options shared by every package. Each package's tsconfig.json
-  // extends this file and adds only what differs (paths, strictness flags, include).
+  // extends this file and adds only what differs (paths, extra strictness, include).
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext", "DOM"],
@@ -8,7 +8,6 @@
     "module": "Preserve",
     "moduleDetection": "force",
     "jsx": "react-jsx",
-    "allowJs": true,
 
     // Bundler mode
     "moduleResolution": "bundler",
@@ -22,6 +21,8 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   }
 }
