@@ -39,6 +39,8 @@ Run these from the repo root. Each one builds what it needs first.
 
 use-form imports pipelines through its built output, exactly as npm users do. To run a command inside one package (for example `cd packages/use-form && bun test`), build pipelines first with `bun run build`, or keep `bun run dev` running.
 
+**TypeScript stays on 6.x for now.** TypeScript 7 no longer ships the JavaScript compiler API that `@eslint-react/eslint-plugin` loads (through typescript-eslint) inside oxlint, so with 7 installed `bun run lint` fails with "Failed to load JS plugin". Type-aware lint rules already run on TypeScript 7 through `oxlint-tsgolint`. Move `typescript` to 7 once `@eslint-react/eslint-plugin` supports it.
+
 ## Changesets
 
 Every pull request that changes a published package needs a changeset. Run `bun run changeset`, pick the packages and the bump, and write the summary users will read in the changelog:
