@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from 'bun:test';
 
 import { isOk, isErr } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { type } from 'arktype';
 
 import { isStandardSchema, fromStandardSchema } from '../../src/standardSchema';
 import { useForm } from '../../src/useForm';
@@ -24,6 +25,12 @@ describe('isStandardSchema', () => {
 
   test('returns true for async Standard Schema v1 object', () => {
     expect(isStandardSchema(asyncStandardSchemaUserValidator)).toBe(true);
+  });
+
+  test('returns true for a callable Standard Schema (ArkType)', () => {
+    const schema = type({ name: 'string' });
+    expect(typeof schema).toBe('function');
+    expect(isStandardSchema(schema)).toBe(true);
   });
 
   test('returns false for a plain function (MaybeAsyncValidator)', () => {
@@ -327,6 +334,44 @@ describe('useForm with Standard Schema', () => {
       expect(result.current.errors.name).toBe('Name is required');
       expect(result.current.errors['address.street']).toBe('Street is required');
       expect(result.current.errors['address.city']).toBe('City is required');
+    });
+  });
+
+  // ArkType schemas are callable functions that carry `~standard`, unlike Zod and Valibot objects.
+  describe('callable Standard Schema (ArkType)', () => {
+    const arkUser = type({ name: 'string > 0', email: 'string.email', age: 'number >= 18' });
+    type ArkUser = typeof arkUser.infer;
+
+    test('calls onSubmit with valid data', async () => {
+      const onSubmit = mock((_values: ArkUser) => {});
+      const validValues: ArkUser = { name: 'John', email: 'john@test.com', age: 25 };
+
+      const { result } = renderHook(() => useForm<ArkUser>(arkUser, { initialValues: validValues, onSubmit }));
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith(validValues);
+    });
+
+    test('reports field errors and does not call onSubmit with invalid data', async () => {
+      const onSubmit = mock((_values: ArkUser) => {});
+
+      const { result } = renderHook(() =>
+        useForm<ArkUser>(arkUser, { initialValues: { name: '', email: 'nope', age: 10 }, onSubmit }),
+      );
+
+      let submitResult: Awaited<ReturnType<typeof result.current.handleSubmit>> | undefined;
+      await act(async () => {
+        submitResult = await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(submitResult && isErr(submitResult)).toBe(true);
+      expect(result.current.errors.name).toBeString();
+      expect(result.current.errors.email).toBeString();
+      expect(result.current.errors.age).toBeString();
     });
   });
 });

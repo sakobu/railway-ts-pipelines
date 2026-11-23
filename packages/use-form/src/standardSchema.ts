@@ -8,11 +8,12 @@ import type { StandardSchemaV1, MaybeAsyncValidator, ValidationError } from '@ra
 // =============================================================================
 
 /**
- * Detects whether a value is a Standard Schema v1 object by checking for
- * the `~standard` property with `version === 1`.
+ * Detects whether a value is a Standard Schema v1 schema by checking for
+ * the `~standard` property with `version === 1`. Schemas may be objects
+ * (Zod, Valibot) or callable functions (ArkType).
  */
 export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
-  if (value == null || typeof value !== 'object' || !('~standard' in value)) {
+  if (value == null || (typeof value !== 'object' && typeof value !== 'function') || !('~standard' in value)) {
     return false;
   }
   const standard = value['~standard'];
