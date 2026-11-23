@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Typed errors, schemas, pipelines and React forms for TypeScript. One error model from the request to the form, in under 10 kB, with no runtime.
+Typed errors, schemas, pipelines and React forms for TypeScript. One error model from the request to the form, in under 10 kB minified and brotli-compressed, with no runtime.
 
 ## Why
 
-A typical TypeScript app stitches this together from separate libraries: Zod or Valibot for schemas, neverthrow or try/catch for errors, React Hook Form and a resolver for forms. Each has its own error shape, and the code that translates between them is yours to write and keep in sync.
+A typical TypeScript app stitches this together from separate libraries: Zod or Valibot for schemas, neverthrow or try/catch for errors, React Hook Form and a resolver for forms. Each has its own error shape, and much of the code that translates between them is yours to write and keep in sync.
 
 railway-ts covers the same ground with one model. `validate()` returns a `Result`, your async steps chain on that `Result`, and the form's `handleSubmit` returns one too. Errors are values, not exceptions, from the schema all the way to the form.
 
@@ -71,7 +71,7 @@ export function SignupForm() {
     initialValues: { email: '', password: '', confirmPassword: '' },
     onSubmit: async (values) => {
       const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
-      if (res.status === 422) form.setServerErrors(await res.json());
+      if (res.status === 422) form.setServerErrors((await res.json()) as Record<string, string>);
     },
   });
 
@@ -89,7 +89,7 @@ export function SignupForm() {
 }
 ```
 
-A taken email travels the same road as a malformed one. `createUser` returns it as a `ValidationError` on `email`, `formatErrors` turns that into `{ email: 'Email already registered' }`, and `setServerErrors` shows it under the email field. There is no mapping layer in between.
+A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, `formatErrors` turns that into `{ email: 'Email already registered' }`, and `setServerErrors` shows it under the email field, with no glue code in between. (`handleSubmit`'s own `Result` covers the client-side check; the server's answer arrives through `setServerErrors`.)
 
 ## What's in the box
 
