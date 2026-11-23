@@ -15,7 +15,7 @@ cd railway-ts
 bun install
 ```
 
-**Prerequisites:** Bun (the version pinned in `package.json` under `packageManager`), Node 22.18+ or 24.11+ (tsdown and the package checks run on Node), and TypeScript knowledge.
+**Prerequisites:** Bun (the version pinned in `package.json` under `packageManager`), Node 22.18+, 24.11+ or 26+ (tsdown and the package checks run on Node; CI uses 26), and TypeScript knowledge.
 
 ## Commands
 
