@@ -1929,6 +1929,43 @@ describe('useForm', () => {
 
       expect(id).toBe('items.1.priority-5');
     });
+    test('two pushes in one handler keep both items', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+
+      act(() => {
+        const helpers = result.current.arrayHelpers('tags');
+        helpers.push('one');
+        helpers.push('two');
+      });
+
+      expect(result.current.values.tags).toEqual(['one', 'two']);
+    });
+
+    test('remove then push in one handler keeps both changes', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: { ...draft, tags: ['a', 'b'] } }));
+
+      act(() => {
+        const helpers = result.current.arrayHelpers('tags');
+        helpers.remove(0);
+        helpers.push('c');
+      });
+
+      expect(result.current.values.tags).toEqual(['b', 'c']);
+    });
+
+    test('helpers kept from an earlier render push onto the current array', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+      const helpers = result.current.arrayHelpers('tags');
+
+      act(() => {
+        result.current.setFieldValue('tags', ['x']);
+      });
+      act(() => {
+        helpers.push('y');
+      });
+
+      expect(result.current.values.tags).toEqual(['x', 'y']);
+    });
   });
 
   describe('async validation', () => {

@@ -31,13 +31,7 @@ import {
 import { createFormStore } from './formStore';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
-import {
-  getValueByPath,
-  collectFieldPaths,
-  isPathAffected,
-  normalizePath,
-  normalizePathKeys,
-} from './utils';
+import { getValueByPath, collectFieldPaths, isPathAffected, normalizePath, normalizePathKeys } from './utils';
 
 import type {
   ArrayHelpers,
@@ -1303,11 +1297,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
         optionValue !== undefined ? `${path}-${String(optionValue)}` : path;
 
-      const arrayValue = getValueByPath<TValues, TItem[]>(formState.values, field) || [];
-
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(
         field,
-        arrayValue,
+        () => getValueByPath<TValues, TItem[]>(store.getState().values, field) || [],
         setFieldValue,
         getFieldPropsAtPath,
         getSelectFieldPropsAtPath,
@@ -1320,7 +1312,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         getFieldIdAtPath,
       );
     },
-    [formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
+    [store, formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
   );
 
   // ===========================================================================
