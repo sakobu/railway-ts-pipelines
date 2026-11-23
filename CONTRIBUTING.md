@@ -15,7 +15,7 @@ cd railway-ts
 bun install
 ```
 
-**Prerequisites:** Bun (the version pinned in `package.json` under `packageManager`), Node 22.18+ or 24.11+ (tsdown and the package checks run on Node), and TypeScript knowledge.
+**Prerequisites:** Bun (the version pinned in `package.json` under `packageManager`), Node 22.18+, 24.11+ or 26+ (tsdown and the package checks run on Node; CI uses 26), and TypeScript knowledge.
 
 ## Commands
 
@@ -39,6 +39,8 @@ Run these from the repo root. Each one builds what it needs first.
 
 use-form imports pipelines through its built output, exactly as npm users do. To run a command inside one package (for example `cd packages/use-form && bun test`), build pipelines first with `bun run build`, or keep `bun run dev` running.
 
+**TypeScript stays on 6.x for now.** TypeScript 7 no longer ships the JavaScript compiler API that `@eslint-react/eslint-plugin` loads (through typescript-eslint) inside oxlint, so with 7 installed `bun run lint` fails with "Failed to load JS plugin". Type-aware lint rules already run on TypeScript 7 through `oxlint-tsgolint`. Move `typescript` to 7 once `@eslint-react/eslint-plugin` supports it.
+
 ## Changesets
 
 Every pull request that changes a published package needs a changeset. Run `bun run changeset`, pick the packages and the bump, and write the summary users will read in the changelog:
@@ -47,7 +49,7 @@ Every pull request that changes a published package needs a changeset. Run `bun 
 - **minor:** new features, and, while the packages are 0.x, changes that can break existing code
 - **major:** reserved for 1.0 and later
 
-**A pipelines minor must widen use-form's peer range in the same PR.** While pipelines is 0.x, a minor bump is outside a `^0.y` range, and Changesets would otherwise rewrite use-form's peer range to the new minor alone, dropping every version users have. Add the new minor to `peerDependencies` in `packages/use-form/package.json` (for example `^0.1.27 || ^0.2.0 || ^0.3.0`). `bun run ci:version` fails if a range would narrow.
+**use-form supports one pipelines minor at a time, so a pipelines minor needs a use-form minor in the same PR.** Set use-form's peer range in `packages/use-form/package.json` to the new minor (for example `^0.3.0`), update use-form for any breaking change, and add a minor changeset for use-form: dropping the previous pipelines minor is a breaking change for use-form users. More generally, a release that accepts fewer peer versions than the package's latest release on npm must be a breaking release. `bun run ci:version` checks this, and CI runs it on every pull request.
 
 Commit the generated file in `.changeset/` with your change. Changes that publish nothing (docs outside the packages, CI, repo tooling) don't need one.
 
