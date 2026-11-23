@@ -1,5 +1,11 @@
 # @railway-ts/pipelines
 
+## 0.4.1
+
+### Patch Changes
+
+- 07c3e36: Correct the bundle sizes quoted in the README, and the TypeScript badge (6.0+).
+
 ## 0.4.0
 
 ### Minor Changes
