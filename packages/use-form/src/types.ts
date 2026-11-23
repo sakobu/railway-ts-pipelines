@@ -84,8 +84,18 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Validation errors from server-side validation.
    * These are set manually via setServerErrors() and are automatically cleared when
    * the related field value changes. Server errors take precedence over client errors.
+   * Holds per-path errors only; the submit error is kept apart in `submitError`.
    */
   serverErrors: Record<FieldPath, string>;
+
+  /**
+   * The error describing the submission attempt itself, not the values. It comes from a server
+   * `ValidationError` at path `[]`, including the generic error from a failed submission.
+   * Absent means none. It shows at `errors._root` and `serverErrors._root`, doesn't count toward
+   * `isValid`, and clears on any value change, `clearServerErrors()`, `resetForm()`, and at the
+   * start of each submit.
+   */
+  submitError?: string;
 
   /**
    * Whether the form is currently being submitted.
@@ -964,6 +974,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'SET_SERVER_ERRORS';
       /** Map of field paths to error messages */
       errors: Record<FieldPath, string>;
+      /** The submit error (a server error at path `[]`); replaces any existing one, and absent clears it */
+      submitError?: string;
     }
   | {
       /** Clears all server-side validation errors */
@@ -1039,7 +1051,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   /** Validation errors from client-side (schema) validation only. */
   clientErrors: Record<FieldPath, string>;
 
-  /** Validation errors set via `setServerErrors()`. Automatically cleared when the related field value changes. */
+  /**
+   * Validation errors set via `setServerErrors()`, keyed by field path. Automatically cleared when the related
+   * field value changes. Includes the submit error at `_root` when one is set.
+   */
   serverErrors: Record<FieldPath, string>;
 
   /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
@@ -1054,7 +1069,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   /** Per-field async validation tracking. `true` when that field's async validator is running. */
   validatingFields: Record<FieldPath, boolean>;
 
-  /** Whether the form is currently valid (no errors of any kind). */
+  /**
+   * Whether the form is currently valid: no client, field-validator or per-path server errors.
+   * The submit error never makes the form invalid. A client error at `_root` does.
+   */
   isValid: boolean;
 
   /** Whether any form values have changed since initialization or last reset. */
@@ -1093,11 +1111,12 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
 
   /**
    * Sets server-side validation errors. These take precedence over client errors and are auto-cleared on field change.
+   * An error at path `[]` becomes the submit error. Every other error's path is marked touched.
    *
    * @example
-   * form.setServerErrors({ email: "Email already taken" });
+   * form.setServerErrors([{ path: ["email"], message: "Email already taken" }]);
    */
-  setServerErrors: (errors: Record<FieldPath, string>) => void;
+  setServerErrors: (errors: ValidationError[]) => void;
 
   /**
    * Clears all server-side validation errors. Client-side errors are not affected.

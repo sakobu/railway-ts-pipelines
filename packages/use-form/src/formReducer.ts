@@ -2,9 +2,9 @@ import {
   deepEqual,
   deepMerge,
   getValueByPath,
-  isPathAffected,
   normalizePath,
   normalizePathKeys,
+  pathsOverlap,
   setValueByPath,
 } from './utils';
 
@@ -77,13 +77,16 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 
       const newServerErrors = { ...state.serverErrors };
       Object.keys(newServerErrors).forEach((errorPath) => {
-        if (isPathAffected(errorPath, action.field)) {
+        if (pathsOverlap(errorPath, action.field)) {
           delete newServerErrors[errorPath];
         }
       });
 
+      // Any value change also clears the submit error
+      const { submitError: _submitError, ...rest } = state;
+
       return {
-        ...state,
+        ...rest,
         values: newValues,
         serverErrors: newServerErrors,
         isDirty: !deepEqual(newValues, initialValues),
@@ -95,14 +98,17 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       const newServerErrors = { ...state.serverErrors };
       Object.keys(action.values).forEach((field) => {
         Object.keys(newServerErrors).forEach((errorPath) => {
-          if (isPathAffected(errorPath, field)) {
+          if (pathsOverlap(errorPath, field)) {
             delete newServerErrors[errorPath];
           }
         });
       });
 
+      // Any value change also clears the submit error
+      const { submitError: _submitError, ...rest } = state;
+
       return {
-        ...state,
+        ...rest,
         values: newValues,
         serverErrors: newServerErrors,
         isDirty: !deepEqual(newValues, initialValues),
@@ -124,17 +130,22 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         clientErrors: normalizePathKeys(action.errors),
       };
 
-    case 'SET_SERVER_ERRORS':
+    case 'SET_SERVER_ERRORS': {
+      const { submitError: _submitError, ...rest } = state;
       return {
-        ...state,
+        ...rest,
         serverErrors: normalizePathKeys(action.errors),
+        ...(action.submitError !== undefined && { submitError: action.submitError }),
       };
+    }
 
-    case 'CLEAR_SERVER_ERRORS':
+    case 'CLEAR_SERVER_ERRORS': {
+      const { submitError: _submitError, ...rest } = state;
       return {
-        ...state,
+        ...rest,
         serverErrors: {},
       };
+    }
 
     case 'SET_SUBMITTING':
       return {

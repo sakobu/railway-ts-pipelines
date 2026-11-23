@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from 'bun:test';
 
-import { isOk, isErr } from '@railway-ts/pipelines/result';
+import { isOk, isErr, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
@@ -347,7 +347,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       expect(result.current.serverErrors.name).toBe('Server error');
@@ -446,10 +446,10 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({
-          name: 'Name already exists',
-          email: 'Email already exists',
-        });
+        result.current.setServerErrors([
+          { path: ['name'], message: 'Name already exists' },
+          { path: ['email'], message: 'Email already exists' },
+        ]);
       });
 
       expect(result.current.serverErrors.name).toBe('Name already exists');
@@ -464,10 +464,10 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({
-          name: 'Name error',
-          email: 'Email error',
-        });
+        result.current.setServerErrors([
+          { path: ['name'], message: 'Name error' },
+          { path: ['email'], message: 'Email error' },
+        ]);
       });
 
       act(() => {
@@ -493,11 +493,128 @@ describe('useForm', () => {
 
       // Add server error for the same field
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       // Server error should be shown in combined errors
       expect(result.current.errors.name).toBe('Server error');
+    });
+
+    test('setServerErrors places ValidationError[] on their fields', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+      });
+
+      expect(result.current.errors.email).toBe('Taken');
+      expect(result.current.serverErrors.email).toBe('Taken');
+    });
+
+    test('setServerErrors shows through getFieldError without touching the field first', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+    });
+
+    test('a server error at path [] is the submit error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.errors._root).toBe('Down');
+      expect(result.current.serverErrors._root).toBe('Down');
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('a client _root still makes isValid false, under the submit error', async () => {
+      const { result } = renderHook(() =>
+        useForm<{ name: string }>(() => err([{ path: [], message: 'Nope' }]), {
+          initialValues: { name: 'John' },
+          validationMode: 'mount',
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.errors._root).toBe('Nope');
+      });
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.errors._root).toBe('Down');
+      expect(result.current.isValid).toBe(false);
+
+      act(() => {
+        result.current.clearServerErrors();
+      });
+
+      expect(result.current.errors._root).toBe('Nope');
+    });
+
+    test('server error on an array item uses the client error key', () => {
+      const { result } = renderHook(() =>
+        useForm<{ items: { name: string }[] }>(
+          () => err([{ path: ['items', '0', 'name'], message: 'Client says no' }]),
+          {
+            initialValues: { items: [{ name: '' }] },
+          },
+        ),
+      );
+
+      act(() => {
+        void result.current.validateForm(result.current.values);
+      });
+
+      expect(Object.keys(result.current.errors)).toHaveLength(1);
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['items', '0', 'name'], message: 'Server says no' }]);
+      });
+
+      const keys = Object.keys(result.current.errors);
+      expect(keys).toHaveLength(1);
+      expect(result.current.errors[keys[0] as string]).toBe('Server says no');
+    });
+
+    test('editing any field clears the submit error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.serverErrors._root).toBe('Down');
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      expect(result.current.serverErrors._root).toBeUndefined();
+      expect(result.current.errors._root).toBeUndefined();
     });
 
     test('server errors are cleared when field value changes', () => {
@@ -508,7 +625,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       expect(result.current.serverErrors.name).toBe('Server error');
@@ -748,7 +865,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ email: 'Email already exists' });
+        result.current.setServerErrors([{ path: ['email'], message: 'Email already exists' }]);
         result.current.setFieldTouched('email', true);
       });
 
@@ -799,13 +916,13 @@ describe('useForm', () => {
 
     test('group path: returns undefined when no descendant is touched', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r1: number[]; r2: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
       });
 
       // Error exists but no descendant touched — invisible.
@@ -814,13 +931,13 @@ describe('useForm', () => {
 
     test('group path: bubbles error once a descendant is touched', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r1: number[]; r2: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('r2.0', true);
       });
 
@@ -829,7 +946,7 @@ describe('useForm', () => {
 
     test('group path: ignores sibling-prefix touches (r20.0 must not satisfy "r2." scan)', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r2: number[]; r20: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: {
             r2: [0, 0, 0],
             r20: [0, 0, 0],
@@ -838,7 +955,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('r20.0', true);
       });
 
@@ -848,17 +965,18 @@ describe('useForm', () => {
 
     test('group path: nested descendant satisfies the scan', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
-          initialValues: {
-            secondary: { position: [0, 0, 0], velocity: [0, 0, 0] },
+        useForm<{ secondary: { position: number[]; velocity: number[] } }>(
+          () => err([{ path: ['secondary'], message: 'Primary and secondary must differ' }]),
+          {
+            initialValues: {
+              secondary: { position: [0, 0, 0], velocity: [0, 0, 0] },
+            },
           },
-        }),
+        ),
       );
 
       act(() => {
-        result.current.setServerErrors({
-          secondary: 'Primary and secondary must differ',
-        });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('secondary.position.0', true);
       });
 
@@ -883,13 +1001,13 @@ describe('useForm', () => {
     test('leaf path: behavior unchanged when descendants are touched', () => {
       // Ensures the new branch doesn't accidentally affect leaf semantics.
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ name: string }>(() => err([{ path: ['name'], message: 'Name is required' }]), {
           initialValues: { name: '' },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Name is required' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('name', true);
       });
 
@@ -898,19 +1016,23 @@ describe('useForm', () => {
 
     test("group path: error at one parent does not bubble through a sibling parent's descendant touch", () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
-          initialValues: {
-            primary: { position: [0, 0, 0] },
-            secondary: { position: [0, 0, 0] },
+        useForm<{ primary: { position: number[] }; secondary: { position: number[] } }>(
+          () =>
+            err([
+              { path: ['primary'], message: 'primary error' },
+              { path: ['secondary'], message: 'secondary error' },
+            ]),
+          {
+            initialValues: {
+              primary: { position: [0, 0, 0] },
+              secondary: { position: [0, 0, 0] },
+            },
           },
-        }),
+        ),
       );
 
       act(() => {
-        result.current.setServerErrors({
-          primary: 'primary error',
-          secondary: 'secondary error',
-        });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('primary.position.0', true);
       });
 
@@ -1861,7 +1983,7 @@ describe('useForm', () => {
 
       // Now set a server error - should override field error
       act(() => {
-        result.current.setServerErrors({ name: 'Server says no' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server says no' }]);
       });
 
       expect(result.current.errors.name).toBe('Server says no');

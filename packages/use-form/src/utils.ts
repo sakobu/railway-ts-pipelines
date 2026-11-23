@@ -248,6 +248,21 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
 };
 
 /**
+ * Checks whether two paths overlap: one is the other, or one contains the other.
+ * Symmetric form of {@link isPathAffected}.
+ *
+ * @param a - First path (dot or bracket notation)
+ * @param b - Second path (dot or bracket notation)
+ * @returns `true` if either path is affected by a change at the other
+ *
+ * @example
+ * pathsOverlap("address.city", "address"); // true
+ * pathsOverlap("address", "address.city"); // true
+ * pathsOverlap("address.city", "address.zip"); // false
+ */
+export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffected(a, b) || isPathAffected(b, a);
+
+/**
  * Recursively collects all field paths from a nested object structure.
  * Traverses the entire object tree and generates path strings for every field,
  * including intermediate parent paths, nested objects, and array elements.

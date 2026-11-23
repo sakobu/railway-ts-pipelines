@@ -4,6 +4,7 @@ import {
   getValueByPath,
   setValueByPath,
   isPathAffected,
+  pathsOverlap,
   collectFieldPaths,
   deepMerge,
   deepEqual,
@@ -183,6 +184,21 @@ describe('isPathAffected', () => {
   test('does not consider child as affecting parent', () => {
     expect(isPathAffected('user', 'user.name')).toBe(false);
     expect(isPathAffected('address', 'address.city')).toBe(false);
+  });
+});
+
+describe('pathsOverlap', () => {
+  test.each([
+    ['name', 'name', true],
+    ['address.city', 'address', true],
+    ['address', 'address.city', true],
+    ['items.0.name', 'items', true],
+    ['items', 'items[0].name', true],
+    ['email', 'name', false],
+    ['address.city', 'address.zip', false],
+    ['r2', 'r20.0', false],
+  ])('pathsOverlap(%p, %p) is %p', (a, b, expected) => {
+    expect(pathsOverlap(a, b)).toBe(expected);
   });
 });
 

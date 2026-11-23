@@ -1,5 +1,11 @@
 import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
-import { validate, formatErrors, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
+import {
+  validate,
+  formatErrors,
+  ROOT_ERROR_KEY,
+  type MaybeAsyncValidator,
+  type ValidationError,
+} from '@railway-ts/pipelines/schema';
 import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
@@ -134,7 +140,7 @@ import type {
  *   onSubmit: async (values) => {
  *     const response = await api.createUser(values);
  *     if (!response.ok) {
- *       const errors = await response.json();
+ *       const errors = await response.json(); // ValidationError[]
  *       form.setServerErrors(errors);
  *     }
  *   }
@@ -258,7 +264,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // Computed State
   // ===========================================================================
 
-  // Combined errors from client, field validators, and server (server > field > client)
+  // Combined errors: client, then field validators, then per-path server errors, then the submit error.
+  // Each later source wins.
   const errors = useMemo(() => {
     const combined: Record<FieldPath, string> = {};
 
@@ -277,11 +284,31 @@ export const useForm = <TValues extends Record<string, unknown>>(
       combined[path] = msg;
     });
 
-    return combined;
-  }, [formState.clientErrors, formState.fieldErrors, formState.serverErrors]);
+    // Submit error (describes the attempt, not a field)
+    if (formState.submitError !== undefined) {
+      combined[ROOT_ERROR_KEY] = formState.submitError;
+    }
 
-  // Form is valid when there are no errors of any kind
-  const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
+    return combined;
+  }, [formState.clientErrors, formState.fieldErrors, formState.serverErrors, formState.submitError]);
+
+  // Public view of server errors: per-path errors plus the submit error at the root key
+  const serverErrors = useMemo(
+    () =>
+      formState.submitError === undefined
+        ? formState.serverErrors
+        : { ...formState.serverErrors, [ROOT_ERROR_KEY]: formState.submitError },
+    [formState.serverErrors, formState.submitError],
+  );
+
+  // Valid when no client, field-validator, or per-path server errors exist. The submit error never counts.
+  const isValid = useMemo(
+    () =>
+      Object.keys(formState.clientErrors).length === 0 &&
+      Object.keys(formState.fieldErrors).length === 0 &&
+      Object.keys(formState.serverErrors).length === 0,
+    [formState.clientErrors, formState.fieldErrors, formState.serverErrors],
+  );
 
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
@@ -610,8 +637,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * Sets server-side validation errors received from API responses.
    * These errors take precedence over client-side errors in the merged `errors` object.
    * Server errors are automatically cleared when the related field value changes.
+   * An error at path `[]` becomes the submit error. Every other error's path is marked touched,
+   * so the errors show through `getFieldError` straight away.
    *
-   * @param serverErrors - Map of field paths to error messages from server
+   * @param errors - Server validation errors, each with a `path` and a `message`
    *
    * @example
    * // Handle server validation errors
@@ -623,11 +652,10 @@ export const useForm = <TValues extends Record<string, unknown>>(
    *     });
    *
    *     if (!response.ok) {
-   *       const errors = await response.json();
-   *       form.setServerErrors({
-   *         "email": "Email already taken",
-   *         "username": "Username not available"
-   *       });
+   *       form.setServerErrors([
+   *         { path: ["email"], message: "Email already taken" },
+   *         { path: ["username"], message: "Username not available" }
+   *       ]);
    *       return;
    *     }
    *   }
@@ -635,12 +663,22 @@ export const useForm = <TValues extends Record<string, unknown>>(
    *
    * @example
    * // Set a single server error
-   * form.setServerErrors({ "email": "This email is already registered" });
+   * form.setServerErrors([{ path: ["email"], message: "This email is already registered" }]);
+   *
+   * @example
+   * // A path [] error is the submit error, shown at errors._root
+   * form.setServerErrors([{ path: [], message: "Service unavailable" }]);
    */
-  const setServerErrors = useCallback((serverErrors: Record<FieldPath, string>): void => {
+  const placeServerErrors = useCallback((errors: ValidationError[]): void => {
+    const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
     dispatch({
       type: 'SET_SERVER_ERRORS',
-      errors: serverErrors,
+      errors: perPath,
+      ...(submitError !== undefined && { submitError }),
+    });
+    dispatch({
+      type: 'MARK_ALL_TOUCHED',
+      fields: Object.keys(perPath),
     });
   }, []);
 
@@ -1271,7 +1309,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     touched: formState.touched,
     errors,
     clientErrors: formState.clientErrors,
-    serverErrors: formState.serverErrors,
+    serverErrors,
     fieldErrors: formState.fieldErrors,
     isSubmitting: formState.isSubmitting,
     isValidating,
@@ -1292,7 +1330,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     setValues,
 
     // Server error management
-    setServerErrors,
+    setServerErrors: placeServerErrors,
     clearServerErrors,
 
     // Form actions
