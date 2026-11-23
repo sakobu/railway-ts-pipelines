@@ -77,7 +77,7 @@ export function SignupForm() {
   });
 
   return (
-    <form onSubmit={(e) => void form.handleSubmit(e)}>
+    <form noValidate onSubmit={(e) => void form.handleSubmit(e)}>
       <input type="email" {...form.getFieldProps('email')} />
       {form.getFieldError('email')}
       <input type="password" {...form.getFieldProps('password')} />
@@ -93,7 +93,7 @@ export function SignupForm() {
 
 A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the `Result` as JSON, and `decodeResult` turns it back into a typed `Result` without a cast. `useForm` puts each error under its field, and `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
 
-Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `ROOT_ERROR_KEY`. If the request itself fails, or the body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
+Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `ROOT_ERROR_KEY`. If the request itself fails, or the response body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
 
 ## What's in the box
 

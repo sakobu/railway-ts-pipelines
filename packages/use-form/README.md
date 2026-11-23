@@ -1,6 +1,6 @@
 # @railway-ts/use-form
 
-[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![Coverage](https://codecov.io/gh/sakobu/railway-ts/branch/main/graph/badge.svg?flag=use-form)](https://codecov.io/gh/sakobu/railway-ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
+[![npm version](https://img.shields.io/npm/v/@railway-ts/use-form.svg)](https://www.npmjs.com/package/@railway-ts/use-form) [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![Coverage](https://codecov.io/gh/sakobu/railway-ts/branch/main/graph/badge.svg?flag=use-form)](https://codecov.io/gh/sakobu/railway-ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-blue)](https://www.typescriptlang.org/)
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 

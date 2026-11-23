@@ -1,6 +1,6 @@
 # @railway-ts/pipelines
 
-[![npm version](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![Coverage](https://codecov.io/gh/sakobu/railway-ts/branch/main/graph/badge.svg?flag=pipelines)](https://codecov.io/gh/sakobu/railway-ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
+[![npm version](https://img.shields.io/npm/v/@railway-ts/pipelines.svg)](https://www.npmjs.com/package/@railway-ts/pipelines) [![CI](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/sakobu/railway-ts/actions/workflows/ci.yml) [![Coverage](https://codecov.io/gh/sakobu/railway-ts/branch/main/graph/badge.svg?flag=pipelines)](https://codecov.io/gh/sakobu/railway-ts) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-blue)](https://www.typescriptlang.org/)
 
 Railway-oriented programming for TypeScript. Typed `Result<T, E>` pipelines with first-class validation and optional `Option<T>` support -- small, modular, and fully tree-shakable.
 
