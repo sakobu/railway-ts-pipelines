@@ -21,21 +21,21 @@ bun install
 
 Run these from the repo root. Each one builds what it needs first.
 
-| Command                 | What it does                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `bun run build`         | Build both packages with [tsdown](https://tsdown.dev), pipelines first               |
-| `bun run dev`           | Rebuild pipelines on change                                                          |
-| `bun run typecheck`     | Type-check every package and the repo scripts with `tsc`                             |
-| `bun run test`          | Run both test suites with `bun test`                                                 |
-| `bun run test:coverage` | Run the tests with coverage and enforce 100% line coverage per package               |
-| `bun run test:package`  | Build pipelines and check it the way consumers see it (types and runtime)            |
-| `bun run lint`          | Lint with [oxlint](https://oxc.rs/docs/guide/usage/linter), type-aware               |
-| `bun run lint:fix`      | Lint and apply safe fixes                                                            |
-| `bun run format`        | Format with [oxfmt](https://oxc.rs/docs/guide/usage/formatter) and sort imports      |
-| `bun run format:check`  | Check formatting                                                                     |
-| `bun run size`          | Check bundle sizes with [size-limit](https://github.com/ai/size-limit) (build first) |
-| `bun run check`         | Everything CI checks: build, typecheck, lint, format, tests, package checks, size    |
-| `bun run changeset`     | Record a release note and version bump with [Changesets](https://changesets.dev)     |
+| Command                 | What it does                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `bun run build`         | Build both packages with [tsdown](https://tsdown.dev), pipelines first                                    |
+| `bun run dev`           | Rebuild pipelines on change                                                                               |
+| `bun run typecheck`     | Type-check every package and the repo scripts with `tsc`                                                  |
+| `bun run test`          | Run both test suites with `bun test`                                                                      |
+| `bun run test:coverage` | Run the tests with coverage and enforce 100% line coverage per package                                    |
+| `bun run test:package`  | Build pipelines and check it the way consumers see it (types and runtime)                                 |
+| `bun run lint`          | Lint with [oxlint](https://oxc.rs/docs/guide/usage/linter), type-aware; fails if a file has no lint rules |
+| `bun run lint:fix`      | Lint and apply safe fixes                                                                                 |
+| `bun run format`        | Format with [oxfmt](https://oxc.rs/docs/guide/usage/formatter) and sort imports                           |
+| `bun run format:check`  | Check formatting                                                                                          |
+| `bun run size`          | Check bundle sizes with [size-limit](https://github.com/ai/size-limit) (build first)                      |
+| `bun run check`         | Everything CI checks: build, typecheck, lint, format, tests at 100% coverage, package checks, size        |
+| `bun run changeset`     | Record a release note and version bump with [Changesets](https://changesets.dev)                          |
 
 use-form imports pipelines through its built output, exactly as npm users do. To run a command inside one package (for example `cd packages/use-form && bun test`), build pipelines first with `bun run build`, or keep `bun run dev` running.
 
