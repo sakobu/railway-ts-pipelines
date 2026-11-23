@@ -2238,6 +2238,22 @@ describe('useForm', () => {
   });
 
   describe('isDirty', () => {
+    test('isDirty follows new initialValues, such as a saved record passed back in', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: initial }),
+        { initialProps: { initial: draft } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('title', 'Saved');
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      rerender({ initial: { ...draft, title: 'Saved' } });
+
+      expect(result.current.isDirty).toBe(false);
+    });
+
     test('isDirty is false initially', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {

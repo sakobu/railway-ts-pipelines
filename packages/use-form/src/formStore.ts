@@ -26,7 +26,7 @@ export type FormStore<TValues extends Record<string, unknown>> = {
  *
  * @template TValues - The shape of the form values
  * @param initialState - The state before any action
- * @param getInitialValues - Reads the initial values the reducer uses (for `RESET_FORM` and `isDirty`) at each dispatch
+ * @param getInitialValues - Reads the initial values `RESET_FORM` resets to, at each dispatch
  * @returns A store whose methods stay the same for its lifetime
  *
  * @example

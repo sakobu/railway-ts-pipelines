@@ -16,7 +16,6 @@ const initialState: FormState<Values> = {
   isSubmitting: false,
   isFormValidating: false,
   submitCount: 0,
-  isDirty: false,
 };
 
 describe('createFormStore', () => {

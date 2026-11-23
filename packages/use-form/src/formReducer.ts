@@ -1,12 +1,4 @@
-import {
-  deepEqual,
-  deepMerge,
-  getValueByPath,
-  normalizePath,
-  normalizePathKeys,
-  pathsOverlap,
-  setValueByPath,
-} from './utils';
+import { deepMerge, getValueByPath, normalizePath, normalizePathKeys, pathsOverlap, setValueByPath } from './utils';
 
 import type { FieldPath, FormAction, FormState } from './types';
 
@@ -84,7 +76,6 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...rest,
         values: newValues,
         serverErrors: newServerErrors,
-        isDirty: !deepEqual(newValues, initialValues),
       };
     }
 
@@ -106,7 +97,6 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...rest,
         values: newValues,
         serverErrors: newServerErrors,
-        isDirty: !deepEqual(newValues, initialValues),
       };
     }
 
@@ -202,7 +192,6 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         isSubmitting: false,
         isFormValidating: false,
         submitCount: 0,
-        isDirty: false,
       };
 
     case 'MARK_ALL_TOUCHED': {

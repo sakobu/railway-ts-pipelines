@@ -56,8 +56,7 @@ export type DeepPartial<T> = T extends Date | RegExp | File | Blob
  *   touched: { "email": true, "password": true },
  *   clientErrors: { "password": "Must be at least 8 characters" },
  *   serverErrors: {},
- *   isSubmitting: false,
- *   isDirty: true
+ *   isSubmitting: false
  * };
  */
 export interface FormState<TValues extends Record<string, unknown>> {
@@ -119,13 +118,6 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Useful in submit mode for patterns like `submitCount === 0 || form.isValid`.
    */
   submitCount: number;
-
-  /**
-   * Whether any form values have changed since initialization or last reset.
-   * Set to true when any field value changes from its initial value.
-   * Useful for prompting users about unsaved changes.
-   */
-  isDirty: boolean;
 }
 
 /**

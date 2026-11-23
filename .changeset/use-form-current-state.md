@@ -9,6 +9,7 @@ Form methods now see the calls made before them in the same handler. Before, the
 - Validation after a second call, or after `setFieldTouched`, could show an error for a value that had already changed.
 - A `setFieldValue` called from a child component's effect right after a re-render ran the previous render's `onFieldChange`.
 - In `'mount'` validation mode, a `resetForm` kept from an earlier render validated that render's `initialValues` instead of the values it reset to.
+- `isDirty` only updated on the next edit, so passing a saved record back in as `initialValues` left the form dirty. It now always compares the current values with the latest `initialValues`.
 
 **Breaking:** `setFieldValue` now stores the new value before calling `onFieldChange`, so any form call made inside `onFieldChange` applies on top of the change. Before, the outer write was applied last. A nested write to the same field now wins, and a nested `resetForm()` or `setValues()` now also resets or overwrites the field that just changed. To reset the other fields when one changes, call `setValues({ ...defaults, [field]: value })` inside `onFieldChange`.
 

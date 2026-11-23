@@ -31,7 +31,14 @@ import {
 import { createFormStore } from './formStore';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
-import { getValueByPath, collectFieldPaths, isPathAffected, normalizePath, normalizePathKeys } from './utils';
+import {
+  deepEqual,
+  getValueByPath,
+  collectFieldPaths,
+  isPathAffected,
+  normalizePath,
+  normalizePathKeys,
+} from './utils';
 
 import type {
   ArrayHelpers,
@@ -216,7 +223,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         isSubmitting: false,
         isFormValidating: false,
         submitCount: 0,
-        isDirty: false,
       },
       () => initialValuesRef.current,
     ),
@@ -309,6 +315,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       Object.keys(formState.serverErrors).length === 0,
     [formState.clientErrors, formState.fieldErrors, formState.serverErrors],
   );
+
+  // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
+  const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
@@ -1333,7 +1342,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     isValidating,
     validatingFields: formState.validatingFields,
     isValid,
-    isDirty: formState.isDirty,
+    isDirty,
     submitCount: formState.submitCount,
 
     // Error helper
