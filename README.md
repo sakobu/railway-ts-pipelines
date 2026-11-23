@@ -39,19 +39,19 @@ export type CreatedUser = S.InferSchemaType<typeof createdUser>;
 // server.ts
 import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { flatMapWith, fromPromiseWithError, type Result } from '@railway-ts/pipelines/result';
-import * as S from '@railway-ts/pipelines/schema';
+import { validate, type ValidationError } from '@railway-ts/pipelines/schema';
 
 import { signupSchema, type CreatedUser, type Signup } from './signupSchema';
 
 // Your data layer. A taken email returns err([{ path: ['email'], message: 'Email already registered' }]).
-declare function createUser(input: Signup): Promise<Result<CreatedUser, S.ValidationError[]>>;
+declare function createUser(input: Signup): Promise<Result<CreatedUser, ValidationError[]>>;
 
-const notJson = (): S.ValidationError[] => [{ path: [], message: 'Request body must be JSON' }];
+const notJson = (): ValidationError[] => [{ path: [], message: 'Request body must be JSON' }];
 
 export async function handleSignup(request: Request): Promise<Response> {
   const result = await pipeAsync(
     fromPromiseWithError(request.json(), notJson),
-    flatMapWith((body) => S.validate(body, signupSchema)),
+    flatMapWith((body) => validate(body, signupSchema)),
     flatMapWith(createUser),
   );
 
@@ -62,7 +62,7 @@ export async function handleSignup(request: Request): Promise<Response> {
 
 ```tsx
 // SignupForm.tsx
-import * as S from '@railway-ts/pipelines/schema';
+import { decodeResult, ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
 import { createdUser, signupSchema } from './signupSchema';
@@ -72,7 +72,7 @@ export function SignupForm() {
     initialValues: { email: '', password: '', confirmPassword: '' },
     onSubmit: async (values) => {
       const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
-      return S.decodeResult(await res.json(), createdUser);
+      return decodeResult(await res.json(), createdUser);
     },
   });
 
@@ -84,7 +84,7 @@ export function SignupForm() {
       {form.getFieldError('password')}
       <input type="password" {...form.getFieldProps('confirmPassword')} />
       {form.getFieldError('confirmPassword')}
-      {form.errors[S.ROOT_ERROR_KEY]}
+      {form.errors[ROOT_ERROR_KEY]}
       <button type="submit">Sign up</button>
     </form>
   );
@@ -93,7 +93,7 @@ export function SignupForm() {
 
 A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the `Result` as JSON, and `decodeResult` turns it back into a typed `Result` without a cast. `useForm` puts each error under its field, and `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
 
-Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `S.ROOT_ERROR_KEY`. If the request itself fails, or the body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
+Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `ROOT_ERROR_KEY`. If the request itself fails, or the body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
 
 ## What's in the box
 
@@ -115,7 +115,7 @@ bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
 
 Both packages support [Standard Schema](https://standardschema.dev), so choosing railway-ts doesn't lock you in either direction:
 
-- **Out:** wrap a pipelines schema with `S.toStandardSchema(signupSchema)` and hand it to tRPC, TanStack Form, React Hook Form or any other Standard Schema consumer.
+- **Out:** wrap a pipelines schema with `toStandardSchema(signupSchema)` and hand it to tRPC, TanStack Form, React Hook Form or any other Standard Schema consumer.
 - **In:** pass a Zod, Valibot or ArkType schema straight to `useForm`. Its errors come back through the same `Result` from `handleSubmit`.
 
 ## How it compares
