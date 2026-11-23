@@ -23,8 +23,9 @@ import type {
  * @template TFieldPaths - Union of valid field paths for the item type
  *
  * @param field - The path to the array field in the form
- * @param getArrayValue - Reads the field's current array. `values` reads it once, at creation; each method that
- *   changes the array reads it when called, so it builds on changes made since
+ * @param arrayValue - The field's array from the current render, exposed as `values`
+ * @param getArrayValue - Reads the field's latest array. Each method that changes the array reads it when called,
+ *   so it builds on changes made since the render
  * @param setFieldValue - Function to update a field value in the form
  * @param getFieldProps - Function to get props for native text inputs
  * @param getSelectFieldProps - Function to get props for native select elements
@@ -50,6 +51,7 @@ import type {
  */
 export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string = ExtractFieldPaths<TItem>>(
   field: FieldPath,
+  arrayValue: TItem[],
   getArrayValue: () => TItem[],
   setFieldValue: (field: FieldPath, value: unknown) => void,
   getFieldProps: (field: string) => NativeFieldProps,
@@ -75,7 +77,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      *   </div>
      * ))
      */
-    values: getArrayValue(),
+    values: arrayValue,
 
     /**
      * Adds a new item to the end of the array.

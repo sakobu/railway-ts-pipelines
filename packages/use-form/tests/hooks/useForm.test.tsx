@@ -633,6 +633,35 @@ describe('useForm', () => {
       expect(result.current.touched).toEqual({});
       expect(result.current.isDirty).toBe(false);
     });
+
+    test('keeps its identity when initialValues is a new object with each render', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: { ...initial } }),
+        { initialProps: { initial: draft } },
+      );
+      const firstReset = result.current.resetForm;
+
+      rerender({ initial: draft });
+
+      expect(result.current.resetForm).toBe(firstReset);
+    });
+
+    test('in mount mode, validates the values it reset to', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) =>
+          useForm(publishValidator, { initialValues: initial, validationMode: 'mount' }),
+        { initialProps: { initial: draft } },
+      );
+      const resetFromFirstRender = result.current.resetForm;
+
+      rerender({ initial: { ...draft, title: '' } });
+      act(() => {
+        resetFromFirstRender();
+      });
+
+      expect(result.current.values.title).toBe('');
+      expect(result.current.clientErrors.title).toBe('Title is required');
+    });
   });
 
   describe('server errors', () => {
@@ -2010,6 +2039,18 @@ describe('useForm', () => {
       });
 
       expect(result.current.values.tags).toEqual(['x', 'y']);
+    });
+
+    test('helpers.values is the array from the same render as form.values', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+      let seen: string[] | undefined;
+
+      act(() => {
+        result.current.setFieldValue('tags', ['x']);
+        seen = result.current.arrayHelpers('tags').values;
+      });
+
+      expect(seen).toEqual(draft.tags);
     });
   });
 

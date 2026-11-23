@@ -82,6 +82,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -108,6 +109,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -133,6 +135,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -162,6 +165,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -187,6 +191,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -212,6 +217,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -237,6 +243,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -262,6 +269,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -287,6 +295,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -312,6 +321,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -340,6 +350,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -365,6 +376,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -390,6 +402,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -415,6 +428,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -440,6 +454,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -465,6 +480,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -490,6 +506,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -518,6 +535,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -543,6 +561,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -568,6 +587,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -593,6 +613,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -618,6 +639,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -643,6 +665,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -668,6 +691,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -693,6 +717,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -719,6 +744,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        sparse,
         () => sparse,
         setFieldValue,
         mocks.getFieldProps,
@@ -748,6 +774,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -773,6 +800,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -798,6 +826,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -823,6 +852,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -848,6 +878,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -873,6 +904,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -904,9 +936,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Contact[] = [{ email: 'test@example.com' }];
       const helpers = createArrayHelpers<Contact, 'email'>(
         'contacts',
-        () => [{ email: 'test@example.com' }],
+        items,
+        () => items,
         () => {},
         mockGetFieldProps,
         mocks.getSelectFieldProps,
@@ -935,9 +969,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ category: 'A' }];
       const helpers = createArrayHelpers<Item, 'category'>(
         'items',
-        () => [{ category: 'A' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mockGetSelectFieldProps,
@@ -967,9 +1003,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ volume: 50 }];
       const helpers = createArrayHelpers<Item, 'volume'>(
         'items',
-        () => [{ volume: 50 }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -998,9 +1036,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ active: true }];
       const helpers = createArrayHelpers<Item, 'active'>(
         'items',
-        () => [{ active: true }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1029,9 +1069,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ enabled: false }];
       const helpers = createArrayHelpers<Item, 'enabled'>(
         'items',
-        () => [{ enabled: false }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1059,9 +1101,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ avatar: null }];
       const helpers = createArrayHelpers<Item, 'avatar'>(
         'items',
-        () => [{ avatar: null }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1093,9 +1137,11 @@ describe('arrayHelpersFactory', () => {
       );
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ size: 'M' }];
       const helpers = createArrayHelpers<Item, 'size'>(
         'items',
-        () => [{ size: 'M' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1124,9 +1170,11 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ name: 'A' }, { name: 'B' }, { name: 'C' }];
       const helpers = createArrayHelpers<Item, 'name'>(
         'items',
-        () => [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
+        items,
+        () => items,
         () => {},
         mockGetFieldProps,
         mocks.getSelectFieldProps,
@@ -1160,14 +1208,16 @@ describe('arrayHelpersFactory', () => {
       }));
       const mocks = createMockFieldProps();
 
+      const items: Team[] = [
+        {
+          name: 'Engineering',
+          members: [{ email: 'a@example.com', phone: '123' }],
+        },
+      ];
       const helpers = createArrayHelpers<Team, 'name' | 'members'>(
         'teams',
-        () => [
-          {
-            name: 'Engineering',
-            members: [{ email: 'a@example.com', phone: '123' }],
-          },
-        ],
+        items,
+        () => items,
         () => {},
         mockGetFieldProps,
         mocks.getSelectFieldProps,
@@ -1201,9 +1251,11 @@ describe('arrayHelpersFactory', () => {
       );
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ priority: 1 }];
       const helpers = createArrayHelpers<Item, 'priority'>(
         'items',
-        () => [{ priority: 1 }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1230,6 +1282,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -1253,6 +1306,7 @@ describe('arrayHelpersFactory', () => {
 
       const helpers = createArrayHelpers(
         'items',
+        initial,
         () => initial,
         setFieldValue,
         mocks.getFieldProps,
@@ -1276,9 +1330,11 @@ describe('arrayHelpersFactory', () => {
       const mockGetFieldError = mock((_field: string): string | undefined => 'Required');
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ email: '' }];
       const helpers = createArrayHelpers<Item, 'email'>(
         'contacts',
-        () => [{ email: '' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1302,9 +1358,11 @@ describe('arrayHelpersFactory', () => {
       const mockGetFieldError = mock((_field: string): string | undefined => undefined);
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ name: 'valid' }];
       const helpers = createArrayHelpers<Item, 'name'>(
         'items',
-        () => [{ name: 'valid' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1330,9 +1388,11 @@ describe('arrayHelpersFactory', () => {
       const mockGetFieldId = mock((field: string, _optionValue?: string | number): string => field);
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ name: 'test' }];
       const helpers = createArrayHelpers<Item, 'name'>(
         'items',
-        () => [{ name: 'test' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1358,9 +1418,11 @@ describe('arrayHelpersFactory', () => {
       );
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ status: 'active' }];
       const helpers = createArrayHelpers<Item, 'status'>(
         'items',
-        () => [{ status: 'active' }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1386,9 +1448,11 @@ describe('arrayHelpersFactory', () => {
       );
       const mocks = createMockFieldProps();
 
+      const items: Item[] = [{ priority: 1 }];
       const helpers = createArrayHelpers<Item, 'priority'>(
         'items',
-        () => [{ priority: 1 }],
+        items,
+        () => items,
         () => {},
         mocks.getFieldProps,
         mocks.getSelectFieldProps,
@@ -1408,12 +1472,13 @@ describe('arrayHelpersFactory', () => {
     });
   });
 
-  test('mutating methods read the array when called, not when created', () => {
+  test('values is the array passed in; mutating methods read the getter when called', () => {
     let current: TestItem[] = [{ id: 1 }];
     const setFieldValue = mock(() => {});
     const mocks = createMockFieldProps();
     const helpers = createArrayHelpers(
       'items',
+      [{ id: 1 }],
       () => current,
       setFieldValue,
       mocks.getFieldProps,

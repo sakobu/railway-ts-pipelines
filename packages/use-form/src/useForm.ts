@@ -922,9 +922,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     });
 
     if (validateOnMount) {
-      void validateForm(initialValues);
+      void validateForm(store.getState().values);
     }
-  }, [dispatch, initialValues, validateForm, validateOnMount]);
+  }, [store, dispatch, validateForm, validateOnMount]);
 
   // ===========================================================================
   // Error Helper
@@ -1299,6 +1299,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(
         field,
+        getValueByPath<TValues, TItem[]>(formState.values, field) || [],
         () => getValueByPath<TValues, TItem[]>(store.getState().values, field) || [],
         setFieldValue,
         getFieldPropsAtPath,
