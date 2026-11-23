@@ -729,30 +729,32 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const runSubmission = useCallback(
     async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
-      const { clientErrors, serverErrors } = formStateRef.current;
-
-      // Mark all fields and error paths as touched (deep)
-      const valuePaths = collectFieldPaths(values);
-      const allPaths = Array.from(new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]));
-
-      dispatch({
-        type: 'MARK_ALL_TOUCHED',
-        fields: allPaths,
-      });
-
-      // Increment submit count on every attempt (regardless of validation outcome)
-      dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
-
-      // Clear any existing server errors
-      dispatch({
-        type: 'CLEAR_SERVER_ERRORS',
-      });
-
-      // Invalidate any pending live async validations
-      ++validationSeqRef.current;
-
-      // Every step is awaited inside this try, so its catch sees every throw and rejection
+      // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
+        const { clientErrors, serverErrors } = formStateRef.current;
+
+        // Mark all fields and error paths as touched (deep)
+        const valuePaths = collectFieldPaths(values);
+        const allPaths = Array.from(
+          new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
+        );
+
+        dispatch({
+          type: 'MARK_ALL_TOUCHED',
+          fields: allPaths,
+        });
+
+        // Increment submit count on every attempt (regardless of validation outcome)
+        dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
+
+        // Clear any existing server errors
+        dispatch({
+          type: 'CLEAR_SERVER_ERRORS',
+        });
+
+        // Invalidate any pending live async validations
+        ++validationSeqRef.current;
+
         // Show validating state during submit validation
         dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
 
@@ -815,8 +817,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           const outcome = onSubmit ? await onSubmit(validData) : undefined;
 
           if (outcome === undefined) {
-            // Cast: an onSubmit that returns nothing, or no onSubmit, leaves TResult at its default,
-            // TValues (see OnSubmit), so the validated values are the success value.
+            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues, and without an
+            // onSubmit TResult defaults to TValues, so the validated values are the success value. The one
+            // hole is an explicit useForm<T, U> with no onSubmit at all.
             return ok(validData) as Result<TResult, ValidationError[]>;
           }
 

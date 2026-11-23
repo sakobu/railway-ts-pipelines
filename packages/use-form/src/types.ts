@@ -130,13 +130,16 @@ export interface FormState<TValues extends Record<string, unknown>> {
 
 /**
  * The submit handler: it returns nothing on every path, or a `Result` on every path.
- * Returning nothing means `TResult` is the form values.
+ * Returning nothing is allowed only when `TResult` is the form values, since `handleSubmit`
+ * then resolves to the values. Any other `TResult` needs a `Result`.
  *
  * @template TValues - The type of form values being managed
  * @template TResult - The value `handleSubmit` resolves to on success
  */
 type OnSubmit<TValues, TResult> =
-  | ((values: TValues) => void | Promise<void>)
+  | ((
+      values: TValues,
+    ) => [TResult] extends [TValues] ? ([TValues] extends [TResult] ? void | Promise<void> : never) : never)
   | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
 
 /**
@@ -194,6 +197,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * With an explicit type argument, `useForm<TValues>` fixes the success value to the form values.
    * For an `onSubmit` that returns `Result<User, …>`, write `useForm<TValues, User>` or drop the type arguments.
+   * With an explicit `useForm<TValues, User>`, always pass an `onSubmit` that returns a `Result`: without one,
+   * `handleSubmit` resolves to the form values, though its type says `User`.
    *
    * @param values - The validated form values (guaranteed to be complete and valid)
    *

@@ -1494,6 +1494,31 @@ describe('useForm', () => {
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
     });
 
+    test('a value that cannot be traversed returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      // Marking every field touched walks the values, and a cycle makes that walk throw
+      const cyclic: Record<string, unknown> = { name: 'John' };
+      cyclic.self = cyclic;
+
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: cyclic,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+      expect(result.current.isSubmitting).toBe(false);
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+    });
+
     test('server errors from onSubmit clear on the next submit', async () => {
       const secondStarted = Promise.withResolvers<void>();
       const releaseSecond = Promise.withResolvers<void>();
