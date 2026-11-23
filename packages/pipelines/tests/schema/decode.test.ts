@@ -104,6 +104,23 @@ describe('decodeResult', () => {
     expect(decodeResult(body, createdUser)).toEqual(failed(cause));
   });
 
+  test('a non-strict response schema tolerates a field the server adds; a strict one names it in the cause', () => {
+    const body = { ok: true, value: { id: 'u1', email: 'a@example.com' } };
+    expect(decodeResult(body, object({ id: required(string()) }, { strict: false }))).toEqual(ok({ id: 'u1' }));
+    expect(decodeResult(body, createdUser)).toEqual(
+      failed([{ path: ['value', 'email'], message: "Unexpected field: 'email'" }]),
+    );
+  });
+
+  test('reads only own keys, so a value whose envelope keys are inherited is not a Result', () => {
+    expect(decodeResult(Object.create({ ok: true, value: undefined }), optional(string()))).toEqual(failed(noOk));
+  });
+
+  test('a Response passed without .json() is rejected, not read through its prototype', () => {
+    const res = Response.json(ok({ id: 'u1' }), { status: 201 });
+    expect(decodeResult(res, optional(string()))).toEqual(failed(noOk));
+  });
+
   test('uses a custom message', () => {
     expect(decodeResult(null, createdUser, 'Sign-up failed')).toEqual(failed(notAnObject, 'Sign-up failed'));
   });

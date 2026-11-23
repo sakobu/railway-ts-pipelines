@@ -24,7 +24,7 @@ import type { ValidationError, Validator } from './core';
  * @example
  * // client
  * const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
- * const result = decodeResult(await res.json(), object({ id: required(string()) }));
+ * const result = decodeResult(await res.json(), object({ id: required(string()) }, { strict: false }));
  * // Result<{ id: string }, ValidationError[]>
  *
  * @param value - The parsed JSON, for example `await res.json()`
@@ -41,17 +41,20 @@ export function decodeResult<T>(
 
   if (typeof value !== 'object' || value === null) return fail([{ path: [], message: 'Expected an object' }]);
 
-  const flag = boolean()('ok' in value ? value.ok : undefined, ['ok']);
+  // Own keys only: parsed JSON has no inherited ones, and a Response passed without .json() must not be read
+  const own = (key: string): unknown => Object.getOwnPropertyDescriptor(value, key)?.value;
+
+  const flag = boolean()(own('ok'), ['ok']);
   if (isErr(flag)) return fail(flag.error);
 
   if (flag.value) {
-    const decoded = schema('value' in value ? value.value : undefined, ['value']);
+    const decoded = schema(own('value'), ['value']);
     return isErr(decoded) ? fail(decoded.error) : decoded;
   }
 
   const errors = chain(
     array(object({ path: required(array(string())), message: required(string()) }, { strict: false })),
     minItems(1),
-  )('error' in value ? value.error : undefined, ['error']);
+  )(own('error'), ['error']);
   return isErr(errors) ? fail(errors.error) : err(errors.value);
 }
