@@ -192,7 +192,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const touchOnChange = mode === 'live';
 
   // ===========================================================================
-  // Reducer Setup
+  // State Store
   // ===========================================================================
 
   // The reducer uses the initialValues of the latest commit. An insertion effect updates them before

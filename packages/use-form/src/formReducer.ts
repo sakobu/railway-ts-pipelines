@@ -34,13 +34,8 @@ import type { FieldPath, FormAction, FormState } from './types';
  * @returns A new form state object reflecting the changes from the action
  *
  * @example
- * // Used internally by useForm hook with useReducer
- * const reducerFn = useCallback(
- *   (state: FormState<TValues>, action: FormAction<TValues>) =>
- *     formReducer(state, action, initialValues),
- *   [initialValues]
- * );
- * const [formState, dispatch] = useReducer(reducerFn, initialState);
+ * // Used internally by useForm's store, which applies each action as soon as it is dispatched
+ * const next = formReducer(state, action, initialValues);
  *
  * @example
  * // Dispatching a field value change
