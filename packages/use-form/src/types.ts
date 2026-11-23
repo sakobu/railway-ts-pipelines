@@ -1,6 +1,6 @@
 import type { Result } from '@railway-ts/pipelines/result';
 import type { ValidationError } from '@railway-ts/pipelines/schema';
-import type { ChangeEvent, FormEvent } from 'react';
+import type { ChangeEvent, SyntheticEvent } from 'react';
 
 // =============================================================================
 // Form Types
@@ -84,8 +84,18 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Validation errors from server-side validation.
    * These are set manually via setServerErrors() and are automatically cleared when
    * the related field value changes. Server errors take precedence over client errors.
+   * Holds per-path errors only; the submit error is kept apart in `submitError`.
    */
   serverErrors: Record<FieldPath, string>;
+
+  /**
+   * The error describing the submission attempt itself, not the values. It comes from a server
+   * `ValidationError` at path `[]`, including the generic error from a failed submission.
+   * Absent means none. It shows at `errors._root` and `serverErrors._root`, doesn't count toward
+   * `isValid`, and clears on any value change, `clearServerErrors()`, `resetForm()`, and at the
+   * start of each submit.
+   */
+  submitError?: string;
 
   /**
    * Whether the form is currently being submitted.
@@ -119,12 +129,27 @@ export interface FormState<TValues extends Record<string, unknown>> {
 }
 
 /**
+ * The submit handler: it returns nothing on every path, or a `Result` on every path.
+ * Returning nothing is allowed only when `TResult` is the form values, since `handleSubmit`
+ * then resolves to the values. Any other `TResult` needs a `Result`.
+ *
+ * @template TValues - The type of form values being managed
+ * @template TResult - The value `handleSubmit` resolves to on success
+ */
+type OnSubmit<TValues, TResult> =
+  | ((
+      values: TValues,
+    ) => [TResult] extends [TValues] ? ([TValues] extends [TResult] ? void | Promise<void> : never) : never)
+  | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
+
+/**
  * Configuration options for the useForm hook.
  *
  * These options control the form's initial state, submission behavior, and validation timing.
  * `initialValues` is required; all other options are optional.
  *
  * @template TValues - The type of form values being managed
+ * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values
  *
  * @example
  * // Minimal configuration
@@ -149,7 +174,7 @@ export interface FormState<TValues extends Record<string, unknown>> {
  *   onSubmit: saveSettings
  * });
  */
-export interface FormOptions<TValues extends Record<string, unknown>> {
+export interface FormOptions<TValues extends Record<string, unknown>, TResult = TValues> {
   /**
    * Initial values for the form fields.
    * These values are used when the form is reset.
@@ -159,6 +184,22 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
   /**
    * Callback function that runs when the form is submitted with valid data.
    * Only called if validation passes. Can be sync or async.
+   *
+   * Return nothing on every path, or a `Result` on every path:
+   * - **Nothing:** `handleSubmit` resolves to `ok(values)`.
+   * - **`ok(value)`:** `handleSubmit` resolves to `ok(value)`.
+   * - **`err(errors)`:** each error is placed on its field, as `setServerErrors` does, and an error at
+   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`.
+   *
+   * If it throws, rejects, or returns anything else, `handleSubmit` resolves to
+   * `err([{ path: [], message: "Something went wrong. Please try again." }])`, which becomes the submit error.
+   * The original error is logged with `console.error`.
+   *
+   * With an explicit type argument, `useForm<TValues>` fixes the success value to the form values.
+   * For an `onSubmit` that returns `Result<User, …>`, write `useForm<TValues, User>` or drop the type arguments.
+   * With an explicit `useForm<TValues, User>`, always pass an `onSubmit` that returns a `Result`: without one,
+   * `handleSubmit` resolves to the form values, though its type says `User`.
+   *
    * @param values - The validated form values (guaranteed to be complete and valid)
    *
    * @example
@@ -168,11 +209,14 @@ export interface FormOptions<TValues extends Record<string, unknown>> {
    *     body: JSON.stringify(values)
    *   });
    *   if (!response.ok) {
-   *     // Handle server errors
+   *     const errors: ValidationError[] = await response.json();
+   *     return err(errors);
    *   }
+   *   const user: User = await response.json();
+   *   return ok(user);
    * }
    */
-  onSubmit?: (values: TValues) => void | Promise<void>;
+  onSubmit?: OnSubmit<TValues, TResult>;
 
   /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
@@ -964,6 +1008,14 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'SET_SERVER_ERRORS';
       /** Map of field paths to error messages */
       errors: Record<FieldPath, string>;
+      /** The submit error (a server error at path `[]`); replaces any existing one, and absent clears it */
+      submitError?: string;
+    }
+  | {
+      /** Sets the submit error without touching per-path server errors (used when a submission fails) */
+      type: 'SET_SUBMIT_ERROR';
+      /** The submit error message; replaces any existing one */
+      submitError: string;
     }
   | {
       /** Clears all server-side validation errors */
@@ -1023,8 +1075,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
  * form actions, native HTML field integration, and array field helpers.
  *
  * @template TValues - The shape of form values as a record with string keys
+ * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values.
+ *   The default, `unknown`, lets a component typed `UseFormReturn<V>` accept any form of shape `V`, whatever its
+ *   `onSubmit` returns. A component that reads `handleSubmit`'s `ok` value writes `UseFormReturn<V, V>`, or
+ *   `UseFormReturn<V, U>` for an `onSubmit` that returns `Result<U, …>`.
  */
-export interface UseFormReturn<TValues extends Record<string, unknown>> {
+export interface UseFormReturn<TValues extends Record<string, unknown>, TResult = unknown> {
   // Form state
 
   /** Current values of all form fields. */
@@ -1039,7 +1095,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   /** Validation errors from client-side (schema) validation only. */
   clientErrors: Record<FieldPath, string>;
 
-  /** Validation errors set via `setServerErrors()`. Automatically cleared when the related field value changes. */
+  /**
+   * Validation errors set via `setServerErrors()`, keyed by field path. Automatically cleared when the related
+   * field value changes. Includes the submit error at `_root` when one is set.
+   */
   serverErrors: Record<FieldPath, string>;
 
   /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
@@ -1054,7 +1113,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   /** Per-field async validation tracking. `true` when that field's async validator is running. */
   validatingFields: Record<FieldPath, boolean>;
 
-  /** Whether the form is currently valid (no errors of any kind). */
+  /**
+   * Whether the form is currently valid: no client, field-validator or per-path server errors.
+   * The submit error never makes the form invalid. A client error at `_root` does.
+   */
   isValid: boolean;
 
   /** Whether any form values have changed since initialization or last reset. */
@@ -1093,11 +1155,12 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
 
   /**
    * Sets server-side validation errors. These take precedence over client errors and are auto-cleared on field change.
+   * An error at path `[]` becomes the submit error. Every other error's path is marked touched.
    *
    * @example
-   * form.setServerErrors({ email: "Email already taken" });
+   * form.setServerErrors([{ path: ["email"], message: "Email already taken" }]);
    */
-  setServerErrors: (errors: Record<FieldPath, string>) => void;
+  setServerErrors: (errors: ValidationError[]) => void;
 
   /**
    * Clears all server-side validation errors. Client-side errors are not affected.
@@ -1110,7 +1173,12 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
   // Form actions
 
   /**
-   * Validates all fields, marks them as touched, and calls `onSubmit` if valid. Returns a Railway `Result`.
+   * Validates all fields, marks them as touched, and calls `onSubmit` if valid. Resolves to a Railway `Result`
+   * and never rejects:
+   * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent
+   * - `err` with the validation errors, or with `onSubmit`'s `err`
+   * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
+   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error.
    *
    * @example
    * <form onSubmit={form.handleSubmit}>
@@ -1118,7 +1186,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>> {
    *   <button type="submit">Submit</button>
    * </form>
    */
-  handleSubmit: (e?: FormEvent) => Promise<Result<TValues, ValidationError[]>>;
+  handleSubmit: (e?: SyntheticEvent) => Promise<Result<TResult, ValidationError[]>>;
 
   /**
    * Resets the form to its initial state — clears all values, errors, and touched state.

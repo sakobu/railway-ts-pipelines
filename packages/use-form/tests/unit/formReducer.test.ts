@@ -21,6 +21,35 @@ describe('formReducer', () => {
   };
 
   describe('SET_FIELD_VALUE', () => {
+    test('SET_FIELD_VALUE clears a server error on a group containing the edited field', () => {
+      const nested = { name: 'John', address: { city: 'NYC' } };
+      const state: FormState<typeof nested> = {
+        ...initialState,
+        values: nested,
+        serverErrors: { address: 'Bad address' },
+      };
+
+      const result = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'address.city', value: 'LA' }, nested);
+
+      expect(result.serverErrors).toEqual({});
+    });
+
+    test('SET_FIELD_VALUE keeps unrelated server errors', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, serverErrors: { email: 'Taken' } };
+
+      const result = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, initialValues);
+
+      expect(result.serverErrors).toEqual({ email: 'Taken' });
+    });
+
+    test('SET_FIELD_VALUE clears the submit error', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };
+
+      const result = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, initialValues);
+
+      expect(result.submitError).toBeUndefined();
+    });
+
     test('updates field value', () => {
       const result = formReducer(
         initialState,
@@ -156,6 +185,19 @@ describe('formReducer', () => {
   });
 
   describe('SET_VALUES', () => {
+    test('SET_VALUES clears overlapping server errors and the submit error', () => {
+      const state: FormState<typeof initialValues> = {
+        ...initialState,
+        serverErrors: { name: 'Taken', email: 'Bad' },
+        submitError: 'Down',
+      };
+
+      const result = formReducer(state, { type: 'SET_VALUES', values: { name: 'Jane' } }, initialValues);
+
+      expect(result.serverErrors).toEqual({ email: 'Bad' });
+      expect(result.submitError).toBeUndefined();
+    });
+
     test('updates multiple values', () => {
       const result = formReducer(
         initialState,
@@ -315,6 +357,21 @@ describe('formReducer', () => {
   });
 
   describe('SET_SERVER_ERRORS', () => {
+    test('SET_SERVER_ERRORS stores the submit error apart from per-path errors', () => {
+      const result = formReducer(
+        initialState,
+        { type: 'SET_SERVER_ERRORS', errors: { name: 'Taken' }, submitError: 'Down' },
+        initialValues,
+      );
+
+      expect(result.serverErrors).toEqual({ name: 'Taken' });
+      expect(result.submitError).toBe('Down');
+
+      const replaced = formReducer(result, { type: 'SET_SERVER_ERRORS', errors: {} }, initialValues);
+
+      expect(replaced.submitError).toBeUndefined();
+    });
+
     test('sets server errors', () => {
       const errors = {
         name: 'Name already exists',
@@ -354,7 +411,26 @@ describe('formReducer', () => {
     });
   });
 
+  describe('SET_SUBMIT_ERROR', () => {
+    test('SET_SUBMIT_ERROR sets the submit error and keeps per-path server errors', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, serverErrors: { email: 'Taken' } };
+
+      const result = formReducer(state, { type: 'SET_SUBMIT_ERROR', submitError: 'Down' }, initialValues);
+
+      expect(result.submitError).toBe('Down');
+      expect(result.serverErrors).toEqual({ email: 'Taken' });
+    });
+  });
+
   describe('CLEAR_SERVER_ERRORS', () => {
+    test('CLEAR_SERVER_ERRORS clears the submit error', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };
+
+      const result = formReducer(state, { type: 'CLEAR_SERVER_ERRORS' }, initialValues);
+
+      expect(result.submitError).toBeUndefined();
+    });
+
     test('clears all server errors', () => {
       const stateWithErrors: FormState<typeof initialValues> = {
         ...initialState,
@@ -437,6 +513,14 @@ describe('formReducer', () => {
   });
 
   describe('RESET_FORM', () => {
+    test('RESET_FORM clears the submit error', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };
+
+      const result = formReducer(state, { type: 'RESET_FORM' }, initialValues);
+
+      expect(result.submitError).toBeUndefined();
+    });
+
     test('resets form to initial state', () => {
       const dirtyState: FormState<typeof initialValues> = {
         values: { name: 'Jane', email: 'jane@example.com' },

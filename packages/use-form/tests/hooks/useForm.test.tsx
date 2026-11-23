@@ -1,6 +1,6 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
-import { isOk, isErr } from '@railway-ts/pipelines/result';
+import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
@@ -347,7 +347,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       expect(result.current.serverErrors.name).toBe('Server error');
@@ -367,7 +367,7 @@ describe('useForm', () => {
       );
 
       const preventDefault = mock(() => {});
-      const fakeEvent = { preventDefault } as unknown as React.FormEvent;
+      const fakeEvent = { preventDefault } as unknown as React.SyntheticEvent;
 
       await act(async () => {
         await result.current.handleSubmit(fakeEvent);
@@ -376,10 +376,129 @@ describe('useForm', () => {
       expect(preventDefault).toHaveBeenCalled();
     });
 
-    test('returns err and skips submission when called concurrently', async () => {
-      const onSubmit = mock(async () => {
-        await new Promise((r) => setTimeout(r, 100));
+    /** An onSubmit that stays pending until the test releases it, and reports when it started. */
+    const createGatedOnSubmit = () => {
+      const started = Promise.withResolvers<void>();
+      const gate = Promise.withResolvers<void>();
+      const onSubmit = mock(async (_values: UserForm) => {
+        started.resolve();
+        await gate.promise;
       });
+      return { onSubmit, started: started.promise, release: gate.resolve };
+    };
+
+    /** Lets an overlapping submission run up to its onSubmit call, if it would make one. */
+    const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    test('a second handleSubmit while onSubmit is pending shares its result', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await started;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await nextTask();
+      });
+
+      await act(async () => {
+        release();
+        await first;
+      });
+
+      expect(second).toBe(first);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test('handleSubmit with changed values while onSubmit is pending submits them afterwards', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await started;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await nextTask();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        release();
+        await first;
+        await second;
+      });
+
+      expect(onSubmit.mock.calls).toEqual([
+        [{ name: 'John', email: 'john@example.com', age: 25 }],
+        [{ name: 'Jane', email: 'john@example.com', age: 25 }],
+      ]);
+    });
+
+    test('a shared handleSubmit still calls preventDefault', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      const firstPreventDefault = mock(() => {});
+      const secondPreventDefault = mock(() => {});
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.SyntheticEvent);
+        await started;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit({
+          preventDefault: secondPreventDefault,
+        } as unknown as React.SyntheticEvent);
+        // Called during handleSubmit itself, while the first submission is still pending
+        expect(secondPreventDefault).toHaveBeenCalledTimes(1);
+        await nextTask();
+      });
+
+      await act(async () => {
+        release();
+        await first;
+        await second;
+      });
+
+      expect(firstPreventDefault).toHaveBeenCalled();
+      expect(secondPreventDefault).toHaveBeenCalled();
+    });
+
+    test('a handleSubmit after the previous one settled starts a new submission', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
 
       const { result } = renderHook(() =>
         useForm(userValidator, {
@@ -388,23 +507,14 @@ describe('useForm', () => {
         }),
       );
 
-      let secondResult: Awaited<ReturnType<typeof result.current.handleSubmit>>;
-
       await act(async () => {
-        // Fire first submit (don't await — stays in-flight)
-        const first = result.current.handleSubmit();
-        // Second call hits the guard
-        secondResult = await result.current.handleSubmit();
-        await first;
+        await result.current.handleSubmit();
+      });
+      await act(async () => {
+        await result.current.handleSubmit();
       });
 
-      // Second call should have returned err([])
-      expect(isErr(secondResult!)).toBe(true);
-      if (isErr(secondResult!)) {
-        expect(secondResult.error).toEqual([]);
-      }
-      // First call should have completed normally
-      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -446,10 +556,10 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({
-          name: 'Name already exists',
-          email: 'Email already exists',
-        });
+        result.current.setServerErrors([
+          { path: ['name'], message: 'Name already exists' },
+          { path: ['email'], message: 'Email already exists' },
+        ]);
       });
 
       expect(result.current.serverErrors.name).toBe('Name already exists');
@@ -464,10 +574,10 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({
-          name: 'Name error',
-          email: 'Email error',
-        });
+        result.current.setServerErrors([
+          { path: ['name'], message: 'Name error' },
+          { path: ['email'], message: 'Email error' },
+        ]);
       });
 
       act(() => {
@@ -493,11 +603,128 @@ describe('useForm', () => {
 
       // Add server error for the same field
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       // Server error should be shown in combined errors
       expect(result.current.errors.name).toBe('Server error');
+    });
+
+    test('setServerErrors places ValidationError[] on their fields', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+      });
+
+      expect(result.current.errors.email).toBe('Taken');
+      expect(result.current.serverErrors.email).toBe('Taken');
+    });
+
+    test('setServerErrors shows through getFieldError without touching the field first', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+    });
+
+    test('a server error at path [] is the submit error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.errors._root).toBe('Down');
+      expect(result.current.serverErrors._root).toBe('Down');
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('a client _root still makes isValid false, under the submit error', async () => {
+      const { result } = renderHook(() =>
+        useForm<{ name: string }>(() => err([{ path: [], message: 'Nope' }]), {
+          initialValues: { name: 'John' },
+          validationMode: 'mount',
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.errors._root).toBe('Nope');
+      });
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.errors._root).toBe('Down');
+      expect(result.current.isValid).toBe(false);
+
+      act(() => {
+        result.current.clearServerErrors();
+      });
+
+      expect(result.current.errors._root).toBe('Nope');
+    });
+
+    test('server error on an array item uses the client error key', () => {
+      const { result } = renderHook(() =>
+        useForm<{ items: { name: string }[] }>(
+          () => err([{ path: ['items', '0', 'name'], message: 'Client says no' }]),
+          {
+            initialValues: { items: [{ name: '' }] },
+          },
+        ),
+      );
+
+      act(() => {
+        void result.current.validateForm(result.current.values);
+      });
+
+      expect(Object.keys(result.current.errors)).toHaveLength(1);
+
+      act(() => {
+        result.current.setServerErrors([{ path: ['items', '0', 'name'], message: 'Server says no' }]);
+      });
+
+      const keys = Object.keys(result.current.errors);
+      expect(keys).toHaveLength(1);
+      expect(result.current.errors[keys[0] as string]).toBe('Server says no');
+    });
+
+    test('editing any field clears the submit error', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+        }),
+      );
+
+      act(() => {
+        result.current.setServerErrors([{ path: [], message: 'Down' }]);
+      });
+
+      expect(result.current.serverErrors._root).toBe('Down');
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      expect(result.current.serverErrors._root).toBeUndefined();
+      expect(result.current.errors._root).toBeUndefined();
     });
 
     test('server errors are cleared when field value changes', () => {
@@ -508,7 +735,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Server error' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server error' }]);
       });
 
       expect(result.current.serverErrors.name).toBe('Server error');
@@ -748,7 +975,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ email: 'Email already exists' });
+        result.current.setServerErrors([{ path: ['email'], message: 'Email already exists' }]);
         result.current.setFieldTouched('email', true);
       });
 
@@ -799,13 +1026,13 @@ describe('useForm', () => {
 
     test('group path: returns undefined when no descendant is touched', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r1: number[]; r2: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
       });
 
       // Error exists but no descendant touched — invisible.
@@ -814,13 +1041,13 @@ describe('useForm', () => {
 
     test('group path: bubbles error once a descendant is touched', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r1: number[]; r2: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: { r1: [0, 0, 0], r2: [0, 0, 0] },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('r2.0', true);
       });
 
@@ -829,7 +1056,7 @@ describe('useForm', () => {
 
     test('group path: ignores sibling-prefix touches (r20.0 must not satisfy "r2." scan)', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ r2: number[]; r20: number[] }>(() => err([{ path: ['r2'], message: 'Vectors must differ' }]), {
           initialValues: {
             r2: [0, 0, 0],
             r20: [0, 0, 0],
@@ -838,7 +1065,7 @@ describe('useForm', () => {
       );
 
       act(() => {
-        result.current.setServerErrors({ r2: 'Vectors must differ' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('r20.0', true);
       });
 
@@ -848,17 +1075,18 @@ describe('useForm', () => {
 
     test('group path: nested descendant satisfies the scan', () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
-          initialValues: {
-            secondary: { position: [0, 0, 0], velocity: [0, 0, 0] },
+        useForm<{ secondary: { position: number[]; velocity: number[] } }>(
+          () => err([{ path: ['secondary'], message: 'Primary and secondary must differ' }]),
+          {
+            initialValues: {
+              secondary: { position: [0, 0, 0], velocity: [0, 0, 0] },
+            },
           },
-        }),
+        ),
       );
 
       act(() => {
-        result.current.setServerErrors({
-          secondary: 'Primary and secondary must differ',
-        });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('secondary.position.0', true);
       });
 
@@ -883,13 +1111,13 @@ describe('useForm', () => {
     test('leaf path: behavior unchanged when descendants are touched', () => {
       // Ensures the new branch doesn't accidentally affect leaf semantics.
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
+        useForm<{ name: string }>(() => err([{ path: ['name'], message: 'Name is required' }]), {
           initialValues: { name: '' },
         }),
       );
 
       act(() => {
-        result.current.setServerErrors({ name: 'Name is required' });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('name', true);
       });
 
@@ -898,19 +1126,23 @@ describe('useForm', () => {
 
     test("group path: error at one parent does not bubble through a sibling parent's descendant touch", () => {
       const { result } = renderHook(() =>
-        useForm(alwaysValidValidator, {
-          initialValues: {
-            primary: { position: [0, 0, 0] },
-            secondary: { position: [0, 0, 0] },
+        useForm<{ primary: { position: number[] }; secondary: { position: number[] } }>(
+          () =>
+            err([
+              { path: ['primary'], message: 'primary error' },
+              { path: ['secondary'], message: 'secondary error' },
+            ]),
+          {
+            initialValues: {
+              primary: { position: [0, 0, 0] },
+              secondary: { position: [0, 0, 0] },
+            },
           },
-        }),
+        ),
       );
 
       act(() => {
-        result.current.setServerErrors({
-          primary: 'primary error',
-          secondary: 'secondary error',
-        });
+        void result.current.validateForm(result.current.values);
         result.current.setFieldTouched('primary.position.0', true);
       });
 
@@ -986,32 +1218,6 @@ describe('useForm', () => {
   });
 
   describe('handleSubmit error handling', () => {
-    test('catches and logs errors thrown in onSubmit', async () => {
-      const consoleErrorSpy = mock(() => {});
-      const originalConsoleError = console.error;
-      console.error = consoleErrorSpy;
-
-      const onSubmit = mock((_values: UserForm) => {
-        throw new Error('Network error');
-      });
-
-      const { result } = renderHook(() =>
-        useForm(userValidator, {
-          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-          onSubmit,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleSubmit();
-      });
-
-      expect(onSubmit).toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
-
-      console.error = originalConsoleError;
-    });
-
     test('handles submit without onSubmit callback', async () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
@@ -1032,6 +1238,356 @@ describe('useForm', () => {
           age: 25,
         });
       }
+    });
+  });
+
+  describe('onSubmit results', () => {
+    const validValues = { name: 'John', email: 'john@example.com', age: 25 };
+    const submitErrorMessage = 'Something went wrong. Please try again.';
+
+    /** Silences the console.error a failed submission logs, and returns the spy. */
+    const silenceConsoleError = () => spyOn(console, 'error').mockImplementation(() => {});
+
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test("handleSubmit returns onSubmit's ok value (sync)", async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => ok({ id: '1' }),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual({ id: '1' });
+      }
+    });
+
+    test("handleSubmit returns onSubmit's ok value (async)", async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => Promise.resolve(ok({ id: '1' })),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual({ id: '1' });
+      }
+    });
+
+    test('handleSubmit returns ok(values) when onSubmit returns nothing', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual(validValues);
+      }
+    });
+
+    test('onSubmit err is placed on fields and returned', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => err([{ path: ['email'], message: 'Taken' }]),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: ['email'], message: 'Taken' }]);
+      }
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.isSubmitting).toBe(false);
+    });
+
+    test('onSubmit err at path [] becomes the submit error and leaves isValid true', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => err([{ path: [], message: 'Service unavailable' }]),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: 'Service unavailable' }]);
+      }
+      expect(result.current.errors._root).toBe('Service unavailable');
+      expect(result.current.serverErrors._root).toBe('Service unavailable');
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('a thrown onSubmit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const onSubmit = mock((_values: UserForm) => {
+        throw new Error('Network error');
+      });
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalled();
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a thrown onSubmit leaves isValid true', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            throw new Error('Network error');
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('field errors set during onSubmit survive a later throw', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            result.current.setServerErrors([{ path: ['email'], message: 'Taken' }]);
+            throw new Error('Request failed');
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValid).toBe(false);
+      expect(result.current.isSubmitting).toBe(false);
+    });
+
+    test('a rejected async onSubmit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: async () => {
+            await Promise.reject(new Error('Network error'));
+          },
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isSubmitting).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('an onSubmit that returns a non-Result value returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: (() => 'saved') as unknown as () => void,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(TypeError));
+      expect(consoleError).toHaveBeenCalledWith(
+        'Form submission error:',
+        expect.objectContaining({ message: 'onSubmit must return a Result or nothing' }),
+      );
+    });
+
+    test('a field validator that throws during submit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          fieldValidators: {
+            name: () => {
+              throw new Error('Validator crashed');
+            },
+          },
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isSubmitting).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a schema validator that throws during submit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm<{ name: string }>(
+          () => {
+            throw new Error('Validator crashed');
+          },
+          {
+            initialValues: { name: 'John' },
+            validationMode: 'submit',
+          },
+        ),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValidating).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a value that cannot be traversed returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      // Marking every field touched walks the values, and a cycle makes that walk throw
+      const cyclic: Record<string, unknown> = { name: 'John' };
+      cyclic.self = cyclic;
+
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: cyclic,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+      expect(result.current.isSubmitting).toBe(false);
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+    });
+
+    test('server errors from onSubmit clear on the next submit', async () => {
+      const secondStarted = Promise.withResolvers<void>();
+      const releaseSecond = Promise.withResolvers<void>();
+      let calls = 0;
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: async (values) => {
+            calls += 1;
+            if (calls === 1) {
+              return err([
+                { path: ['email'], message: 'Taken' },
+                { path: [], message: 'Service unavailable' },
+              ]);
+            }
+            secondStarted.resolve();
+            await releaseSecond.promise;
+            return ok(values);
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.errors._root).toBe('Service unavailable');
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await secondStarted.promise;
+      });
+
+      // Cleared when the submit starts, while its onSubmit is still pending
+      expect(result.current.serverErrors).toEqual({});
+      expect(result.current.errors.email).toBeUndefined();
+      expect(result.current.errors._root).toBeUndefined();
+
+      await act(async () => {
+        releaseSecond.resolve();
+        await second;
+      });
     });
   });
 
@@ -1611,6 +2167,41 @@ describe('useForm', () => {
       });
       expect(result.current.isDirty).toBe(false);
     });
+
+    test('replacing a File with another File marks the form dirty', () => {
+      // Same name, contents and timestamp, so comparing by content can't tell the two apart.
+      // The timestamp is nonzero because happy-dom replaces 0 with the current time.
+      const lastModified = Date.UTC(2024, 0, 1);
+      const initialValues = { avatar: new File(['a'], 'a.txt', { lastModified }) };
+      const { result } = renderHook(() => useForm(alwaysValidValidator, { initialValues }));
+
+      act(() => {
+        result.current.setFieldValue('avatar', new File(['a'], 'a.txt', { lastModified }));
+      });
+
+      expect(result.current.isDirty).toBe(true);
+    });
+
+    test('picking an equal date-library value keeps the form clean', () => {
+      // Shaped like a dayjs value: a date picker creates a new one on every pick
+      class DayjsLike {
+        $d: Date;
+        $y: number;
+        constructor(iso: string) {
+          this.$d = new Date(iso);
+          this.$y = this.$d.getUTCFullYear();
+        }
+      }
+
+      const initialValues = { startDate: new DayjsLike('2024-01-01') };
+      const { result } = renderHook(() => useForm(alwaysValidValidator, { initialValues }));
+
+      act(() => {
+        result.current.setFieldValue('startDate', new DayjsLike('2024-01-01'));
+      });
+
+      expect(result.current.isDirty).toBe(false);
+    });
   });
 
   describe('fieldValidators', () => {
@@ -1861,7 +2452,7 @@ describe('useForm', () => {
 
       // Now set a server error - should override field error
       act(() => {
-        result.current.setServerErrors({ name: 'Server says no' });
+        result.current.setServerErrors([{ path: ['name'], message: 'Server says no' }]);
       });
 
       expect(result.current.errors.name).toBe('Server says no');

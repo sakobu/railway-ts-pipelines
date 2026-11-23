@@ -9,11 +9,15 @@ Main hook for form management.
 ### Signature
 
 ```typescript
-function useForm<TValues extends Record<string, unknown>>(
+function useForm<TValues extends Record<string, unknown>, TResult = TValues>(
   validator: MaybeAsyncValidator<unknown, TValues> | StandardSchemaV1<unknown, TValues>,
-  options: FormOptions<TValues>,
-): UseFormReturn<TValues>;
+  options: FormOptions<TValues, TResult>,
+): UseFormReturn<TValues, TResult>;
 ```
+
+`TResult` is the value `handleSubmit` resolves to on success. It is the form values unless your `onSubmit` returns a `Result<U, ValidationError[]>`, in which case it is `U`; TypeScript infers it from `onSubmit`.
+
+**Explicit type arguments.** `useForm<T>(…)` with only `T` given leaves `TResult` at its default, the form values, so an `onSubmit` that returns `Result<U, …>` is a type error. Write `useForm(schema, …)` and let both be inferred, or give both: `useForm<T, U>(…)`. With explicit `useForm<T, U>`, pass an `onSubmit` that returns a `Result`: an `onSubmit` that returns nothing (for example a forgotten `return`) is a type error, and with no `onSubmit` at all the `ok` value is not checked. It is the form values, typed `U`.
 
 ### Parameters
 
@@ -48,16 +52,24 @@ const validator = v.object({
 
 #### options
 
-Type: `FormOptions<TValues>`
+Type: `FormOptions<TValues, TResult>`
 
 Configuration object.
 
 ```typescript
 {
-  initialValues: TValues;
-  onSubmit?: (values: TValues) => void | Promise<void>;
+  initialValues: NoInfer<TValues>;
+  // Returning nothing is allowed only when TResult is the form values; see onSubmit below
+  onSubmit?:
+    | ((values: TValues) => void | Promise<void>)
+    | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
   validationMode?: "live" | "blur" | "mount" | "submit";
-  fieldValidators?: Partial<Record<ExtractFieldPaths<TValues>, FieldValidator>>;
+  fieldValidators?: {
+    [K in ExtractFieldPaths<TValues>]?: (
+      value: FieldTypeAtPath<TValues, K>,
+      values: TValues,
+    ) => string | undefined | Promise<string | undefined>;
+  };
   onValuesChange?: (values: TValues, prevValues: TValues) => void;
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
 }
@@ -75,10 +87,10 @@ Configuration options for useForm.
 
 #### initialValues
 
-Type: `TValues`
+Type: `NoInfer<TValues>`
 Required
 
-Initial values for form fields. Used when form is reset.
+Initial values for form fields. Used when form is reset. The values type comes from the validator or schema, not from `initialValues`.
 
 ```typescript
 initialValues: {
@@ -89,16 +101,27 @@ initialValues: {
 
 #### onSubmit
 
-Type: `(values: TValues) => void | Promise<void>`
+Type: `(values: TValues) => void | Promise<void>`, or `(values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>`
 Optional
 
-Callback invoked when form is submitted with valid data.
+Callback invoked when form is submitted with valid data. It returns nothing on every path, or a `Result` on every path. Returning nothing is allowed only when `TResult` is the form values.
 
 ```typescript
+// Return nothing: handleSubmit resolves with the validated values
 onSubmit: async (values) => {
   await api.submit(values);
 };
+
+// Return a Result: ok becomes handleSubmit's result, err lands on the form
+onSubmit: async (values) => {
+  const res = await api.register(values); // Result<User, ValidationError[]>
+  return res;
+};
 ```
+
+An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error.
+
+**Breaking change: a value that is neither `undefined` nor a `Result` is an error.** If `onSubmit` returns anything else, `handleSubmit` resolves to the generic submit error (`Something went wrong. Please try again.`) and logs `console.error('Form submission error:', error)`. Before, it resolved `ok(values)`. The usual trap is a prop typed `(v: T) => void` that the parent fills with `(v) => api.save(v)`: that returns a `Response` or `mutateAsync`'s data, type-checks, and then fails at runtime. Return nothing (`async (v) => { await save(v); }`) or return a `Result`.
 
 #### validationMode
 
@@ -206,7 +229,7 @@ form.touched.password; // false
 
 Type: `Record<FieldPath, string>`
 
-Combined client, field validator, and server errors. Server errors take highest precedence (server > field > client).
+Combined client, field validator, and server errors. Server errors take highest precedence (server > field > client). The submit error shows at `form.errors._root` (`ROOT_ERROR_KEY`).
 
 ```typescript
 form.errors.email; // "Email is required"
@@ -227,7 +250,7 @@ form.clientErrors.email; // "Invalid email format"
 
 Type: `Record<FieldPath, string>`
 
-Manually set errors from server responses.
+Errors from the server: set by `setServerErrors(...)`, or by `onSubmit` returning `err`. The submit error (a server error at path `[]`) shows at `serverErrors._root`.
 
 ```typescript
 form.serverErrors.username; // "Username already taken"
@@ -237,7 +260,7 @@ form.serverErrors.username; // "Username already taken"
 
 Type: `boolean`
 
-True when there are no validation errors.
+True when there are no validation errors. The submit error (a server error at path `[]`) is not a validation error and does not count: a form whose submission failed stays valid, so the user can retry.
 
 ```typescript
 <button disabled={!form.isValid}>Submit</button>
@@ -309,7 +332,7 @@ The `errors` object is a merged view of three separate error layers. When multip
 | ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
 | 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
 | 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 
@@ -326,7 +349,8 @@ const errors = {
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field; bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, `resetForm()`, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 
@@ -432,23 +456,25 @@ form.setValues({
 Set server-side validation errors.
 
 ```typescript
-setServerErrors(errors: Record<FieldPath, string>): void
+setServerErrors(errors: ValidationError[]): void
 ```
 
 **Parameters:**
 
-- `errors` - Object mapping field paths to error messages
+- `errors` - `ValidationError[]`, each `{ path, message }`
 
 **Example:**
 
 ```typescript
-form.setServerErrors({
-  email: 'Email already exists',
-  username: 'Username taken',
-});
+form.setServerErrors([
+  { path: ['email'], message: 'Email already exists' },
+  { path: ['username'], message: 'Username taken' },
+  // path [] is the submit error: it describes the attempt, not a field
+  { path: [], message: 'Network error. Please try again.' },
+]);
 ```
 
-Server errors automatically clear when affected fields change.
+Per-path errors land on their fields, under the same keys as client errors, and mark those paths touched. A path-`[]` error becomes the submit error, shown at `form.errors._root`. Server errors automatically clear when affected fields change (and on the groups that contain them); the submit error clears on any value change.
 
 ### clearServerErrors
 
@@ -469,14 +495,21 @@ form.clearServerErrors();
 Submit form with validation. Returns a Railway `Result` so you can pattern-match on the outcome.
 
 ```typescript
-handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
+handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 ```
 
 **Parameters:**
 
-- `e` - Optional form event (will call `preventDefault`)
+- `e` - Optional event. `preventDefault` is always called on it, including when the call shares a running submission.
 
-**Returns:** `Promise<Result<TValues, ValidationError[]>>` -- `Ok` with validated data on success, `Err` with validation errors on failure.
+**Returns:** `Promise<Result<TResult, ValidationError[]>>` -- `Ok` with `onSubmit`'s `ok` value (the validated values when `onSubmit` returns nothing or is absent), `Err` with validation errors or `onSubmit`'s `err` on failure.
+
+**It never rejects.** A throw in the schema validator, a field validator or `onSubmit`, or an `onSubmit` value that is neither `undefined` nor a `Result`, is logged with `console.error('Form submission error:', error)` and resolves to `err([{ path: [], message: 'Something went wrong. Please try again.' }])`. That error becomes the submit error at `form.errors._root`, and `isSubmitting` and `isValidating` reset.
+
+**Overlapping submits:**
+
+- Same values as the running submission: the call shares its promise, so `onSubmit` does not run twice on a double-click during a slow request.
+- Different values: the call waits for the running submission, then submits the latest values. At most one follow-up waits, so auto-save does not miss edits made during a save.
 
 **What it does:**
 
@@ -485,7 +518,7 @@ handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
 3. Clears existing server errors
 4. Runs schema validation (awaits if async)
 5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
-6. If everything passes, calls `onSubmit` (if provided)
+6. If everything passes, calls `onSubmit` (if provided); an `err` it returns is placed on the form
 7. Returns the `Result`
 
 **Example:**
@@ -494,17 +527,19 @@ handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
 // Use onSubmit callback (void discards the Promise for React 19 compatibility)
 <form onSubmit={(e) => void form.handleSubmit(e)}>{/* fields */}</form>
 
-// Advanced: pattern-match on the result
+// Advanced: onSubmit returns a Result, handleSubmit resolves with it
 import { match } from "@railway-ts/pipelines/result";
+
+const form = useForm(schema, {
+  initialValues: { email: "", password: "" },
+  onSubmit: async (values) => registerUser(values), // Result<User, ValidationError[]>
+});
 
 const result = await form.handleSubmit();
 match(result, {
-  ok: (values) => {
-    console.log("Submitted:", values);
-    navigate("/success");
-  },
+  ok: (user) => navigate(`/welcome/${user.id}`),
   err: (errors) => {
-    console.error("Validation errors:", errors);
+    console.error("Submission errors:", errors);
     scrollToFirstError();
   },
 });
@@ -1480,6 +1515,8 @@ function SubmitButton({ form }: Props) {
   );
 }
 ```
+
+`UseFormReturn<V>` accepts any form of shape `V`, whatever its `onSubmit` returns. Its `handleSubmit` resolves `Result<unknown, ValidationError[]>`. A component that reads the `ok` value writes `UseFormReturn<V, V>`, or `UseFormReturn<V, U>` for a form whose `onSubmit` returns `Result<U, …>`.
 
 ### InferSchemaType
 

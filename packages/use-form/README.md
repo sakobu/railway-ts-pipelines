@@ -87,6 +87,7 @@ import {
   minLength,
   ROOT_ERROR_KEY,
   type InferSchemaType,
+  type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -110,11 +111,11 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string): Promise<{ available: boolean }> =>
   fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
-    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
+    res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`)),
   );
 
 class ApiValidationError extends Error {
-  constructor(public fieldErrors: Record<string, string>) {
+  constructor(public fieldErrors: ValidationError[]) {
     super('Validation failed');
   }
 }
@@ -126,7 +127,7 @@ const registerUser = async (values: Registration): Promise<void> => {
     body: JSON.stringify(values),
   });
 
-  if (!res.ok) throw new ApiValidationError(await res.json());
+  if (!res.ok) throw new ApiValidationError((await res.json()) as ValidationError[]);
 };
 
 // --- Component ---
@@ -142,9 +143,8 @@ export function RegistrationForm() {
       if (error instanceof ApiValidationError) {
         form.setServerErrors(error.fieldErrors);
       } else {
-        form.setServerErrors({
-          [ROOT_ERROR_KEY]: 'Network error. Please try again.',
-        });
+        // path [] is the submit error, shown at form.errors[ROOT_ERROR_KEY]
+        form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]);
       }
     },
   });

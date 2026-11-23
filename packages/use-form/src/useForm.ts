@@ -1,6 +1,12 @@
-import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
-import { validate, formatErrors, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
-import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
+import { isErr, isResult, ok, err, type Result } from '@railway-ts/pipelines/result';
+import {
+  validate,
+  formatErrors,
+  ROOT_ERROR_KEY,
+  type MaybeAsyncValidator,
+  type ValidationError,
+} from '@railway-ts/pipelines/schema';
+import { useReducer, useCallback, useMemo, useEffect, useRef, useState, type SyntheticEvent } from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import {
@@ -15,6 +21,7 @@ import {
 } from './fieldPropsFactory';
 import { formReducer } from './formReducer';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
+import { createSubmitScheduler } from './submitScheduler';
 import {
   deepMerge,
   getValueByPath,
@@ -44,6 +51,9 @@ import type {
   UseFormReturn,
 } from './types';
 
+/** The submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
+const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
 // =============================================================================
 // Main Hook
 // =============================================================================
@@ -58,6 +68,7 @@ import type {
  * provides helpers for working with nested objects and dynamic arrays.
  *
  * @template TValues - The shape of form values as a record with string keys
+ * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values
  *
  * @param validator - Railway-oriented validator (sync or async) from @railway-ts/pipelines that validates form values
  * @param options - Configuration options for form behavior
@@ -129,14 +140,13 @@ import type {
  * </form>
  *
  * @example
- * // Handle server errors
+ * // Handle server errors: return err to place them on the form, ok to succeed
  * const form = useForm(userValidator, {
+ *   initialValues: { name: "", email: "", age: 0 },
  *   onSubmit: async (values) => {
  *     const response = await api.createUser(values);
- *     if (!response.ok) {
- *       const errors = await response.json();
- *       form.setServerErrors(errors);
- *     }
+ *     if (!response.ok) return err((await response.json()) as ValidationError[]);
+ *     return ok((await response.json()) as User);
  *   }
  * });
  *
@@ -162,10 +172,10 @@ import type {
  *   </div>
  * );
  */
-export const useForm = <TValues extends Record<string, unknown>>(
+export const useForm = <TValues extends Record<string, unknown>, TResult = TValues>(
   validatorOrSchema: FormValidator<TValues>,
-  options: FormOptions<TValues>,
-): UseFormReturn<TValues> => {
+  options: FormOptions<TValues, TResult>,
+): UseFormReturn<TValues, TResult> => {
   const { initialValues, onSubmit, validationMode, fieldValidators, onValuesChange, onFieldChange } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
@@ -251,14 +261,15 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // Per-field sequence counters for race condition protection on field-level async validation
   const fieldValidationSeqRef = useRef<Record<string, number>>({});
 
-  // Guard against concurrent handleSubmit calls
-  const isHandlingSubmitRef = useRef(false);
+  // Decides what an overlapping handleSubmit does: share the running submission, or follow it
+  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
 
   // ===========================================================================
   // Computed State
   // ===========================================================================
 
-  // Combined errors from client, field validators, and server (server > field > client)
+  // Combined errors: client, then field validators, then per-path server errors, then the submit error.
+  // Each later source wins.
   const errors = useMemo(() => {
     const combined: Record<FieldPath, string> = {};
 
@@ -277,11 +288,31 @@ export const useForm = <TValues extends Record<string, unknown>>(
       combined[path] = msg;
     });
 
-    return combined;
-  }, [formState.clientErrors, formState.fieldErrors, formState.serverErrors]);
+    // Submit error (describes the attempt, not a field)
+    if (formState.submitError !== undefined) {
+      combined[ROOT_ERROR_KEY] = formState.submitError;
+    }
 
-  // Form is valid when there are no errors of any kind
-  const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
+    return combined;
+  }, [formState.clientErrors, formState.fieldErrors, formState.serverErrors, formState.submitError]);
+
+  // Public view of server errors: per-path errors plus the submit error at the root key
+  const serverErrors = useMemo(
+    () =>
+      formState.submitError === undefined
+        ? formState.serverErrors
+        : { ...formState.serverErrors, [ROOT_ERROR_KEY]: formState.submitError },
+    [formState.serverErrors, formState.submitError],
+  );
+
+  // Valid when no client, field-validator, or per-path server errors exist. The submit error never counts.
+  const isValid = useMemo(
+    () =>
+      Object.keys(formState.clientErrors).length === 0 &&
+      Object.keys(formState.fieldErrors).length === 0 &&
+      Object.keys(formState.serverErrors).length === 0,
+    [formState.clientErrors, formState.fieldErrors, formState.serverErrors],
+  );
 
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
@@ -610,37 +641,39 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * Sets server-side validation errors received from API responses.
    * These errors take precedence over client-side errors in the merged `errors` object.
    * Server errors are automatically cleared when the related field value changes.
+   * An error at path `[]` becomes the submit error. Every other error's path is marked touched,
+   * so the errors show through `getFieldError` straight away.
    *
-   * @param serverErrors - Map of field paths to error messages from server
+   * @param errors - Server validation errors, each with a `path` and a `message`
    *
    * @example
-   * // Handle server validation errors
-   * const form = useForm(userValidator, {
-   *   onSubmit: async (values) => {
-   *     const response = await fetch("/api/users", {
-   *       method: "POST",
-   *       body: JSON.stringify(values)
-   *     });
-   *
-   *     if (!response.ok) {
-   *       const errors = await response.json();
-   *       form.setServerErrors({
-   *         "email": "Email already taken",
-   *         "username": "Username not available"
-   *       });
-   *       return;
-   *     }
-   *   }
+   * // Errors that arrive outside onSubmit, such as in a React Query mutation's onError
+   * // (inside onSubmit, return err(errors) instead)
+   * const mutation = useMutation({
+   *   mutationFn: api.createUser,
+   *   onError: (error) => {
+   *     if (error instanceof ApiValidationError) form.setServerErrors(error.fieldErrors);
+   *   },
    * });
    *
    * @example
    * // Set a single server error
-   * form.setServerErrors({ "email": "This email is already registered" });
+   * form.setServerErrors([{ path: ["email"], message: "This email is already registered" }]);
+   *
+   * @example
+   * // A path [] error is the submit error, shown at errors._root
+   * form.setServerErrors([{ path: [], message: "Service unavailable" }]);
    */
-  const setServerErrors = useCallback((serverErrors: Record<FieldPath, string>): void => {
+  const placeServerErrors = useCallback((errors: ValidationError[]): void => {
+    const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
     dispatch({
       type: 'SET_SERVER_ERRORS',
-      errors: serverErrors,
+      errors: perPath,
+      ...(submitError !== undefined && { submitError }),
+    });
+    dispatch({
+      type: 'MARK_ALL_TOUCHED',
+      fields: Object.keys(perPath),
     });
   }, []);
 
@@ -674,58 +707,21 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // ===========================================================================
 
   /**
-   * Handles form submission using the Railway-oriented programming pattern.
-   * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
-   * Returns a Promise that resolves to either the validated data or validation errors.
+   * Runs one submission of the given values: marks every field touched, counts the attempt,
+   * clears server errors, validates, runs the field validators, then calls `onSubmit`.
+   * `handleSubmit` decides when it runs, through the submit scheduler.
    *
-   * @param e - Optional form event (will preventDefault if provided)
-   * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
+   * Never rejects. A throw anywhere, or an `onSubmit` value that is neither a `Result` nor nothing,
+   * is logged and resolves to the generic submit error.
    *
-   * @example
-   * // Use in form element
-   * <form onSubmit={form.handleSubmit}>
-   *   <input {...form.getFieldProps("email")} />
-   *   <button type="submit">Submit</button>
-   * </form>
-   *
-   * @example
-   * // Use in button click handler
-   * <button onClick={form.handleSubmit}>
-   *   Save Changes
-   * </button>
-   *
-   * @example
-   * // Handle result programmatically with Railway pattern
-   * import { match } from "@railway-ts/pipelines/result";
-   *
-   * const handleSave = async () => {
-   *   const result = await form.handleSubmit();
-   *   match(result, {
-   *     ok: (values) => {
-   *       console.log("Form submitted:", values);
-   *       navigate("/success");
-   *     },
-   *     err: (errors) => {
-   *       console.error("Validation errors:", errors);
-   *     },
-   *   });
-   * };
+   * @param values - The form values to submit
+   * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
-  const handleSubmit = useCallback(
-    async (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
-      if (e) {
-        e.preventDefault();
-      }
-
-      // Guard against concurrent submissions
-      if (isHandlingSubmitRef.current) {
-        return err([]);
-      }
-
-      isHandlingSubmitRef.current = true;
-
+  const runSubmission = useCallback(
+    async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
+      // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
-        const { values, clientErrors, serverErrors } = formStateRef.current;
+        const { clientErrors, serverErrors } = formStateRef.current;
 
         // Mark all fields and error paths as touched (deep)
         const valuePaths = collectFieldPaths(values);
@@ -752,83 +748,150 @@ export const useForm = <TValues extends Record<string, unknown>>(
         // Show validating state during submit validation
         dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
 
-        // Validate the form (await handles both sync and async validators)
-        const validationResult = await validate(values, validator);
+        let validationResult: Result<TValues, ValidationError[]>;
+        try {
+          // Validate the form (await handles both sync and async validators)
+          validationResult = await validate(values, validator);
+        } finally {
+          dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+        }
 
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+        if (isErr(validationResult)) {
+          dispatch({
+            type: 'SET_CLIENT_ERRORS',
+            errors: formatErrors(validationResult.error),
+          });
 
-        // Handle result using Railway pattern
-        return match(validationResult, {
-          ok: async (validData) => {
-            // Only set isSubmitting after validation passes
-            dispatch({
-              type: 'SET_SUBMITTING',
-              isSubmitting: true,
-            });
+          // No SET_SUBMITTING dispatch — isSubmitting was never set to true
+          return validationResult;
+        }
 
-            // Run all field validators in parallel before calling onSubmit
-            if (fieldValidators) {
-              const fieldEntries = Object.entries(fieldValidators) as Array<
-                [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
-              >;
+        const validData = validationResult.value;
 
-              const fieldResults = await Promise.all(
-                fieldEntries.map(async ([field, validatorFn]) => {
-                  const fieldValue = getValueByPath(values, field);
-                  const error = await validatorFn(fieldValue, values);
-                  if (error) {
-                    dispatch({ type: 'SET_FIELD_ERROR', field, error });
-                  } else {
-                    dispatch({
-                      type: 'SET_FIELD_ERROR',
-                      field,
-                      error: undefined,
-                    });
-                  }
-                  return { field, error };
-                }),
-              );
-
-              const hasFieldErrors = fieldResults.some((r) => r.error);
-              if (hasFieldErrors) {
-                dispatch({
-                  type: 'SET_SUBMITTING',
-                  isSubmitting: false,
-                });
-                return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
-              }
-            }
-
-            if (onSubmit) {
-              try {
-                await onSubmit(validData);
-              } catch (error) {
-                console.error('Form submission error:', error);
-              }
-            }
-
-            dispatch({
-              type: 'SET_SUBMITTING',
-              isSubmitting: false,
-            });
-
-            return ok(validData);
-          },
-          err: (errors) => {
-            dispatch({
-              type: 'SET_CLIENT_ERRORS',
-              errors: formatErrors(errors),
-            });
-
-            // No SET_SUBMITTING dispatch — isSubmitting was never set to true
-            return Promise.resolve(err(errors));
-          },
+        // Only set isSubmitting after validation passes
+        dispatch({
+          type: 'SET_SUBMITTING',
+          isSubmitting: true,
         });
-      } finally {
-        isHandlingSubmitRef.current = false;
+
+        try {
+          // Run all field validators in parallel before calling onSubmit
+          if (fieldValidators) {
+            const fieldEntries = Object.entries(fieldValidators) as Array<
+              [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
+            >;
+
+            const fieldResults = await Promise.all(
+              fieldEntries.map(async ([field, validatorFn]) => {
+                const fieldValue = getValueByPath(values, field);
+                const error = await validatorFn(fieldValue, values);
+                if (error) {
+                  dispatch({ type: 'SET_FIELD_ERROR', field, error });
+                } else {
+                  dispatch({
+                    type: 'SET_FIELD_ERROR',
+                    field,
+                    error: undefined,
+                  });
+                }
+                return { field, error };
+              }),
+            );
+
+            const hasFieldErrors = fieldResults.some((r) => r.error);
+            if (hasFieldErrors) {
+              return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
+            }
+          }
+
+          const outcome = onSubmit ? await onSubmit(validData) : undefined;
+
+          if (outcome === undefined) {
+            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues, and without an
+            // onSubmit TResult defaults to TValues, so the validated values are the success value. The one
+            // hole is an explicit useForm<T, U> with no onSubmit at all.
+            return ok(validData) as Result<TResult, ValidationError[]>;
+          }
+
+          if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
+
+          if (isErr(outcome)) placeServerErrors(outcome.error);
+
+          return outcome;
+        } finally {
+          dispatch({
+            type: 'SET_SUBMITTING',
+            isSubmitting: false,
+          });
+        }
+      } catch (error) {
+        console.error('Form submission error:', error);
+
+        // Sets only the submit error: field errors placed during the submission stay
+        dispatch({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
+        return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
       }
     },
-    [validator, onSubmit, fieldValidators],
+    [validator, onSubmit, fieldValidators, placeServerErrors],
+  );
+
+  /**
+   * Handles form submission using the Railway-oriented programming pattern.
+   * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
+   * Returns a Promise that resolves to a Result and never rejects:
+   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent
+   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields
+   * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
+   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
+   *   error is logged with `console.error`.
+   *
+   * While a submission is running, a call with the same values shares its Promise, and a call
+   * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
+   *
+   * @param e - Optional form event (will preventDefault if provided)
+   * @returns Promise<Result<TResult, ValidationError[]>> - Railway Result with `onSubmit`'s value, the validated data, or errors
+   *
+   * @example
+   * // Use in form element
+   * <form onSubmit={form.handleSubmit}>
+   *   <input {...form.getFieldProps("email")} />
+   *   <button type="submit">Submit</button>
+   * </form>
+   *
+   * @example
+   * // Use in button click handler
+   * <button onClick={form.handleSubmit}>
+   *   Save Changes
+   * </button>
+   *
+   * @example
+   * // onSubmit returns the server's Result, and handleSubmit passes it on
+   * import { match } from "@railway-ts/pipelines/result";
+   *
+   * const form = useForm(userValidator, {
+   *   initialValues: { name: "", email: "" },
+   *   onSubmit: (values) => api.createUser(values), // Promise<Result<User, ValidationError[]>>
+   * });
+   *
+   * const handleSave = async () => {
+   *   const result = await form.handleSubmit();
+   *   match(result, {
+   *     ok: (user) => {
+   *       navigate(`/users/${user.id}`);
+   *     },
+   *     err: (errors) => {
+   *       // Already on the form: field errors under their paths, a path [] error at errors._root
+   *       console.warn("Not saved:", errors);
+   *     },
+   *   });
+   * };
+   */
+  const handleSubmit = useCallback(
+    (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
+      e?.preventDefault();
+      return submitScheduler.submit(() => formStateRef.current.values, runSubmission);
+    },
+    [submitScheduler, runSubmission],
   );
 
   /**
@@ -1271,7 +1334,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     touched: formState.touched,
     errors,
     clientErrors: formState.clientErrors,
-    serverErrors: formState.serverErrors,
+    serverErrors,
     fieldErrors: formState.fieldErrors,
     isSubmitting: formState.isSubmitting,
     isValidating,
@@ -1292,7 +1355,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
     setValues,
 
     // Server error management
-    setServerErrors,
+    setServerErrors: placeServerErrors,
     clearServerErrors,
 
     // Form actions
