@@ -12,6 +12,7 @@ import {
   tuple,
   validate,
   type InferSchemaType,
+  type MaybeAsyncValidator,
   type ValidationError,
   type Validator,
 } from '@railway-ts/pipelines/schema';
@@ -51,3 +52,8 @@ export const validated: Result<{ name: string; age?: number }, ValidationError[]
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Hand = Validator<unknown, { a: number | undefined; list: { b: string | undefined }[] }>;
 export const handInferred: Equal<InferSchemaType<Hand>, { a?: number; list: { b?: string }[] }> = true;
+
+declare const slow: MaybeAsyncValidator<unknown, string>;
+const userAsync = object({ name: slow, age: optional(number()) });
+type AsyncOutputOf<V> = V extends MaybeAsyncValidator<unknown, infer O> ? O : never;
+export const asyncOut: Equal<AsyncOutputOf<typeof userAsync>, { name: string; age?: number }> = true;
