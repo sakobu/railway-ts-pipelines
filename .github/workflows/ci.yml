@@ -43,6 +43,16 @@ jobs:
       - name: Test with coverage
         run: bun run test:coverage
 
+      - name: Check pipelines as consumers see it
+        run: bun run test:package
+
+      - name: Build
+        run: bun run build
+
+      - name: Check bundle size
+        run: bun run size
+
+      # Last, so a Codecov outage (fail_ci_if_error) can't hide the checks above.
       - name: Upload pipelines coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
@@ -60,15 +70,6 @@ jobs:
           disable_search: true
           flags: use-form
           fail_ci_if_error: true
-
-      - name: Check pipelines as consumers see it
-        run: bun run test:package
-
-      - name: Build
-        run: bun run build
-
-      - name: Check bundle size
-        run: bun run size
 
   # use-form must keep working with the lowest pipelines version its peer range
   # allows, installed from npm rather than linked from the workspace.
@@ -90,9 +91,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Build use-form
-        run: bun run --filter @railway-ts/use-form build
 
       - name: Install the lowest supported pipelines from npm
         working-directory: packages/use-form
