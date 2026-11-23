@@ -183,11 +183,15 @@ const form = useForm(validator, {
 
 ## Step 5: Submission and Server Errors
 
-When the user submits, `handleSubmit` validates the form, marks all fields as touched, and calls your `onSubmit` callback if validation passes. Server errors are set separately and display through the same `form.errors` object:
+When the user submits, `handleSubmit` validates the form, marks all fields as touched, and calls your `onSubmit` callback if validation passes. `onSubmit` can return a `Result`: an `err` of `ValidationError[]` lands on the form and displays through the same `form.errors` object:
 
 ```tsx
+import { err, ok } from '@railway-ts/pipelines/result';
+
+import type { ValidationError } from '@railway-ts/pipelines/schema';
+
 function RegistrationForm() {
-  const form = useForm<RegistrationForm>(registrationSchema, {
+  const form = useForm(registrationSchema, {
     initialValues: { username: '', email: '', password: '' },
     onSubmit: async (values) => {
       const response = await fetch('/api/register', {
@@ -197,13 +201,12 @@ function RegistrationForm() {
       });
 
       if (!response.ok) {
-        const errors = await response.json();
-        // { username: "Username already taken", email: "Email in use" }
-        form.setServerErrors(errors);
-        return;
+        // [{ path: ['username'], message: 'Username already taken' }, ...]
+        return err((await response.json()) as ValidationError[]);
       }
 
       window.location.href = '/dashboard';
+      return ok(values);
     },
   });
 
@@ -230,9 +233,11 @@ Three things to know about server errors:
 
 1. **They auto-clear** -- when the user edits a field, its server error disappears
 2. **They win** -- if a field has both a client error and a server error, the server error is displayed (server > fieldValidator > client)
-3. **Form-level errors** -- use `ROOT_ERROR_KEY` (from `@railway-ts/pipelines/schema`) for errors not tied to a specific field (e.g., network errors, rate limiting)
+3. **The submit error** -- a server error at path `[]` is not tied to a field: it describes the submission itself (e.g., network errors, rate limiting). It shows at `form.errors._root` (`ROOT_ERROR_KEY`, from `@railway-ts/pipelines/schema`), does not count toward `isValid`, and clears on any edit
 
-`handleSubmit` accepts an optional form event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard).
+You can also set server errors yourself, for example from a mutation callback: `form.setServerErrors([{ path: ['username'], message: 'Username already taken' }])` takes the same `ValidationError[]`.
+
+`handleSubmit` accepts an optional event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard). It never rejects: if a validator or `onSubmit` throws, it logs the error and resolves to an `err` that shows as the submit error ("Something went wrong. Please try again."). An `onSubmit` must return nothing or a `Result`; any other value is treated the same way.
 
 `handleSubmit` also returns a `Result`, so you can pattern-match on the outcome instead of using `onSubmit`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
 

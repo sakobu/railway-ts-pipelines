@@ -41,9 +41,10 @@ Patterns and techniques. Each recipe is self-contained.
 
 **Problem:** You're building a create/edit form that talks to an API. The server might reject the data (duplicate email, username taken), and you need those errors to appear on the correct fields.
 
-**Solution:** Use `onSubmit` to call the API, and `setServerErrors` to display backend validation errors. Server errors auto-clear when the user edits the affected field.
+**Solution:** Use `onSubmit` to call the API and return an `err` built from the backend's `ValidationError[]`: it lands on the matching fields. Server errors auto-clear when the user edits the affected field.
 
 ```tsx
+import { err, ok } from '@railway-ts/pipelines/result';
 import {
   object,
   string,
@@ -55,6 +56,7 @@ import {
   email,
   ROOT_ERROR_KEY,
   type InferSchemaType,
+  type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
@@ -67,23 +69,28 @@ const userSchema = object({
 type UserForm = InferSchemaType<typeof userSchema>;
 
 function CreateUserForm() {
-  const form = useForm<UserForm>(userSchema, {
+  const form = useForm(userSchema, {
     initialValues: { username: '', email: '', bio: '' },
     onSubmit: async (values) => {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-
-      if (!response.ok) {
-        const errors = await response.json();
-        // e.g. { email: "Email already exists", username: "Username taken" }
-        form.setServerErrors(errors);
-        return;
+      let response: Response;
+      try {
+        response = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        });
+      } catch {
+        // path [] is the submit error, shown at form.errors[ROOT_ERROR_KEY]
+        return err([{ path: [], message: 'Network error. Please try again.' }]);
       }
 
-      window.location.reassign = '/users';
+      if (!response.ok) {
+        // e.g. [{ path: ['email'], message: 'Email already exists' }, { path: ['username'], message: 'Username taken' }]
+        return err((await response.json()) as ValidationError[]);
+      }
+
+      window.location.assign('/users');
+      return ok(values);
     },
   });
 
@@ -121,11 +128,13 @@ function CreateUserForm() {
 }
 ```
 
-For form-level errors (network failures, rate limiting), use `ROOT_ERROR_KEY`:
+For form-level errors (network failures, rate limiting), use a path-`[]` error. It is the submit error: it shows at `form.errors[ROOT_ERROR_KEY]`, does not count toward `isValid`, and clears on any edit. Outside `onSubmit`, set it with `setServerErrors`:
 
 ```typescript
-form.setServerErrors({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
+form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]);
 ```
+
+If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again."
 
 ---
 
@@ -1183,27 +1192,30 @@ Field validators return `undefined` for valid, or an error message string for in
 
 **Problem:** You want to handle the submit outcome programmatically rather than through `onSubmit` -- for example, to navigate on success or log errors.
 
-**Solution:** `handleSubmit` returns a `Promise<Result<TValues, ValidationError[]>>`. Use `match` from `@railway-ts/pipelines/result` to branch on success or failure.
+**Solution:** Have `onSubmit` return a `Result`. `handleSubmit` resolves to it: `onSubmit`'s `ok` value, or its `err`, which also lands on the form. It never rejects. Use `match` from `@railway-ts/pipelines/result` to branch on the outcome.
 
 ```tsx
-import { match } from '@railway-ts/pipelines/result';
+import { match, type Result } from '@railway-ts/pipelines/result';
+
+import type { ValidationError } from '@railway-ts/pipelines/schema';
+
+type User = { id: string; email: string };
+declare const navigate: (to: string) => void;
+declare const registerUser: (values: { email: string; password: string }) => Promise<Result<User, ValidationError[]>>;
 
 function RegistrationForm() {
   const form = useForm(registrationSchema, {
     initialValues: { email: '', password: '' },
-    // No onSubmit needed -- we handle the result directly
+    onSubmit: async (values) => registerUser(values),
   });
 
   const handleSave = async () => {
     const result = await form.handleSubmit();
 
     match(result, {
-      ok: (values) => {
-        console.log('Validated data:', values);
-        // Navigate, show toast, etc.
-      },
+      ok: (user) => navigate(`/welcome/${user.id}`),
       err: (errors) => {
-        console.error('Validation failed:', errors);
+        console.error('Submit failed:', errors);
         // Log to analytics, show banner, etc.
       },
     });
@@ -1224,7 +1236,7 @@ function RegistrationForm() {
 }
 ```
 
-You can also combine `onSubmit` (for the main action) with the returned `Result` (for side effects):
+If `onSubmit` returns nothing, `handleSubmit` resolves with the validated values, so you can also combine `onSubmit` (for the main action) with the returned `Result` (for side effects):
 
 ```typescript
 const form = useForm(schema, {
@@ -1695,6 +1707,7 @@ import {
   minLength,
   ROOT_ERROR_KEY,
   type InferSchemaType,
+  type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
@@ -1711,17 +1724,18 @@ const schema = chain(
 );
 
 type Registration = InferSchemaType<typeof schema>;
+type User = { id: string; username: string };
 
 // --- API layer ---
 
 const checkUsername = (username: string) =>
   fromPromise<{ available: boolean }>(
     fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
-      res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
+      res.ok ? (res.json() as Promise<{ available: boolean }>) : Promise.reject(new Error(`HTTP ${res.status}`)),
     ),
   );
 
-const registerUser = async (values: Registration): Promise<Result<void, Record<string, string>>> => {
+const registerUser = async (values: Registration): Promise<Result<User, ValidationError[]>> => {
   const result = await fromPromise(
     fetch('/api/register', {
       method: 'POST',
@@ -1730,18 +1744,19 @@ const registerUser = async (values: Registration): Promise<Result<void, Record<s
     }),
   );
 
-  if (!result.ok) return err({ [ROOT_ERROR_KEY]: 'Network error. Please try again.' });
+  // path [] is the submit error, shown at form.errors[ROOT_ERROR_KEY]
+  if (!result.ok) return err([{ path: [], message: 'Network error. Please try again.' }]);
 
   const res = result.value;
-  if (!res.ok) return err((await res.json()) as Record<string, string>);
+  if (!res.ok) return err((await res.json()) as ValidationError[]);
 
-  return ok(undefined);
+  return ok((await res.json()) as User);
 };
 
 // --- Component ---
 
 export function RegistrationForm() {
-  const form = useForm<Registration>(schema, {
+  const form = useForm(schema, {
     initialValues: {
       username: '',
       email: '',
@@ -1757,15 +1772,8 @@ export function RegistrationForm() {
         });
       },
     },
-    onSubmit: async (values) => {
-      const result = await registerUser(values);
-      match(result, {
-        ok: () => {
-          window.location.reassign = '/welcome';
-        },
-        err: (errors) => form.setServerErrors(errors),
-      });
-    },
+    // The returned Result is handleSubmit's result; an err lands on the form
+    onSubmit: (values) => registerUser(values),
   });
 
   return (
@@ -1798,7 +1806,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `fieldValidators` for username availability with `validatingFields` loading state
-- **Server errors** -- `setServerErrors` from API response, auto-clear on edit
+- **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both auto-clear on edit
 - **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching
 - **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
 
@@ -1820,6 +1828,7 @@ import {
   minLength,
   ROOT_ERROR_KEY,
   type InferSchemaType,
+  type ValidationError,
 } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1843,11 +1852,11 @@ type Registration = InferSchemaType<typeof schema>;
 
 const checkUsername = (username: string): Promise<{ available: boolean }> =>
   fetch(`/api/check-username?u=${encodeURIComponent(username)}`).then((res) =>
-    res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`),
+    res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`)),
   );
 
 class ApiValidationError extends Error {
-  constructor(public fieldErrors: Record<string, string>) {
+  constructor(public fieldErrors: ValidationError[]) {
     super('Validation failed');
   }
 }
@@ -1859,7 +1868,7 @@ const registerUser = async (values: Registration): Promise<void> => {
     body: JSON.stringify(values),
   });
 
-  if (!res.ok) throw new ApiValidationError(await res.json());
+  if (!res.ok) throw new ApiValidationError((await res.json()) as ValidationError[]);
 };
 
 // --- Component ---
@@ -1875,9 +1884,8 @@ export function RegistrationForm() {
       if (error instanceof ApiValidationError) {
         form.setServerErrors(error.fieldErrors);
       } else {
-        form.setServerErrors({
-          [ROOT_ERROR_KEY]: 'Network error. Please try again.',
-        });
+        // path [] is the submit error, shown at form.errors[ROOT_ERROR_KEY]
+        form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]);
       }
     },
   });
@@ -1936,7 +1944,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `queryClient.fetchQuery` with `staleTime` for caching username checks
-- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors`, auto-clear on edit
+- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors([...])`, auto-clear on edit
 - **React Query integration** -- `useMutation` for submit, `fetchQuery` for field validation
 - **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
 
