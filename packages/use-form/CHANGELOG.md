@@ -1,5 +1,11 @@
 # @railway-ts/use-form
 
+## 0.4.0
+
+### Minor Changes
+
+- 62f9376: Requires `@railway-ts/pipelines` 0.4.
+
 ## 0.3.0
 
 ### Minor Changes
