@@ -12,7 +12,7 @@ railway-ts covers the same ground with one model. `validate()` returns a `Result
 
 ## One schema, end to end
 
-Define the schema once. The server validates requests with it, and the form is driven by it.
+Define the schemas once, in a module both sides import. The server validates requests with `signupSchema`, the form is driven by it, and the client reads the server's answer with `createdUser`.
 
 ```ts
 // signupSchema.ts
@@ -28,18 +28,23 @@ export const signupSchema = S.chain(
 );
 
 export type Signup = S.InferSchemaType<typeof signupSchema>;
+
+// Non-strict, so the server can add fields without breaking older clients
+export const createdUser = S.object({ id: S.required(S.string()) }, { strict: false });
+
+export type CreatedUser = S.InferSchemaType<typeof createdUser>;
 ```
 
 ```ts
 // server.ts
 import { pipeAsync } from '@railway-ts/pipelines/composition';
-import { flatMapWith, fromPromiseWithError, match, type Result } from '@railway-ts/pipelines/result';
+import { flatMapWith, fromPromiseWithError, type Result } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 
-import { signupSchema, type Signup } from './signupSchema';
+import { signupSchema, type CreatedUser, type Signup } from './signupSchema';
 
 // Your data layer. A taken email returns err([{ path: ['email'], message: 'Email already registered' }]).
-declare function createUser(input: Signup): Promise<Result<{ id: string }, S.ValidationError[]>>;
+declare function createUser(input: Signup): Promise<Result<CreatedUser, S.ValidationError[]>>;
 
 const notJson = (): S.ValidationError[] => [{ path: [], message: 'Request body must be JSON' }];
 
@@ -50,29 +55,24 @@ export async function handleSignup(request: Request): Promise<Response> {
     flatMapWith(createUser),
   );
 
-  return match(result, {
-    ok: (user) => Response.json(user, { status: 201 }),
-    err: (errors) => Response.json(errors, { status: 422 }),
-  });
+  // A Result is its own wire format: { ok, value } or { ok, error }
+  return Response.json(result, { status: result.ok ? 201 : 422 });
 }
 ```
 
 ```tsx
 // SignupForm.tsx
-import { err, ok } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
-import { signupSchema } from './signupSchema';
+import { createdUser, signupSchema } from './signupSchema';
 
 export function SignupForm() {
   const form = useForm(signupSchema, {
     initialValues: { email: '', password: '', confirmPassword: '' },
     onSubmit: async (values) => {
       const res = await fetch('/api/signup', { method: 'POST', body: JSON.stringify(values) });
-      if (res.status === 422) return err((await res.json()) as S.ValidationError[]);
-      if (!res.ok) return err([{ path: [], message: 'Sign-up failed. Please try again.' }]);
-      return ok((await res.json()) as { id: string });
+      return S.decodeResult(await res.json(), createdUser);
     },
   });
 
@@ -91,9 +91,9 @@ export function SignupForm() {
 }
 ```
 
-A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the errors as they are, and `onSubmit` returns them as an `err`. `useForm` puts each one under its field, with no glue code in between. `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
+A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the `Result` as JSON, and `decodeResult` turns it back into a typed `Result` without a cast. `useForm` puts each error under its field, and `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
 
-Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, any other failed response becomes one error at path `[]`, which the form shows at `S.ROOT_ERROR_KEY`. If the request itself fails, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
+Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `S.ROOT_ERROR_KEY`. If the request itself fails, or the body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
 
 ## What's in the box
 
@@ -109,7 +109,7 @@ Two packages, five pieces. Each piece is its own import, so you only ship what y
 bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
 ```
 
-`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only and need TypeScript 6.0+ and Node.js 22.12+. use-form also needs React 19 and `@railway-ts/pipelines` 0.3.
+`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only and need TypeScript 6.0+ and Node.js 22.12+. use-form also needs React 19 and `@railway-ts/pipelines` 0.4.
 
 ## Works with what you have
 
