@@ -24,5 +24,17 @@
     "path": "packages/use-form/dist/index.mjs",
     "limit": "10 kB",
     "ignore": ["react", "react-dom", "@railway-ts/pipelines"]
+  },
+  {
+    "name": "railway-ts (pipelines + use-form)",
+    "path": [
+      "packages/pipelines/dist/option/index.mjs",
+      "packages/pipelines/dist/result/index.mjs",
+      "packages/pipelines/dist/composition/index.mjs",
+      "packages/pipelines/dist/schema/index.mjs",
+      "packages/use-form/dist/index.mjs"
+    ],
+    "limit": "10 kB",
+    "ignore": ["react", "react-dom"]
   }
 ]
