@@ -1,6 +1,6 @@
 import type { Result } from '@railway-ts/pipelines/result';
 import type { ValidationError } from '@railway-ts/pipelines/schema';
-import type { ChangeEvent, FormEvent } from 'react';
+import type { ChangeEvent, SyntheticEvent } from 'react';
 
 // =============================================================================
 // Form Types
@@ -1172,7 +1172,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    *   <button type="submit">Submit</button>
    * </form>
    */
-  handleSubmit: (e?: FormEvent) => Promise<Result<TResult, ValidationError[]>>;
+  handleSubmit: (e?: SyntheticEvent) => Promise<Result<TResult, ValidationError[]>>;
 
   /**
    * Resets the form to its initial state — clears all values, errors, and touched state.

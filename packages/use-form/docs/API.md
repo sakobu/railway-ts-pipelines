@@ -469,7 +469,7 @@ form.clearServerErrors();
 Submit form with validation. Returns a Railway `Result` so you can pattern-match on the outcome.
 
 ```typescript
-handleSubmit(e?: FormEvent): Promise<Result<TValues, ValidationError[]>>
+handleSubmit(e?: SyntheticEvent): Promise<Result<TValues, ValidationError[]>>
 ```
 
 **Parameters:**

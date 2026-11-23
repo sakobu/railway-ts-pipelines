@@ -367,7 +367,7 @@ describe('useForm', () => {
       );
 
       const preventDefault = mock(() => {});
-      const fakeEvent = { preventDefault } as unknown as React.FormEvent;
+      const fakeEvent = { preventDefault } as unknown as React.SyntheticEvent;
 
       await act(async () => {
         await result.current.handleSubmit(fakeEvent);
@@ -473,13 +473,15 @@ describe('useForm', () => {
 
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
-        first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.FormEvent);
+        first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.SyntheticEvent);
         await started;
       });
 
       let second!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
-        second = result.current.handleSubmit({ preventDefault: secondPreventDefault } as unknown as React.FormEvent);
+        second = result.current.handleSubmit({
+          preventDefault: secondPreventDefault,
+        } as unknown as React.SyntheticEvent);
         await nextTask();
       });
 

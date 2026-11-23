@@ -6,7 +6,7 @@ import {
   type MaybeAsyncValidator,
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
-import { useReducer, useCallback, useMemo, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useReducer, useCallback, useMemo, useEffect, useRef, useState, type SyntheticEvent } from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import {
@@ -894,7 +894,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * };
    */
   const handleSubmit = useCallback(
-    (e?: FormEvent): Promise<Result<TResult, ValidationError[]>> => {
+    (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
       return submitScheduler.submit(() => formStateRef.current.values, runSubmission);
     },
