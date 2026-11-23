@@ -273,6 +273,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
    * route through setFieldValue, so this catches every user-driven field interaction.
    *
+   * It runs after the field's new value is stored, so setFieldValue calls made inside it
+   * apply after this change, and the field's validation sees their values.
+   *
    * The callback is stored in a ref internally, so inline functions are safe.
    *
    * @param field - The field path that changed (e.g., "email", "address.city")

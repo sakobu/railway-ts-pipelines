@@ -15,6 +15,7 @@ import {
   alwaysInvalidAsyncValidator,
   userWithContactsValidator,
   publishValidator,
+  regionValidator,
   type PublishForm,
   type UserForm,
   type AsyncUserForm,
@@ -242,6 +243,42 @@ describe('useForm', () => {
       email: 'auto@test.com',
       age: 0,
     });
+  });
+
+  test('validation after an onFieldChange cascade sees the cascaded values', () => {
+    const { result } = renderHook(() =>
+      useForm(regionValidator, {
+        initialValues: { country: 'US', state: 'NY' },
+        onFieldChange: (field) => {
+          if (field === 'country') result.current.setFieldValue('state', '');
+        },
+      }),
+    );
+
+    act(() => {
+      result.current.setFieldValue('country', 'CA');
+    });
+
+    expect(result.current.clientErrors.state).toBe('State is required');
+  });
+
+  test('a guarded same-field write in onFieldChange wins', () => {
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, {
+        initialValues: { code: '' },
+        onFieldChange: (field, value) => {
+          if (field === 'code' && typeof value === 'string' && value !== value.toUpperCase()) {
+            result.current.setFieldValue('code', value.toUpperCase());
+          }
+        },
+      }),
+    );
+
+    act(() => {
+      result.current.setFieldValue('code', 'abc');
+    });
+
+    expect(result.current.values.code).toBe('ABC');
   });
 
   describe('handleSubmit', () => {

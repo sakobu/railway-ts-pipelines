@@ -33,7 +33,6 @@ import { isStandardSchema, fromStandardSchema, type FormValidator } from './stan
 import { createSubmitScheduler } from './submitScheduler';
 import {
   getValueByPath,
-  setValueByPath,
   collectFieldPaths,
   isPathAffected,
   normalizePath,
@@ -230,10 +229,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
   const formState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { dispatch } = store;
-
-  // Tracks in-flight accumulated values during synchronous onFieldChange cascades.
-  // Non-null only while the onFieldChange callback is executing.
-  const pendingValuesRef = useRef<TValues | null>(null);
 
   // =========================================================================
   // Value change callbacks
@@ -525,30 +520,23 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void => {
-      // Read from pendingValuesRef during onFieldChange cascades, otherwise from the store
-      const baseValues = pendingValuesRef.current ?? store.getState().values;
-      const updatedValues = setValueByPath<TValues, TValue>(baseValues, field, value);
-
-      // Expose accumulated values to nested setFieldValue calls inside onFieldChange
-      pendingValuesRef.current = updatedValues;
-      onFieldChangeRef.current?.(field, value, updatedValues);
-      pendingValuesRef.current = null;
-
-      // Dispatch state update
+      // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
       dispatch({
         type: 'SET_FIELD_VALUE',
         field,
         value,
       });
 
+      onFieldChangeRef.current?.(field, value, store.getState().values);
+
       // Mark touched on first change for immediate error visibility
       if (touchOnChange && !store.getState().touched[normalizePath(field)]) {
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
-      // Validate with calculated values if needed
+      // Validate the values as they are after any onFieldChange cascade
       if (shouldValidate) {
-        runValidationPipeline(field, updatedValues);
+        runValidationPipeline(field, store.getState().values);
       }
     },
     [store, dispatch, validateOnChange, touchOnChange, runValidationPipeline],

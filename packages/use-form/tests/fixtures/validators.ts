@@ -40,6 +40,14 @@ export const publishValidator = object({
 export type PublishForm = InferSchemaType<typeof publishValidator>;
 
 /**
+ * A region whose state depends on its country, for onFieldChange cascades
+ */
+export const regionValidator = object({
+  country: required(chain(string(), nonEmpty('Country is required'))),
+  state: required(chain(string(), nonEmpty('State is required'))),
+});
+
+/**
  * Nested form validator for testing using Railway schema builders
  */
 export const addressSchema = object({
