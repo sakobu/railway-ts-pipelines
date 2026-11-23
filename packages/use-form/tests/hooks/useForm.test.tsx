@@ -1,8 +1,8 @@
 import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { StrictMode, useEffect } from 'react';
+import { render, renderHook, act, waitFor } from '@testing-library/react';
+import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'react';
 import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
@@ -279,6 +279,51 @@ describe('useForm', () => {
     });
 
     expect(result.current.values.code).toBe('ABC');
+  });
+
+  describe('form calls inside onFieldChange apply after the change', () => {
+    const account = { type: 'personal', company: '', name: '' };
+
+    test('resetForm resets the field that just changed too', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: account,
+          onFieldChange: (field) => {
+            if (field === 'type') result.current.resetForm();
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Ada');
+      });
+      act(() => {
+        result.current.setFieldValue('type', 'business');
+      });
+
+      expect(result.current.values).toEqual(account);
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('setValues with the defaults and the new value resets the other fields', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: account,
+          onFieldChange: (field, value) => {
+            if (field === 'type') result.current.setValues({ ...account, type: value });
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Ada');
+      });
+      act(() => {
+        result.current.setFieldValue('type', 'business');
+      });
+
+      expect(result.current.values).toEqual({ type: 'business', company: '', name: '' });
+    });
   });
 
   describe('handleSubmit', () => {
@@ -2852,25 +2897,53 @@ describe('useForm', () => {
       expect(result.current.values.status).toBe('published');
     });
 
-    test('resetForm in an effect uses initialValues from the same render', () => {
+    describe('resetForm in a child effect after initialValues change', () => {
+      type ResetChildProps = { initial: PublishForm; resetForm: () => void };
+
+      const PassiveResetChild = ({ initial, resetForm }: ResetChildProps) => {
+        useEffect(() => {
+          resetForm();
+        }, [initial, resetForm]);
+        return null;
+      };
+
+      const LayoutResetChild = ({ initial, resetForm }: ResetChildProps) => {
+        useLayoutEffect(() => {
+          resetForm();
+        }, [initial, resetForm]);
+        return null;
+      };
+
+      const ResettableForm = ({ initial, Child }: { initial: PublishForm; Child: ComponentType<ResetChildProps> }) => {
+        const form = useForm(publishValidator, { initialValues: initial });
+        return (
+          <>
+            <output data-testid="title">{form.values.title}</output>
+            <output data-testid="dirty">{String(form.isDirty)}</output>
+            <Child initial={initial} resetForm={form.resetForm} />
+          </>
+        );
+      };
+
       const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
 
-      const { result, rerender } = renderHook(
-        ({ initial }: { initial: PublishForm }) => {
-          const form = useForm(publishValidator, { initialValues: initial });
-          const { resetForm } = form;
-          useEffect(() => {
-            resetForm();
-          }, [initial, resetForm]);
-          return form;
-        },
-        { initialProps: { initial: draft } },
-      );
+      test('a passive effect resets to the new initialValues', () => {
+        const { rerender, getByTestId } = render(<ResettableForm initial={draft} Child={PassiveResetChild} />);
 
-      rerender({ initial: loaded });
+        rerender(<ResettableForm initial={loaded} Child={PassiveResetChild} />);
 
-      expect(result.current.values).toEqual(loaded);
-      expect(result.current.isDirty).toBe(false);
+        expect(getByTestId('title').textContent).toBe('Loaded');
+        expect(getByTestId('dirty').textContent).toBe('false');
+      });
+
+      test('a layout effect resets to the new initialValues', () => {
+        const { rerender, getByTestId } = render(<ResettableForm initial={draft} Child={LayoutResetChild} />);
+
+        rerender(<ResettableForm initial={loaded} Child={LayoutResetChild} />);
+
+        expect(getByTestId('title').textContent).toBe('Loaded');
+        expect(getByTestId('dirty').textContent).toBe('false');
+      });
     });
 
     test('two edits with an async validator settle with no stale error', async () => {

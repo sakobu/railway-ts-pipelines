@@ -10,7 +10,7 @@ import {
   useCallback,
   useMemo,
   useEffect,
-  useLayoutEffect,
+  useInsertionEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -195,10 +195,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Reducer Setup
   // ===========================================================================
 
-  // The reducer uses the initialValues of the latest commit. A layout effect updates them before
-  // any passive effect or event handler of that commit can dispatch.
+  // The reducer uses the initialValues of the latest commit. An insertion effect updates them before
+  // any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
   const initialValuesRef = useRef(initialValues);
-  useLayoutEffect(() => {
+  useInsertionEffect(() => {
     initialValuesRef.current = initialValues;
   });
 
