@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from 'bun:test';
 
-import { isOk, isErr, err } from '@railway-ts/pipelines/result';
+import { isOk, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
@@ -376,10 +376,125 @@ describe('useForm', () => {
       expect(preventDefault).toHaveBeenCalled();
     });
 
-    test('returns err and skips submission when called concurrently', async () => {
-      const onSubmit = mock(async () => {
-        await new Promise((r) => setTimeout(r, 100));
+    /** An onSubmit that stays pending until the test releases it, and reports when it started. */
+    const createGatedOnSubmit = () => {
+      const started = Promise.withResolvers<void>();
+      const gate = Promise.withResolvers<void>();
+      const onSubmit = mock(async (_values: UserForm) => {
+        started.resolve();
+        await gate.promise;
       });
+      return { onSubmit, started: started.promise, release: gate.resolve };
+    };
+
+    /** Lets an overlapping submission run up to its onSubmit call, if it would make one. */
+    const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    test('a second handleSubmit while onSubmit is pending shares its result', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await started;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await nextTask();
+      });
+
+      await act(async () => {
+        release();
+        await first;
+      });
+
+      expect(second).toBe(first);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test('handleSubmit with changed values while onSubmit is pending submits them afterwards', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await started;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await nextTask();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        release();
+        await first;
+        await second;
+      });
+
+      expect(onSubmit.mock.calls).toEqual([
+        [{ name: 'John', email: 'john@example.com', age: 25 }],
+        [{ name: 'Jane', email: 'john@example.com', age: 25 }],
+      ]);
+    });
+
+    test('a shared handleSubmit still calls preventDefault', async () => {
+      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
+          onSubmit,
+        }),
+      );
+
+      const firstPreventDefault = mock(() => {});
+      const secondPreventDefault = mock(() => {});
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.FormEvent);
+        await started;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit({ preventDefault: secondPreventDefault } as unknown as React.FormEvent);
+        await nextTask();
+      });
+
+      await act(async () => {
+        release();
+        await first;
+        await second;
+      });
+
+      expect(firstPreventDefault).toHaveBeenCalled();
+      expect(secondPreventDefault).toHaveBeenCalled();
+    });
+
+    test('a handleSubmit after the previous one settled starts a new submission', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
 
       const { result } = renderHook(() =>
         useForm(userValidator, {
@@ -388,23 +503,14 @@ describe('useForm', () => {
         }),
       );
 
-      let secondResult: Awaited<ReturnType<typeof result.current.handleSubmit>>;
-
       await act(async () => {
-        // Fire first submit (don't await — stays in-flight)
-        const first = result.current.handleSubmit();
-        // Second call hits the guard
-        secondResult = await result.current.handleSubmit();
-        await first;
+        await result.current.handleSubmit();
+      });
+      await act(async () => {
+        await result.current.handleSubmit();
       });
 
-      // Second call should have returned err([])
-      expect(isErr(secondResult!)).toBe(true);
-      if (isErr(secondResult!)) {
-        expect(secondResult.error).toEqual([]);
-      }
-      // First call should have completed normally
-      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1731,6 +1837,41 @@ describe('useForm', () => {
       act(() => {
         result.current.setFieldValue('startDate', new Date('2024-01-01'));
       });
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('replacing a File with another File marks the form dirty', () => {
+      // Same name, contents and timestamp, so comparing by content can't tell the two apart.
+      // The timestamp is nonzero because happy-dom replaces 0 with the current time.
+      const lastModified = Date.UTC(2024, 0, 1);
+      const initialValues = { avatar: new File(['a'], 'a.txt', { lastModified }) };
+      const { result } = renderHook(() => useForm(alwaysValidValidator, { initialValues }));
+
+      act(() => {
+        result.current.setFieldValue('avatar', new File(['a'], 'a.txt', { lastModified }));
+      });
+
+      expect(result.current.isDirty).toBe(true);
+    });
+
+    test('picking an equal date-library value keeps the form clean', () => {
+      // Shaped like a dayjs value: a date picker creates a new one on every pick
+      class DayjsLike {
+        $d: Date;
+        $y: number;
+        constructor(iso: string) {
+          this.$d = new Date(iso);
+          this.$y = this.$d.getUTCFullYear();
+        }
+      }
+
+      const initialValues = { startDate: new DayjsLike('2024-01-01') };
+      const { result } = renderHook(() => useForm(alwaysValidValidator, { initialValues }));
+
+      act(() => {
+        result.current.setFieldValue('startDate', new DayjsLike('2024-01-01'));
+      });
+
       expect(result.current.isDirty).toBe(false);
     });
   });

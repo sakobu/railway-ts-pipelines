@@ -380,12 +380,45 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
   return result;
 };
 
+/**
+ * Whether an object is a plain object: its prototype is `Object.prototype` or `null`.
+ */
+const isPlainObject = (value: object): boolean => {
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+/**
+ * Compares two values by content wherever their content is visible, and by identity elsewhere.
+ * Used for `isDirty` and for deciding whether a submit repeats the running one.
+ *
+ * - `Date` and `RegExp` compare by value.
+ * - `Blob` and `File` compare by identity. Browsers keep a file's contents out of its fields.
+ * - Any other non-plain object with no own enumerable keys compares by identity: `Map`, `Set`,
+ *   `Temporal` values, and classes with only private fields keep their state where keys can't see it.
+ * - Arrays, plain objects and class instances with own fields (such as dayjs values) compare by content.
+ *
+ * When unsure, it calls two values different. That costs at most an extra save or an
+ * "unsaved changes" prompt, where calling them equal could drop a save.
+ *
+ * @param a - The first value
+ * @param b - The second value
+ * @returns Whether the two values are equal
+ *
+ * @example
+ * deepEqual({ tags: ["a"] }, { tags: ["a"] }); // true
+ * deepEqual(new Date("2024-01-01"), new Date("2024-01-01")); // true
+ * deepEqual(new File(["a"], "a.txt"), new File(["a"], "a.txt")); // false: compared by identity
+ */
 export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
   if (a == null || b == null) return false;
   if (typeof a !== 'object' || typeof b !== 'object') return false;
+
+  // Files and Blobs compare by identity, which Object.is has already ruled out
+  if (typeof Blob !== 'undefined' && (a instanceof Blob || b instanceof Blob)) return false;
 
   if (Array.isArray(a)) {
     if (!Array.isArray(b) || a.length !== b.length) return false;
@@ -395,6 +428,8 @@ export const deepEqual = (a: unknown, b: unknown): boolean => {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
   if (keysA.length !== keysB.length) return false;
+  // With no own keys to compare, a non-plain object's state is hidden: compare by identity
+  if (keysA.length === 0 && !(isPlainObject(a) && isPlainObject(b))) return false;
   return keysA.every(
     (key) =>
       Object.prototype.hasOwnProperty.call(b, key) &&

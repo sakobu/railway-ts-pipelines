@@ -512,6 +512,51 @@ describe('useFormAutoSubmission', () => {
     });
   });
 
+  describe('overlapping saves', () => {
+    test('an edit made during an in-flight auto-save is saved after it', async () => {
+      const onSubmit = mock(async (_values: Record<string, unknown>) => {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      });
+      const initialValues = { name: '' };
+
+      const { result } = renderHook(() => {
+        const form = useForm(alwaysValidValidator, {
+          initialValues,
+          onSubmit,
+        });
+        useFormAutoSubmission(form, 50);
+        return form;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'a');
+      });
+
+      // The first save is in flight
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(1);
+        },
+        { timeout: 500 },
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'ab');
+      });
+
+      // Both saves have finished
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(2);
+          expect(result.current.isSubmitting).toBe(false);
+        },
+        { timeout: 1500 },
+      );
+
+      expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
+    });
+  });
+
   describe('hook return value', () => {
     test('returns null', () => {
       const { result } = renderHook(() => {

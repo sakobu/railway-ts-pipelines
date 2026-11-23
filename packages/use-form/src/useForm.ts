@@ -6,7 +6,7 @@ import {
   type MaybeAsyncValidator,
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
-import { useReducer, useCallback, useMemo, useEffect, useRef, type FormEvent } from 'react';
+import { useReducer, useCallback, useMemo, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import {
@@ -21,6 +21,7 @@ import {
 } from './fieldPropsFactory';
 import { formReducer } from './formReducer';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
+import { createSubmitScheduler } from './submitScheduler';
 import {
   deepMerge,
   getValueByPath,
@@ -257,8 +258,8 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // Per-field sequence counters for race condition protection on field-level async validation
   const fieldValidationSeqRef = useRef<Record<string, number>>({});
 
-  // Guard against concurrent handleSubmit calls
-  const isHandlingSubmitRef = useRef(false);
+  // Decides what an overlapping handleSubmit does: share the running submission, or follow it
+  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TValues, ValidationError[]>>);
 
   // ===========================================================================
   // Computed State
@@ -712,9 +713,123 @@ export const useForm = <TValues extends Record<string, unknown>>(
   // ===========================================================================
 
   /**
+   * Runs one submission of the given values: marks every field touched, counts the attempt,
+   * clears server errors, validates, runs the field validators, then calls `onSubmit`.
+   * `handleSubmit` decides when it runs, through the submit scheduler.
+   *
+   * @param values - The form values to submit
+   * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
+   */
+  const runSubmission = useCallback(
+    async (values: TValues): Promise<Result<TValues, ValidationError[]>> => {
+      const { clientErrors, serverErrors } = formStateRef.current;
+
+      // Mark all fields and error paths as touched (deep)
+      const valuePaths = collectFieldPaths(values);
+      const allPaths = Array.from(new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]));
+
+      dispatch({
+        type: 'MARK_ALL_TOUCHED',
+        fields: allPaths,
+      });
+
+      // Increment submit count on every attempt (regardless of validation outcome)
+      dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
+
+      // Clear any existing server errors
+      dispatch({
+        type: 'CLEAR_SERVER_ERRORS',
+      });
+
+      // Invalidate any pending live async validations
+      ++validationSeqRef.current;
+
+      // Show validating state during submit validation
+      dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+
+      // Validate the form (await handles both sync and async validators)
+      const validationResult = await validate(values, validator);
+
+      dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+
+      // Handle result using Railway pattern
+      return match(validationResult, {
+        ok: async (validData) => {
+          // Only set isSubmitting after validation passes
+          dispatch({
+            type: 'SET_SUBMITTING',
+            isSubmitting: true,
+          });
+
+          // Run all field validators in parallel before calling onSubmit
+          if (fieldValidators) {
+            const fieldEntries = Object.entries(fieldValidators) as Array<
+              [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
+            >;
+
+            const fieldResults = await Promise.all(
+              fieldEntries.map(async ([field, validatorFn]) => {
+                const fieldValue = getValueByPath(values, field);
+                const error = await validatorFn(fieldValue, values);
+                if (error) {
+                  dispatch({ type: 'SET_FIELD_ERROR', field, error });
+                } else {
+                  dispatch({
+                    type: 'SET_FIELD_ERROR',
+                    field,
+                    error: undefined,
+                  });
+                }
+                return { field, error };
+              }),
+            );
+
+            const hasFieldErrors = fieldResults.some((r) => r.error);
+            if (hasFieldErrors) {
+              dispatch({
+                type: 'SET_SUBMITTING',
+                isSubmitting: false,
+              });
+              return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
+            }
+          }
+
+          if (onSubmit) {
+            try {
+              await onSubmit(validData);
+            } catch (error) {
+              console.error('Form submission error:', error);
+            }
+          }
+
+          dispatch({
+            type: 'SET_SUBMITTING',
+            isSubmitting: false,
+          });
+
+          return ok(validData);
+        },
+        err: (errors) => {
+          dispatch({
+            type: 'SET_CLIENT_ERRORS',
+            errors: formatErrors(errors),
+          });
+
+          // No SET_SUBMITTING dispatch — isSubmitting was never set to true
+          return Promise.resolve(err(errors));
+        },
+      });
+    },
+    [validator, onSubmit, fieldValidators],
+  );
+
+  /**
    * Handles form submission using the Railway-oriented programming pattern.
    * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
    * Returns a Promise that resolves to either the validated data or validation errors.
+   *
+   * While a submission is running, a call with the same values shares its Promise, and a call
+   * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
    *
    * @param e - Optional form event (will preventDefault if provided)
    * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
@@ -750,123 +865,11 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * };
    */
   const handleSubmit = useCallback(
-    async (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
-      if (e) {
-        e.preventDefault();
-      }
-
-      // Guard against concurrent submissions
-      if (isHandlingSubmitRef.current) {
-        return err([]);
-      }
-
-      isHandlingSubmitRef.current = true;
-
-      try {
-        const { values, clientErrors, serverErrors } = formStateRef.current;
-
-        // Mark all fields and error paths as touched (deep)
-        const valuePaths = collectFieldPaths(values);
-        const allPaths = Array.from(
-          new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
-        );
-
-        dispatch({
-          type: 'MARK_ALL_TOUCHED',
-          fields: allPaths,
-        });
-
-        // Increment submit count on every attempt (regardless of validation outcome)
-        dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
-
-        // Clear any existing server errors
-        dispatch({
-          type: 'CLEAR_SERVER_ERRORS',
-        });
-
-        // Invalidate any pending live async validations
-        ++validationSeqRef.current;
-
-        // Show validating state during submit validation
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
-
-        // Validate the form (await handles both sync and async validators)
-        const validationResult = await validate(values, validator);
-
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
-
-        // Handle result using Railway pattern
-        return match(validationResult, {
-          ok: async (validData) => {
-            // Only set isSubmitting after validation passes
-            dispatch({
-              type: 'SET_SUBMITTING',
-              isSubmitting: true,
-            });
-
-            // Run all field validators in parallel before calling onSubmit
-            if (fieldValidators) {
-              const fieldEntries = Object.entries(fieldValidators) as Array<
-                [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
-              >;
-
-              const fieldResults = await Promise.all(
-                fieldEntries.map(async ([field, validatorFn]) => {
-                  const fieldValue = getValueByPath(values, field);
-                  const error = await validatorFn(fieldValue, values);
-                  if (error) {
-                    dispatch({ type: 'SET_FIELD_ERROR', field, error });
-                  } else {
-                    dispatch({
-                      type: 'SET_FIELD_ERROR',
-                      field,
-                      error: undefined,
-                    });
-                  }
-                  return { field, error };
-                }),
-              );
-
-              const hasFieldErrors = fieldResults.some((r) => r.error);
-              if (hasFieldErrors) {
-                dispatch({
-                  type: 'SET_SUBMITTING',
-                  isSubmitting: false,
-                });
-                return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
-              }
-            }
-
-            if (onSubmit) {
-              try {
-                await onSubmit(validData);
-              } catch (error) {
-                console.error('Form submission error:', error);
-              }
-            }
-
-            dispatch({
-              type: 'SET_SUBMITTING',
-              isSubmitting: false,
-            });
-
-            return ok(validData);
-          },
-          err: (errors) => {
-            dispatch({
-              type: 'SET_CLIENT_ERRORS',
-              errors: formatErrors(errors),
-            });
-
-            // No SET_SUBMITTING dispatch — isSubmitting was never set to true
-            return Promise.resolve(err(errors));
-          },
-        });
-      } finally {
-        isHandlingSubmitRef.current = false;
-      }
+    (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
+      e?.preventDefault();
+      return submitScheduler.submit(() => formStateRef.current.values, runSubmission);
     },
-    [validator, onSubmit, fieldValidators],
+    [submitScheduler, runSubmission],
   );
 
   /**

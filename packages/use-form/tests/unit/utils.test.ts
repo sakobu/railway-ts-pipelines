@@ -440,6 +440,41 @@ describe('deepEqual', () => {
     const obj = { a: 1 };
     expect(deepEqual(obj, obj)).toBe(true);
   });
+
+  test('Files and Blobs compare by identity', () => {
+    const file = new File(['a'], 'a.txt');
+    expect(deepEqual(new File(['a'], 'a.txt'), new File(['a'], 'a.txt'))).toBe(false);
+    expect(deepEqual(file, file)).toBe(true);
+    expect(deepEqual(new Blob(['a']), new Blob(['a']))).toBe(false);
+  });
+
+  test('objects that hide their state compare by identity', () => {
+    expect(deepEqual(new Map(), new Map())).toBe(false);
+    expect(deepEqual(Temporal.PlainDate.from('2024-01-01'), Temporal.PlainDate.from('2024-01-02'))).toBe(false);
+  });
+
+  test('class instances with own fields compare by content', () => {
+    // Shaped like a dayjs value: a date picker creates a new one on every pick
+    class DayjsLike {
+      $d: Date;
+      $y: number;
+      constructor(iso: string) {
+        this.$d = new Date(iso);
+        this.$y = this.$d.getUTCFullYear();
+      }
+    }
+
+    expect(deepEqual(new DayjsLike('2024-01-01'), new DayjsLike('2024-01-01'))).toBe(true);
+    expect(deepEqual(new DayjsLike('2024-01-01'), new DayjsLike('2024-06-15'))).toBe(false);
+  });
+
+  test('null-prototype objects compare by content', () => {
+    const withName = (name: string) => Object.assign(Object.create(null) as Record<string, unknown>, { name });
+
+    expect(deepEqual(withName('a'), withName('a'))).toBe(true);
+    expect(deepEqual(withName('a'), withName('b'))).toBe(false);
+    expect(deepEqual(Object.create(null), Object.create(null))).toBe(true);
+  });
 });
 
 describe('tuple field paths (runtime)', () => {
