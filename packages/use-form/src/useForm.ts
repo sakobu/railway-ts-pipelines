@@ -244,9 +244,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   }, [formState.values]);
 
   // --- onFieldChange ---
-  // Fired imperatively from setFieldValue — no effect needed.
+  // Fired imperatively from setFieldValue. Updated in an insertion effect, like initialValuesRef,
+  // so a setFieldValue from any effect of the same commit, a child's included, gets this render's callback.
   const onFieldChangeRef = useRef(onFieldChange);
-  useEffect(() => {
+  useInsertionEffect(() => {
     onFieldChangeRef.current = onFieldChange;
   });
 

@@ -2987,6 +2987,38 @@ describe('useForm', () => {
       });
     });
 
+    test("a child's effect that calls setFieldValue gets the onFieldChange from the same render", () => {
+      const calls: string[] = [];
+
+      const TitleSetter = ({
+        label,
+        setFieldValue,
+      }: {
+        label: string;
+        setFieldValue: (field: 'title', value: string) => void;
+      }) => {
+        useEffect(() => {
+          setFieldValue('title', label);
+        }, [label, setFieldValue]);
+        return null;
+      };
+
+      const LabelledForm = ({ label }: { label: string }) => {
+        const form = useForm(publishValidator, {
+          initialValues: draft,
+          onFieldChange: () => {
+            calls.push(label);
+          },
+        });
+        return <TitleSetter label={label} setFieldValue={form.setFieldValue} />;
+      };
+
+      const { rerender } = render(<LabelledForm label="first" />);
+      rerender(<LabelledForm label="second" />);
+
+      expect(calls).toEqual(['first', 'second']);
+    });
+
     test('two edits with an async validator settle with no stale error', async () => {
       const { result } = renderHook(() => useForm(asyncUserValidator, { initialValues: emptyUser }));
 
