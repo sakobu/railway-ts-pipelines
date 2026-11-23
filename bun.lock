@@ -24,7 +24,7 @@
     },
     "packages/pipelines": {
       "name": "@railway-ts/pipelines",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "peerDependencies": {
         "typescript": ">=6.0",
       },
@@ -34,7 +34,7 @@
     },
     "packages/use-form": {
       "name": "@railway-ts/use-form",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "devDependencies": {
         "@happy-dom/global-registrator": "^21.0.4",
         "@railway-ts/pipelines": "workspace:*",

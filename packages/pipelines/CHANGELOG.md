@@ -1,5 +1,13 @@
 # @railway-ts/pipelines
 
+## 0.3.0
+
+### Minor Changes
+
+- 4f280d7: Add `isResult(value)`, which tells whether any value is a `Result`.
+- 8c66e2a: `object()` now types optional fields as optional keys (`{ age?: number }`), the same shape `InferSchemaType` gives. Before, they were required keys typed `number | undefined`. Code annotated with the old shape may need updating. This includes `refineAt<…>` type arguments that write `age: number | undefined` (write `age?: number`, or use `InferSchemaType`), and generic helpers that return `object(schema)` as `Validator<unknown, T>` (let TypeScript infer the return type).
+- 2c5dbc2: Requires TypeScript 6.0 or later (was 5.0) and Node.js 22.12 or later (was 18).
+
 ## 0.2.1
 
 ### Patch Changes
