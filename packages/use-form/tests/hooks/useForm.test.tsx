@@ -482,6 +482,8 @@ describe('useForm', () => {
         second = result.current.handleSubmit({
           preventDefault: secondPreventDefault,
         } as unknown as React.SyntheticEvent);
+        // Called during handleSubmit itself, while the first submission is still pending
+        expect(secondPreventDefault).toHaveBeenCalledTimes(1);
         await nextTask();
       });
 

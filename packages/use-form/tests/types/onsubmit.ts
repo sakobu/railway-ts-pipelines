@@ -119,8 +119,11 @@ export function useOnSubmitCases() {
   });
 
   // useForm<T> fixes TResult to T, so an onSubmit that returns another value needs useForm<T, U>.
-  // @ts-expect-error TResult is Flat when only TValues is given
-  useForm<Flat>(flat, { initialValues: { name: '' }, onSubmit: (v) => createUser(v) });
+  useForm<Flat>(flat, {
+    initialValues: { name: '' },
+    // @ts-expect-error TResult is Flat when only TValues is given
+    onSubmit: (v) => createUser(v),
+  });
 
   // useForm<T, U> with U other than T needs an onSubmit that returns a Result: a forgotten return is caught.
   useForm<Flat, User>(flat, {
