@@ -630,14 +630,14 @@ Extract the union of output types from a validator map. Used by `discriminatedUn
 function object<T extends Record<string, unknown>>(
   schema: SyncSchema<T>,
   options?: { strict?: boolean },
-): Validator<unknown, T>;
+): Validator<unknown, ObjectOutput<T>>;
 function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
   options?: { strict?: boolean },
-): MaybeAsyncValidator<unknown, T>;
+): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 ```
 
-Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async.
+Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async. A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output: `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
 
 ```typescript
 const userSchema = object({

@@ -133,6 +133,9 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
 /**
  * Create a validator for objects based on a schema.
  *
+ * A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output:
+ * `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+ *
  * @example
  * const userSchema = object({
  *   name: required(string()),
