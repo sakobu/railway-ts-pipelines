@@ -41,7 +41,7 @@ import { pipeAsync } from '@railway-ts/pipelines/composition';
 import { flatMapWith, fromPromiseWithError, type Result } from '@railway-ts/pipelines/result';
 import { validate, type ValidationError } from '@railway-ts/pipelines/schema';
 
-import { signupSchema, type CreatedUser, type Signup } from './signupSchema';
+import { createdUser, signupSchema, type CreatedUser, type Signup } from './signupSchema';
 
 // Your data layer. A taken email returns err([{ path: ['email'], message: 'Email already registered' }]).
 declare function createUser(input: Signup): Promise<Result<CreatedUser, ValidationError[]>>;
@@ -53,6 +53,7 @@ export async function handleSignup(request: Request): Promise<Response> {
     fromPromiseWithError(request.json(), notJson),
     flatMapWith((body) => validate(body, signupSchema)),
     flatMapWith(createUser),
+    flatMapWith((user) => validate(user, createdUser)), // send only the fields createdUser lists
   );
 
   // A Result is its own wire format: { ok, value } or { ok, error }
@@ -92,6 +93,8 @@ export function SignupForm() {
 ```
 
 A taken email ends up under the same field as a malformed one. `createUser` returns it as a `ValidationError` on `email`, the server sends the `Result` as JSON, and `decodeResult` turns it back into a typed `Result` without a cast. `useForm` puts each error under its field, and `handleSubmit` resolves to the same `Result`: `ok` with the new user, or `err` with the errors, whether the schema caught them in the browser or the server sent them.
+
+`createdUser` works on both sides. The server runs its answer through it, so only the fields it lists leave the server, even if `createUser` returns a whole database row. The client checks the reply against it, and because it's non-strict, a field the server adds later doesn't break older clients.
 
 Failures along the way are values too. On the server, a request body that isn't JSON comes back as an error. On the client, a response that isn't a `Result` becomes one error that the form shows at `ROOT_ERROR_KEY`. If the request itself fails, or the response body isn't JSON, `handleSubmit` still doesn't reject: the form shows a generic error in the same place.
 
