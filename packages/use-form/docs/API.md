@@ -59,9 +59,17 @@ Configuration object.
 ```typescript
 {
   initialValues: NoInfer<TValues>;
-  onSubmit?: OnSubmit<TValues, TResult>;
+  // Returning nothing is allowed only when TResult is the form values; see onSubmit below
+  onSubmit?:
+    | ((values: TValues) => void | Promise<void>)
+    | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
   validationMode?: "live" | "blur" | "mount" | "submit";
-  fieldValidators?: Partial<Record<ExtractFieldPaths<TValues>, FieldValidator>>;
+  fieldValidators?: {
+    [K in ExtractFieldPaths<TValues>]?: (
+      value: FieldTypeAtPath<TValues, K>,
+      values: TValues,
+    ) => string | undefined | Promise<string | undefined>;
+  };
   onValuesChange?: (values: TValues, prevValues: TValues) => void;
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
 }
@@ -242,7 +250,7 @@ form.clientErrors.email; // "Invalid email format"
 
 Type: `Record<FieldPath, string>`
 
-Manually set errors from server responses.
+Errors from the server: set by `setServerErrors(...)`, or by `onSubmit` returning `err`. The submit error (a server error at path `[]`) shows at `serverErrors._root`.
 
 ```typescript
 form.serverErrors.username; // "Username already taken"
@@ -324,7 +332,7 @@ The `errors` object is a merged view of three separate error layers. When multip
 | ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
 | 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
 | 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 
@@ -1508,7 +1516,7 @@ function SubmitButton({ form }: Props) {
 }
 ```
 
-A form whose `onSubmit` returns `Result<U, …>` is a `UseFormReturn<V, U>`, which a component typed `UseFormReturn<V>` does not accept. Type such a component `UseFormReturn<V, unknown>`.
+`UseFormReturn<V>` accepts any form of shape `V`, whatever its `onSubmit` returns. Its `handleSubmit` resolves `Result<unknown, ValidationError[]>`. A component that reads the `ok` value writes `UseFormReturn<V, V>`, or `UseFormReturn<V, U>` for a form whose `onSubmit` returns `Result<U, …>`.
 
 ### InferSchemaType
 

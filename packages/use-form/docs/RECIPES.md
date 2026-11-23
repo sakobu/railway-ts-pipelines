@@ -1021,13 +1021,14 @@ const form = useForm(schema, {
 | ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
 | 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
 | 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`                                                |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
 
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field; bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()` or new `handleSubmit`
+- the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, `resetForm()`, and at the start of each submit
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 
@@ -1190,7 +1191,7 @@ Field validators return `undefined` for valid, or an error message string for in
 
 ## Pattern-Matching Submit Results
 
-**Problem:** You want to handle the submit outcome programmatically rather than through `onSubmit` -- for example, to navigate on success or log errors.
+**Problem:** You want to act on the submit outcome where you call `handleSubmit` -- for example, to navigate on success or log errors.
 
 **Solution:** Have `onSubmit` return a `Result`. `handleSubmit` resolves to it: `onSubmit`'s `ok` value, or its `err`, which also lands on the form. It never rejects. Use `match` from `@railway-ts/pipelines/result` to branch on the outcome.
 
@@ -1234,24 +1235,6 @@ function RegistrationForm() {
     </form>
   );
 }
-```
-
-If `onSubmit` returns nothing, `handleSubmit` resolves with the validated values, so you can also combine `onSubmit` (for the main action) with the returned `Result` (for side effects):
-
-```typescript
-const form = useForm(schema, {
-  initialValues: {/* ... */},
-  onSubmit: async (values) => {
-    await api.createUser(values);
-  },
-});
-
-// Later, in a handler:
-const result = await form.handleSubmit();
-match(result, {
-  ok: () => navigate('/dashboard'),
-  err: () => scrollToFirstError(),
-});
 ```
 
 ---
@@ -1711,6 +1694,8 @@ import {
 } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 
+import type { SyntheticEvent } from 'react';
+
 // --- Schema ---
 
 const schema = chain(
@@ -1776,8 +1761,16 @@ export function RegistrationForm() {
     onSubmit: (values) => registerUser(values),
   });
 
+  const handleRegister = async (e: SyntheticEvent) => {
+    match(await form.handleSubmit(e), {
+      ok: (user) => window.location.assign(`/welcome/${user.id}`),
+      // Already on the form: field errors under their paths, a network failure at errors[ROOT_ERROR_KEY]
+      err: () => {},
+    });
+  };
+
   return (
-    <form onSubmit={(e) => void form.handleSubmit(e)}>
+    <form onSubmit={(e) => void handleRegister(e)}>
       <input {...form.getFieldProps('username')} />
       {form.validatingFields.username && <span>Checking...</span>}
       {form.getFieldError('username') && <span>{form.getFieldError('username')}</span>}
@@ -1807,8 +1800,8 @@ This form demonstrates:
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `fieldValidators` for username availability with `validatingFields` loading state
 - **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both auto-clear on edit
-- **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching
-- **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
+- **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching, including on `handleSubmit`'s result to navigate on success
+- **React 19 compatibility** -- `(e) => void handleRegister(e)` pattern
 
 ---
 

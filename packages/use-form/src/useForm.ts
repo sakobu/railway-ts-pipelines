@@ -140,14 +140,13 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
  * </form>
  *
  * @example
- * // Handle server errors
+ * // Handle server errors: return err to place them on the form, ok to succeed
  * const form = useForm(userValidator, {
+ *   initialValues: { name: "", email: "", age: 0 },
  *   onSubmit: async (values) => {
  *     const response = await api.createUser(values);
- *     if (!response.ok) {
- *       const errors = await response.json(); // ValidationError[]
- *       form.setServerErrors(errors);
- *     }
+ *     if (!response.ok) return err((await response.json()) as ValidationError[]);
+ *     return ok((await response.json()) as User);
  *   }
  * });
  *
@@ -648,22 +647,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * @param errors - Server validation errors, each with a `path` and a `message`
    *
    * @example
-   * // Handle server validation errors
-   * const form = useForm(userValidator, {
-   *   onSubmit: async (values) => {
-   *     const response = await fetch("/api/users", {
-   *       method: "POST",
-   *       body: JSON.stringify(values)
-   *     });
-   *
-   *     if (!response.ok) {
-   *       form.setServerErrors([
-   *         { path: ["email"], message: "Email already taken" },
-   *         { path: ["username"], message: "Username not available" }
-   *       ]);
-   *       return;
-   *     }
-   *   }
+   * // Errors that arrive outside onSubmit, such as in a React Query mutation's onError
+   * // (inside onSubmit, return err(errors) instead)
+   * const mutation = useMutation({
+   *   mutationFn: api.createUser,
+   *   onError: (error) => {
+   *     if (error instanceof ApiValidationError) form.setServerErrors(error.fieldErrors);
+   *   },
    * });
    *
    * @example

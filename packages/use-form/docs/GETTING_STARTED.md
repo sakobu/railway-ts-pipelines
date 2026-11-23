@@ -239,7 +239,7 @@ You can also set server errors yourself, for example from a mutation callback: `
 
 `handleSubmit` accepts an optional event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard). It never rejects: if a validator or `onSubmit` throws, it logs the error and resolves to an `err` that shows as the submit error ("Something went wrong. Please try again."). An `onSubmit` must return nothing or a `Result`; any other value is treated the same way.
 
-`handleSubmit` also returns a `Result`, so you can pattern-match on the outcome instead of using `onSubmit`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
+`handleSubmit` also resolves to a `Result`, so you can pattern-match on the outcome where you call it, for example to navigate once `onSubmit` returns `ok`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
 
 > **React 19 note:** React 19 form actions expect `onSubmit` to not return a Promise. Use `(e) => void form.handleSubmit(e)` to satisfy the type checker.
 
