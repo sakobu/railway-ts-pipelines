@@ -28,7 +28,7 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12"
   },
   "scripts": {
     "build": "tsdown",
@@ -72,7 +72,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "typescript": ">=5.0"
+    "typescript": ">=6.0"
   },
   "peerDependenciesMeta": {
     "typescript": {

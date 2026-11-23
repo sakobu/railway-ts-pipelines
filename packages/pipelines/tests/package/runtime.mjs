@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 assert.deepStrictEqual(option.mapToResult(option.some(1), 'missing'), result.ok(1));
 assert.deepStrictEqual(result.mapToOption(result.ok(1)), option.some(1));
 
-// The package is ESM-only: require() goes through Node's require(esm) (Node 20.19+/22.12+)
+// The package is ESM-only: require() goes through Node's require(esm) (Node 22.12+)
 // and returns the same module instance as import, so there is no second copy to disagree with.
 assert.equal(require('@railway-ts/pipelines/result'), result);
 assert.equal(require('@railway-ts/pipelines/option'), option);

@@ -32,7 +32,7 @@ Bring your own Zod, Valibot, or ArkType via [Standard Schema](https://github.com
 bun add @railway-ts/use-form @railway-ts/pipelines  # or npm, pnpm, yarn
 ```
 
-Requires React 18+ and @railway-ts/pipelines 0.2.
+Requires React 19, TypeScript 6.0+, Node.js 22.12+ and @railway-ts/pipelines 0.3.
 
 ## Quick Start
 
@@ -210,7 +210,7 @@ Cross-field validation, async username check, server errors, and React Query int
 - **Array helpers** -- type-safe `push`, `remove`, `swap`, `insert`, `replace` with field bindings
 - **Four validation modes** -- `live`, `blur`, `mount`, `submit`
 - **Auto-submission** -- `useFormAutoSubmission` for search/filter forms with debounced submit
-- **React 18 + 19** -- compatible with both, tree-shakeable ESM
+- **React 19** -- tree-shakeable ESM
 
 ## Works With
 
