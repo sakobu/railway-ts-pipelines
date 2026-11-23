@@ -118,9 +118,9 @@ jobs:
         working-directory: packages/use-form
         run: bun test
 
-  # Runs the release workflow's versioning step (`changeset version` and its checks)
-  # without opening a pull request, so a changeset that would break it fails in the
-  # PR that adds it instead of in the release workflow after the merge.
+  # Versions the packages as the release workflow would (without opening a pull
+  # request) and checks their peer ranges against npm, so a change that would
+  # break the release fails in its own PR instead of after the merge.
   release-plan:
     runs-on: ubuntu-latest
 
@@ -141,5 +141,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The release workflow versions the packages only when changesets are pending
+      # (`changeset version` exits 1 when there are none), so this does the same.
       - name: Version packages
-        run: bun run ci:version
+        run: |
+          if find .changeset -maxdepth 1 -name '*.md' ! -name README.md | grep -q .; then
+            bun run changeset version
+          else
+            echo "No pending changesets: nothing to version."
+          fi
+
+      # Runs with or without changesets: a PR that narrows a peer range without
+      # one must fail too.
+      - name: Check peer ranges
+        run: bun scripts/check-peer-ranges.ts
