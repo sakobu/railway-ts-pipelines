@@ -133,7 +133,6 @@ describe('Standard Schema', () => {
         age: required(number()),
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const schema = toStandardSchema(userSchema);
 
       // This is a compile-time check — if it compiles, the types work
@@ -182,7 +181,6 @@ describe('Standard Schema', () => {
     });
 
     test('type inference: InferInput resolves to unknown', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const schema = toStandardSchema(string());
 
       // Compile-time check: input type should be unknown

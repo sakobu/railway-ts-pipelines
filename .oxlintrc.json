@@ -590,14 +590,6 @@
         "afterAll": "readonly"
       },
       "plugins": ["typescript", "react"]
-    },
-    {
-      "files": ["packages/use-form/scripts/**/*.ts"],
-      "rules": {
-        "no-console": "off",
-        "typescript/no-explicit-any": "off"
-      },
-      "plugins": ["typescript"]
     }
   ]
 }

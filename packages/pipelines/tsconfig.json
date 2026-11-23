@@ -12,7 +12,7 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["src", "tests", "examples", "scripts", "*.ts", "*.js"],
+  "include": ["src", "tests", "examples", "*.ts", "*.js"],
   // tests/package type-checks the built package with its own tsconfig.json
   "exclude": ["tests/package"]
 }

@@ -5,7 +5,7 @@
 // For each <pkgDir> it reads <pkgDir>/coverage/lcov.info, reports every file with LH < LF
 // (as <pkgDir>/<file>, relative to the repo root), and writes <pkgDir>/coverage/lcov.repo.info
 // with every SF: path prefixed by <pkgDir>/, so Codecov maps it to the right file in the repo.
-// Exits 1 if any package is below 100% or has no lcov.info.
+// Exits 1 if any package is below 100%, or its lcov.info is missing, lists no files or is unreadable.
 import path from 'node:path';
 
 const pkgDirs = process.argv.slice(2);
@@ -26,6 +26,7 @@ for (const pkgDir of pkgDirs) {
 
   let currentFile = '';
   let lf = 0;
+  let files = 0;
   let pkgOk = true;
   const rewritten: string[] = [];
 
@@ -33,19 +34,31 @@ for (const pkgDir of pkgDirs) {
   for (const line of text.split('\n')) {
     if (line.startsWith('SF:')) {
       currentFile = path.join(pkgDir, line.slice(3));
+      files++;
       rewritten.push(`SF:${currentFile}`);
       continue;
     }
     rewritten.push(line);
-    if (line.startsWith('LF:')) {
-      lf = Number.parseInt(line.slice(3), 10) || 0;
-    } else if (line.startsWith('LH:')) {
-      const lh = Number.parseInt(line.slice(3), 10) || 0;
+    if (!line.startsWith('LF:') && !line.startsWith('LH:')) {
+      continue;
+    }
+    if (!/^\d+$/.test(line.slice(3))) {
+      console.error(`Unreadable line count for ${currentFile}: ${line}`);
+      pkgOk = false;
+    } else if (line.startsWith('LF:')) {
+      lf = Number(line.slice(3));
+    } else {
+      const lh = Number(line.slice(3));
       if (lh < lf) {
         console.error(`Coverage < 100% for ${currentFile}: LH ${lh} / LF ${lf}`);
         pkgOk = false;
       }
     }
+  }
+
+  if (files === 0) {
+    console.error(`${pkgDir}: ${lcovPath} lists no files`);
+    pkgOk = false;
   }
 
   await Bun.write(path.join(pkgDir, 'coverage', 'lcov.repo.info'), rewritten.join('\n'));

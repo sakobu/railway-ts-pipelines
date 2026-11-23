@@ -15,7 +15,7 @@ The repo is a [Bun](https://bun.com) workspace. Bun's version is pinned in `pack
 
 ```bash
 bun install
-bun run check   # build, type-check, lint, format check, tests, package checks, size limits
+bun run check   # everything CI checks: build, types, lint, format, tests at 100% coverage, package checks, sizes
 bun run dev     # rebuild pipelines on change (use-form imports its built output)
 ```
 
