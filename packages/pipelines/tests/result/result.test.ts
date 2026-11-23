@@ -1,12 +1,13 @@
 import { describe, test, expect } from 'bun:test';
 
-import { isSome, isNone } from '@/option';
+import { isSome, isNone, some } from '@/option';
 import {
   type Result,
   ok,
   err,
   isOk,
   isErr,
+  isResult,
   map,
   mapErr,
   flatMap,
@@ -151,6 +152,23 @@ describe('Result', () => {
       if (isErr(errorResult)) {
         expect(errorResult.error).toBe(actualError);
       }
+    });
+  });
+
+  describe('isResult', () => {
+    test('isResult is true for ok and err', () => {
+      expect(isResult(ok(1))).toBe(true);
+      expect(isResult(err('x'))).toBe(true);
+    });
+
+    test('isResult is false for look-alikes and other values', () => {
+      expect(isResult({ ok: true, value: 1 })).toBe(false);
+      expect(isResult({ ok: false, status: 500 })).toBe(false);
+      expect(isResult(null)).toBe(false);
+      expect(isResult(undefined)).toBe(false);
+      expect(isResult(0)).toBe(false);
+      expect(isResult('ok')).toBe(false);
+      expect(isResult(some(1))).toBe(false);
     });
   });
 

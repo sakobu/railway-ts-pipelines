@@ -50,6 +50,14 @@ function isErr<T, E>(result: Result<T, E>): result is { ok: false; error: E };
 
 Check if a Result is an Err variant. Narrows the type so `result.error` is accessible.
 
+#### `isResult`
+
+```typescript
+function isResult(value: unknown): value is Result<unknown, unknown>;
+```
+
+Check whether any value is a `Result`. Use it where a value's type isn't known; `isOk` and `isErr` take a `Result`.
+
 ### Transformations
 
 #### `map`
