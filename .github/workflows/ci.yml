@@ -72,7 +72,9 @@ jobs:
           fail_ci_if_error: true
 
   # use-form must keep working with the lowest pipelines version its peer range
-  # allows, installed from npm rather than linked from the workspace.
+  # accepts, installed from npm rather than linked from the workspace. When that
+  # version is the workspace's own (right after a pipelines minor), the checks job
+  # already tests it, so this job skips its checks.
   use-form-min-pipelines:
     runs-on: ubuntu-latest
 
@@ -92,21 +94,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Find the lowest supported pipelines
+        id: lowest
+        run: bun scripts/lowest-pipelines.ts >> "$GITHUB_OUTPUT"
+
       - name: Install the lowest supported pipelines from npm
+        if: steps.lowest.outputs.older == 'true'
         working-directory: packages/use-form
+        env:
+          MIN: ${{ steps.lowest.outputs.version }}
         run: |
-          MIN=$(node -p "require('./package.json').peerDependencies['@railway-ts/pipelines'].match(/\d+\.\d+\.\d+/)[0]")
-          echo "Lowest supported @railway-ts/pipelines: $MIN"
           bun add -d "@railway-ts/pipelines@$MIN"
-          # When MIN equals the workspace version, Bun links packages/pipelines
-          # instead of installing from npm. Fail unless npm's copy is installed.
-          MIN=$MIN node -e "const d=require('./package.json').devDependencies['@railway-ts/pipelines'], i=require('./node_modules/@railway-ts/pipelines/package.json').version; if (d !== process.env.MIN || i !== process.env.MIN) { console.error('expected', process.env.MIN, 'got', d, i); process.exit(1); }"
+          INSTALLED=$(node -p "require('./node_modules/@railway-ts/pipelines/package.json').version")
+          if [ "$INSTALLED" != "$MIN" ]; then echo "expected @railway-ts/pipelines $MIN, got $INSTALLED"; exit 1; fi
 
       - name: Type check use-form
+        if: steps.lowest.outputs.older == 'true'
         working-directory: packages/use-form
         run: bun run typecheck
 
       - name: Test use-form
+        if: steps.lowest.outputs.older == 'true'
         working-directory: packages/use-form
         run: bun test
 
