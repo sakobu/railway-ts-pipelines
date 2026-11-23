@@ -1,7 +1,7 @@
 import { err, isErr, ok, type Result } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 
-import { useForm } from '../../src';
+import { useForm, type UseFormReturn } from '../../src';
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
@@ -70,6 +70,11 @@ export function useOnSubmitCases() {
 
   const explicitUserForm = useForm<Flat, User>(flat, { initialValues: { name: '' }, onSubmit: createUser });
   expectTrue<Equal<OkOf<typeof explicitUserForm>, User>>();
+
+  // A component typed UseFormReturn<V> accepts any form of shape V, whatever its onSubmit returns.
+  const takesForm = (f: UseFormReturn<Flat>) => f;
+  takesForm(useForm(flat, { initialValues: { name: '' }, onSubmit: (v) => createUser(v) }));
+  expectTrue<Equal<Awaited<ReturnType<UseFormReturn<Flat>['handleSubmit']>>, Result<unknown, S.ValidationError[]>>>();
 
   // onSubmit's values are typed from the schema.
   useForm(flat, {

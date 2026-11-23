@@ -1075,9 +1075,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
  * form actions, native HTML field integration, and array field helpers.
  *
  * @template TValues - The shape of form values as a record with string keys
- * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values
+ * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values.
+ *   The default, `unknown`, lets a component typed `UseFormReturn<V>` accept any form of shape `V`, whatever its
+ *   `onSubmit` returns. A component that reads `handleSubmit`'s `ok` value writes `UseFormReturn<V, V>`, or
+ *   `UseFormReturn<V, U>` for an `onSubmit` that returns `Result<U, …>`.
  */
-export interface UseFormReturn<TValues extends Record<string, unknown>, TResult = TValues> {
+export interface UseFormReturn<TValues extends Record<string, unknown>, TResult = unknown> {
   // Form state
 
   /** Current values of all form fields. */
