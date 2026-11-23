@@ -49,7 +49,7 @@ Every pull request that changes a published package needs a changeset. Run `bun 
 - **minor:** new features, and, while the packages are 0.x, changes that can break existing code
 - **major:** reserved for 1.0 and later
 
-**use-form supports one pipelines minor at a time, so a pipelines minor needs a use-form minor in the same PR.** Set use-form's peer range in `packages/use-form/package.json` to the new minor (for example `^0.3.0`), update use-form for any breaking change, and add a minor changeset for use-form: dropping the previous pipelines minor is a breaking change for use-form users. More generally, a release that accepts fewer peer versions than the package's latest release on npm must be a breaking release. `bun run ci:version` checks this, and CI runs it on every pull request.
+**use-form supports one pipelines minor at a time, so a pipelines minor needs a use-form minor in the same PR.** Set use-form's peer range in `packages/use-form/package.json` to the new minor (for example `^0.3.0`), update use-form for any breaking change, and add a minor changeset for use-form: dropping the previous pipelines minor is a breaking change for use-form users. More generally, a release that accepts fewer peer versions than the package's latest release on npm must be a breaking release. `bun run ci:version` checks this, and CI checks every pull request.
 
 Commit the generated file in `.changeset/` with your change. Changes that publish nothing (docs outside the packages, CI, repo tooling) don't need one.
 
