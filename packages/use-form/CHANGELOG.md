@@ -1,5 +1,11 @@
 # @railway-ts/use-form
 
+## 0.2.1
+
+### Patch Changes
+
+- 71a4aec: `useForm` and `isStandardSchema` now accept Standard Schemas that are functions, such as ArkType's. Before, passing an ArkType schema to `useForm` crashed with a `TypeError`.
+
 ## 0.2.0
 
 ### Minor Changes
