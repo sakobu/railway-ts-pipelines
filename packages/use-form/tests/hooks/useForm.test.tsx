@@ -2,6 +2,8 @@ import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { StrictMode, useEffect } from 'react';
+import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
 import {
@@ -12,10 +14,14 @@ import {
   alwaysValidAsyncValidator,
   alwaysInvalidAsyncValidator,
   userWithContactsValidator,
+  publishValidator,
+  type PublishForm,
   type UserForm,
   type AsyncUserForm,
   type UserWithAddressForm,
 } from '../fixtures/validators';
+
+const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
 describe('useForm', () => {
   describe('initialization', () => {
@@ -2610,6 +2616,237 @@ describe('useForm', () => {
 
       await waitFor(() => expect(callCount).toBe(1));
       expect(result.current.errors.name).toBeUndefined();
+    });
+  });
+
+  describe('calls in one handler', () => {
+    const emptyUser = { name: '', email: '', age: 25 };
+
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test('setFieldValue then handleSubmit submits the new value', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.setFieldValue('status', 'published');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+    });
+
+    test('an edit submitted while the old values are being submitted is submitted after them', async () => {
+      const firstStarted = Promise.withResolvers<void>();
+      const releaseFirst = Promise.withResolvers<void>();
+      const submitted: string[] = [];
+
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          onSubmit: async (values) => {
+            submitted.push(values.status);
+            if (submitted.length === 1) {
+              firstStarted.resolve();
+              await releaseFirst.promise;
+            }
+          },
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await firstStarted.promise;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        result.current.setFieldValue('status', 'published');
+        second = result.current.handleSubmit();
+      });
+
+      expect(second).not.toBe(first);
+
+      await act(async () => {
+        releaseFirst.resolve();
+        await second;
+      });
+
+      expect(submitted).toEqual(['draft', 'published']);
+    });
+
+    test('setValues then handleSubmit submits the new values', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.setValues({ status: 'published' });
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+    });
+
+    test('an array push then handleSubmit submits the pushed item', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.arrayHelpers('tags').push('x');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, tags: ['x'] });
+    });
+
+    test('resetForm then handleSubmit submits the initial values', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      act(() => {
+        result.current.setFieldValue('status', 'published');
+      });
+
+      await act(async () => {
+        result.current.resetForm();
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith(draft);
+    });
+
+    test('setFieldValue then setFieldTouched in blur mode shows no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser, validationMode: 'blur' }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldTouched('name');
+      });
+
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('two setFieldValue calls in live mode leave no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'john@example.com');
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('setFieldValue then setValues in live mode leaves no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setValues({ email: 'john@example.com' });
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('the second onFieldChange sees the first change', () => {
+      const onFieldChange = mock((_field: string, _value: unknown, _values: UserForm) => {});
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser, onFieldChange }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'j@x.com');
+      });
+
+      expect(onFieldChange.mock.calls[1]?.[2].name).toBe('John');
+    });
+
+    test('works under StrictMode', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }), {
+        wrapper: StrictMode,
+      });
+
+      await act(async () => {
+        result.current.setFieldValue('status', 'published');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+      expect(result.current.values.status).toBe('published');
+    });
+
+    test('resetForm in an effect uses initialValues from the same render', () => {
+      const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
+
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => {
+          const form = useForm(publishValidator, { initialValues: initial });
+          const { resetForm } = form;
+          useEffect(() => {
+            resetForm();
+          }, [initial, resetForm]);
+          return form;
+        },
+        { initialProps: { initial: draft } },
+      );
+
+      rerender({ initial: loaded });
+
+      expect(result.current.values).toEqual(loaded);
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('two edits with an async validator settle with no stale error', async () => {
+      const { result } = renderHook(() => useForm(asyncUserValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'john@example.com');
+      });
+
+      await waitFor(() => expect(result.current.isValidating).toBe(false));
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('unmounting during a submission resolves it without errors', async () => {
+      const consoleError = spyOn(console, 'error');
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+
+      const { result, unmount } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          onSubmit: async (values) => {
+            started.resolve();
+            await release.promise;
+            return ok(values);
+          },
+        }),
+      );
+
+      let pending!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        pending = result.current.handleSubmit();
+        await started.promise;
+      });
+
+      unmount();
+      release.resolve();
+
+      expect(isOk(await pending)).toBe(true);
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+
+    test('renders on the server', () => {
+      const Form = () => {
+        const form = useForm(publishValidator, { initialValues: draft });
+        return <input {...form.getFieldProps('title')} />;
+      };
+
+      expect(renderToString(<Form />)).toContain('value="Hello"');
     });
   });
 });

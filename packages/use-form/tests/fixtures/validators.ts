@@ -29,6 +29,17 @@ export const userValidator = object({
 export type UserForm = InferSchemaType<typeof userValidator>;
 
 /**
+ * A post with a status and tags, for handlers that edit and then submit
+ */
+export const publishValidator = object({
+  title: required(chain(string(), nonEmpty('Title is required'))),
+  status: required(string()),
+  tags: required(array(string())),
+});
+
+export type PublishForm = InferSchemaType<typeof publishValidator>;
+
+/**
  * Nested form validator for testing using Railway schema builders
  */
 export const addressSchema = object({
