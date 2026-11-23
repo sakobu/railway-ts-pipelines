@@ -17,7 +17,6 @@ describe('formReducer', () => {
     isSubmitting: false,
     isFormValidating: false,
     submitCount: 0,
-    isDirty: false,
   };
 
   describe('SET_FIELD_VALUE', () => {
@@ -63,20 +62,6 @@ describe('formReducer', () => {
 
       expect(result.values.name).toBe('Jane');
       expect(result.values.email).toBe('john@example.com');
-    });
-
-    test('marks form as dirty', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FIELD_VALUE',
-          field: 'name',
-          value: 'Jane',
-        },
-        initialValues,
-      );
-
-      expect(result.isDirty).toBe(true);
     });
 
     test('clears server errors for affected field', () => {
@@ -130,7 +115,6 @@ describe('formReducer', () => {
         isSubmitting: false,
         isFormValidating: false,
         submitCount: 0,
-        isDirty: false,
       };
 
       const cityRef = nestedValues.user.address;
@@ -164,7 +148,6 @@ describe('formReducer', () => {
         isSubmitting: false,
         isFormValidating: false,
         submitCount: 0,
-        isDirty: false,
       };
 
       const result = formReducer(
@@ -212,19 +195,6 @@ describe('formReducer', () => {
       expect(result.values.email).toBe('jane@example.com');
     });
 
-    test('marks form as dirty', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_VALUES',
-          values: { name: 'Jane' },
-        },
-        initialValues,
-      );
-
-      expect(result.isDirty).toBe(true);
-    });
-
     test('deep merges nested objects preserving sibling properties', () => {
       const nestedValues = {
         name: 'John',
@@ -240,7 +210,6 @@ describe('formReducer', () => {
         isSubmitting: false,
         isFormValidating: false,
         submitCount: 0,
-        isDirty: false,
       };
 
       const result = formReducer(
@@ -532,7 +501,6 @@ describe('formReducer', () => {
         isSubmitting: true,
         isFormValidating: true,
         submitCount: 3,
-        isDirty: true,
       };
 
       const result = formReducer(
@@ -552,7 +520,6 @@ describe('formReducer', () => {
       expect(result.isSubmitting).toBe(false);
       expect(result.isFormValidating).toBe(false);
       expect(result.submitCount).toBe(0);
-      expect(result.isDirty).toBe(false);
     });
   });
 

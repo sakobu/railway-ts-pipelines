@@ -29,6 +29,25 @@ export const userValidator = object({
 export type UserForm = InferSchemaType<typeof userValidator>;
 
 /**
+ * A post with a status and tags, for handlers that edit and then submit
+ */
+export const publishValidator = object({
+  title: required(chain(string(), nonEmpty('Title is required'))),
+  status: required(string()),
+  tags: required(array(string())),
+});
+
+export type PublishForm = InferSchemaType<typeof publishValidator>;
+
+/**
+ * A region whose state depends on its country, for onFieldChange cascades
+ */
+export const regionValidator = object({
+  country: required(chain(string(), nonEmpty('Country is required'))),
+  state: required(chain(string(), nonEmpty('State is required'))),
+});
+
+/**
  * Nested form validator for testing using Railway schema builders
  */
 export const addressSchema = object({

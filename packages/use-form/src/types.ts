@@ -56,8 +56,7 @@ export type DeepPartial<T> = T extends Date | RegExp | File | Blob
  *   touched: { "email": true, "password": true },
  *   clientErrors: { "password": "Must be at least 8 characters" },
  *   serverErrors: {},
- *   isSubmitting: false,
- *   isDirty: true
+ *   isSubmitting: false
  * };
  */
 export interface FormState<TValues extends Record<string, unknown>> {
@@ -119,13 +118,6 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Useful in submit mode for patterns like `submitCount === 0 || form.isValid`.
    */
   submitCount: number;
-
-  /**
-   * Whether any form values have changed since initialization or last reset.
-   * Set to true when any field value changes from its initial value.
-   * Useful for prompting users about unsaved changes.
-   */
-  isDirty: boolean;
 }
 
 /**
@@ -272,6 +264,11 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
    * route through setFieldValue, so this catches every user-driven field interaction.
+   *
+   * It runs after the field's new value is stored, so any form call made inside it applies on top
+   * of this change, and the field's validation sees the result. A resetForm() or setValues() made
+   * here can override the field that just changed. To reset the other fields when one changes,
+   * call setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *

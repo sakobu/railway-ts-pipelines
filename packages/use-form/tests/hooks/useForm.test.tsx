@@ -1,7 +1,9 @@
 import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { render, renderHook, act, waitFor } from '@testing-library/react';
+import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'react';
+import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
 import {
@@ -12,10 +14,15 @@ import {
   alwaysValidAsyncValidator,
   alwaysInvalidAsyncValidator,
   userWithContactsValidator,
+  publishValidator,
+  regionValidator,
+  type PublishForm,
   type UserForm,
   type AsyncUserForm,
   type UserWithAddressForm,
 } from '../fixtures/validators';
+
+const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
 describe('useForm', () => {
   describe('initialization', () => {
@@ -235,6 +242,87 @@ describe('useForm', () => {
       name: 'Alice',
       email: 'auto@test.com',
       age: 0,
+    });
+  });
+
+  test('validation after an onFieldChange cascade sees the cascaded values', () => {
+    const { result } = renderHook(() =>
+      useForm(regionValidator, {
+        initialValues: { country: 'US', state: 'NY' },
+        onFieldChange: (field) => {
+          if (field === 'country') result.current.setFieldValue('state', '');
+        },
+      }),
+    );
+
+    act(() => {
+      result.current.setFieldValue('country', 'CA');
+    });
+
+    expect(result.current.clientErrors.state).toBe('State is required');
+  });
+
+  test('a guarded same-field write in onFieldChange wins', () => {
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, {
+        initialValues: { code: '' },
+        onFieldChange: (field, value) => {
+          if (field === 'code' && typeof value === 'string' && value !== value.toUpperCase()) {
+            result.current.setFieldValue('code', value.toUpperCase());
+          }
+        },
+      }),
+    );
+
+    act(() => {
+      result.current.setFieldValue('code', 'abc');
+    });
+
+    expect(result.current.values.code).toBe('ABC');
+  });
+
+  describe('form calls inside onFieldChange apply after the change', () => {
+    const account = { type: 'personal', company: '', name: '' };
+
+    test('resetForm resets the field that just changed too', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: account,
+          onFieldChange: (field) => {
+            if (field === 'type') result.current.resetForm();
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Ada');
+      });
+      act(() => {
+        result.current.setFieldValue('type', 'business');
+      });
+
+      expect(result.current.values).toEqual(account);
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('setValues with the defaults and the new value resets the other fields', () => {
+      const { result } = renderHook(() =>
+        useForm(alwaysValidValidator, {
+          initialValues: account,
+          onFieldChange: (field, value) => {
+            if (field === 'type') result.current.setValues({ ...account, type: value });
+          },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Ada');
+      });
+      act(() => {
+        result.current.setFieldValue('type', 'business');
+      });
+
+      expect(result.current.values).toEqual({ type: 'business', company: '', name: '' });
     });
   });
 
@@ -544,6 +632,35 @@ describe('useForm', () => {
       expect(result.current.values).toEqual(initialValues);
       expect(result.current.touched).toEqual({});
       expect(result.current.isDirty).toBe(false);
+    });
+
+    test('keeps its identity when initialValues is a new object with each render', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: { ...initial } }),
+        { initialProps: { initial: draft } },
+      );
+      const firstReset = result.current.resetForm;
+
+      rerender({ initial: draft });
+
+      expect(result.current.resetForm).toBe(firstReset);
+    });
+
+    test('in mount mode, validates the values it reset to', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) =>
+          useForm(publishValidator, { initialValues: initial, validationMode: 'mount' }),
+        { initialProps: { initial: draft } },
+      );
+      const resetFromFirstRender = result.current.resetForm;
+
+      rerender({ initial: { ...draft, title: '' } });
+      act(() => {
+        resetFromFirstRender();
+      });
+
+      expect(result.current.values.title).toBe('');
+      expect(result.current.clientErrors.title).toBe('Title is required');
     });
   });
 
@@ -1886,6 +2003,55 @@ describe('useForm', () => {
 
       expect(id).toBe('items.1.priority-5');
     });
+    test('two pushes in one handler keep both items', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+
+      act(() => {
+        const helpers = result.current.arrayHelpers('tags');
+        helpers.push('one');
+        helpers.push('two');
+      });
+
+      expect(result.current.values.tags).toEqual(['one', 'two']);
+    });
+
+    test('remove then push in one handler keeps both changes', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: { ...draft, tags: ['a', 'b'] } }));
+
+      act(() => {
+        const helpers = result.current.arrayHelpers('tags');
+        helpers.remove(0);
+        helpers.push('c');
+      });
+
+      expect(result.current.values.tags).toEqual(['b', 'c']);
+    });
+
+    test('helpers kept from an earlier render push onto the current array', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+      const helpers = result.current.arrayHelpers('tags');
+
+      act(() => {
+        result.current.setFieldValue('tags', ['x']);
+      });
+      act(() => {
+        helpers.push('y');
+      });
+
+      expect(result.current.values.tags).toEqual(['x', 'y']);
+    });
+
+    test('helpers.values is the array from the same render as form.values', () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft }));
+      let seen: string[] | undefined;
+
+      act(() => {
+        result.current.setFieldValue('tags', ['x']);
+        seen = result.current.arrayHelpers('tags').values;
+      });
+
+      expect(seen).toEqual(draft.tags);
+    });
   });
 
   describe('async validation', () => {
@@ -2072,6 +2238,22 @@ describe('useForm', () => {
   });
 
   describe('isDirty', () => {
+    test('isDirty follows new initialValues, such as a saved record passed back in', () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: initial }),
+        { initialProps: { initial: draft } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('title', 'Saved');
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      rerender({ initial: { ...draft, title: 'Saved' } });
+
+      expect(result.current.isDirty).toBe(false);
+    });
+
     test('isDirty is false initially', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
@@ -2610,6 +2792,297 @@ describe('useForm', () => {
 
       await waitFor(() => expect(callCount).toBe(1));
       expect(result.current.errors.name).toBeUndefined();
+    });
+  });
+
+  describe('calls in one handler', () => {
+    const emptyUser = { name: '', email: '', age: 25 };
+
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test('setFieldValue then handleSubmit submits the new value', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.setFieldValue('status', 'published');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+    });
+
+    test('an edit submitted while the old values are being submitted is submitted after them', async () => {
+      const firstStarted = Promise.withResolvers<void>();
+      const releaseFirst = Promise.withResolvers<void>();
+      const submitted: string[] = [];
+
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          onSubmit: async (values) => {
+            submitted.push(values.status);
+            if (submitted.length === 1) {
+              firstStarted.resolve();
+              await releaseFirst.promise;
+            }
+          },
+        }),
+      );
+
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        first = result.current.handleSubmit();
+        await firstStarted.promise;
+      });
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        result.current.setFieldValue('status', 'published');
+        second = result.current.handleSubmit();
+      });
+
+      expect(second).not.toBe(first);
+
+      await act(async () => {
+        releaseFirst.resolve();
+        await second;
+      });
+
+      expect(submitted).toEqual(['draft', 'published']);
+    });
+
+    test('setValues then handleSubmit submits the new values', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.setValues({ status: 'published' });
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+    });
+
+    test('an array push then handleSubmit submits the pushed item', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      await act(async () => {
+        result.current.arrayHelpers('tags').push('x');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, tags: ['x'] });
+    });
+
+    test('resetForm then handleSubmit submits the initial values', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }));
+
+      act(() => {
+        result.current.setFieldValue('status', 'published');
+      });
+
+      await act(async () => {
+        result.current.resetForm();
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith(draft);
+    });
+
+    test('setFieldValue then setFieldTouched in blur mode shows no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser, validationMode: 'blur' }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldTouched('name');
+      });
+
+      expect(result.current.getFieldError('name')).toBeUndefined();
+    });
+
+    test('two setFieldValue calls in live mode leave no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'john@example.com');
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('setFieldValue then setValues in live mode leaves no stale error', () => {
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setValues({ email: 'john@example.com' });
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('the second onFieldChange sees the first change', () => {
+      const onFieldChange = mock((_field: string, _value: unknown, _values: UserForm) => {});
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: emptyUser, onFieldChange }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'j@x.com');
+      });
+
+      expect(onFieldChange.mock.calls[1]?.[2].name).toBe('John');
+    });
+
+    test('works under StrictMode', async () => {
+      const onSubmit = mock((_values: PublishForm) => {});
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit }), {
+        wrapper: StrictMode,
+      });
+
+      await act(async () => {
+        result.current.setFieldValue('status', 'published');
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledWith({ ...draft, status: 'published' });
+      expect(result.current.values.status).toBe('published');
+    });
+
+    describe('resetForm in a child effect after initialValues change', () => {
+      type ResetChildProps = { initial: PublishForm; resetForm: () => void };
+
+      const PassiveResetChild = ({ initial, resetForm }: ResetChildProps) => {
+        useEffect(() => {
+          resetForm();
+        }, [initial, resetForm]);
+        return null;
+      };
+
+      const LayoutResetChild = ({ initial, resetForm }: ResetChildProps) => {
+        useLayoutEffect(() => {
+          resetForm();
+        }, [initial, resetForm]);
+        return null;
+      };
+
+      const ResettableForm = ({ initial, Child }: { initial: PublishForm; Child: ComponentType<ResetChildProps> }) => {
+        const form = useForm(publishValidator, { initialValues: initial });
+        return (
+          <>
+            <output data-testid="title">{form.values.title}</output>
+            <output data-testid="dirty">{String(form.isDirty)}</output>
+            <Child initial={initial} resetForm={form.resetForm} />
+          </>
+        );
+      };
+
+      const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
+
+      test('a passive effect resets to the new initialValues', () => {
+        const { rerender, getByTestId } = render(<ResettableForm initial={draft} Child={PassiveResetChild} />);
+
+        rerender(<ResettableForm initial={loaded} Child={PassiveResetChild} />);
+
+        expect(getByTestId('title').textContent).toBe('Loaded');
+        expect(getByTestId('dirty').textContent).toBe('false');
+      });
+
+      test('a layout effect resets to the new initialValues', () => {
+        const { rerender, getByTestId } = render(<ResettableForm initial={draft} Child={LayoutResetChild} />);
+
+        rerender(<ResettableForm initial={loaded} Child={LayoutResetChild} />);
+
+        expect(getByTestId('title').textContent).toBe('Loaded');
+        expect(getByTestId('dirty').textContent).toBe('false');
+      });
+    });
+
+    test("a child's effect that calls setFieldValue gets the onFieldChange from the same render", () => {
+      const calls: string[] = [];
+
+      const TitleSetter = ({
+        label,
+        setFieldValue,
+      }: {
+        label: string;
+        setFieldValue: (field: 'title', value: string) => void;
+      }) => {
+        useEffect(() => {
+          setFieldValue('title', label);
+        }, [label, setFieldValue]);
+        return null;
+      };
+
+      const LabelledForm = ({ label }: { label: string }) => {
+        const form = useForm(publishValidator, {
+          initialValues: draft,
+          onFieldChange: () => {
+            calls.push(label);
+          },
+        });
+        return <TitleSetter label={label} setFieldValue={form.setFieldValue} />;
+      };
+
+      const { rerender } = render(<LabelledForm label="first" />);
+      rerender(<LabelledForm label="second" />);
+
+      expect(calls).toEqual(['first', 'second']);
+    });
+
+    test('two edits with an async validator settle with no stale error', async () => {
+      const { result } = renderHook(() => useForm(asyncUserValidator, { initialValues: emptyUser }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+        result.current.setFieldValue('email', 'john@example.com');
+      });
+
+      await waitFor(() => expect(result.current.isValidating).toBe(false));
+      expect(result.current.clientErrors).toEqual({});
+    });
+
+    test('unmounting during a submission resolves it without errors', async () => {
+      const consoleError = spyOn(console, 'error');
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+
+      const { result, unmount } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          onSubmit: async (values) => {
+            started.resolve();
+            await release.promise;
+            return ok(values);
+          },
+        }),
+      );
+
+      let pending!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        pending = result.current.handleSubmit();
+        await started.promise;
+      });
+
+      unmount();
+      release.resolve();
+
+      expect(isOk(await pending)).toBe(true);
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+
+    test('renders on the server', () => {
+      const Form = () => {
+        const form = useForm(publishValidator, { initialValues: draft });
+        return <input {...form.getFieldProps('title')} />;
+      };
+
+      expect(renderToString(<Form />)).toContain('value="Hello"');
     });
   });
 });

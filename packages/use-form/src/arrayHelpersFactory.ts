@@ -23,7 +23,9 @@ import type {
  * @template TFieldPaths - Union of valid field paths for the item type
  *
  * @param field - The path to the array field in the form
- * @param arrayValue - The current array values
+ * @param arrayValue - The field's array from the current render, exposed as `values`
+ * @param getArrayValue - Reads the field's latest array. Each method that changes the array reads it when called,
+ *   so it builds on changes made since the render
  * @param setFieldValue - Function to update a field value in the form
  * @param getFieldProps - Function to get props for native text inputs
  * @param getSelectFieldProps - Function to get props for native select elements
@@ -50,6 +52,7 @@ import type {
 export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string = ExtractFieldPaths<TItem>>(
   field: FieldPath,
   arrayValue: TItem[],
+  getArrayValue: () => TItem[],
   setFieldValue: (field: FieldPath, value: unknown) => void,
   getFieldProps: (field: string) => NativeFieldProps,
   getSelectFieldProps: (field: string) => NativeSelectProps,
@@ -88,6 +91,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * helpers.push({ name: "", email: "", phone: "" });
      */
     push: (value: TItem) => {
+      const arrayValue = getArrayValue();
       const newArray = [...arrayValue, value];
       setFieldValue(field, newArray);
     },
@@ -105,6 +109,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * helpers.remove(1);
      */
     remove: (index: number) => {
+      const arrayValue = getArrayValue();
       if (index < 0 || index >= arrayValue.length) return;
       const newArray = [...arrayValue];
       newArray.splice(index, 1);
@@ -125,6 +130,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * helpers.insert(0, { name: "New Contact", email: "", phone: "" });
      */
     insert: (index: number, value: TItem) => {
+      const arrayValue = getArrayValue();
       const clamped = Math.max(0, Math.min(index, arrayValue.length));
       const newArray = [...arrayValue];
       newArray.splice(clamped, 0, value);
@@ -151,6 +157,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * };
      */
     swap: (indexA: number, indexB: number) => {
+      const arrayValue = getArrayValue();
       if (indexA === indexB || indexA < 0 || indexB < 0 || indexA >= arrayValue.length || indexB >= arrayValue.length) {
         return;
       }
@@ -180,6 +187,7 @@ export const createArrayHelpers = <TItem = unknown, TFieldPaths extends string =
      * helpers.replace(0, { name: "John Doe", email: "john@example.com", phone: "555-0100" });
      */
     replace: (index: number, value: TItem) => {
+      const arrayValue = getArrayValue();
       if (index < 0 || index >= arrayValue.length) return;
       const newArray = [...arrayValue];
       newArray[index] = value;

@@ -6,7 +6,16 @@ import {
   type MaybeAsyncValidator,
   type ValidationError,
 } from '@railway-ts/pipelines/schema';
-import { useReducer, useCallback, useMemo, useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useEffect,
+  useInsertionEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type SyntheticEvent,
+} from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import {
@@ -19,13 +28,12 @@ import {
   createNativeFileFieldProps,
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
-import { formReducer } from './formReducer';
+import { createFormStore } from './formStore';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
 import {
-  deepMerge,
+  deepEqual,
   getValueByPath,
-  setValueByPath,
   collectFieldPaths,
   isPathAffected,
   normalizePath,
@@ -37,13 +45,11 @@ import type {
   DeepPartial,
   ExtractFieldPaths,
   FieldPath,
-  FormAction,
   NativeCheckboxProps,
   NativeCheckboxGroupOptionProps,
   FormOptions,
   NativeSelectProps,
   NativeSliderProps,
-  FormState,
   NativeSwitchProps,
   NativeFieldProps,
   NativeFileFieldProps,
@@ -193,41 +199,36 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const touchOnChange = mode === 'live';
 
   // ===========================================================================
-  // Reducer Setup
+  // State Store
   // ===========================================================================
 
-  // Create a memoized reducer that captures initialValues
-  const reducerFn = useCallback(
-    (state: FormState<TValues>, action: FormAction<TValues>) => formReducer(state, action, initialValues),
-    [initialValues],
-  );
-
-  // Initial state
-  const initialState: FormState<TValues> = {
-    values: initialValues,
-    touched: {},
-    clientErrors: {},
-    serverErrors: {},
-    fieldErrors: {},
-    validatingFields: {},
-    isSubmitting: false,
-    isFormValidating: false,
-    submitCount: 0,
-    isDirty: false,
-  };
-
-  // Initialize the reducer
-  const [formState, dispatch] = useReducer(reducerFn, initialState);
-
-  // Ref to access latest formState inside stable callbacks without re-creating them
-  const formStateRef = useRef(formState);
-  useEffect(() => {
-    formStateRef.current = formState;
+  // The reducer uses the initialValues of the latest commit. An insertion effect updates them before
+  // any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
+  const initialValuesRef = useRef(initialValues);
+  useInsertionEffect(() => {
+    initialValuesRef.current = initialValues;
   });
 
-  // Tracks in-flight accumulated values during synchronous onFieldChange cascades.
-  // Non-null only while the onFieldChange callback is executing.
-  const pendingValuesRef = useRef<TValues | null>(null);
+  // The state lives in a store, so every method reads the state left by the calls before it,
+  // not the state of the last render. React renders from the store.
+  const [store] = useState(() =>
+    createFormStore<TValues>(
+      {
+        values: initialValues,
+        touched: {},
+        clientErrors: {},
+        serverErrors: {},
+        fieldErrors: {},
+        validatingFields: {},
+        isSubmitting: false,
+        isFormValidating: false,
+        submitCount: 0,
+      },
+      () => initialValuesRef.current,
+    ),
+  );
+  const formState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const { dispatch } = store;
 
   // =========================================================================
   // Value change callbacks
@@ -249,9 +250,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   }, [formState.values]);
 
   // --- onFieldChange ---
-  // Fired imperatively from setFieldValue — no effect needed.
+  // Fired imperatively from setFieldValue. Updated in an insertion effect, like initialValuesRef,
+  // so a setFieldValue from any effect of the same commit, a child's included, gets this render's callback.
   const onFieldChangeRef = useRef(onFieldChange);
-  useEffect(() => {
+  useInsertionEffect(() => {
     onFieldChangeRef.current = onFieldChange;
   });
 
@@ -314,6 +316,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     [formState.clientErrors, formState.fieldErrors, formState.serverErrors],
   );
 
+  // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
+  const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
+
   // Derived: true when any async validation (form-level or field-level) is running
   const isValidating = useMemo(
     () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
@@ -328,19 +333,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Dispatches the validation result to update client errors.
    * Shared by both sync and async validation paths.
    */
-  const dispatchValidationResult = useCallback((result: Result<TValues, ValidationError[]>) => {
-    if (isErr(result)) {
-      dispatch({
-        type: 'SET_CLIENT_ERRORS',
-        errors: formatErrors(result.error),
-      });
-    } else {
-      dispatch({
-        type: 'SET_CLIENT_ERRORS',
-        errors: {},
-      });
-    }
-  }, []);
+  const dispatchValidationResult = useCallback(
+    (result: Result<TValues, ValidationError[]>) => {
+      if (isErr(result)) {
+        dispatch({
+          type: 'SET_CLIENT_ERRORS',
+          errors: formatErrors(result.error),
+        });
+      } else {
+        dispatch({
+          type: 'SET_CLIENT_ERRORS',
+          errors: {},
+        });
+      }
+    },
+    [dispatch],
+  );
 
   /**
    * Validates the current form values using the Railway-oriented validator and updates error state.
@@ -376,7 +384,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       dispatchValidationResult(validationResult);
       return validationResult;
     },
-    [validator, dispatchValidationResult],
+    [dispatch, validator, dispatchValidationResult],
   );
 
   /**
@@ -417,7 +425,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'SET_FIELD_ERROR', field, error: result });
       }
     },
-    [fieldValidators],
+    [dispatch, fieldValidators],
   );
 
   /**
@@ -429,7 +437,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // Clear stale client errors for this field before (potentially async) validation.
       // For sync validators, SET_CLIENT_ERRORS immediately follows so the cleared state is never rendered.
       // For async validators, this prevents the old error from flashing during the gap.
-      const currentErrors = formStateRef.current.clientErrors;
+      const currentErrors = store.getState().clientErrors;
       const hasStale = Object.keys(currentErrors).some((p) => isPathAffected(p, field));
       if (hasStale) {
         const cleaned = { ...currentErrors };
@@ -463,7 +471,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
       }
     },
-    [validateForm, fieldValidators, runFieldValidator],
+    [store, dispatch, validateForm, fieldValidators, runFieldValidator],
   );
 
   // Validate on mount if enabled
@@ -480,7 +488,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         fields: allFields,
       });
     }
-  }, [initialValues, validateForm, validateOnMount]);
+  }, [dispatch, initialValues, validateForm, validateOnMount]);
 
   // ===========================================================================
   // Field Management Functions
@@ -516,33 +524,26 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void => {
-      // Read from pendingValuesRef during onFieldChange cascades, otherwise from committed state
-      const baseValues = pendingValuesRef.current ?? formStateRef.current.values;
-      const updatedValues = setValueByPath<TValues, TValue>(baseValues, field, value);
-
-      // Expose accumulated values to nested setFieldValue calls inside onFieldChange
-      pendingValuesRef.current = updatedValues;
-      onFieldChangeRef.current?.(field, value, updatedValues);
-      pendingValuesRef.current = null;
-
-      // Dispatch state update
+      // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
       dispatch({
         type: 'SET_FIELD_VALUE',
         field,
         value,
       });
 
+      onFieldChangeRef.current?.(field, value, store.getState().values);
+
       // Mark touched on first change for immediate error visibility
-      if (touchOnChange && !formStateRef.current.touched[normalizePath(field)]) {
+      if (touchOnChange && !store.getState().touched[normalizePath(field)]) {
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
-      // Validate with calculated values if needed
+      // Validate the values as they are after any onFieldChange cascade
       if (shouldValidate) {
-        runValidationPipeline(field, updatedValues);
+        runValidationPipeline(field, store.getState().values);
       }
     },
-    [validateOnChange, touchOnChange, runValidationPipeline],
+    [store, dispatch, validateOnChange, touchOnChange, runValidationPipeline],
   );
 
   /**
@@ -580,12 +581,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       });
 
       if (shouldValidate) {
-        // Need to get latest state for validation
-        const updatedValues = deepMerge(formState.values, newValues);
-        void validateForm(updatedValues);
+        void validateForm(store.getState().values);
       }
     },
-    [formState.values, validateOnChange, validateForm],
+    [store, dispatch, validateOnChange, validateForm],
   );
 
   /**
@@ -613,6 +612,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldTouched = useCallback(
     (field: FieldPath, isTouched = true, shouldValidate = validateOnBlur): void => {
+      const wasTouched = store.getState().touched[normalizePath(field)];
       dispatch({
         type: 'SET_FIELD_TOUCHED',
         field,
@@ -622,15 +622,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       if (shouldValidate) {
         if (!validateOnChange) {
           // In non-live modes, run field validators on blur
-          runValidationPipeline(field, formState.values);
-        } else if (!formState.touched[normalizePath(field)]) {
+          runValidationPipeline(field, store.getState().values);
+        } else if (!wasTouched) {
           // Live mode: only validate on first touch (focus→blur without typing).
           // After onChange has run (which sets touched), blur is redundant.
-          void validateForm(formState.values);
+          void validateForm(store.getState().values);
         }
       }
     },
-    [formState.values, formState.touched, validateOnBlur, validateOnChange, validateForm, runValidationPipeline],
+    [store, dispatch, validateOnBlur, validateOnChange, validateForm, runValidationPipeline],
   );
 
   // ===========================================================================
@@ -664,18 +664,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * // A path [] error is the submit error, shown at errors._root
    * form.setServerErrors([{ path: [], message: "Service unavailable" }]);
    */
-  const placeServerErrors = useCallback((errors: ValidationError[]): void => {
-    const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
-    dispatch({
-      type: 'SET_SERVER_ERRORS',
-      errors: perPath,
-      ...(submitError !== undefined && { submitError }),
-    });
-    dispatch({
-      type: 'MARK_ALL_TOUCHED',
-      fields: Object.keys(perPath),
-    });
-  }, []);
+  const placeServerErrors = useCallback(
+    (errors: ValidationError[]): void => {
+      const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
+      dispatch({
+        type: 'SET_SERVER_ERRORS',
+        errors: perPath,
+        ...(submitError !== undefined && { submitError }),
+      });
+      dispatch({
+        type: 'MARK_ALL_TOUCHED',
+        fields: Object.keys(perPath),
+      });
+    },
+    [dispatch],
+  );
 
   /**
    * Clears all server-side validation errors.
@@ -700,7 +703,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     dispatch({
       type: 'CLEAR_SERVER_ERRORS',
     });
-  }, []);
+  }, [dispatch]);
 
   // ===========================================================================
   // Form Action Functions
@@ -721,7 +724,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
-        const { clientErrors, serverErrors } = formStateRef.current;
+        const { clientErrors, serverErrors } = store.getState();
 
         // Mark all fields and error paths as touched (deep)
         const valuePaths = collectFieldPaths(values);
@@ -832,7 +835,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
       }
     },
-    [validator, onSubmit, fieldValidators, placeServerErrors],
+    [store, dispatch, validator, onSubmit, fieldValidators, placeServerErrors],
   );
 
   /**
@@ -889,9 +892,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const handleSubmit = useCallback(
     (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
-      return submitScheduler.submit(() => formStateRef.current.values, runSubmission);
+      return submitScheduler.submit(() => store.getState().values, runSubmission);
     },
-    [submitScheduler, runSubmission],
+    [store, submitScheduler, runSubmission],
   );
 
   /**
@@ -929,9 +932,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     });
 
     if (validateOnMount) {
-      void validateForm(initialValues);
+      void validateForm(store.getState().values);
     }
-  }, [initialValues, validateForm, validateOnMount]);
+  }, [store, dispatch, validateForm, validateOnMount]);
 
   // ===========================================================================
   // Error Helper
@@ -1304,11 +1307,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
         optionValue !== undefined ? `${path}-${String(optionValue)}` : path;
 
-      const arrayValue = getValueByPath<TValues, TItem[]>(formState.values, field) || [];
-
       return createArrayHelpers<TItem, ExtractFieldPaths<TItem>>(
         field,
-        arrayValue,
+        getValueByPath<TValues, TItem[]>(formState.values, field) || [],
+        () => getValueByPath<TValues, TItem[]>(store.getState().values, field) || [],
         setFieldValue,
         getFieldPropsAtPath,
         getSelectFieldPropsAtPath,
@@ -1321,7 +1323,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         getFieldIdAtPath,
       );
     },
-    [formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
+    [store, formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
   );
 
   // ===========================================================================
@@ -1340,7 +1342,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     isValidating,
     validatingFields: formState.validatingFields,
     isValid,
-    isDirty: formState.isDirty,
+    isDirty,
     submitCount: formState.submitCount,
 
     // Error helper

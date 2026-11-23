@@ -193,6 +193,17 @@ Array helper operations (`push`, `remove`, `insert`, `swap`, `replace`) also
 route through `setFieldValue`, so `onFieldChange` fires for them with the
 array field path (e.g., `"contacts"`) and the full new array as the value.
 
+It runs after the field's new value is stored, so any form call made inside it
+applies on top of the change, and the field's validation sees the result. A
+`resetForm()` or `setValues()` made here can override the field that just
+changed. To reset the other fields when one changes, pass the new value along:
+
+```typescript
+onFieldChange: (field, value) => {
+  if (field === 'type') form.setValues({ ...defaults, type: value });
+},
+```
+
 ```typescript
 onFieldChange: (field, value, values) => {
   analytics.track('field_edited', { field });
@@ -371,6 +382,17 @@ Useful in `submit` mode for patterns like `submitCount === 0 || form.isValid`.
 ```
 
 ## Form Methods
+
+Each method sees the calls made before it, even in the same handler:
+`setFieldValue('status', 'published')` followed by `handleSubmit()` submits
+`'published'`. The state properties above describe the last render, like any
+React state.
+
+Call form methods from event handlers and effects, not while rendering. The
+form's state lives outside React, so a call during render makes React log a
+warning. To load new values when a prop changes, give the form's component a
+`key`, or pass the new values as `initialValues` and call `resetForm()` in an
+effect (see [resetForm](#resetform)).
 
 ### setFieldValue
 
@@ -555,10 +577,18 @@ Reset form to initial values and clear errors.
 resetForm(): void
 ```
 
+It resets to the `initialValues` passed in the latest render.
+
 **Example:**
 
 ```typescript
 <button onClick={() => form.resetForm()}>Reset</button>
+
+// Load another record: pass it as initialValues, then reset in an effect
+const { resetForm } = form;
+useEffect(() => {
+  resetForm();
+}, [user, resetForm]);
 ```
 
 ### getFieldError
