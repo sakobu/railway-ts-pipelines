@@ -29,12 +29,12 @@ Each layer works independently. Combine them when it makes sense.
 
 Fully tree-shakable:
 
-- `result` -- 631 B
-- `option` -- 406 B
-- `composition` -- 233 B
-- `schema` -- 3.54 kB
+- `result` -- 855 B
+- `option` -- 540 B
+- `composition` -- 269 B
+- `schema` -- 4.07 kB
 
-**~4.8 kB total** (minified + brotli)
+**~5.7 kB total** (minified + brotli)
 
 See how it compares at [schemabenchmarks.dev](https://schemabenchmarks.dev) — smallest bundle size of all benchmarked libraries.
 
