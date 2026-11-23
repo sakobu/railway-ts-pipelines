@@ -17,3 +17,4 @@ export * from './union';
 export * from './enum';
 export * from './bigint';
 export * from './standard';
+export * from './decode';
