@@ -1,4 +1,4 @@
-import { isErr, ok, err, match, type Result } from '@railway-ts/pipelines/result';
+import { isErr, isResult, ok, err, type Result } from '@railway-ts/pipelines/result';
 import {
   validate,
   formatErrors,
@@ -51,6 +51,9 @@ import type {
   UseFormReturn,
 } from './types';
 
+/** The submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
+const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
 // =============================================================================
 // Main Hook
 // =============================================================================
@@ -65,6 +68,7 @@ import type {
  * provides helpers for working with nested objects and dynamic arrays.
  *
  * @template TValues - The shape of form values as a record with string keys
+ * @template TResult - The value `handleSubmit` resolves to on success: `onSubmit`'s `ok` value, or the form values
  *
  * @param validator - Railway-oriented validator (sync or async) from @railway-ts/pipelines that validates form values
  * @param options - Configuration options for form behavior
@@ -169,10 +173,10 @@ import type {
  *   </div>
  * );
  */
-export const useForm = <TValues extends Record<string, unknown>>(
+export const useForm = <TValues extends Record<string, unknown>, TResult = TValues>(
   validatorOrSchema: FormValidator<TValues>,
-  options: FormOptions<TValues>,
-): UseFormReturn<TValues> => {
+  options: FormOptions<TValues, TResult>,
+): UseFormReturn<TValues, TResult> => {
   const { initialValues, onSubmit, validationMode, fieldValidators, onValuesChange, onFieldChange } = options;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
@@ -259,7 +263,7 @@ export const useForm = <TValues extends Record<string, unknown>>(
   const fieldValidationSeqRef = useRef<Record<string, number>>({});
 
   // Decides what an overlapping handleSubmit does: share the running submission, or follow it
-  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TValues, ValidationError[]>>);
+  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
 
   // ===========================================================================
   // Computed State
@@ -717,11 +721,14 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * clears server errors, validates, runs the field validators, then calls `onSubmit`.
    * `handleSubmit` decides when it runs, through the submit scheduler.
    *
+   * Never rejects. A throw anywhere, or an `onSubmit` value that is neither a `Result` nor nothing,
+   * is logged and resolves to the generic submit error.
+   *
    * @param values - The form values to submit
-   * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
+   * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
   const runSubmission = useCallback(
-    async (values: TValues): Promise<Result<TValues, ValidationError[]>> => {
+    async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
       const { clientErrors, serverErrors } = formStateRef.current;
 
       // Mark all fields and error paths as touched (deep)
@@ -744,23 +751,38 @@ export const useForm = <TValues extends Record<string, unknown>>(
       // Invalidate any pending live async validations
       ++validationSeqRef.current;
 
-      // Show validating state during submit validation
-      dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+      // Every step is awaited inside this try, so its catch sees every throw and rejection
+      try {
+        // Show validating state during submit validation
+        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
 
-      // Validate the form (await handles both sync and async validators)
-      const validationResult = await validate(values, validator);
+        let validationResult: Result<TValues, ValidationError[]>;
+        try {
+          // Validate the form (await handles both sync and async validators)
+          validationResult = await validate(values, validator);
+        } finally {
+          dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+        }
 
-      dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
-
-      // Handle result using Railway pattern
-      return match(validationResult, {
-        ok: async (validData) => {
-          // Only set isSubmitting after validation passes
+        if (isErr(validationResult)) {
           dispatch({
-            type: 'SET_SUBMITTING',
-            isSubmitting: true,
+            type: 'SET_CLIENT_ERRORS',
+            errors: formatErrors(validationResult.error),
           });
 
+          // No SET_SUBMITTING dispatch — isSubmitting was never set to true
+          return validationResult;
+        }
+
+        const validData = validationResult.value;
+
+        // Only set isSubmitting after validation passes
+        dispatch({
+          type: 'SET_SUBMITTING',
+          isSubmitting: true,
+        });
+
+        try {
           // Run all field validators in parallel before calling onSubmit
           if (fieldValidators) {
             const fieldEntries = Object.entries(fieldValidators) as Array<
@@ -786,53 +808,55 @@ export const useForm = <TValues extends Record<string, unknown>>(
 
             const hasFieldErrors = fieldResults.some((r) => r.error);
             if (hasFieldErrors) {
-              dispatch({
-                type: 'SET_SUBMITTING',
-                isSubmitting: false,
-              });
               return err(fieldResults.filter((r) => r.error).map((r) => ({ path: [r.field], message: r.error! })));
             }
           }
 
-          if (onSubmit) {
-            try {
-              await onSubmit(validData);
-            } catch (error) {
-              console.error('Form submission error:', error);
-            }
+          const outcome = onSubmit ? await onSubmit(validData) : undefined;
+
+          if (outcome === undefined) {
+            // Cast: an onSubmit that returns nothing, or no onSubmit, leaves TResult at its default,
+            // TValues (see OnSubmit), so the validated values are the success value.
+            return ok(validData) as Result<TResult, ValidationError[]>;
           }
 
+          if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
+
+          if (isErr(outcome)) placeServerErrors(outcome.error);
+
+          return outcome;
+        } finally {
           dispatch({
             type: 'SET_SUBMITTING',
             isSubmitting: false,
           });
+        }
+      } catch (error) {
+        console.error('Form submission error:', error);
 
-          return ok(validData);
-        },
-        err: (errors) => {
-          dispatch({
-            type: 'SET_CLIENT_ERRORS',
-            errors: formatErrors(errors),
-          });
-
-          // No SET_SUBMITTING dispatch — isSubmitting was never set to true
-          return Promise.resolve(err(errors));
-        },
-      });
+        const submitErrors: ValidationError[] = [{ path: [], message: SUBMIT_ERROR_MESSAGE }];
+        placeServerErrors(submitErrors);
+        return err(submitErrors);
+      }
     },
-    [validator, onSubmit, fieldValidators],
+    [validator, onSubmit, fieldValidators, placeServerErrors],
   );
 
   /**
    * Handles form submission using the Railway-oriented programming pattern.
    * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
-   * Returns a Promise that resolves to either the validated data or validation errors.
+   * Returns a Promise that resolves to a Result and never rejects:
+   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent
+   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields
+   * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
+   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
+   *   error is logged with `console.error`.
    *
    * While a submission is running, a call with the same values shares its Promise, and a call
    * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
    *
    * @param e - Optional form event (will preventDefault if provided)
-   * @returns Promise<Result<TValues, ValidationError[]>> - Railway Result with validated data or errors
+   * @returns Promise<Result<TResult, ValidationError[]>> - Railway Result with `onSubmit`'s value, the validated data, or errors
    *
    * @example
    * // Use in form element
@@ -848,24 +872,29 @@ export const useForm = <TValues extends Record<string, unknown>>(
    * </button>
    *
    * @example
-   * // Handle result programmatically with Railway pattern
+   * // onSubmit returns the server's Result, and handleSubmit passes it on
    * import { match } from "@railway-ts/pipelines/result";
+   *
+   * const form = useForm(userValidator, {
+   *   initialValues: { name: "", email: "" },
+   *   onSubmit: (values) => api.createUser(values), // Promise<Result<User, ValidationError[]>>
+   * });
    *
    * const handleSave = async () => {
    *   const result = await form.handleSubmit();
    *   match(result, {
-   *     ok: (values) => {
-   *       console.log("Form submitted:", values);
-   *       navigate("/success");
+   *     ok: (user) => {
+   *       navigate(`/users/${user.id}`);
    *     },
    *     err: (errors) => {
-   *       console.error("Validation errors:", errors);
+   *       // Already on the form: field errors under their paths, a path [] error at errors._root
+   *       console.warn("Not saved:", errors);
    *     },
    *   });
    * };
    */
   const handleSubmit = useCallback(
-    (e?: FormEvent): Promise<Result<TValues, ValidationError[]>> => {
+    (e?: FormEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
       return submitScheduler.submit(() => formStateRef.current.values, runSubmission);
     },

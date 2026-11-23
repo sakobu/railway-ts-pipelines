@@ -1,6 +1,6 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
-import { isOk, err } from '@railway-ts/pipelines/result';
+import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
@@ -1214,32 +1214,6 @@ describe('useForm', () => {
   });
 
   describe('handleSubmit error handling', () => {
-    test('catches and logs errors thrown in onSubmit', async () => {
-      const consoleErrorSpy = mock(() => {});
-      const originalConsoleError = console.error;
-      console.error = consoleErrorSpy;
-
-      const onSubmit = mock((_values: UserForm) => {
-        throw new Error('Network error');
-      });
-
-      const { result } = renderHook(() =>
-        useForm(userValidator, {
-          initialValues: { name: 'John', email: 'john@example.com', age: 25 },
-          onSubmit,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.handleSubmit();
-      });
-
-      expect(onSubmit).toHaveBeenCalled();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
-
-      console.error = originalConsoleError;
-    });
-
     test('handles submit without onSubmit callback', async () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
@@ -1260,6 +1234,309 @@ describe('useForm', () => {
           age: 25,
         });
       }
+    });
+  });
+
+  describe('onSubmit results', () => {
+    const validValues = { name: 'John', email: 'john@example.com', age: 25 };
+    const submitErrorMessage = 'Something went wrong. Please try again.';
+
+    /** Silences the console.error a failed submission logs, and returns the spy. */
+    const silenceConsoleError = () => spyOn(console, 'error').mockImplementation(() => {});
+
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test("handleSubmit returns onSubmit's ok value (sync)", async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => ok({ id: '1' }),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual({ id: '1' });
+      }
+    });
+
+    test("handleSubmit returns onSubmit's ok value (async)", async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => Promise.resolve(ok({ id: '1' })),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual({ id: '1' });
+      }
+    });
+
+    test('handleSubmit returns ok(values) when onSubmit returns nothing', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(isOk(submitResult)).toBe(true);
+      if (isOk(submitResult)) {
+        expect(submitResult.value).toEqual(validValues);
+      }
+    });
+
+    test('onSubmit err is placed on fields and returned', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => err([{ path: ['email'], message: 'Taken' }]),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: ['email'], message: 'Taken' }]);
+      }
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.isSubmitting).toBe(false);
+    });
+
+    test('onSubmit err at path [] becomes the submit error and leaves isValid true', async () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => err([{ path: [], message: 'Service unavailable' }]),
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: 'Service unavailable' }]);
+      }
+      expect(result.current.errors._root).toBe('Service unavailable');
+      expect(result.current.serverErrors._root).toBe('Service unavailable');
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('a thrown onSubmit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const onSubmit = mock((_values: UserForm) => {
+        throw new Error('Network error');
+      });
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(onSubmit).toHaveBeenCalled();
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a thrown onSubmit leaves isValid true', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            throw new Error('Network error');
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValid).toBe(true);
+    });
+
+    test('a rejected async onSubmit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: async () => {
+            await Promise.reject(new Error('Network error'));
+          },
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isSubmitting).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('an onSubmit that returns a non-Result value returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: (() => 'saved') as unknown as () => void,
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(TypeError));
+      expect(consoleError).toHaveBeenCalledWith(
+        'Form submission error:',
+        expect.objectContaining({ message: 'onSubmit must return a Result or nothing' }),
+      );
+    });
+
+    test('a field validator that throws during submit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          fieldValidators: {
+            name: () => {
+              throw new Error('Validator crashed');
+            },
+          },
+        }),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isSubmitting).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a schema validator that throws during submit returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm<{ name: string }>(
+          () => {
+            throw new Error('Validator crashed');
+          },
+          {
+            initialValues: { name: 'John' },
+            validationMode: 'submit',
+          },
+        ),
+      );
+
+      const submitResult = await act(async () => {
+        return await result.current.handleSubmit();
+      });
+
+      expect(isErr(submitResult)).toBe(true);
+      if (isErr(submitResult)) {
+        expect(submitResult.error).toEqual([{ path: [], message: submitErrorMessage }]);
+      }
+      expect(result.current.errors._root).toBe(submitErrorMessage);
+      expect(result.current.isValidating).toBe(false);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('server errors from onSubmit clear on the next submit', async () => {
+      const secondStarted = Promise.withResolvers<void>();
+      const releaseSecond = Promise.withResolvers<void>();
+      let calls = 0;
+
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: async (values) => {
+            calls += 1;
+            if (calls === 1) {
+              return err([
+                { path: ['email'], message: 'Taken' },
+                { path: [], message: 'Service unavailable' },
+              ]);
+            }
+            secondStarted.resolve();
+            await releaseSecond.promise;
+            return ok(values);
+          },
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(result.current.getFieldError('email')).toBe('Taken');
+      expect(result.current.errors._root).toBe('Service unavailable');
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        second = result.current.handleSubmit();
+        await secondStarted.promise;
+      });
+
+      // Cleared when the submit starts, while its onSubmit is still pending
+      expect(result.current.serverErrors).toEqual({});
+      expect(result.current.errors.email).toBeUndefined();
+      expect(result.current.errors._root).toBeUndefined();
+
+      await act(async () => {
+        releaseSecond.resolve();
+        await second;
+      });
     });
   });
 

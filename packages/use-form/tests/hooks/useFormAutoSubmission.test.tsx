@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -554,6 +554,61 @@ describe('useFormAutoSubmission', () => {
       );
 
       expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
+    });
+  });
+
+  describe('failed saves', () => {
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test('keeps auto-submitting after a thrown onSubmit', async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      let calls = 0;
+      const onSubmit = mock((_values: Record<string, unknown>) => {
+        calls += 1;
+        if (calls === 1) throw new Error('Network error');
+        return Promise.resolve();
+      });
+      const initialValues = { name: '' };
+
+      const { result } = renderHook(() => {
+        const form = useForm(alwaysValidValidator, {
+          initialValues,
+          onSubmit,
+        });
+        useFormAutoSubmission(form, 50);
+        return form;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'a');
+      });
+
+      // The first save failed: the submit error shows, and the form stays valid
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(1);
+          expect(result.current.errors._root).toBe('Something went wrong. Please try again.');
+        },
+        { timeout: 500 },
+      );
+      expect(result.current.isValid).toBe(true);
+
+      act(() => {
+        result.current.setFieldValue('name', 'ab');
+      });
+
+      await waitFor(
+        () => {
+          expect(onSubmit).toHaveBeenCalledTimes(2);
+          expect(result.current.isSubmitting).toBe(false);
+        },
+        { timeout: 500 },
+      );
+
+      expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
     });
   });
 
