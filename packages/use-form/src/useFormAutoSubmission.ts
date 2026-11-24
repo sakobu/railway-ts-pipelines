@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useDebounce } from './useDebounce';
 import { deepEqual } from './utils';
@@ -11,8 +11,11 @@ type FormWithAutoSubmit<T> = {
   values: T;
   isDirty: boolean;
   isValid: boolean;
+  /** When true, auto-submission waits: a save would overwrite a newer version of the record. Optional, so any form-like object still fits. */
+  isStale?: boolean;
   validateForm: (values: T) => { ok: boolean } | Promise<{ ok: boolean }>;
-  handleSubmit: () => void;
+  /** Its result, when a promise, marks when the save settles. */
+  handleSubmit: () => unknown;
 };
 
 /**
@@ -23,8 +26,10 @@ type FormWithAutoSubmit<T> = {
  * 1. The form is dirty (has been modified)
  * 2. The form is valid (passes all validation rules)
  * 3. The values have changed since the last validation
+ * 4. The form isn't stale (`isStale`): a save would overwrite a newer version of the record.
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
+ * An edit made during a save goes out as soon as that save settles, unless the form is then stale.
  *
  * @template T - The type of form values
  *
@@ -54,14 +59,54 @@ type FormWithAutoSubmit<T> = {
  * useFormAutoSubmission(form);
  */
 export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 200) => {
-  const { values, isDirty, isValid, validateForm, handleSubmit } = form;
+  const { values, isDirty, isValid, isStale = false, validateForm, handleSubmit } = form;
   const lastValidatedRef = useRef<T | null>(null);
+  // This hook's last save: its values, and whether it's still running
+  const savedRef = useRef<T | null>(null);
+  const savingRef = useRef(false);
+  // A save came due while this hook's own save ran: it goes out once that save settles
+  const heldRef = useRef(false);
+  // Bumped when a save settles, so the effect decides with its outcome
+  const [settled, setSettled] = useState(0);
+
+  const submit = useCallback(
+    (submitted: T) => {
+      savingRef.current = true;
+      savedRef.current = submitted;
+      void Promise.resolve(handleSubmit()).finally(() => {
+        savingRef.current = false;
+        setSettled((n) => n + 1);
+      });
+    },
+    [handleSubmit],
+  );
 
   const debouncedSubmit = useDebounce(() => {
-    if (isValid) handleSubmit();
+    if (!isValid) return;
+    if (isStale) {
+      // Forget the validated values, so the effect submits them once the form is no longer stale
+      lastValidatedRef.current = null;
+      return;
+    }
+    if (savingRef.current) {
+      heldRef.current = true;
+      return;
+    }
+    submit(values);
   }, delay);
 
   useEffect(() => {
+    if (isStale) {
+      lastValidatedRef.current = null;
+      heldRef.current = false;
+      return;
+    }
+    if (heldRef.current && !savingRef.current) {
+      // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go
+      heldRef.current = false;
+      if (isDirty && !deepEqual(values, savedRef.current)) submit(values);
+      return;
+    }
     if (!isDirty) return;
     if (deepEqual(values, lastValidatedRef.current)) return;
 
@@ -75,7 +120,8 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
     } else if (result.ok) {
       debouncedSubmit();
     }
-  }, [values, isDirty, debouncedSubmit, validateForm]);
+    // `settled` re-runs the effect once a save settles, so a held save goes out
+  }, [values, isDirty, isStale, settled, submit, debouncedSubmit, validateForm]);
 
   return null;
 };

@@ -1,9 +1,11 @@
 import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
+import { ok, err, type Result } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
+import { nextTask } from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -11,6 +13,40 @@ import {
   alwaysValidAsyncValidator,
   type UserForm,
 } from '../fixtures/validators';
+
+import type { ValidationError } from '@railway-ts/pipelines/schema';
+
+const initial: UserForm = { name: 'John', email: 'john@example.com', age: 25 };
+
+/** A form fed by `initialValues` props, auto-submitting after `delay`. */
+const renderAutoSubmitForm = (
+  onSubmit: ((values: UserForm) => void) | ((values: UserForm) => Promise<Result<UserForm, ValidationError[]>>),
+  delay: number,
+) =>
+  renderHook(
+    ({ values }: { values: UserForm }) => {
+      const form = useForm(userValidator, {
+        initialValues: values,
+        onSubmit,
+      });
+      useFormAutoSubmission(form, delay);
+      return form;
+    },
+    { initialProps: { values: initial } },
+  );
+
+/** A save whose outcome the test decides. */
+const createGatedSave = () => {
+  const saves: PromiseWithResolvers<Result<UserForm, ValidationError[]>>[] = [];
+  const onSubmit = mock((_values: UserForm) => {
+    const save = Promise.withResolvers<Result<UserForm, ValidationError[]>>();
+    saves.push(save);
+    return save.promise;
+  });
+  return { saves, onSubmit };
+};
+
+const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)));
 
 describe('useFormAutoSubmission', () => {
   describe('basic auto-submission', () => {
@@ -555,6 +591,59 @@ describe('useFormAutoSubmission', () => {
 
       expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
     });
+
+    test('an edit made during a save goes out as soon as that save settles, without another delay', async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const { result } = renderAutoSubmitForm(onSubmit, 200);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 500 });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // The edit comes due during the save
+      await sleep(300);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+
+      // Half the delay: waiting a full delay after the save would miss this
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 100 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Janet' }]);
+    });
+
+    test("an edit that comes back to the values being saved isn't saved again", async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const { result } = renderAutoSubmitForm(onSubmit, 200);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 500 });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The edit comes due during the save
+      await sleep(300);
+
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+      await sleep(300);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('failed saves', () => {
@@ -609,6 +698,77 @@ describe('useFormAutoSubmission', () => {
 
       expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+  });
+
+  describe('stale forms', () => {
+    // Another user's change to the record
+    const changed: UserForm = { ...initial, email: 'new@example.com' };
+    const wait = () => sleep(150);
+
+    test('does not submit while the form is stale, including a save already waiting out its delay', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      rerender({ values: changed });
+      expect(result.current.isStale).toBe(true);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      await wait();
+
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    test('submits the edits made while stale once the form is no longer stale', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      rerender({ values: changed });
+      await wait();
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      // The other user undid the change
+      rerender({ values: { ...initial } });
+      expect(result.current.isStale).toBe(false);
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      expect(onSubmit.mock.calls[0]).toEqual([{ ...initial, name: 'Jane' }]);
+    });
+
+    test("a save that comes due during a save waits for it, and doesn't go out if that save ends stale", async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      rerender({ values: changed });
+      // The save is running, so the form doesn't read as stale
+      expect(result.current.isStale).toBe(false);
+      await wait();
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
+        await nextTask();
+      });
+      expect(result.current.isStale).toBe(true);
+
+      await wait();
+      expect(onSubmit).toHaveBeenCalledTimes(1);
     });
   });
 
