@@ -1095,13 +1095,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             return err([{ path: [], message: changedWhileSavingMessage }]);
           }
 
-          const outcome = onSubmit ? await onSubmit(validData) : undefined;
+          if (!onSubmit) {
+            // Nothing was saved, so the values stay edits: a newer version arriving later doesn't replace them.
+            // Cast: without an onSubmit TResult defaults to TValues, so the validated values are the success value.
+            // The one hole is an explicit useForm<T, U> with no onSubmit at all.
+            return ok(validData) as Result<TResult, ValidationError[]>;
+          }
+
+          const outcome = await onSubmit(validData);
 
           if (outcome === undefined) {
             settleSuccess();
-            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues, and without an
-            // onSubmit TResult defaults to TValues, so the validated values are the success value. The one
-            // hole is an explicit useForm<T, U> with no onSubmit at all.
+            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues
             return ok(validData) as Result<TResult, ValidationError[]>;
           }
 

@@ -242,6 +242,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **`err(errors)`:** each error is placed on its field, as `setServerErrors` does, and an error at
    *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`.
    *
+   * Without `onSubmit`, a submit only validates. Nothing is saved, so the values stay edits: a newer
+   * `initialValues` raises `isStale` rather than replacing them.
+   *
    * If it throws, rejects, or returns anything else, `handleSubmit` resolves to
    * `err([{ path: [], message: "Something went wrong. Please try again." }])`, which becomes the submit error.
    * The original error is logged with `console.error`. `messages.submitFailed` replaces the text.
@@ -1305,7 +1308,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   /**
    * Validates all fields, marks them as touched, and calls `onSubmit` if valid. Resolves to a Railway `Result`
    * and never rejects:
-   * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent
+   * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent. Without
+   *   `onSubmit`, nothing is saved, so the values stay edits.
    * - `err` with the validation errors, or with `onSubmit`'s `err`
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`

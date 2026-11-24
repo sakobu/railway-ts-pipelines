@@ -703,6 +703,17 @@ describe('saving', () => {
     expect(result.current.isStale).toBe(true);
   });
 
+  test("a submit with no onSubmit saves nothing: the values stay edits, and a newer version doesn't replace them", async () => {
+    const { result, rerender } = renderForm();
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    await act(() => result.current.handleSubmit());
+    rerender({ initial: { ...draft, status: 'published' } });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isStale).toBe(true);
+  });
+
   test('follows a saved record that differs from the submitted values', async () => {
     const { result, rerender } = renderForm({ onSubmit: () => {} });
 
