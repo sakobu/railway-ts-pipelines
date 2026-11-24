@@ -8,7 +8,7 @@ import type { AsyncValidator, MaybeAsyncValidator, ValidationError, ValidationRe
 /**
  * Options for controlling validation behavior.
  */
-export type ValidateOptions = { abortEarly?: boolean };
+export type ValidateOptions = { abortEarly?: boolean | undefined };
 
 /**
  * The key used in formatted error objects for root-level validation errors (i.e. errors with an empty path).

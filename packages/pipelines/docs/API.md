@@ -582,7 +582,7 @@ A schema where all validators are synchronous. Preserves sync return types.
 #### `ValidationError`
 
 ```typescript
-type ValidationError = { path: string[]; message: string; cause?: ValidationError[] };
+type ValidationError = { path: string[]; message: string; cause?: ValidationError[] | undefined };
 ```
 
 A validation error with path information and a message. `cause` holds the errors that explain this one, like `Error.cause`. [`decodeResult`](#decoderesult) sets it, and the rest of the library ignores it.
@@ -598,10 +598,18 @@ The result of a validation-and-format operation.
 #### `ValidateOptions`
 
 ```typescript
-type ValidateOptions = { abortEarly?: boolean };
+type ValidateOptions = { abortEarly?: boolean | undefined };
 ```
 
 Options for controlling validation behavior. When `abortEarly` is `true`, validation stops after the first error instead of collecting all errors.
+
+#### `UnionOptions`
+
+```typescript
+type UnionOptions = { collectAllErrors?: boolean | undefined; errorPrefix?: string | undefined };
+```
+
+Options for [`union`](#union). When `collectAllErrors` is `true` (the default), the union tries every validator until one succeeds, and a failure reports all their errors; when `false`, it stops at the first validator that fails and reports only its errors. `errorPrefix` is put before each error message, as `${errorPrefix}: ${message}`.
 
 #### `InferSchemaType<V>`
 
@@ -631,11 +639,11 @@ Extract the union of output types from a validator map. Used by `discriminatedUn
 ```typescript
 function object<T extends Record<string, unknown>>(
   schema: SyncSchema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): Validator<unknown, ObjectOutput<T>>;
 function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 ```
 
@@ -1180,7 +1188,7 @@ Ensure a value is one of the allowed values.
 ```typescript
 function union<I, O1, O2>(
   validators: [Validator<I, O1>, Validator<I, O2>],
-  options?: { collectAllErrors?: boolean; errorPrefix?: string },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2>;
 ```
 

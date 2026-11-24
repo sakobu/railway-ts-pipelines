@@ -2,6 +2,17 @@ import { err, isOk, type Result } from '../result';
 
 import type { MaybeAsyncValidator, ValidatorMapOutput, ValidationError, Validator } from './core';
 
+/** Options for {@link union}. */
+export type UnionOptions = {
+  /**
+   * When true (the default), the union tries every validator until one succeeds, and a failure reports all their
+   * errors. When false, it stops at the first validator that fails and reports only its errors.
+   */
+  collectAllErrors?: boolean | undefined;
+  /** Put before each error message, as `${errorPrefix}: ${message}`. */
+  errorPrefix?: string | undefined;
+};
+
 /**
  * Create a validator that checks if a value matches any of the provided validators.
  * Returns the result of the first successful validator, or all errors if none match.
@@ -16,65 +27,35 @@ import type { MaybeAsyncValidator, ValidatorMapOutput, ValidationError, Validato
  * @param options - Configuration options
  * @returns A validator that succeeds if any of the provided validators succeed
  */
-export function union<I>(
-  validators: [],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
-): Validator<I, never>;
+export function union<I>(validators: [], options?: UnionOptions): Validator<I, never>;
 
-export function union<I, O1>(
-  validators: [Validator<I, O1>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
-): Validator<I, O1>;
+export function union<I, O1>(validators: [Validator<I, O1>], options?: UnionOptions): Validator<I, O1>;
 export function union<I, O1>(
   validators: [MaybeAsyncValidator<I, O1>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O1>;
 
 export function union<I, O1, O2>(
   validators: [Validator<I, O1>, Validator<I, O2>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2>;
 export function union<I, O1, O2>(
   validators: [MaybeAsyncValidator<I, O1>, MaybeAsyncValidator<I, O2>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O1 | O2>;
 
 export function union<I, O1, O2, O3>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2 | O3>;
 export function union<I, O1, O2, O3>(
   validators: [MaybeAsyncValidator<I, O1>, MaybeAsyncValidator<I, O2>, MaybeAsyncValidator<I, O3>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O1 | O2 | O3>;
 
 export function union<I, O1, O2, O3, O4>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>, Validator<I, O4>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2 | O3 | O4>;
 export function union<I, O1, O2, O3, O4>(
   validators: [
@@ -83,18 +64,12 @@ export function union<I, O1, O2, O3, O4>(
     MaybeAsyncValidator<I, O3>,
     MaybeAsyncValidator<I, O4>,
   ],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O1 | O2 | O3 | O4>;
 
 export function union<I, O1, O2, O3, O4, O5>(
   validators: [Validator<I, O1>, Validator<I, O2>, Validator<I, O3>, Validator<I, O4>, Validator<I, O5>],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2 | O3 | O4 | O5>;
 export function union<I, O1, O2, O3, O4, O5>(
   validators: [
@@ -104,33 +79,18 @@ export function union<I, O1, O2, O3, O4, O5>(
     MaybeAsyncValidator<I, O4>,
     MaybeAsyncValidator<I, O5>,
   ],
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O1 | O2 | O3 | O4 | O5>;
 
-export function union<I, O>(
-  validators: Array<Validator<I, O>>,
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
-): Validator<I, O>;
+export function union<I, O>(validators: Array<Validator<I, O>>, options?: UnionOptions): Validator<I, O>;
 export function union<I, O>(
   validators: Array<MaybeAsyncValidator<I, O>>,
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O>;
 
 export function union<I, O>(
   validators: Array<MaybeAsyncValidator<I, O>>,
-  options?: {
-    collectAllErrors?: boolean;
-    errorPrefix?: string;
-  },
+  options?: UnionOptions,
 ): MaybeAsyncValidator<I, O> {
   const { collectAllErrors = true, errorPrefix } = options || {};
 
