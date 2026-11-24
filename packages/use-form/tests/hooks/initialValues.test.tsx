@@ -296,6 +296,34 @@ describe('errors after a follow', () => {
     expect(result.current.errors.title).toBe('Title is required');
     expect(result.current.fieldErrors).toEqual({});
   });
+
+  test("a submission's validation of the old values does not land on the followed values", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(gated, { initialValues: initial }),
+      { initialProps: { initial: draft } },
+    );
+
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ initial: loaded });
+    expect(result.current.values).toEqual(loaded);
+
+    // The follow's check settles first, so the submission's result for the old values would land last
+    await act(async () => {
+      pending[1]!.resolve(ok(loaded));
+      await nextTask();
+    });
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+      await submitting;
+    });
+
+    expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
 });
 
 describe('isStale', () => {

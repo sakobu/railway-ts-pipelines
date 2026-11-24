@@ -50,6 +50,7 @@ import type {
   FieldPath,
   NativeCheckboxProps,
   NativeCheckboxGroupOptionProps,
+  FormAction,
   FormOptions,
   FormState,
   NativeSelectProps,
@@ -848,6 +849,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       try {
         const { clientErrors, serverErrors, baselineEpoch, lastVersion } = store.getState();
 
+        // The validation's results describe the submitted values, so they land only while those values are
+        // still the baseline: a follow of new initialValues or a resetForm() drops them
+        const whileBaseline = (action: FormAction<TValues>): void => {
+          if (store.getState().baselineEpoch === baselineEpoch) dispatch(action);
+        };
+
         // Mark all fields and error paths as touched (deep)
         const valuePaths = collectFieldPaths(values);
         const allPaths = Array.from(
@@ -878,11 +885,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           // Validate the form (await handles both sync and async validators)
           validationResult = await validate(values, validator);
         } finally {
-          dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+          whileBaseline({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
         }
 
         if (isErr(validationResult)) {
-          dispatch({
+          whileBaseline({
             type: 'SET_CLIENT_ERRORS',
             errors: formatErrors(validationResult.error),
           });
@@ -910,15 +917,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               fieldEntries.map(async ([field, validatorFn]) => {
                 const fieldValue = getValueByPath(values, field);
                 const error = await validatorFn(fieldValue, values);
-                if (error) {
-                  dispatch({ type: 'SET_FIELD_ERROR', field, error });
-                } else {
-                  dispatch({
-                    type: 'SET_FIELD_ERROR',
-                    field,
-                    error: undefined,
-                  });
-                }
+                whileBaseline({ type: 'SET_FIELD_ERROR', field, error });
                 return { field, error };
               }),
             );

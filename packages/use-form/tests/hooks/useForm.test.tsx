@@ -2268,6 +2268,26 @@ describe('useForm', () => {
       expect(result.current.clientErrors.title).toBe('Title is required');
       expect(result.current.isValidating).toBe(false);
     });
+
+    test("resetForm() during a submission's validation drops its errors", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      act(() => result.current.resetForm());
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        outcome = await submitting;
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+      expect(result.current.isValidating).toBe(false);
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Title is required' }]));
+    });
   });
 
   describe('isDirty', () => {
@@ -2890,6 +2910,29 @@ describe('useForm', () => {
       expect(result.current.fieldErrors).toEqual({});
       expect(result.current.validatingFields).toEqual({});
       expect(result.current.values).toEqual(draft);
+    });
+
+    test("resetForm() during a submission's field checks drops their errors", async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, { initialValues: draft, fieldValidators: { title: () => gate() } }),
+      );
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      expect(calls).toHaveLength(1);
+      act(() => result.current.resetForm());
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        outcome = await submitting;
+      });
+
+      expect(result.current.fieldErrors).toEqual({});
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
     });
 
     test("a field validator waiting on a replaced schema check doesn't run", async () => {
