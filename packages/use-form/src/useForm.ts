@@ -84,6 +84,9 @@ type SchemaCheck<TValues> =
   | Promise<Result<TValues, ValidationError[]> | undefined>
   | undefined;
 
+/** A `fieldValidators` entry as the hook calls it, by a path the form only knows as a string. */
+type FieldValidatorFn<TValues> = (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>;
+
 /**
  * Logs a validator's throw or rejection that nothing could catch: in a check the form started on its own, or in an
  * async check, which settles after the call that started it returned.
@@ -574,10 +577,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const fieldValue = getValueByPath(values, field);
       let result: string | undefined | Promise<string | undefined>;
       try {
-        result = (validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>)(
-          fieldValue,
-          values,
-        );
+        result = (validatorFn as FieldValidatorFn<TValues>)(fieldValue, values);
       } catch (error) {
         endReplaced();
         throw error;
@@ -1180,19 +1180,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         });
 
         try {
-          // Run all field validators in parallel before calling onSubmit
+          // Run all field validators in parallel before calling onSubmit. An entry set to undefined is skipped, as a
+          // missing key is.
           if (fieldValidators) {
             const fieldEntries = Object.entries(fieldValidators) as Array<
-              [string, (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>]
+              [string, FieldValidatorFn<TValues> | undefined]
             >;
 
             const fieldResults = await Promise.all(
-              fieldEntries.map(async ([field, validatorFn]) => {
-                const fieldValue = getValueByPath(values, field);
-                const error = await validatorFn(fieldValue, values);
-                if (isLatestFieldCheck(field)) send({ type: 'SET_FIELD_ERROR', field, error });
-                return { field, error };
-              }),
+              fieldEntries
+                .filter((entry): entry is [string, FieldValidatorFn<TValues>] => Boolean(entry[1]))
+                .map(async ([field, validatorFn]) => {
+                  const fieldValue = getValueByPath(values, field);
+                  const error = await validatorFn(fieldValue, values);
+                  if (isLatestFieldCheck(field)) send({ type: 'SET_FIELD_ERROR', field, error });
+                  return { field, error };
+                }),
             );
 
             const hasFieldErrors = fieldResults.some((r) => r.error);
