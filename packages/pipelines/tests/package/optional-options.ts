@@ -7,7 +7,7 @@ import type { UnionOptions, ValidateOptions, ValidationError, Validator } from '
 
 /** The optional keys of T that reject an explicit undefined. Needs exactOptionalPropertyTypes: without it, every optional key is listed. */
 type KeysRejectingUndefined<T> = {
-  [K in keyof T]-?: {} extends Pick<T, K> ? (undefined extends Required<T>[K] ? never : K) : never;
+  [K in keyof T]-?: Partial<Pick<T, K>> extends Pick<T, K> ? (undefined extends Required<T>[K] ? never : K) : never;
 }[keyof T];
 
 /** `{}` fits only when every optional key of T accepts undefined; otherwise the error names the keys that don't. */
