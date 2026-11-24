@@ -34,7 +34,7 @@
     },
     "packages/use-form": {
       "name": "@railway-ts/use-form",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@happy-dom/global-registrator": "^21.0.4",
         "@railway-ts/pipelines": "workspace:*",
