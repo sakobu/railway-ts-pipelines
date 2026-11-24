@@ -232,6 +232,43 @@ describe('errors after a follow', () => {
     expect(result.current.touched['tags.1']).toBe(true);
   });
 
+  test("the old values' schema errors don't show on the followed values while their async check runs", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(gated, { initialValues: initial, validationMode: 'mount' }),
+      { initialProps: { initial: { ...draft, title: '' } } },
+    );
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+      await nextTask();
+    });
+    expect(result.current.clientErrors.title).toBe('Title is required');
+
+    rerender({ initial: loaded });
+
+    expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValidating).toBe(true);
+  });
+
+  test("the old values' field errors don't show on the followed values while the schema check runs", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(gated, { initialValues: initial, validationMode: 'blur', fieldValidators: { title: () => 'Taken' } }),
+      { initialProps: { initial: draft } },
+    );
+    act(() => result.current.setFieldTouched('title'));
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      await nextTask();
+    });
+    expect(result.current.fieldErrors.title).toBe('Taken');
+
+    rerender({ initial: loaded });
+
+    expect(result.current.fieldErrors).toEqual({});
+  });
+
   test('a schema validation still running for the old values does not land on the followed values', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(

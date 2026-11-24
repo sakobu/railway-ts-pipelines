@@ -633,8 +633,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Runs the side effects of a follow, so the errors describe the values shown. It re-validates when the
    * mode calls for it, when the form has validated before (a blurred field in `blur` mode, a submit attempt in
    * any mode), or when errors are shown or still being checked. It re-runs the field validators that have an
-   * error or are still running, and in `mount` mode marks the new version's fields touched. A mode that
-   * wouldn't have validated yet still doesn't.
+   * error or are still running, and in `mount` mode marks the new version's fields touched. While an async check
+   * runs, the old values' errors are cleared, as when typing. A mode that wouldn't have validated yet still doesn't.
    *
    * @param prev - The state before the follow
    * @param next - The state after it
@@ -654,6 +654,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         fields.length > 0
       ) {
         const schemaResult = validateForm(next.values);
+        if (schemaResult instanceof Promise) {
+          // As when typing: the old values' errors don't show on the new ones while the check runs
+          if (Object.keys(store.getState().clientErrors).length > 0)
+            dispatch({ type: 'SET_CLIENT_ERRORS', errors: {} });
+          fields.forEach((field) => {
+            if (store.getState().fieldErrors[normalizePath(field)] !== undefined) {
+              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+            }
+          });
+        }
         fields.forEach((field) => runFieldAfterSchema(field, next.values, schemaResult));
       }
 
@@ -661,7 +671,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
       }
     },
-    [dispatch, validateOnChange, validateOnBlur, validateOnMount, validateForm, runFieldAfterSchema],
+    [store, dispatch, validateOnChange, validateOnBlur, validateOnMount, validateForm, runFieldAfterSchema],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
