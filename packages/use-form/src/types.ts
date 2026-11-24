@@ -201,7 +201,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * Initial values for the form fields, and the values `resetForm()` resets to.
    *
    * The form follows new values while it has no unsaved edits, such as a refetched record. A form with
-   * edits keeps them, and `isStale` reports that a newer version arrived.
+   * edits keeps them, and `isStale` reports that a newer version arrived. Values that equal the latest
+   * `initialValues` count as having no edits, except while a submission runs, when the version may be an
+   * optimistic write.
    *
    * New values are compared by content, so an inline object is fine as long as it's built from the same
    * data the same way on every render.

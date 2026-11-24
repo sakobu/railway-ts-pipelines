@@ -41,6 +41,38 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   baselineEpoch: 0,
 });
 
+/**
+ * Whether values equal to the latest version may count as clean. Not while a submission runs: the latest version
+ * may be an optimistic write that a failed save rolls back, and counting it clean would let the rollback replace
+ * the values. Nor while a save's answer is pending: the latest version is then the one from before the save.
+ */
+const latestIsSettled = <TValues extends Record<string, unknown>>(state: FormState<TValues>): boolean =>
+  !state.isSubmitting && state.baseVersion !== undefined;
+
+/** Treats the values shown, equal to the latest version, as clean and as based on it, without changing them. */
+const settleOnLatest = <TValues extends Record<string, unknown>>(state: FormState<TValues>): FormState<TValues> => ({
+  ...state,
+  cleanValues: state.lastVersion,
+  baseVersion: state.lastVersion,
+  isStale: false,
+});
+
+/**
+ * The state after an edit set `values` and kept `serverErrors`. The edit clears the submit error. Values that
+ * come to equal the latest version end `isStale`, and count as clean when {@link latestIsSettled} allows. The
+ * comparison only runs once a version arrived under edits, so most forms pay nothing for it.
+ */
+const withEdit = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  values: TValues,
+  serverErrors: Record<FieldPath, string>,
+): FormState<TValues> => {
+  const { submitError: _submitError, ...rest } = state;
+  const next = { ...rest, values, serverErrors };
+  if (state.cleanValues === state.lastVersion || !deepEqual(values, state.lastVersion)) return next;
+  return latestIsSettled(next) ? settleOnLatest(next) : { ...next, isStale: false };
+};
+
 /** Shows `version`, and treats it as clean and as the base of any later edits. */
 const followVersion = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
@@ -130,15 +162,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         }
       });
 
-      // Any value change also clears the submit error
-      const { submitError: _submitError, ...rest } = state;
-
-      return {
-        ...rest,
-        values: newValues,
-        serverErrors: newServerErrors,
-        isStale: state.isStale && !deepEqual(newValues, state.lastVersion),
-      };
+      return withEdit(state, newValues, newServerErrors);
     }
 
     case 'SET_VALUES': {
@@ -152,15 +176,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         });
       });
 
-      // Any value change also clears the submit error
-      const { submitError: _submitError, ...rest } = state;
-
-      return {
-        ...rest,
-        values: newValues,
-        serverErrors: newServerErrors,
-        isStale: state.isStale && !deepEqual(newValues, state.lastVersion),
-      };
+      return withEdit(state, newValues, newServerErrors);
     }
 
     case 'SET_FIELD_TOUCHED':
@@ -262,13 +278,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       }
       if (deepEqual(version, state.lastVersion)) return state;
       if (deepEqual(state.values, state.cleanValues)) return followVersion(state, version);
-      const baseVersion = state.baseVersion ?? version;
-      return {
-        ...state,
-        lastVersion: version,
-        baseVersion,
-        isStale: !deepEqual(state.values, version) && !deepEqual(baseVersion, version),
-      };
+      // A version arriving while a save's answer is pending is that answer, and becomes the base
+      const arrived = { ...state, lastVersion: version, baseVersion: state.baseVersion ?? version };
+      if (deepEqual(state.values, version)) {
+        return latestIsSettled(arrived) ? settleOnLatest(arrived) : { ...arrived, isStale: false };
+      }
+      return { ...arrived, isStale: !deepEqual(arrived.baseVersion, version) };
     }
 
     case 'SUBMIT_SUCCEEDED': {
@@ -280,8 +295,9 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         // None arrived for this submission: the next one to arrive is the server's answer
         return { ...state, cleanValues: action.values, baseVersion: undefined, isStale: false };
       }
-      // One arrived: the server's answer, delivered before onSubmit returned
+      // One arrived: the server's answer, delivered before onSubmit returned. The save succeeded, so it's settled.
       if (deepEqual(state.values, action.values)) return followVersion(state, state.lastVersion);
+      if (deepEqual(state.values, state.lastVersion)) return settleOnLatest(state);
       return { ...state, cleanValues: action.values, baseVersion: state.lastVersion, isStale: false };
     }
 

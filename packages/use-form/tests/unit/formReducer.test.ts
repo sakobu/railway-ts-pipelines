@@ -783,11 +783,35 @@ describe('SYNC_INITIAL_VALUES', () => {
     expect(stale.isStale).toBe(true);
   });
 
-  test('is not stale when the new version equals the edited values', () => {
-    const result = formReducer({ ...s, values: { ...v2 } }, sync(v2), v2);
+  test('a new version equal to the edited values makes them clean, keeping the values shown', () => {
+    const values = { ...v2 };
+
+    const result = formReducer({ ...s, values }, sync(v2), v2);
+
+    expect(result.values).toBe(values);
+    expect(result.lastVersion).toBe(v2);
+    expect(result.cleanValues).toBe(v2);
+    expect(result.baseVersion).toBe(v2);
+    expect(result.isStale).toBe(false);
+    expect(result.baselineEpoch).toBe(0);
+  });
+
+  test('after values came to equal a version, the next version is followed', () => {
+    const v3 = { ...v2, name: 'Jim' };
+    const caughtUp = formReducer({ ...s, values: { ...v2 } }, sync(v2), v2);
+
+    const result = formReducer(caughtUp, sync(v3), v3);
+
+    expect(result.values).toBe(v3);
+    expect(result.isStale).toBe(false);
+  });
+
+  test('a version equal to the values during a submission stays an edit: it may be an optimistic write', () => {
+    const result = formReducer({ ...s, values: { ...v2 }, isSubmitting: true }, sync(v2), v2);
 
     expect(result.isStale).toBe(false);
     expect(result.cleanValues).toBe(v1);
+    expect(result.baseVersion).toBe(v1);
   });
 
   test('clears isStale when the new version equals the base again', () => {
@@ -815,10 +839,11 @@ describe('SYNC_INITIAL_VALUES', () => {
   });
 
   test('keeps the edits through an optimistic write and its rollback', () => {
-    const s1 = formReducer({ ...s, values: edited }, sync({ ...edited }), v1);
+    // The optimistic write arrives while onSubmit runs, and the rollback once the failed save has settled
+    const s1 = formReducer({ ...s, values: edited, isSubmitting: true }, sync({ ...edited }), v1);
     expect(s1.isStale).toBe(false);
 
-    const s2 = formReducer(s1, sync({ ...v1 }), v1);
+    const s2 = formReducer({ ...s1, isSubmitting: false }, sync({ ...v1 }), v1);
     expect(s2.values).toBe(edited);
     expect(s2.isStale).toBe(false);
   });
@@ -885,6 +910,15 @@ describe('SUBMIT_SUCCEEDED', () => {
 
     expect(result.values).toBe(typed);
     expect(result.cleanValues).toBe(edited);
+    expect(result.baseVersion).toBe(saved);
+    expect(result.isStale).toBe(false);
+    expect(result.baselineEpoch).toBe(0);
+  });
+
+  test('typing done during the submission that equals the version that arrived counts as clean', () => {
+    const result = formReducer({ ...s, values: { ...saved }, lastVersion: saved, isSubmitting: true }, succeeded, v1);
+
+    expect(result.cleanValues).toBe(saved);
     expect(result.baseVersion).toBe(saved);
     expect(result.isStale).toBe(false);
     expect(result.baselineEpoch).toBe(0);
@@ -986,19 +1020,42 @@ describe('isStale and edits', () => {
   const s = createInitialFormState(v1, 'a');
   const stale: FormState<typeof v1> = { ...s, values: edited, lastVersion: v2, isStale: true };
 
-  test('SET_FIELD_VALUE clears isStale when the values come to equal the latest version', () => {
+  test('SET_FIELD_VALUE makes the values clean when they come to equal the latest version', () => {
     const a = formReducer(stale, { type: 'SET_FIELD_VALUE', field: 'name', value: 'John' }, v1);
     const b = formReducer(a, { type: 'SET_FIELD_VALUE', field: 'email', value: 'new@example.com' }, v1);
 
     expect(b.isStale).toBe(false);
-    expect(b.cleanValues).toBe(v1);
-    expect(b.baseVersion).toBe(v1);
+    expect(b.cleanValues).toBe(v2);
+    expect(b.baseVersion).toBe(v2);
   });
 
-  test('SET_VALUES clears isStale the same way', () => {
+  test('SET_VALUES makes them clean the same way', () => {
     const result = formReducer(stale, { type: 'SET_VALUES', values: { name: 'John', email: 'new@example.com' } }, v1);
 
     expect(result.isStale).toBe(false);
+    expect(result.cleanValues).toBe(v2);
+    expect(result.baseVersion).toBe(v2);
+  });
+
+  test('an edit back to the latest version stays an edit during a submission', () => {
+    const result = formReducer(
+      { ...stale, isSubmitting: true },
+      { type: 'SET_VALUES', values: { name: 'John', email: 'new@example.com' } },
+      v1,
+    );
+
+    expect(result.isStale).toBe(false);
+    expect(result.cleanValues).toBe(v1);
+  });
+
+  test("an edit back to the latest version stays an edit while a save's answer is pending", () => {
+    // The save of `edited` succeeded before its answer arrived, so the latest version is the one before it
+    const pending: FormState<typeof v1> = { ...s, values: edited, cleanValues: edited, baseVersion: undefined };
+
+    const result = formReducer(pending, { type: 'SET_FIELD_VALUE', field: 'name', value: 'John' }, v1);
+
+    expect(result.cleanValues).toBe(edited);
+    expect(result.baseVersion).toBeUndefined();
   });
 
   test('SET_FIELD_VALUE keeps isStale while the values differ from the latest version', () => {

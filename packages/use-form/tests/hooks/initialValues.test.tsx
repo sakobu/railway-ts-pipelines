@@ -370,6 +370,36 @@ describe('isStale', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
+  test('values that come to equal the latest version count as clean, so the next version is followed', () => {
+    const { result, rerender } = renderForm();
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    // Saved outside handleSubmit, and the saved record passed back in
+    rerender({ initial: { ...draft, title: 'Mine' } });
+    rerender({ initial: { ...draft, title: 'Mine', status: 'published' } });
+
+    expect(result.current.values).toEqual({ ...draft, title: 'Mine', status: 'published' });
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  test('a wrapper that feeds the values back as initialValues follows its own reset', () => {
+    const { result } = renderHook(() => {
+      const [value, setValue] = useState(draft);
+      const form = useForm(publishValidator, {
+        initialValues: value,
+        onFieldChange: (_field, _value, values) => setValue(values),
+      });
+      return { form, reset: () => setValue(draft) };
+    });
+
+    act(() => result.current.form.setFieldValue('title', 'Mine'));
+    act(() => result.current.reset());
+
+    expect(result.current.form.values).toEqual(draft);
+    expect(result.current.form.isStale).toBe(false);
+  });
+
   test('reads false while a save runs, and shows again when the save fails', async () => {
     const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
@@ -438,8 +468,9 @@ describe('saving', () => {
     act(() => {
       submitting = result.current.handleSubmit();
     });
-    rerender({ initial: { ...draft, title: 'Mine' } });
+    // onSubmit's mutation writes the typed values to the cache, and rolls them back once the save has failed
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    rerender({ initial: { ...draft, title: 'Mine' } });
     await act(async () => {
       saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
       await submitting;
