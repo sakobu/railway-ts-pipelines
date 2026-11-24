@@ -169,7 +169,7 @@ function EditContact({ ids }: { ids: string[] }) {
   const queryClient = useQueryClient();
   const [id, setId] = useState(ids[0] ?? '');
 
-  const { data } = useQuery({
+  const { data, isPlaceholderData } = useQuery({
     queryKey: ['contact', id],
     queryFn: () => fetchContact(id),
     // Keep the last loaded contact while the next one loads
@@ -219,8 +219,11 @@ function EditContact({ ids }: { ids: string[] }) {
           </div>
         )}
 
-        <input {...form.getFieldProps('name')} />
-        <input type="email" {...form.getFieldProps('email')} />
+        {/* Typing while the next contact loads would be lost when it arrives */}
+        <fieldset disabled={isPlaceholderData}>
+          <input {...form.getFieldProps('name')} />
+          <input type="email" {...form.getFieldProps('email')} />
+        </fieldset>
 
         {form.errors[ROOT_ERROR_KEY] && <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>}
 
@@ -244,7 +247,8 @@ What happens:
 Things to get right:
 
 - **Key on the loaded id, not the selected id.** `resetKey: data?.id` starts the form over when the new record's data is in `initialValues`. Keying on the selected `id` would reset it while the old record's values are still there.
-- **Keep the previous record while the next one loads** (`placeholderData: keepPreviousData`). Without it, `data` turns `undefined`, so the form resets to empty and then to the next record, and anything typed meanwhile is lost.
+- **Keep the previous record while the next one loads** (`placeholderData: keepPreviousData`). Without it, `data` turns `undefined`, so the form resets to empty and then to the next record.
+- **Disable the fields while the next record loads** (`isPlaceholderData`). Either way, the form starts over when the next record arrives, so anything typed meanwhile is lost.
 - **A failed save for a record the user switched away from shows nowhere.** Block switching while `isSubmitting`, as above, or `await form.handleSubmit()` and report the `err` in a toast.
 - **Two checks prevent lost updates together.** `isStale` covers a change the app has fetched. Save is disabled then, because `data.version` is already the newer version and the server would accept it. The server's version check covers a change the app hasn't fetched yet.
 - **Build `initialValues` the same way on every render.** Create generated values, like a new row's id or today's date, once, and don't read storage during render. Otherwise every render looks like a new version, and `useForm` logs an error naming the cause, or the form shows `isStale` after every edit. Have `toFormValues` return arrays and plain objects, which compare by content. A `Set`, `Map` or Temporal value compares by identity, so a new one on every render does the same. If the form needs one, build `initialValues` with `useMemo`, keyed on `data`. A refetch still rebuilds it, and then it counts as a new version even with the same items.
@@ -1725,13 +1729,17 @@ describe('LoginForm', () => {
 function PersistentForm() {
   // Read once. Reading it every render would feed each saved draft back in as a new version.
   const [saved, setSaved] = useState(() => JSON.parse(localStorage.getItem('draftForm') || '{}'));
+  // Counts submitted drafts: each one starts the form over
+  const [submitted, setSubmitted] = useState(0);
 
   const form = useForm(formSchema, {
     initialValues: { name: '', email: '', ...saved },
+    resetKey: submitted,
     onSubmit: async (values) => {
       await api.submit(values);
       localStorage.removeItem('draftForm');
       setSaved({});
+      setSubmitted((n) => n + 1);
     },
   });
 
@@ -1750,7 +1758,7 @@ function PersistentForm() {
 }
 ```
 
-After the submit, `initialValues` becomes the empty values, and the form follows them because the submit left it with no unsaved edits. `resetForm()` would reset to the draft read on mount, and the persistence effect would save that draft again.
+After the submit, the new `resetKey` starts the form over on the empty values. Following them alone isn't enough: with no draft restored, the empty values equal the ones the form started from, so no new version arrives and the submitted values would stay. `resetForm()` in `onSubmit` would reset to the draft read on mount, and the persistence effect would save that draft again.
 
 ---
 

@@ -63,6 +63,10 @@ export default function EditRecordForm() {
     if (andRefetch) void refetch(data.id);
   };
 
+  // While the next contact loads, the form still shows the last one. The form starts over when the next one
+  // arrives, so typing meanwhile would be lost: the fields are disabled until then.
+  const loading = data?.id !== selectedId;
+
   const touchedCount = Object.values(form.touched).filter(Boolean).length;
 
   return (
@@ -103,19 +107,19 @@ export default function EditRecordForm() {
 
       <div className="field">
         <label htmlFor={form.getFieldId('name')}>Name *</label>
-        <input type="text" {...form.getFieldProps('name')} />
+        <input type="text" {...form.getFieldProps('name')} disabled={loading} />
         {form.getFieldError('name') && <span className="error">{form.getFieldError('name')}</span>}
       </div>
 
       <div className="field">
         <label htmlFor={form.getFieldId('email')}>Email *</label>
-        <input type="email" {...form.getFieldProps('email')} />
+        <input type="email" {...form.getFieldProps('email')} disabled={loading} />
         {form.getFieldError('email') && <span className="error">{form.getFieldError('email')}</span>}
       </div>
 
       <div className="field">
         <label htmlFor={form.getFieldId('role')}>Role *</label>
-        <select {...form.getSelectFieldProps('role')}>
+        <select {...form.getSelectFieldProps('role')} disabled={loading}>
           <option value="admin">Admin</option>
           <option value="editor">Editor</option>
           <option value="viewer">Viewer</option>
