@@ -644,6 +644,66 @@ describe('useFormAutoSubmission', () => {
 
       expect(onSubmit).toHaveBeenCalledTimes(1);
     });
+
+    test("a held save isn't sent when the edits were undone during the save", async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const { result } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // The edit comes due during the save: it's held
+      await sleep(150);
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+      });
+      expect(result.current.isDirty).toBe(false);
+
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+      await sleep(150);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test("after a resetKey switch, the new record's save waits for the previous record's running save", async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
+      const { result, rerender } = renderHook(
+        ({ values, id }: { values: UserForm; id: string }) => {
+          const form = useForm(userValidator, { initialValues: values, resetKey: id, onSubmit });
+          useFormAutoSubmission(form, 50);
+          return form;
+        },
+        { initialProps: { values: initial, id: 'a' } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      rerender({ values: other, id: 'b' });
+      act(() => {
+        result.current.setFieldValue('name', 'Bobby');
+      });
+      await sleep(300);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
+    });
   });
 
   describe('failed saves', () => {
@@ -769,6 +829,93 @@ describe('useFormAutoSubmission', () => {
 
       await wait();
       expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      // The other user undid the change: the dropped save goes out
+      rerender({ values: { ...initial } });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Janet' }]);
+    });
+
+    test("a save dropped as stale doesn't come back as an invalid edit once the form is no longer stale", async () => {
+      const { saves, onSubmit } = createGatedSave();
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      rerender({ values: changed });
+      await wait();
+      await act(async () => {
+        saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
+        await nextTask();
+      });
+      expect(result.current.isStale).toBe(true);
+
+      act(() => {
+        result.current.setFieldValue('email', 'not-an-email');
+      });
+      rerender({ values: { ...initial } });
+      await wait();
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.submitCount).toBe(1);
+    });
+
+    test("a form that's stale isn't validated, and is validated once it isn't", async () => {
+      const validateForm = mock((_values: { name: string }) => ({ ok: true }));
+      const handleSubmit = mock(() => {});
+      const { rerender } = renderHook(
+        ({ name, isStale }: { name: string; isStale: boolean }) =>
+          useFormAutoSubmission(
+            { values: { name }, isDirty: true, isValid: true, isStale, validateForm, handleSubmit },
+            20,
+          ),
+        { initialProps: { name: 'a', isStale: true } },
+      );
+
+      rerender({ name: 'ab', isStale: true });
+      await sleep(80);
+      expect(validateForm).not.toHaveBeenCalled();
+      expect(handleSubmit).not.toHaveBeenCalled();
+
+      rerender({ name: 'ab', isStale: false });
+      await sleep(80);
+      expect(validateForm).toHaveBeenCalledTimes(1);
+      expect(handleSubmit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('a handleSubmit that throws', () => {
+    afterEach(() => {
+      mock.restore();
+    });
+
+    test("is logged, and doesn't stop later edits from being submitted", async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const boom = new Error('boom');
+      let calls = 0;
+      const handleSubmit = () => {
+        calls += 1;
+        if (calls === 1) throw boom;
+      };
+      const validateForm = () => ({ ok: true });
+      const { rerender } = renderHook(
+        ({ values }: { values: { name: string } }) =>
+          useFormAutoSubmission({ values, isDirty: true, isValid: true, validateForm, handleSubmit }, 20),
+        { initialProps: { values: { name: 'a' } } },
+      );
+
+      await sleep(80);
+      rerender({ values: { name: 'ab' } });
+      await sleep(80);
+
+      expect(calls).toBe(2);
+      expect(consoleError).toHaveBeenCalledWith('Auto-submission error:', boom);
     });
   });
 

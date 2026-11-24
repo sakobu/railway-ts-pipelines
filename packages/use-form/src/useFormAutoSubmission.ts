@@ -30,6 +30,8 @@ type FormWithAutoSubmit<T> = {
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
  * An edit made during a save goes out as soon as that save settles, unless the form is then stale.
+ * After a `resetKey` switch, the new record's auto-save waits for the previous record's running save,
+ * and goes out as soon as it settles.
  *
  * @template T - The type of form values
  *
@@ -73,21 +75,25 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
     (submitted: T) => {
       savingRef.current = true;
       savedRef.current = submitted;
-      void Promise.resolve(handleSubmit()).finally(() => {
-        savingRef.current = false;
-        setSettled((n) => n + 1);
-      });
+      // A throw from handleSubmit, sync or async, still settles the save, so later saves aren't held forever
+      void new Promise<unknown>((resolve) => {
+        resolve(handleSubmit());
+      })
+        .catch((error: unknown) => {
+          console.error('Auto-submission error:', error);
+        })
+        .finally(() => {
+          savingRef.current = false;
+          setSettled((n) => n + 1);
+        });
     },
     [handleSubmit],
   );
 
   const debouncedSubmit = useDebounce(() => {
     if (!isValid) return;
-    if (isStale) {
-      // Forget the validated values, so the effect submits them once the form is no longer stale
-      lastValidatedRef.current = null;
-      return;
-    }
+    // The effect already forgot the validated values, so it submits them once the form is no longer stale
+    if (isStale) return;
     if (savingRef.current) {
       heldRef.current = true;
       return;
