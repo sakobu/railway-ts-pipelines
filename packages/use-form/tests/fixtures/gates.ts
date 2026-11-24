@@ -1,4 +1,7 @@
-import type { Result } from '@railway-ts/pipelines/result';
+import { mock } from 'bun:test';
+
+import { ok, type Result } from '@railway-ts/pipelines/result';
+
 import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
 
 /** Waits one macrotask, so callbacks of promises already settled run before the test continues. */
@@ -28,4 +31,20 @@ export const createGatedFieldValidator = () => {
     return call.promise;
   };
   return { calls, gate };
+};
+
+/**
+ * An `onSubmit` whose calls stay pending until the test settles them, in call order. A call settled with
+ * nothing saves, and returns `ok` with the submitted values. One settled with an `ok` or an `err` returns it.
+ *
+ * @template TValues - The form values
+ */
+export const createGatedOnSubmit = <TValues>() => {
+  const saves: PromiseWithResolvers<Result<TValues, ValidationError[]> | undefined>[] = [];
+  const onSubmit = mock(async (values: TValues): Promise<Result<TValues, ValidationError[]>> => {
+    const save = Promise.withResolvers<Result<TValues, ValidationError[]> | undefined>();
+    saves.push(save);
+    return (await save.promise) ?? ok(values);
+  });
+  return { saves, onSubmit };
 };

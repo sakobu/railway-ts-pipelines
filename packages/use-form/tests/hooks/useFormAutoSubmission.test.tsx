@@ -5,7 +5,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
-import { nextTask } from '../fixtures/gates';
+import { createGatedOnSubmit, nextTask } from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -34,17 +34,6 @@ const renderAutoSubmitForm = (
     },
     { initialProps: { values: initial } },
   );
-
-/** A save whose outcome the test decides. */
-const createGatedSave = () => {
-  const saves: PromiseWithResolvers<Result<UserForm, ValidationError[]>>[] = [];
-  const onSubmit = mock((_values: UserForm) => {
-    const save = Promise.withResolvers<Result<UserForm, ValidationError[]>>();
-    saves.push(save);
-    return save.promise;
-  });
-  return { saves, onSubmit };
-};
 
 const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)));
 
@@ -593,7 +582,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test('an edit made during a save goes out as soon as that save settles, without another delay', async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result } = renderAutoSubmitForm(onSubmit, 200);
 
       act(() => {
@@ -619,7 +608,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test("an edit that comes back to the values being saved isn't saved again", async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result } = renderAutoSubmitForm(onSubmit, 200);
 
       act(() => {
@@ -646,7 +635,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test("a held save isn't sent when the edits were undone during the save", async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result } = renderAutoSubmitForm(onSubmit, 50);
 
       act(() => {
@@ -674,7 +663,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test("after a resetKey switch, the new record's save waits for the previous record's running save", async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
       const { result, rerender } = renderHook(
         ({ values, id }: { values: UserForm; id: string }) => {
@@ -804,7 +793,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test("a save that comes due during a save waits for it, and doesn't go out if that save ends stale", async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
 
       act(() => {
@@ -837,7 +826,7 @@ describe('useFormAutoSubmission', () => {
     });
 
     test("a save dropped as stale doesn't come back as an invalid edit once the form is no longer stale", async () => {
-      const { saves, onSubmit } = createGatedSave();
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
 
       act(() => {

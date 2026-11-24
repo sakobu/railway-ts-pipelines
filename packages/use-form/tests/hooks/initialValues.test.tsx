@@ -6,7 +6,7 @@ import { Component, StrictMode, useEffect, useLayoutEffect, useState, type React
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
-import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
+import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
 import type { FormOptions, UseFormReturn } from '../../src/types';
@@ -21,25 +21,6 @@ const renderForm = (options: Omit<FormOptions<PublishForm>, 'initialValues'> = {
     ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: initial, ...options }),
     { initialProps: { initial: draft } },
   );
-
-/** An onSubmit that stays pending until the test releases it. */
-const createGatedOnSubmit = () => {
-  const gate = Promise.withResolvers<void>();
-  const onSubmit = async (_values: PublishForm) => {
-    await gate.promise;
-  };
-  return { onSubmit, release: () => gate.resolve() };
-};
-
-/** An onSubmit that stays pending until the test releases it, then fails as a server's version check would. */
-const createGatedConflict = () => {
-  const gate = Promise.withResolvers<void>();
-  const onSubmit = async (_values: PublishForm) => {
-    await gate.promise;
-    return err([{ path: [], message: 'Conflict' }]);
-  };
-  return { onSubmit, release: () => gate.resolve() };
-};
 
 describe('following new initialValues', () => {
   test('follows a new version when the form has no edits', () => {
@@ -128,7 +109,7 @@ describe('following new initialValues', () => {
   });
 
   test('keeps isSubmitting true when a version lands during a submission', async () => {
-    const { onSubmit, release } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     let submitting!: Promise<unknown>;
@@ -141,7 +122,7 @@ describe('following new initialValues', () => {
     expect(result.current.isSubmitting).toBe(true);
 
     await act(async () => {
-      release();
+      saves[0]!.resolve(undefined);
       await submitting;
     });
     await waitFor(() => expect(result.current.isSubmitting).toBe(false));
@@ -390,7 +371,7 @@ describe('isStale', () => {
   });
 
   test('reads false while a save runs, and shows again when the save fails', async () => {
-    const { onSubmit, release } = createGatedConflict();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'Mine'));
@@ -403,7 +384,7 @@ describe('isStale', () => {
     expect(result.current.isStale).toBe(false);
 
     await act(async () => {
-      release();
+      saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
       await submitting;
     });
 
@@ -427,7 +408,7 @@ describe('saving', () => {
   });
 
   test('keeps typing done during a save, without isStale, when the saved record arrives', async () => {
-    const { onSubmit, release } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'A'));
@@ -436,8 +417,9 @@ describe('saving', () => {
       submitting = result.current.handleSubmit();
     });
     act(() => result.current.setFieldValue('title', 'AB'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     await act(async () => {
-      release();
+      saves[0]!.resolve(undefined);
       await submitting;
     });
     rerender({ initial: { ...draft, title: 'A' } });
@@ -448,7 +430,7 @@ describe('saving', () => {
   });
 
   test("keeps edits through an optimistic write and a failed save's rollback", async () => {
-    const { onSubmit, release } = createGatedConflict();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'Mine'));
@@ -457,8 +439,9 @@ describe('saving', () => {
       submitting = result.current.handleSubmit();
     });
     rerender({ initial: { ...draft, title: 'Mine' } });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     await act(async () => {
-      release();
+      saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
       await submitting;
     });
     rerender({ initial: draft });
@@ -494,7 +477,7 @@ describe('saving', () => {
   });
 
   test('follows a saved record that arrives before onSubmit returns', async () => {
-    const { onSubmit, release } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', ' Mine '));
@@ -507,7 +490,7 @@ describe('saving', () => {
     expect(result.current.isStale).toBe(false);
 
     await act(async () => {
-      release();
+      saves[0]!.resolve(undefined);
       await submitting;
     });
 
@@ -517,7 +500,7 @@ describe('saving', () => {
   });
 
   test('bases typing done during a save on a saved record that arrives before onSubmit returns', async () => {
-    const { onSubmit, release } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'A'));
@@ -529,7 +512,7 @@ describe('saving', () => {
     act(() => result.current.setFieldValue('title', 'AB'));
     rerender({ initial: { ...draft, title: 'A' } });
     await act(async () => {
-      release();
+      saves[0]!.resolve(undefined);
       await submitting;
     });
 
@@ -544,7 +527,7 @@ describe('saving', () => {
   });
 
   test('a follow on a successful save re-validates like any follow', async () => {
-    const { onSubmit, release } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit, validationMode: 'live' });
 
     act(() => result.current.setFieldValue('title', 'Mine'));
@@ -555,7 +538,7 @@ describe('saving', () => {
     await waitFor(() => expect(result.current.isSubmitting).toBe(true));
     rerender({ initial: { ...draft, title: '' } });
     await act(async () => {
-      release();
+      saves[0]!.resolve(undefined);
       await submitting;
     });
 

@@ -1,11 +1,11 @@
 import { describe, test, expect, mock, spyOn } from 'bun:test';
 
-import { err, isErr, isOk, ok, type Result } from '@railway-ts/pipelines/result';
+import { err, isErr, isOk, type Result } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 
 import { useForm } from '../../src/useForm';
-import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
+import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
 import type { FormOptions, ResetKey } from '../../src/types';
@@ -27,23 +27,9 @@ const renderForm = (
     initialProps,
   });
 
-/**
- * An onSubmit whose calls stay pending until the test settles them, in call order. A call settled
- * with `undefined` saves, and one settled with an `err` fails.
- */
-const createGatedOnSubmit = () => {
-  const gates: PromiseWithResolvers<Outcome | undefined>[] = [];
-  const onSubmit = mock(async (values: PublishForm): Promise<Outcome> => {
-    const gate = Promise.withResolvers<Outcome | undefined>();
-    gates.push(gate);
-    return (await gate.promise) ?? ok(values);
-  });
-  return { onSubmit, gates };
-};
-
 describe('resetKey', () => {
   test('a resetKey change starts the form over with the new initialValues', async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     // Saved first, so the edits and errors below come after anything the submit clears
@@ -54,7 +40,7 @@ describe('resetKey', () => {
     });
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await saving;
     });
     expect(result.current.submitCount).toBe(1);
@@ -104,7 +90,7 @@ describe('resetKey', () => {
   });
 
   test('methods keep their identity across a resetKey change', () => {
-    const { onSubmit } = createGatedOnSubmit();
+    const { onSubmit } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
     const before = result.current;
 
@@ -118,7 +104,7 @@ describe('resetKey', () => {
   });
 
   test("a running save's results do not land on the new record", async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'Mine'));
@@ -132,7 +118,7 @@ describe('resetKey', () => {
     expect(result.current.isSubmitting).toBe(false);
 
     await act(async () => {
-      gates[0]!.resolve(
+      saves[0]!.resolve(
         err([
           { path: ['title'], message: 'Taken' },
           { path: [], message: 'Conflict' },
@@ -151,7 +137,7 @@ describe('resetKey', () => {
     // The throw is logged, as for any submission
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const { onSubmit, gates } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
       const { result, rerender } = renderForm({ onSubmit });
 
       let pending!: Promise<Outcome>;
@@ -162,7 +148,7 @@ describe('resetKey', () => {
       rerender({ rec: B, id: 'b' });
 
       await act(async () => {
-        gates[0]!.reject(new Error('Network down'));
+        saves[0]!.reject(new Error('Network down'));
         await nextTask();
       });
 
@@ -207,7 +193,7 @@ describe('resetKey', () => {
   });
 
   test("B's submit starts while A's is still pending", async () => {
-    const { onSubmit } = createGatedOnSubmit();
+    const { onSubmit } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => {
@@ -224,7 +210,7 @@ describe('resetKey', () => {
   });
 
   test("A's save settling doesn't end B's running save", async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => {
@@ -238,7 +224,7 @@ describe('resetKey', () => {
     await waitFor(() => expect(result.current.isSubmitting).toBe(true));
 
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await nextTask();
     });
 
@@ -246,7 +232,7 @@ describe('resetKey', () => {
   });
 
   test("a follow-up queued on A submits A's values, not B's", async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'A1'));
@@ -261,7 +247,7 @@ describe('resetKey', () => {
     rerender({ rec: B, id: 'b' });
 
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await nextTask();
     });
 
@@ -270,7 +256,7 @@ describe('resetKey', () => {
   });
 
   test("a follow-up queued on A that starts after the switch doesn't change B's state", async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'A1'));
@@ -289,7 +275,7 @@ describe('resetKey', () => {
 
     // A's save settles, and its follow-up starts while B's state is current
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await nextTask();
     });
     expect(onSubmit).toHaveBeenCalledTimes(2);
@@ -298,7 +284,7 @@ describe('resetKey', () => {
     expect(result.current.isSubmitting).toBe(false);
 
     await act(async () => {
-      gates[1]!.resolve(undefined);
+      saves[1]!.resolve(undefined);
       await nextTask();
     });
 
@@ -314,7 +300,7 @@ describe('resetKey', () => {
   });
 
   test("a follow-up queued on A that fails its checks after the switch leaves B's errors and flags", async () => {
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     // Rejects only A's follow-up, so its check failing on B would show
     const { result, rerender } = renderForm({
       onSubmit,
@@ -336,7 +322,7 @@ describe('resetKey', () => {
 
     // A's save settles, and its follow-up runs its checks while B's state is current
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await nextTask();
     });
 
@@ -351,7 +337,7 @@ describe('resetKey', () => {
     // Async only for B's edit, so A's submissions validate at once
     const validator: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
       (value as PublishForm).title === 'Bx' ? gated(value, path) : publishValidator(value, path);
-    const { onSubmit, gates } = createGatedOnSubmit();
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderHook(
       ({ rec, id }: Props) => useForm(validator, { initialValues: rec, resetKey: id, onSubmit }),
       { initialProps: { rec: A, id: 'a' } },
@@ -370,7 +356,7 @@ describe('resetKey', () => {
     act(() => result.current.setFieldValue('title', 'Bx'));
 
     await act(async () => {
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
       await nextTask();
     });
     expect(onSubmit).toHaveBeenCalledTimes(2);
@@ -418,7 +404,7 @@ describe('resetKey', () => {
   test('unmounting during a switched-away save still resolves its promise, without errors', async () => {
     const consoleError = spyOn(console, 'error');
     try {
-      const { onSubmit, gates } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
       const { result, rerender, unmount } = renderForm({ onSubmit });
 
       let pending!: Promise<Outcome>;
@@ -428,7 +414,7 @@ describe('resetKey', () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
       rerender({ rec: B, id: 'b' });
       unmount();
-      gates[0]!.resolve(undefined);
+      saves[0]!.resolve(undefined);
 
       expect(isOk(await pending)).toBe(true);
       expect(consoleError).not.toHaveBeenCalled();

@@ -6,7 +6,7 @@ import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'reac
 import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
-import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
+import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import {
   userValidator,
   userWithAddressValidator,
@@ -468,19 +468,8 @@ describe('useForm', () => {
       expect(preventDefault).toHaveBeenCalled();
     });
 
-    /** An onSubmit that stays pending until the test releases it, and reports when it started. */
-    const createGatedOnSubmit = () => {
-      const started = Promise.withResolvers<void>();
-      const gate = Promise.withResolvers<void>();
-      const onSubmit = mock(async (_values: UserForm) => {
-        started.resolve();
-        await gate.promise;
-      });
-      return { onSubmit, started: started.promise, release: gate.resolve };
-    };
-
     test('a second handleSubmit while onSubmit is pending shares its result', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -491,7 +480,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit();
-        await started;
+        await nextTask();
       });
 
       let second!: ReturnType<typeof result.current.handleSubmit>;
@@ -501,7 +490,7 @@ describe('useForm', () => {
       });
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
       });
 
@@ -510,7 +499,7 @@ describe('useForm', () => {
     });
 
     test('handleSubmit with changed values while onSubmit is pending submits them afterwards', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -521,7 +510,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit();
-        await started;
+        await nextTask();
       });
 
       act(() => {
@@ -537,8 +526,11 @@ describe('useForm', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
+        // The follow-up's own save
+        await nextTask();
+        saves[1]!.resolve(undefined);
         await second;
       });
 
@@ -549,7 +541,7 @@ describe('useForm', () => {
     });
 
     test('a shared handleSubmit still calls preventDefault', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -563,7 +555,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.SyntheticEvent);
-        await started;
+        await nextTask();
       });
 
       let second!: ReturnType<typeof result.current.handleSubmit>;
@@ -577,7 +569,7 @@ describe('useForm', () => {
       });
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
         await second;
       });
