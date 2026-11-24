@@ -43,13 +43,16 @@ export type MaybeAsyncValidator<I, O = I> = (
   path?: string[],
 ) => Result<O, ValidationError[]> | Promise<Result<O, ValidationError[]>>;
 
+// `extends infer U ? U : never` resolves the union, so editors show its members rather than this alias.
 /**
  * Extracts the union of output types from a validator map.
  * Used by {@link discriminatedUnion} to infer the output type from the map's validators.
  */
 export type ValidatorMapOutput<M extends Record<string, MaybeAsyncValidator<unknown, unknown>>> = {
   [K in keyof M]: M[K] extends MaybeAsyncValidator<unknown, infer O> ? O : never;
-}[keyof M];
+}[keyof M] extends infer U
+  ? U
+  : never;
 
 // A key whose type accepts undefined is optional, and keeps undefined: the key can be missing or hold undefined.
 type ObjectOutput<T> = {
