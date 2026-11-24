@@ -27,6 +27,14 @@ export type SubmitScheduler<TValues, TOutcome> = {
    * @returns The promise of the submission this call started or joined
    */
   submit: (getValues: () => TValues, run: (values: TValues) => Promise<TOutcome>) => Promise<TOutcome>;
+
+  /**
+   * A waiting follow-up submits `values` instead of calling its `getValues`. Used when the form starts over:
+   * the running submission and its follow-up still run, for the state they belong to.
+   *
+   * @param values - The values the waiting follow-up submits. With nothing waiting, nothing changes.
+   */
+  retire: (values: TValues) => void;
 };
 
 type Running<TValues, TOutcome> = {
@@ -96,5 +104,9 @@ export const createSubmitScheduler = <TValues, TOutcome>(): SubmitScheduler<TVal
     return promise;
   };
 
-  return { submit };
+  const retire = (values: TValues): void => {
+    if (followUp) followUp.getValues = () => values;
+  };
+
+  return { submit, retire };
 };

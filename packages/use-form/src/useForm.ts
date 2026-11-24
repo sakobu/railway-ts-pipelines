@@ -84,6 +84,29 @@ const takeNextFieldSeq = (seqs: Record<FieldPath, number>, key: FieldPath): numb
   return seq;
 };
 
+/**
+ * Places server errors on the form: an error at path `[]` becomes the submit error, and every other
+ * error goes on its path, marked touched so it shows.
+ *
+ * @param send - Dispatches each write, or drops it when the errors no longer belong to the form's state
+ * @param errors - Server validation errors, each with a `path` and a `message`
+ */
+const placeErrorsWith = <TValues extends Record<string, unknown>>(
+  send: (action: FormAction<TValues>) => void,
+  errors: ValidationError[],
+): void => {
+  const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
+  send({
+    type: 'SET_SERVER_ERRORS',
+    errors: perPath,
+    ...(submitError !== undefined && { submitError }),
+  });
+  send({
+    type: 'MARK_ALL_TOUCHED',
+    fields: Object.keys(perPath),
+  });
+};
+
 // =============================================================================
 // Main Hook
 // =============================================================================
@@ -284,8 +307,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Per-field sequence counters for race condition protection on field-level async validation
   const fieldValidationSeqRef = useRef<Record<string, number>>({});
 
-  // Decides what an overlapping handleSubmit does: share the running submission, or follow it
-  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
+  // Decides what an overlapping handleSubmit does: share the running submission, or follow it.
+  // A resetKey reset replaces it, so the new record's submits don't join or wait behind the old record's.
+  const [firstSubmitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
+  const submitSchedulerRef = useRef(firstSubmitScheduler);
 
   // ===========================================================================
   // Computed State
@@ -618,7 +643,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     const next = store.getState();
     if (next !== prev) {
       if (next.generation !== prev.generation) {
-        // Task 3: reset side effects
+        // Started over. The old record's running submission and waiting follow-up still run as the old record's,
+        // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
+        submitSchedulerRef.current.retire(prev.values);
+        submitSchedulerRef.current = createSubmitScheduler();
+
+        if (validateOnMount) {
+          void validateForm(next.values);
+          dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
+        }
       } else if (next.baselineEpoch !== prev.baselineEpoch) {
         runFollowEffects(prev, next);
       }
@@ -627,7 +660,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     if (stabilityCheck.record(storedState, next !== prev, store.getState())) {
       console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);
     }
-  }, [store, dispatch, storedState, initialValues, resetKey, stabilityCheck, runFollowEffects]);
+  }, [
+    store,
+    dispatch,
+    storedState,
+    initialValues,
+    resetKey,
+    stabilityCheck,
+    runFollowEffects,
+    validateForm,
+    validateOnMount,
+  ]);
 
   // ===========================================================================
   // Field Management Functions
@@ -805,18 +848,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * form.setServerErrors([{ path: [], message: "Service unavailable" }]);
    */
   const placeServerErrors = useCallback(
-    (errors: ValidationError[]): void => {
-      const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
-      dispatch({
-        type: 'SET_SERVER_ERRORS',
-        errors: perPath,
-        ...(submitError !== undefined && { submitError }),
-      });
-      dispatch({
-        type: 'MARK_ALL_TOUCHED',
-        fields: Object.keys(perPath),
-      });
-    },
+    (errors: ValidationError[]): void => placeErrorsWith(dispatch, errors),
     [dispatch],
   );
 
@@ -850,18 +882,39 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
+   * Returns a dispatch for the writes of one generation: they land only while the form is still in it,
+   * so after a `resetKey` reset, the previous record's writes are dropped.
+   *
+   * @param generation - The generation the writes belong to
+   * @returns A dispatch that drops each write once `generation` is no longer current
+   */
+  const dispatchIn = useCallback(
+    (generation: number) =>
+      (action: FormAction<TValues>): void => {
+        if (store.getState().generation === generation) dispatch(action);
+      },
+    [store, dispatch],
+  );
+
+  /**
    * Runs one submission of the given values: marks every field touched, counts the attempt,
    * clears server errors, validates, runs the field validators, then calls `onSubmit`.
    * `handleSubmit` decides when it runs, through the submit scheduler.
+   *
+   * The submission belongs to the form state of `generation`. After a `resetKey` reset it still runs
+   * and resolves, but none of its writes land.
    *
    * Never rejects. A throw anywhere, or an `onSubmit` value that is neither a `Result` nor nothing,
    * is logged and resolves to the generic submit error.
    *
    * @param values - The form values to submit
+   * @param generation - The generation current when `handleSubmit` was called
    * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
   const runSubmission = useCallback(
-    async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
+    async (values: TValues, generation: number): Promise<Result<TResult, ValidationError[]>> => {
+      const send = dispatchIn(generation);
+
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
         const { clientErrors, serverErrors, baselineEpoch, lastVersion } = store.getState();
@@ -869,7 +922,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         // The validation's results describe the submitted values, so they land only while those values are
         // still the baseline: a follow of new initialValues or a resetForm() drops them
         const whileBaseline = (action: FormAction<TValues>): void => {
-          if (store.getState().baselineEpoch === baselineEpoch) dispatch(action);
+          if (store.getState().baselineEpoch === baselineEpoch) send(action);
         };
 
         // Mark all fields and error paths as touched (deep)
@@ -878,24 +931,25 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
         );
 
-        dispatch({
+        send({
           type: 'MARK_ALL_TOUCHED',
           fields: allPaths,
         });
 
         // Increment submit count on every attempt (regardless of validation outcome)
-        dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
+        send({ type: 'INCREMENT_SUBMIT_COUNT' });
 
         // Clear any existing server errors
-        dispatch({
+        send({
           type: 'CLEAR_SERVER_ERRORS',
         });
 
-        // Invalidate any pending live async validations
-        ++validationSeqRef.current;
+        // Invalidate any pending live async validations, unless a resetKey reset replaced this submission's
+        // state: a follow-up of the previous record can start during the new record's, whose validations stay
+        if (store.getState().generation === generation) ++validationSeqRef.current;
 
         // Show validating state during submit validation
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+        send({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
 
         let validationResult: Result<TValues, ValidationError[]>;
         try {
@@ -918,7 +972,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         const validData = validationResult.value;
 
         // Only set isSubmitting after validation passes
-        dispatch({
+        send({
           type: 'SET_SUBMITTING',
           isSubmitting: true,
         });
@@ -947,10 +1001,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
           // A successful save settles the baseline. A version that arrived while it ran is the save's own
           // answer: the form follows it, or bases the edits on it. Inside the try, so isSubmitting stays
-          // true until the finally.
+          // true until the finally. A dropped write leaves the epoch as it was, so nothing follows.
           const settleSuccess = () => {
             const before = store.getState();
-            dispatch({ type: 'SUBMIT_SUCCEEDED', values, baselineEpoch, lastVersion });
+            send({ type: 'SUBMIT_SUCCEEDED', values, baselineEpoch, lastVersion });
             const after = store.getState();
             if (after.baselineEpoch !== before.baselineEpoch) runFollowEffects(before, after);
           };
@@ -968,14 +1022,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
 
           if (isErr(outcome)) {
-            placeServerErrors(outcome.error);
+            placeErrorsWith(send, outcome.error);
           } else {
             settleSuccess();
           }
 
           return outcome;
         } finally {
-          dispatch({
+          send({
             type: 'SET_SUBMITTING',
             isSubmitting: false,
           });
@@ -984,11 +1038,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         console.error('Form submission error:', error);
 
         // Sets only the submit error: field errors placed during the submission stay
-        dispatch({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
+        send({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
         return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
       }
     },
-    [store, dispatch, validator, onSubmit, fieldValidators, placeServerErrors, runFollowEffects],
+    [store, validator, onSubmit, fieldValidators, runFollowEffects, dispatchIn],
   );
 
   /**
@@ -1003,6 +1057,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * While a submission is running, a call with the same values shares its Promise, and a call
    * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
+   *
+   * A submission belongs to the record the form held when it was called. After a `resetKey` change it
+   * still runs and its Promise still resolves, but none of its results land on the new record's form,
+   * and the new record's submit doesn't wait for it.
    *
    * @param e - Optional form event (will preventDefault if provided)
    * @returns Promise<Result<TResult, ValidationError[]>> - Railway Result with `onSubmit`'s value, the validated data, or errors
@@ -1045,9 +1103,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const handleSubmit = useCallback(
     (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
-      return submitScheduler.submit(() => store.getState().values, runSubmission);
+      const { generation } = store.getState();
+      return submitSchedulerRef.current.submit(
+        () => store.getState().values,
+        (values) => runSubmission(values, generation),
+      );
     },
-    [store, submitScheduler, runSubmission],
+    [store, runSubmission],
   );
 
   /**

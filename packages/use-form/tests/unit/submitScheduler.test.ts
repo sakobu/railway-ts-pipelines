@@ -134,4 +134,19 @@ describe('createSubmitScheduler', () => {
     pending[2]!.resolve('third');
     expect(await third).toBe('third');
   });
+
+  test('retire makes a waiting follow-up submit the given values', async () => {
+    const scheduler = createSubmitScheduler<{ n: number }, string>();
+    const first = Promise.withResolvers<string>();
+    const run = mock((v: { n: number }) => (v.n === 1 ? first.promise : Promise.resolve('second')));
+    let live = { n: 1 };
+    void scheduler.submit(() => live, run);
+    live = { n: 2 };
+    const followUp = scheduler.submit(() => live, run);
+    scheduler.retire({ n: 2 });
+    live = { n: 3 };
+    first.resolve('first');
+    expect(await followUp).toBe('second');
+    expect(run.mock.calls[1]?.[0]).toEqual({ n: 2 });
+  });
 });
