@@ -2963,6 +2963,73 @@ describe('useForm', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
+    test('handleSubmit skips a field validator set to undefined', async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const onSubmit = mock(() => {});
+        const checkEmail = mock(() => undefined);
+        const { result } = renderHook(() =>
+          useForm(userValidator, {
+            initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+            fieldValidators: { name: undefined, email: checkEmail },
+            onSubmit,
+          }),
+        );
+
+        let outcome!: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+        await act(async () => {
+          outcome = await result.current.handleSubmit();
+        });
+
+        expect(outcome).toEqual(ok({ name: 'John', email: 'john@test.com', age: 25 }));
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(onSubmit).toHaveBeenCalledWith({ name: 'John', email: 'john@test.com', age: 25 });
+        expect(checkEmail).toHaveBeenCalledTimes(1);
+        expect(result.current.fieldErrors).toEqual({});
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    test('a field validator set to undefined does not hide another field validator error at submit', async () => {
+      const onSubmit = mock(() => {});
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          fieldValidators: { name: undefined, email: () => 'Email is taken' },
+          onSubmit,
+        }),
+      );
+
+      let outcome!: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+      await act(async () => {
+        outcome = await result.current.handleSubmit();
+      });
+
+      expect(outcome).toEqual(err([{ path: ['email'], message: 'Email is taken' }]));
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.fieldErrors).toEqual({ email: 'Email is taken' });
+    });
+
+    test('a field validator set to undefined is skipped on a field change', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+          validationMode: 'live',
+          fieldValidators: { name: undefined },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      expect(result.current.validatingFields.name).toBeUndefined();
+      expect(result.current.isValidating).toBe(false);
+      expect(result.current.fieldErrors).toEqual({});
+    });
+
     test('resetForm clears validatingFields and fieldErrors', async () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
