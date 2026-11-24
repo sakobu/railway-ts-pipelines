@@ -609,7 +609,7 @@ Options for controlling validation behavior. When `abortEarly` is `true`, valida
 type UnionOptions = { collectAllErrors?: boolean | undefined; errorPrefix?: string | undefined };
 ```
 
-Options for [`union`](#union). When `collectAllErrors` is `true` (the default), the union tries every validator until one succeeds, and a failure reports all their errors; when `false`, it stops at the first validator that fails and reports only its errors. `errorPrefix` is put before each error message, as `${errorPrefix}: ${message}`.
+Options for [`union`](#union). When `collectAllErrors` is `true` (the default), a union that fails reports every validator's errors; when `false`, only the first validator's. `errorPrefix` is put before each error message, as `${errorPrefix}: ${message}`.
 
 #### `InferSchemaType<V>`
 

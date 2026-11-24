@@ -4,10 +4,7 @@ import type { MaybeAsyncValidator, ValidatorMapOutput, ValidationError, Validato
 
 /** Options for {@link union}. */
 export type UnionOptions = {
-  /**
-   * When true (the default), the union tries every validator until one succeeds, and a failure reports all their
-   * errors. When false, it stops at the first validator that fails and reports only its errors.
-   */
+  /** When true (the default), a union that fails reports every validator's errors; when false, only the first's. */
   collectAllErrors?: boolean | undefined;
   /** Put before each error message, as `${errorPrefix}: ${message}`. */
   errorPrefix?: string | undefined;
