@@ -54,6 +54,18 @@ describe('createFormStore', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  test('setInitialValues neither changes the state nor notifies', () => {
+    const store = createFormStore(initialState, initialState.values);
+    const listener = mock(() => {});
+    store.subscribe(listener);
+    const before = store.getState();
+
+    store.setInitialValues({ name: 'B' });
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(store.getState()).toBe(before);
+  });
+
   test('the reducer gets the initial values set most recently, at dispatch time', () => {
     const store = createFormStore<Values>(initialState, { name: '' });
 

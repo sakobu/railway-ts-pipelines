@@ -23,6 +23,7 @@ import {
   type UserWithAddressForm,
 } from '../fixtures/validators';
 
+import type { UseFormReturn } from '../../src/types';
 import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
@@ -3185,6 +3186,34 @@ describe('useForm', () => {
         );
       };
 
+      // Resets, then types, in the commit that brings new initialValues. The edit stops a follow, so the
+      // values show which initialValues the reset itself used.
+      const LayoutResetThenTypeChild = ({
+        initial,
+        form,
+      }: {
+        initial: PublishForm;
+        form: UseFormReturn<PublishForm>;
+      }) => {
+        const { resetForm, setFieldValue } = form;
+        useLayoutEffect(() => {
+          if (initial === draft) return;
+          resetForm();
+          setFieldValue('title', 'Typed');
+        }, [initial, resetForm, setFieldValue]);
+        return null;
+      };
+
+      const ResetThenTypeForm = ({ initial }: { initial: PublishForm }) => {
+        const form = useForm(publishValidator, { initialValues: initial });
+        return (
+          <>
+            <output data-testid="status">{form.values.status}</output>
+            <LayoutResetThenTypeChild initial={initial} form={form} />
+          </>
+        );
+      };
+
       const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
 
       test('a passive effect resets to the new initialValues', () => {
@@ -3203,6 +3232,14 @@ describe('useForm', () => {
 
         expect(getByTestId('title').textContent).toBe('Loaded');
         expect(getByTestId('dirty').textContent).toBe('false');
+      });
+
+      test('a layout effect resets to the initialValues of the same commit, when an edit then stops the follow', () => {
+        const { rerender, getByTestId } = render(<ResetThenTypeForm initial={draft} />);
+
+        rerender(<ResetThenTypeForm initial={loaded} />);
+
+        expect(getByTestId('status').textContent).toBe('published');
       });
     });
 
