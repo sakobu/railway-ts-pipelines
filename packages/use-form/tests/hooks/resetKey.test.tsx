@@ -147,6 +147,32 @@ describe('resetKey', () => {
     expect(result.current.isSubmitting).toBe(false);
   });
 
+  test("a running save that throws after the switch doesn't set the new record's submit error", async () => {
+    // The throw is logged, as for any submission
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { onSubmit, gates } = createGatedOnSubmit();
+      const { result, rerender } = renderForm({ onSubmit });
+
+      let pending!: Promise<Outcome>;
+      act(() => {
+        pending = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      rerender({ rec: B, id: 'b' });
+
+      await act(async () => {
+        gates[0]!.reject(new Error('Network down'));
+        await nextTask();
+      });
+
+      expect(isErr(await pending)).toBe(true);
+      expect(result.current.errors).toEqual({});
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test('a stale async validation result is dropped', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(
@@ -195,6 +221,28 @@ describe('resetKey', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
     expect(onSubmit.mock.calls[1]![0]).toEqual(B);
+  });
+
+  test("A's save settling doesn't end B's running save", async () => {
+    const { onSubmit, gates } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => {
+      void result.current.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    rerender({ rec: B, id: 'b' });
+    act(() => {
+      void result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+
+    await act(async () => {
+      gates[0]!.resolve(undefined);
+      await nextTask();
+    });
+
+    expect(result.current.isSubmitting).toBe(true);
   });
 
   test("a follow-up queued on A submits A's values, not B's", async () => {
@@ -263,6 +311,39 @@ describe('resetKey', () => {
     // The follow-up's success didn't settle B's baseline on A's values: B still follows its next version
     rerender({ rec: { ...B, title: 'B2' }, id: 'b' });
     expect(result.current.values.title).toBe('B2');
+  });
+
+  test("a follow-up queued on A that fails its checks after the switch leaves B's errors and flags", async () => {
+    const { onSubmit, gates } = createGatedOnSubmit();
+    // Rejects only A's follow-up, so its check failing on B would show
+    const { result, rerender } = renderForm({
+      onSubmit,
+      fieldValidators: { title: (value) => (value === 'A2' ? 'Only for A' : undefined) },
+    });
+
+    act(() => result.current.setFieldValue('title', 'A1'));
+    act(() => {
+      void result.current.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    act(() => result.current.setFieldValue('title', 'A2'));
+    let followUp!: Promise<Outcome>;
+    act(() => {
+      followUp = result.current.handleSubmit();
+    });
+    rerender({ rec: B, id: 'b' });
+    act(() => result.current.setServerErrors([{ path: ['status'], message: 'Taken' }]));
+
+    // A's save settles, and its follow-up runs its checks while B's state is current
+    await act(async () => {
+      gates[0]!.resolve(undefined);
+      await nextTask();
+    });
+
+    expect(isErr(await followUp)).toBe(true);
+    expect(result.current.serverErrors).toEqual({ status: 'Taken' });
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.isValidating).toBe(false);
   });
 
   test("a follow-up queued on A that starts after the switch doesn't drop B's validation still running", async () => {
