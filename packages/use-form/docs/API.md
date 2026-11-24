@@ -327,7 +327,7 @@ Type: `boolean`
 
 True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`. A `resetKey` change, a successful save, and the other person undoing their change clear it too.
 
-It reads false while a submission runs, since a version that arrives then may be the save's own answer. A failed save shows it again.
+It reads false while a submission runs, since a version that arrives then may be the save's own answer. A failed save shows it again. A save that was waiting behind it, such as a queued Save or an auto-save, then isn't sent: see [`handleSubmit`](#handlesubmit).
 
 ```typescript
 {form.isStale && (
@@ -410,7 +410,7 @@ const errors = {
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
@@ -583,6 +583,13 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 - Same values as the running submission: the call shares its promise, so `onSubmit` does not run twice on a double-click during a slow request.
 - Different values: the call waits for the running submission, then submits the latest values. At most one follow-up waits, so auto-save does not miss edits made during a save.
 
+**A save that would overwrite a newer version isn't sent.** Just before `onSubmit`, the submission checks whether a newer `initialValues` arrived that it would overwrite:
+
+- one that arrived while it validated, and made the form stale or was followed
+- one that made the form stale while a running submission hid `isStale`, as for a follow-up queued behind a save that then failed
+
+Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. A save started while `isStale` read true still goes out: the app chose to overwrite.
+
 **What it does:**
 
 1. Calls `preventDefault` on the event (if provided)
@@ -590,7 +597,7 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 3. Clears existing server errors
 4. Runs schema validation (awaits if async)
 5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
-6. If everything passes, calls `onSubmit` (if provided); an `err` it returns is placed on the form
+6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form
 7. Returns the `Result`
 
 **Example:**
@@ -1300,7 +1307,7 @@ Hook for auto-submitting forms after debounced changes.
 Monitors form values and automatically triggers submission when the form
 is dirty, valid, and values have changed since the last validation.
 
-It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save goes out as soon as that save settles, unless the form is then stale or invalid.
+It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save, its own or a manual one, goes out as soon as that save settles, unless the form is then stale or invalid.
 
 After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
 

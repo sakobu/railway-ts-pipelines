@@ -1273,6 +1273,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * - `err` with the validation errors, or with `onSubmit`'s `err`
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error.
+   * - `err` with a submit error, without calling `onSubmit`, when the save would overwrite a newer `initialValues`:
+   *   one that arrived while it validated and made the form stale or was followed, or one that made the form
+   *   stale while a running submission hid `isStale`. A save started while `isStale` read true still goes out.
    *
    * @example
    * <form onSubmit={form.handleSubmit}>

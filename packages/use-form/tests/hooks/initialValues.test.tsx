@@ -451,6 +451,125 @@ describe('isStale', () => {
 });
 
 describe('saving', () => {
+  const CHANGED_WHILE_SAVING =
+    'The record changed while saving, so nothing was saved. Review the latest version and save again.';
+
+  /** A form in submit mode, so only the submission calls the gated validator. */
+  const renderGatedForm = (onSubmit: (values: PublishForm) => void) => {
+    const gate = createGatedValidator<PublishForm>();
+    const rendered = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(gate.gated, { initialValues: initial, onSubmit, validationMode: 'submit' }),
+      { initialProps: { initial: draft } },
+    );
+    return { ...rendered, pending: gate.pending };
+  };
+
+  test("a version that makes the form stale while the save validates cancels it: onSubmit isn't called", async () => {
+    const onSubmit = mock((_values: PublishForm) => {});
+    const { result, rerender, pending } = renderGatedForm(onSubmit);
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ initial: { ...draft, status: 'published' } });
+    let outcome!: Awaited<typeof submitting>;
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+      outcome = await submitting;
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(outcome).toEqual(err([{ path: [], message: CHANGED_WHILE_SAVING }]));
+    expect(result.current.errors._root).toBe(CHANGED_WHILE_SAVING);
+    expect(result.current.isStale).toBe(true);
+    expect(result.current.values.title).toBe('Mine');
+  });
+
+  test('a version followed while the save validates cancels it too', async () => {
+    const onSubmit = mock((_values: PublishForm) => {});
+    const { result, rerender, pending } = renderGatedForm(onSubmit);
+
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ initial: loaded });
+    await act(async () => {
+      for (const check of pending) check.resolve(ok(draft));
+      await submitting;
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(result.current.values).toEqual(loaded);
+    expect(result.current.errors._root).toBe(CHANGED_WHILE_SAVING);
+  });
+
+  test('a save started while the form shows isStale goes out: the app chose to overwrite', async () => {
+    const onSubmit = mock((_values: PublishForm) => {});
+    const { result, rerender, pending } = renderGatedForm(onSubmit);
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    rerender({ initial: { ...draft, status: 'published' } });
+    expect(result.current.isStale).toBe(true);
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+      await submitting;
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith({ ...draft, title: 'Mine' });
+  });
+
+  test("a failed save's field errors don't land after resetForm() during it, but its submit error does", async () => {
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+    const { result } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    act(() => result.current.resetForm());
+    await act(async () => {
+      saves[0]!.resolve(
+        err([
+          { path: ['title'], message: 'Taken' },
+          { path: [], message: 'Down' },
+        ]),
+      );
+      await submitting;
+    });
+
+    expect(result.current.serverErrors).toEqual({ _root: 'Down' });
+    expect(result.current.touched).toEqual({});
+  });
+
+  test("a failed save's field errors don't land on a version followed during it", async () => {
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    rerender({ initial: loaded });
+    await act(async () => {
+      saves[0]!.resolve(err([{ path: ['title'], message: 'Taken' }]));
+      await submitting;
+    });
+
+    expect(result.current.values).toEqual(loaded);
+    expect(result.current.serverErrors).toEqual({});
+  });
+
   test('follows a saved record that differs from the submitted values', async () => {
     const { result, rerender } = renderForm({ onSubmit: () => {} });
 

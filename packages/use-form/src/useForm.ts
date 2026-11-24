@@ -65,6 +65,10 @@ import type {
 /** The submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
 const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
+/** The submit error for a save cancelled before `onSubmit`, because it would overwrite a newer version. */
+const CHANGED_WHILE_SAVING_MESSAGE =
+  'The record changed while saving, so nothing was saved. Review the latest version and save again.';
+
 /** Logged once per form when initialValues keeps changing along with the form's own state. */
 const UNSTABLE_INITIAL_VALUES_MESSAGE =
   "useForm: initialValues or resetKey keeps changing along with the form's own state. " +
@@ -933,15 +937,20 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * The submission belongs to the form state of `generation`. After a `resetKey` reset it still runs
    * and resolves, but none of its writes land.
    *
+   * It doesn't call `onSubmit` when the save would overwrite a newer version of the record: one that arrived
+   * while it validated and made the form stale or was followed, or a staleness that a running submission hid
+   * from the caller. It resolves to a submit error instead.
+   *
    * Never rejects. A throw anywhere, or an `onSubmit` value that is neither a `Result` nor nothing,
    * is logged and resolves to the generic submit error.
    *
    * @param values - The form values to submit
    * @param generation - The generation current when `handleSubmit` was called
+   * @param staleShown - Whether `isStale` read true when `handleSubmit` was called: the app chose to overwrite
    * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
   const runSubmission = useCallback(
-    async (values: TValues, generation: number): Promise<Result<TResult, ValidationError[]>> => {
+    async (values: TValues, generation: number, staleShown: boolean): Promise<Result<TResult, ValidationError[]>> => {
       const send = dispatchIn(generation);
 
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
@@ -950,8 +959,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
         // The validation's results describe the submitted values, so they land only while those values are
         // still the baseline: a follow of new initialValues or a resetForm() drops them
+        const isBaseline = (): boolean => store.getState().baselineEpoch === baselineEpoch;
         const whileBaseline = (action: FormAction<TValues>): void => {
-          if (store.getState().baselineEpoch === baselineEpoch) send(action);
+          if (isBaseline()) send(action);
+        };
+
+        // Whether the save would overwrite a newer version of the record. After a resetKey switch, the previous
+        // record's save still goes out, as a remount's would.
+        const isOvertaken = (): boolean => {
+          const now = store.getState();
+          if (now.generation !== generation) return false;
+          // A staleness the caller couldn't see, because isStale reads false while a submission runs
+          if (now.isStale && !staleShown) return true;
+          if (now.lastVersion === lastVersion) return false;
+          // A version that arrived since: the form went stale, or followed it and no longer shows these values
+          return now.isStale || (!isBaseline() && !deepEqual(now.values, values));
         };
 
         // Mark all fields and error paths as touched (deep)
@@ -1039,6 +1061,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             if (after.baselineEpoch !== before.baselineEpoch) runFollowEffects(before, after);
           };
 
+          // The last check before the save goes out
+          if (isOvertaken()) {
+            send({ type: 'SET_SUBMIT_ERROR', submitError: CHANGED_WHILE_SAVING_MESSAGE });
+            return err([{ path: [], message: CHANGED_WHILE_SAVING_MESSAGE }]);
+          }
+
           const outcome = onSubmit ? await onSubmit(validData) : undefined;
 
           if (outcome === undefined) {
@@ -1052,7 +1080,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
 
           if (isErr(outcome)) {
-            placeErrorsWith(send, outcome.error);
+            if (isBaseline()) {
+              placeErrorsWith(send, outcome.error);
+            } else {
+              // A follow or resetForm() replaced the submitted values, so the field errors would describe values no
+              // longer shown. The submit error is about the attempt, and still shows.
+              const submitError = formatErrors(outcome.error)[ROOT_ERROR_KEY];
+              if (submitError !== undefined) send({ type: 'SET_SUBMIT_ERROR', submitError });
+            }
           } else {
             settleSuccess();
           }
@@ -1084,6 +1119,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
    *   error is logged with `console.error`.
+   * - `err` with a submit error, without calling `onSubmit`, when the save would overwrite a newer version of
+   *   the record that the caller hadn't seen (see `runSubmission`)
    *
    * While a submission is running, a call with the same values shares its Promise, and a call
    * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
@@ -1133,10 +1170,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const handleSubmit = useCallback(
     (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
-      const { generation } = store.getState();
+      const { generation, isStale, isSubmitting } = store.getState();
+      // What isStale read: a submission running hides it
+      const staleShown = isStale && !isSubmitting;
       return submitSchedulerRef.current.submit(
         () => store.getState().values,
-        (values) => runSubmission(values, generation),
+        (values) => runSubmission(values, generation, staleShown),
       );
     },
     [store, runSubmission],

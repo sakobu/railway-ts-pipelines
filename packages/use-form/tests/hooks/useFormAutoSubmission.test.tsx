@@ -1005,6 +1005,37 @@ describe('useFormAutoSubmission', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Janet' }]);
     });
 
+    test("a save that comes due during a manual save doesn't go out if that save ends stale", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The user clicks Save, and types on before the auto-save's delay ends
+      let saving!: Promise<unknown>;
+      act(() => {
+        saving = result.current.handleSubmit();
+      });
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      // The auto-save comes due during the manual save, then someone else changes the record
+      await wait();
+      rerender({ values: changed });
+
+      await act(async () => {
+        saves[0]!.resolve(err([{ path: [], message: 'Conflict' }]));
+        await saving;
+      });
+      await wait();
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.isStale).toBe(true);
+      expect(result.current.values.name).toBe('Janet');
+    });
+
     test("a save dropped as stale doesn't come back as an invalid edit once the form is no longer stale", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
