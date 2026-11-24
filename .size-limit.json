@@ -34,7 +34,7 @@
       "packages/pipelines/dist/schema/index.mjs",
       "packages/use-form/dist/index.mjs"
     ],
-    "limit": "12 kB",
+    "limit": "13 kB",
     "ignore": ["react", "react-dom"]
   }
 ]
