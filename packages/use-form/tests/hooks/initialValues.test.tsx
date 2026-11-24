@@ -172,6 +172,44 @@ describe('errors after a follow', () => {
     expect(result.current.clientErrors).toEqual({});
   });
 
+  test('blur mode re-validates once a field was blurred, even with no errors shown', () => {
+    const { result, rerender } = renderForm({ validationMode: 'blur' });
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.clientErrors).toEqual({});
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.getFieldError('title')).toBe('Title is required');
+    expect(result.current.isValid).toBe(false);
+  });
+
+  test("blur mode doesn't start validating before any field was blurred", () => {
+    const { result, rerender } = renderForm({ validationMode: 'blur' });
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.clientErrors).toEqual({});
+  });
+
+  test('submit mode re-validates after a submit attempt, even with no errors shown', async () => {
+    const { result, rerender } = renderForm({ validationMode: 'submit', onSubmit: () => {} });
+    await act(() => result.current.handleSubmit());
+    expect(result.current.clientErrors).toEqual({});
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.getFieldError('title')).toBe('Title is required');
+  });
+
+  test("submit mode doesn't start validating when a field is only marked touched", () => {
+    const { result, rerender } = renderForm({ validationMode: 'submit' });
+    act(() => result.current.setFieldTouched('title'));
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.clientErrors).toEqual({});
+  });
+
   test('blur mode re-validates when client errors already exist', () => {
     const { result, rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) =>
@@ -867,7 +905,8 @@ describe('state identity', () => {
     const runs = { errors: 0, serverErrors: 0 };
     const { result, rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) => {
-        // blur mode: the follow doesn't re-validate, so only its own change shows
+        // blur mode, with title touched by the server error: the follow re-validates, and its valid result keeps
+        // clientErrors as they were, so only the follow's own change shows
         const form = useForm(publishValidator, { initialValues: initial, validationMode: 'blur' });
         useEffect(() => {
           runs.errors += 1;

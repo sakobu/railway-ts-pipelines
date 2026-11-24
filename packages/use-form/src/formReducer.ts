@@ -11,9 +11,9 @@ import {
 import type { FieldPath, FormAction, FormState, ResetKey } from './types';
 
 /**
- * The one empty map shared by a fresh state's maps, a follow's server errors and cleared server errors.
- * A render that derives a state and the store that computes the same state then hold the same map, and
- * clearing server errors that were already empty keeps their identity, so values derived from them do too.
+ * The one empty map shared by a fresh state's maps, a follow's server errors, cleared server errors and a valid
+ * result's client errors. A render that derives a state and the store that computes the same state then hold the
+ * same map, and clearing errors that were already empty keeps their identity, so values derived from them do too.
  * Frozen, since the reducer copies before every write: a mutation in place would throw.
  */
 const EMPTY: Readonly<Record<string, never>> = Object.freeze({});
@@ -188,11 +188,11 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         },
       };
 
-    case 'SET_CLIENT_ERRORS':
-      return {
-        ...state,
-        clientErrors: normalizePathKeys(action.errors),
-      };
+    case 'SET_CLIENT_ERRORS': {
+      const clientErrors = normalizePathKeys(action.errors);
+      // A valid result keeps the shared empty map, so values derived from it, like `errors`, keep their identity
+      return { ...state, clientErrors: Object.keys(clientErrors).length === 0 ? EMPTY : clientErrors };
+    }
 
     case 'SET_SERVER_ERRORS': {
       const { submitError: _submitError, ...rest } = state;

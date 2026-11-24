@@ -103,7 +103,7 @@ initialValues: {
 
 The form follows new `initialValues`, such as a refetched record:
 
-- With no unsaved edits, the form shows the new values in the same render.
+- With no unsaved edits, the form shows the new values in the same render. Its errors then describe them: it re-validates in `live` and `mount` modes, in `blur` mode once a field was blurred, after a submit attempt, and whenever errors already show. A mode that wouldn't have validated yet still doesn't.
 - With edits, they stay, and [`isStale`](#isstale) reports that a newer version arrived.
 - Values that equal the latest `initialValues` count as having no edits, so the next version is followed. That covers a save made outside `handleSubmit` whose record is passed back in, a wrapper that feeds the values back as `initialValues`, and typing that matches the latest version. While a submission runs, matching values still count as edits: the version may be an optimistic write that a failed save rolls back.
 - New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed. The one exception is a saved record equal to the version before the save, as when the server trims `'Hello '` back to `'Hello'`. It can't be told apart from the same data rendered again, so the form keeps the typed values and stays dirty.

@@ -617,9 +617,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   /**
    * Runs the side effects of a follow, so the errors describe the values shown. It re-validates when the
-   * mode or the errors already shown call for it, re-runs the field validators that have an error or are
-   * still running, and in `mount` mode marks the new version's fields touched. A mode that wouldn't have
-   * validated yet still doesn't.
+   * mode calls for it, when the form has validated before (a blurred field in `blur` mode, a submit attempt in
+   * any mode), or when errors are shown or still being checked. It re-runs the field validators that have an
+   * error or are still running, and in `mount` mode marks the new version's fields touched. A mode that
+   * wouldn't have validated yet still doesn't.
    *
    * @param prev - The state before the follow
    * @param next - The state after it
@@ -627,10 +628,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const runFollowEffects = useCallback(
     (prev: FormState<TValues>, next: FormState<TValues>): void => {
       const fields = Array.from(new Set([...Object.keys(prev.fieldErrors), ...Object.keys(prev.validatingFields)]));
+      const blurred = validateOnBlur && Object.values(prev.touched).some(Boolean);
 
       if (
         validateOnChange ||
         validateOnMount ||
+        blurred ||
+        prev.submitCount > 0 ||
         Object.keys(prev.clientErrors).length > 0 ||
         prev.isFormValidating ||
         fields.length > 0
@@ -643,7 +647,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
       }
     },
-    [dispatch, validateOnChange, validateOnMount, validateForm, runFieldAfterSchema],
+    [dispatch, validateOnChange, validateOnBlur, validateOnMount, validateForm, runFieldAfterSchema],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates

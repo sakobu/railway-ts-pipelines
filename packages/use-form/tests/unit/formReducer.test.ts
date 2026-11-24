@@ -291,6 +291,12 @@ describe('formReducer', () => {
 
       expect(result.clientErrors).toEqual(newErrors);
     });
+
+    test('no errors keep the shared empty map, so a valid result changes nothing derived from it', () => {
+      const result = formReducer(initialState, { type: 'SET_CLIENT_ERRORS', errors: {} }, initialValues);
+
+      expect(result.clientErrors).toBe(initialState.clientErrors);
+    });
   });
 
   describe('SET_SERVER_ERRORS', () => {
