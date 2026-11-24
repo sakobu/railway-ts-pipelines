@@ -263,6 +263,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     initialValues,
     resetKey,
     onSubmit,
+    savedValues,
     validationMode,
     fieldValidators,
     onValuesChange,
@@ -1198,13 +1199,28 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             }
           }
 
-          // A successful save settles the baseline. A version that arrived while it ran is the save's own
-          // answer: the form follows it, or bases the edits on it. A latest version equal to the base isn't: it's
-          // the previous save's answer or the old base coming back. Inside the try, so isSubmitting stays true
-          // until the finally. A dropped write leaves the epoch as it was, so nothing follows.
-          const settleSuccess = () => {
+          // A successful save settles the baseline. With savedValues, the save's answer is the version equal to what
+          // it stored. Without, a version that arrived while it ran is the answer: the form follows it, or bases the
+          // edits on it. A latest version equal to the base isn't: it's the previous save's answer or the old base
+          // coming back. Inside the try, so isSubmitting stays true until the finally. A dropped write leaves the
+          // epoch as it was, so nothing follows.
+          const settleSuccess = (result: TResult) => {
+            let saved: TValues | undefined;
+            try {
+              saved = savedValues?.(result);
+            } catch (error) {
+              // The save succeeded all the same: without what it stored, the form finds its answer as it does without
+              // savedValues
+              console.error('Form submission error:', error);
+            }
             const before = store.getState();
-            send({ type: 'SUBMIT_SUCCEEDED', values, baselineEpoch, lastVersion });
+            send({
+              type: 'SUBMIT_SUCCEEDED',
+              values,
+              baselineEpoch,
+              lastVersion,
+              ...(saved !== undefined && { saved }),
+            });
             const after = store.getState();
             if (after.baselineEpoch !== before.baselineEpoch) runFollowEffects(before, after);
           };
@@ -1225,9 +1241,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           const outcome = await onSubmit(validData);
 
           if (outcome === undefined) {
-            settleSuccess();
             // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues
-            return ok(validData) as Result<TResult, ValidationError[]>;
+            const result = validData as unknown as TResult;
+            settleSuccess(result);
+            return ok(result);
           }
 
           if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
@@ -1247,7 +1264,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               if (submitError !== undefined) send({ type: 'SET_SUBMIT_ERROR', submitError });
             }
           } else {
-            settleSuccess();
+            settleSuccess(outcome.value);
           }
 
           return outcome;
@@ -1269,6 +1286,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       store,
       validator,
       onSubmit,
+      savedValues,
       fieldValidators,
       runFollowEffects,
       dispatchIn,

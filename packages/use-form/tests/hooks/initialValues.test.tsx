@@ -1073,6 +1073,132 @@ describe('saving', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
+  describe('savedValues', () => {
+    /** A form whose onSubmit returns the record the server stored, and savedValues reads it. */
+    const renderSavingForm = () => {
+      const gate = createGatedOnSubmit<PublishForm>();
+      const rendered = renderForm({ onSubmit: gate.onSubmit, savedValues: (saved) => saved });
+      return { ...rendered, saves: gate.saves, onSubmit: gate.onSubmit };
+    };
+
+    /** Starts a save of ' Mine ', which the server trims. */
+    const startSave = async (rendered: ReturnType<typeof renderSavingForm>) => {
+      act(() => rendered.result.current.setFieldValue('title', ' Mine '));
+      let submitting!: Promise<unknown>;
+      act(() => {
+        submitting = rendered.result.current.handleSubmit();
+      });
+      await waitFor(() => expect(rendered.onSubmit).toHaveBeenCalledTimes(1));
+      return async () => {
+        await act(async () => {
+          rendered.saves[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await submitting;
+        });
+      };
+    };
+
+    test("an optimistic copy of the saved values isn't taken for the save's answer, with typing during the save", async () => {
+      const rendered = renderSavingForm();
+      const finish = await startSave(rendered);
+      // onSubmit writes the submitted values to the cache before the request ends
+      rendered.rerender({ initial: { ...draft, title: ' Mine ' } });
+      act(() => rendered.result.current.setFieldValue('status', 'published'));
+      await finish();
+
+      rendered.rerender({ initial: { ...draft, title: 'Mine' } });
+
+      expect(rendered.result.current.isStale).toBe(false);
+      expect(rendered.result.current.values).toEqual({ ...draft, title: ' Mine ', status: 'published' });
+    });
+
+    test('nor with typing after it, and the form follows the answer when nothing was typed', async () => {
+      const typed = renderSavingForm();
+      const finishTyped = await startSave(typed);
+      typed.rerender({ initial: { ...draft, title: ' Mine ' } });
+      await finishTyped();
+      act(() => typed.result.current.setFieldValue('status', 'published'));
+      typed.rerender({ initial: { ...draft, title: 'Mine' } });
+      expect(typed.result.current.isStale).toBe(false);
+
+      const untouched = renderSavingForm();
+      const finishUntouched = await startSave(untouched);
+      untouched.rerender({ initial: { ...draft, title: ' Mine ' } });
+      await finishUntouched();
+      untouched.rerender({ initial: { ...draft, title: 'Mine' } });
+      expect(untouched.result.current.values.title).toBe('Mine');
+      expect(untouched.result.current.isDirty).toBe(false);
+    });
+
+    test('a saved record equal to the version before the save is followed, and a later change still shows', async () => {
+      const { result, rerender, saves, onSubmit } = renderSavingForm();
+
+      act(() => result.current.setFieldValue('title', ' Hello '));
+      let submitting!: Promise<unknown>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...draft }));
+        await submitting;
+      });
+
+      expect(result.current.values.title).toBe('Hello');
+      expect(result.current.isDirty).toBe(false);
+
+      act(() => result.current.setFieldValue('title', 'Mine'));
+      rerender({ initial: { ...draft, status: 'published' } });
+      expect(result.current.isStale).toBe(true);
+    });
+
+    test('one that throws is logged, the save still succeeds, and the next version is taken for its answer', async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const boom = new Error('boom');
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+      const { result, rerender } = renderForm({
+        onSubmit,
+        savedValues: () => {
+          throw boom;
+        },
+      });
+
+      act(() => result.current.setFieldValue('title', ' Mine '));
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      let outcome!: Awaited<typeof submitting>;
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+        outcome = await submitting;
+      });
+
+      expect(outcome).toEqual(ok({ ...draft, title: 'Mine' }));
+      expect(result.current.errors._root).toBeUndefined();
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', boom);
+
+      rerender({ initial: { ...draft, title: 'Mine' } });
+      expect(result.current.values.title).toBe('Mine');
+      expect(result.current.isStale).toBe(false);
+      consoleError.mockRestore();
+    });
+
+    test("a change by someone else that arrives during the save shows, until the save's answer arrives after it", async () => {
+      const rendered = renderSavingForm();
+      const finish = await startSave(rendered);
+      rendered.rerender({ initial: { ...draft, status: 'published' } });
+      act(() => rendered.result.current.setFieldValue('tags', ['x']));
+      await finish();
+
+      expect(rendered.result.current.isStale).toBe(true);
+
+      // The save's answer is newer than their change
+      rendered.rerender({ initial: { ...draft, title: 'Mine' } });
+      expect(rendered.result.current.isStale).toBe(false);
+    });
+  });
+
   describe("a second Save while the first save's answer is pending", () => {
     /** Saves ' Mine ' once, with its answer still to come, then starts a second Save held in its field check. */
     const startSecondSave = async () => {

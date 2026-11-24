@@ -52,19 +52,17 @@ const latestIsSettled = <TValues extends Record<string, unknown>>(state: FormSta
   !state.isSubmitting && state.baseVersion !== undefined;
 
 /** Treats the values shown, equal to the latest version, as clean and as based on it, without changing them. */
-const settleOnLatest = <TValues extends Record<string, unknown>>(state: FormState<TValues>): FormState<TValues> => ({
-  ...state,
-  cleanValues: state.lastVersion,
-  baseVersion: state.lastVersion,
-  isStale: false,
-});
+const settleOnLatest = <TValues extends Record<string, unknown>>(state: FormState<TValues>): FormState<TValues> => {
+  const { saved: _saved, ...rest } = state;
+  return { ...rest, cleanValues: state.lastVersion, baseVersion: state.lastVersion, isStale: false };
+};
 
 /** Shows `version`, and treats it as clean and as the base of any later edits. */
 const followVersion = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   version: TValues,
 ): FormState<TValues> => {
-  const { submitError: _submitError, ...rest } = state;
+  const { submitError: _submitError, saved: _saved, ...rest } = state;
   return {
     ...rest,
     values: version,
@@ -75,6 +73,23 @@ const followVersion = <TValues extends Record<string, unknown>>(
     isStale: false,
     baselineEpoch: state.baselineEpoch + 1,
   };
+};
+
+/**
+ * The state after a successful save whose answer is the latest version: the form follows it when nothing was typed
+ * since the save started, or bases the edits on it.
+ *
+ * @param state - The state when the save settles
+ * @param submitted - The values the save submitted
+ */
+const answeredBy = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  submitted: TValues,
+): FormState<TValues> => {
+  if (deepEqual(state.values, submitted)) return followVersion(state, state.lastVersion);
+  if (deepEqual(state.values, state.lastVersion)) return settleOnLatest(state);
+  const { saved: _saved, ...rest } = state;
+  return { ...rest, cleanValues: submitted, baseVersion: state.lastVersion, isStale: false };
 };
 
 /**
@@ -292,10 +307,20 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         };
       }
       if (deepEqual(version, state.lastVersion)) return state;
-      // A version arriving while a save's answer is pending is that answer, and becomes the base. Any other counts.
-      const counted = state.baseVersion === undefined ? state : { ...state, otherVersions: state.otherVersions + 1 };
+      const pending = state.baseVersion === undefined;
+      // While a save's answer is pending, the save's own copy of the submitted values isn't a new version
+      if (pending && state.saved !== undefined && deepEqual(version, state.cleanValues)) {
+        return { ...state, lastVersion: version };
+      }
+      // The version arriving while a save's answer is pending is that answer, and becomes the base: the one equal to
+      // what the save stored, when savedValues gave it, or else the first. Any other counts.
+      const isAnswer = pending && (state.saved === undefined || deepEqual(version, state.saved));
+      const counted = isAnswer ? state : { ...state, otherVersions: state.otherVersions + 1 };
       if (deepEqual(state.values, state.cleanValues)) return followVersion(counted, version);
-      const arrived = { ...counted, lastVersion: version, baseVersion: state.baseVersion ?? version };
+      const { saved: _saved, ...answered } = counted;
+      const arrived = isAnswer
+        ? { ...answered, lastVersion: version, baseVersion: version }
+        : { ...counted, lastVersion: version };
       if (deepEqual(state.values, version)) {
         return latestIsSettled(arrived) ? settleOnLatest(arrived) : { ...arrived, isStale: false };
       }
@@ -304,25 +329,36 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 
     case 'SUBMIT_SUCCEEDED': {
       if (action.baselineEpoch !== state.baselineEpoch) return state;
-      // Within one epoch only a version arriving while the form has edits moves lastVersion. A latest version
-      // equal to the base, by content, isn't this save's answer either: it's the previous save's answer, pending
-      // when this save started and made the base when it arrived, or the old base coming back
-      if (state.lastVersion === action.lastVersion || deepEqual(state.baseVersion, state.lastVersion)) {
+      const { values: submitted, saved } = action;
+      // Within one epoch only a version arriving while the form has edits moves lastVersion
+      const arrivedDuring = state.lastVersion !== action.lastVersion;
+
+      if (saved !== undefined) {
+        // savedValues gave what the save stored: the version equal to it is the answer, whenever it arrives
+        if (deepEqual(state.lastVersion, saved)) return answeredBy(state, submitted);
+        // Not here yet. A version that arrived during the save, other than its copy of the submitted values, is
+        // someone else's change: the form follows it, or reports it until the answer arrives after it.
+        const theirs = arrivedDuring && !deepEqual(state.lastVersion, submitted);
+        if (theirs && deepEqual(state.values, submitted)) return followVersion(state, state.lastVersion);
+        return { ...state, cleanValues: submitted, baseVersion: undefined, saved, isStale: theirs };
+      }
+
+      // A latest version equal to the base, by content, isn't this save's answer either: it's the previous save's
+      // answer, pending when this save started and made the base when it arrived, or the old base coming back
+      if (!arrivedDuring || deepEqual(state.baseVersion, state.lastVersion)) {
         // None arrived for this submission: the next one to arrive is the server's answer. Unless the submitted
         // values equal the latest version: the answer then has the same content, so it never arrives as a new
         // version, and the latest version stays the base.
-        const answered = deepEqual(action.values, state.lastVersion);
+        const answered = deepEqual(submitted, state.lastVersion);
         return {
           ...state,
-          cleanValues: action.values,
+          cleanValues: submitted,
           baseVersion: answered ? state.lastVersion : undefined,
           isStale: false,
         };
       }
       // One arrived: the server's answer, delivered before onSubmit returned. The save succeeded, so it's settled.
-      if (deepEqual(state.values, action.values)) return followVersion(state, state.lastVersion);
-      if (deepEqual(state.values, state.lastVersion)) return settleOnLatest(state);
-      return { ...state, cleanValues: action.values, baseVersion: state.lastVersion, isStale: false };
+      return answeredBy(state, submitted);
     }
 
     case 'MARK_ALL_TOUCHED': {

@@ -54,6 +54,8 @@ export default function EditRecordForm() {
       }
       return result;
     },
+    // What the save stored, so the form knows which version is its answer
+    savedValues: toFormValues,
   });
 
   const simulateOtherUser = (andRefetch: boolean) => {

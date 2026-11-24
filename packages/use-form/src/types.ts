@@ -137,6 +137,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   baseVersion: TValues | undefined;
 
+  /** What the save whose answer is pending stored, when `savedValues` gave it: the answer is the version equal to it. */
+  saved?: TValues;
+
   /** Whether someone else changed the record under unsaved edits. `UseFormReturn.isStale` also reads false while `isSubmitting`. */
   isStale: boolean;
 
@@ -286,6 +289,24 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * }
    */
   onSubmit?: OnSubmit<TValues, TResult>;
+
+  /**
+   * Returns the form values a successful save stored, from `onSubmit`'s `ok` value (the submitted values when
+   * `onSubmit` returns nothing). In an edit form, map the saved record as `initialValues` is mapped.
+   *
+   * With it, the form knows which version is the save's answer: the one equal to these values, whenever it
+   * arrives. An optimistic copy of the submitted values in `initialValues`' source isn't taken for the answer, a
+   * change by someone else that arrives during the save shows as `isStale` until the answer arrives after it, and a
+   * saved record equal to the version before the save is followed.
+   *
+   * Without it, the form takes a version that arrived during the save, or else the next one, for the save's answer.
+   * So it does when it throws: the save still succeeds, and the throw is logged with `console.error`.
+   *
+   * @example
+   * onSubmit: async (values) => saveContact(id, values), // Promise<Result<Contact, ValidationError[]>>
+   * savedValues: toFormValues,
+   */
+  savedValues?: (result: TResult) => NoInfer<TValues>;
 
   /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
@@ -1099,6 +1120,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       baselineEpoch: number;
       /** The `lastVersion` when the submission started */
       lastVersion: TValues;
+      /** What the save stored, from `savedValues` */
+      saved?: TValues;
     }
   | {
       /** Updates a single field value and optionally triggers validation */

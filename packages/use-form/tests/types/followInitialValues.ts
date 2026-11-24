@@ -1,3 +1,4 @@
+import { err, type Result } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 
 import { useForm } from '../../src';
@@ -45,6 +46,38 @@ export function writeMaps(form: UseFormReturn<Flat>) {
   // Reading them, or passing them on, still works
   const touched: Record<string, boolean> = form.touched;
   return touched.name === true && form.errors.name !== undefined;
+}
+
+type Saved = { id: string; name: string; updatedAt: string };
+declare const saveRecord: (values: Flat) => Promise<Result<Saved, S.ValidationError[]>>;
+
+export function useSavedValues() {
+  // savedValues gets onSubmit's ok value, and returns the form values the save stored
+  const form = useForm(flat, {
+    initialValues: { name: '' },
+    onSubmit: saveRecord,
+    savedValues: (saved) => ({ name: saved.name }),
+  });
+  expectTrue<Equal<Awaited<ReturnType<typeof form.handleSubmit>>, Result<Saved, S.ValidationError[]>>>();
+
+  useForm(flat, {
+    initialValues: { name: '' },
+    onSubmit: saveRecord,
+    // @ts-expect-error it returns the form values
+    savedValues: (saved) => saved.id,
+  });
+
+  // A named mapper, as an edit form passes, beside an onSubmit with an err path: onSubmit's ok value still sets TResult
+  const toFlat = (record?: Saved): Flat => ({ name: record?.name ?? '' });
+  const named = useForm(flat, {
+    initialValues: { name: '' },
+    onSubmit: async (values) => {
+      if (values.name === '') return err([{ path: ['name'], message: 'Required' }]);
+      return saveRecord(values);
+    },
+    savedValues: toFlat,
+  });
+  expectTrue<Equal<Awaited<ReturnType<typeof named.handleSubmit>>, Result<Saved, S.ValidationError[]>>>();
 }
 
 export function useMessages() {

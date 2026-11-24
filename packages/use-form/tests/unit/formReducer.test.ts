@@ -925,6 +925,33 @@ describe('SUBMIT_SUCCEEDED', () => {
     expect(result.isStale).toBe(false);
   });
 
+  describe('with saved, what savedValues says the save stored', () => {
+    test('follows the latest version when it equals saved, even one from before the save', () => {
+      // The server trimmed the edit away: the saved record equals the version before the save
+      const result = formReducer({ ...s, values: edited }, { ...succeeded, saved: { ...v1 } }, v1);
+
+      expect(result.values).toBe(v1);
+      expect(result.baseVersion).toBe(v1);
+      expect(result.baselineEpoch).toBe(1);
+    });
+
+    test("waits for the version equal to saved: the save's copy of its values doesn't count, nor become the base", () => {
+      const pending = formReducer({ ...s, values: edited }, { ...succeeded, saved }, v1);
+      expect(pending.baseVersion).toBeUndefined();
+      expect(pending.saved).toBe(saved);
+
+      const copied = formReducer(pending, sync({ ...edited }), v1);
+      expect(copied.values).toBe(edited);
+      expect(copied.baseVersion).toBeUndefined();
+      expect(copied.otherVersions).toBe(0);
+
+      const answered = formReducer({ ...copied, values: { ...edited, name: 'Janet' } }, sync(saved), v1);
+      expect(answered.baseVersion).toBe(saved);
+      expect(answered.saved).toBeUndefined();
+      expect(answered.isStale).toBe(false);
+    });
+  });
+
   test('a save of values equal to the latest version keeps that version as the base', () => {
     // Its answer has the same content, so it never arrives as a new version: waiting for it would leave the base
     // unset, and the next version, someone else's change, would be taken for the answer

@@ -195,6 +195,8 @@ function EditContact({ ids }: { ids: string[] }) {
       queryClient.setQueryData(['contact', data.id], result.contact);
       return ok(result.contact);
     },
+    // What the save stored, so the form knows its answer: an optimistic write or someone else's change isn't
+    savedValues: toFormValues,
   });
 
   return (
@@ -241,7 +243,7 @@ What happens:
 - A refetch with no edits is followed: the form shows the new values in the same render.
 - With edits, the form keeps them, `isStale` turns true, and Save waits for a Reload.
 - A change the app hasn't fetched yet comes back from the server as a conflict. The refetch then turns `isStale` true.
-- A save is followed even if the server changes the record, such as by normalizing the email. The exception is a saved record equal to the version before the save, as when the server trims the only edit away: the form keeps the typed values and stays dirty.
+- A save is followed even if the server changes the record, such as by normalizing the email. `savedValues` tells the form which version is the save's answer, so an optimistic write isn't taken for it, and a saved record equal to the version before the save is followed too.
 - A record switch starts over: values, touched state and errors reset to the new record.
 
 Things to get right:
