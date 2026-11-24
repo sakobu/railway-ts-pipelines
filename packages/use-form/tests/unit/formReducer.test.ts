@@ -857,13 +857,7 @@ describe('SYNC_INITIAL_VALUES', () => {
 describe('SUBMIT_SUCCEEDED', () => {
   const s = createInitialFormState(v1, 'a');
   const saved = { ...edited, email: 'saved@example.com' };
-  const succeeded = {
-    type: 'SUBMIT_SUCCEEDED',
-    values: edited,
-    baselineEpoch: 0,
-    lastVersion: v1,
-    baseVersion: v1,
-  } as const;
+  const succeeded = { type: 'SUBMIT_SUCCEEDED', values: edited, baselineEpoch: 0, lastVersion: v1 } as const;
 
   test('with no version since the submission started, takes the submitted values as clean and unsets the base', () => {
     const result = formReducer({ ...s, values: edited, isStale: true }, succeeded, v1);
@@ -902,15 +896,19 @@ describe('SUBMIT_SUCCEEDED', () => {
     expect(formReducer(state, succeeded, v1)).toBe(state);
   });
 
-  test("with a base at the start, a version that arrived is the save's answer, even the base itself", () => {
-    // Someone else's change made the form stale, and the base came back while the save ran
+  test("the base coming back during the submission isn't its answer: keeps the saved values, doesn't follow it", () => {
+    // Someone else's change made the form stale, and the base the edits started from came back while the save ran
     const stale = formReducer({ ...s, values: edited }, sync(v2), v1);
     const state = formReducer(stale, sync(v1), v1);
 
     const result = formReducer(state, { ...succeeded, lastVersion: v2 }, v1);
 
-    expect(result.values).toBe(v1);
-    expect(result.baselineEpoch).toBe(1);
+    expect(result.values).toBe(edited);
+    expect(result.lastVersion).toBe(v1);
+    expect(result.cleanValues).toBe(edited);
+    expect(result.baseVersion).toBeUndefined();
+    expect(result.isStale).toBe(false);
+    expect(result.baselineEpoch).toBe(0);
   });
 
   describe("while the previous save's answer was pending", () => {
@@ -920,12 +918,11 @@ describe('SUBMIT_SUCCEEDED', () => {
     const answer = { ...earlier, email: 'jan@example.com' };
     const typed = { ...edited, name: 'Janet' };
     const start: FormState<typeof v1> = { ...s, values: edited, cleanValues: earlier, baseVersion: undefined };
-    const second = { ...succeeded, baseVersion: undefined };
 
     test('the version that arrived answered the previous save: the submitted values are clean, the base unset', () => {
       const state = formReducer(start, sync(answer), v1);
 
-      const result = formReducer(state, second, v1);
+      const result = formReducer(state, succeeded, v1);
 
       expect(result.values).toBe(edited);
       expect(result.lastVersion).toBe(answer);
@@ -938,7 +935,7 @@ describe('SUBMIT_SUCCEEDED', () => {
     test('keeps typing done during the submission, with the base unset', () => {
       const state = formReducer({ ...start, values: typed }, sync(answer), v1);
 
-      const result = formReducer(state, second, v1);
+      const result = formReducer(state, succeeded, v1);
 
       expect(result.values).toBe(typed);
       expect(result.cleanValues).toBe(edited);
@@ -949,7 +946,7 @@ describe('SUBMIT_SUCCEEDED', () => {
     test("a second version that arrived is this save's answer: follows it when nothing was typed since", () => {
       const state = formReducer(formReducer(start, sync(answer), v1), sync(saved), v1);
 
-      const result = formReducer(state, second, v1);
+      const result = formReducer(state, succeeded, v1);
 
       expect(result.values).toBe(saved);
       expect(result.cleanValues).toBe(saved);
@@ -960,7 +957,7 @@ describe('SUBMIT_SUCCEEDED', () => {
     test('bases typing done during the submission on a second version that arrived', () => {
       const state = formReducer(formReducer({ ...start, values: typed }, sync(answer), v1), sync(saved), v1);
 
-      const result = formReducer(state, second, v1);
+      const result = formReducer(state, succeeded, v1);
 
       expect(result.values).toBe(typed);
       expect(result.cleanValues).toBe(edited);

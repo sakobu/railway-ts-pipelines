@@ -926,7 +926,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
-        const { clientErrors, serverErrors, baselineEpoch, lastVersion, baseVersion } = store.getState();
+        const { clientErrors, serverErrors, baselineEpoch, lastVersion } = store.getState();
 
         // The validation's results describe the submitted values, so they land only while those values are
         // still the baseline: a follow of new initialValues or a resetForm() drops them
@@ -1009,12 +1009,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           }
 
           // A successful save settles the baseline. A version that arrived while it ran is the save's own
-          // answer: the form follows it, or bases the edits on it. When the previous save's answer was still
-          // pending at the start, the first version to arrive is that answer instead. Inside the try, so
-          // isSubmitting stays true until the finally. A dropped write leaves the epoch as it was, so nothing follows.
+          // answer: the form follows it, or bases the edits on it. A latest version that is the base isn't: it's
+          // the previous save's answer or the old base coming back. Inside the try, so isSubmitting stays true
+          // until the finally. A dropped write leaves the epoch as it was, so nothing follows.
           const settleSuccess = () => {
             const before = store.getState();
-            send({ type: 'SUBMIT_SUCCEEDED', values, baselineEpoch, lastVersion, baseVersion });
+            send({ type: 'SUBMIT_SUCCEEDED', values, baselineEpoch, lastVersion });
             const after = store.getState();
             if (after.baselineEpoch !== before.baselineEpoch) runFollowEffects(before, after);
           };

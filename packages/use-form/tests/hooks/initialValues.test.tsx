@@ -546,6 +546,29 @@ describe('saving', () => {
     expect(result.current.clientErrors.title).toBe('Title is required');
   });
 
+  test("the base coming back during a save isn't followed as the save's answer", async () => {
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    rerender({ initial: { ...draft, status: 'published' } });
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+    // The version the edits started from comes back, as the same object
+    rerender({ initial: draft });
+    await act(async () => {
+      saves[0]!.resolve(undefined);
+      await submitting;
+    });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isDirty).toBe(true);
+    expect(result.current.isStale).toBe(false);
+  });
+
   describe("back-to-back saves, the first one's answer arriving during the second", () => {
     /** Saves `First`, then queues a save of `second` that starts once the first succeeds, before its answer. */
     const saveTwice = async (second: string) => {
