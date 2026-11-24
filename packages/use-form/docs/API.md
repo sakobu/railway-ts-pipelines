@@ -612,7 +612,7 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 - one that arrived while it validated, and made the form stale or was followed
 - one that made the form stale while a running submission hid `isStale`, as for a follow-up queued behind a save that then failed
 
-Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite.
+Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite. So does one the user reset the form during (`resetForm()`), as with `handleSubmit(); resetForm()` to submit and clear.
 
 **What it does:**
 

@@ -456,6 +456,15 @@ describe('formReducer', () => {
   });
 
   describe('RESET_FORM', () => {
+    test('an initialValues equal to the latest version by content keeps it: no new version arrived', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, values: { name: 'Jane', email: '' } };
+
+      const result = formReducer(state, { type: 'RESET_FORM' }, { ...initialValues });
+
+      expect(result.lastVersion).toBe(initialState.lastVersion);
+      expect(result.values).toBe(initialState.lastVersion);
+    });
+
     test('RESET_FORM clears the submit error', () => {
       const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };
 

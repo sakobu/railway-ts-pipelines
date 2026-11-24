@@ -529,6 +529,28 @@ describe('saving', () => {
     expect(result.current.values.title).toBe('Mine');
   });
 
+  test('resetForm() while the save validates lets it go out, with initialValues built inline', async () => {
+    const gate = createGatedValidator<PublishForm>();
+    const onSubmit = mock((_values: PublishForm) => {});
+    const { result } = renderHook(() =>
+      useForm(gate.gated, { initialValues: { ...draft }, onSubmit, validationMode: 'submit' }),
+    );
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    act(() => result.current.resetForm());
+    await act(async () => {
+      gate.pending[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+      await submitting;
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith({ ...draft, title: 'Mine' });
+    expect(result.current.errors._root).toBeUndefined();
+  });
+
   test('messages.changedWhileSaving replaces the message of a cancelled save', async () => {
     const { result, rerender, pending } = renderGatedForm(() => {}, {
       messages: { changedWhileSaving: 'Otra persona cambió este registro.' },

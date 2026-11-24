@@ -260,12 +260,16 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       };
     }
 
-    case 'RESET_FORM':
+    case 'RESET_FORM': {
+      // initialValues built inline is a new object on every render. One equal to the latest version by content is
+      // that version, so it keeps its identity: a submission tells by it whether a new version arrived.
+      const version = deepEqual(initialValues, state.lastVersion) ? state.lastVersion : initialValues;
       return {
-        ...createInitialFormState(initialValues, state.resetKey),
+        ...createInitialFormState(version, state.resetKey),
         generation: state.generation,
         baselineEpoch: state.baselineEpoch + 1,
       };
+    }
 
     case 'SYNC_INITIAL_VALUES': {
       const { initialValues: version, resetKey } = action;
