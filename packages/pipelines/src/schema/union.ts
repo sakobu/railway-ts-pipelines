@@ -231,9 +231,10 @@ export function discriminatedUnion<const M extends Record<string, MaybeAsyncVali
       return err([{ path: parentPath, message: 'Expected an object' }]);
     }
 
-    // Extract the discriminant value
+    // Extract the discriminant value from the input's own properties, as object() reads its fields
+    const input = value as Record<string, unknown>;
     // eslint-disable-next-line security/detect-object-injection -- discriminantField is a schema-defined string literal
-    const discriminantValue = (value as Record<string, unknown>)[discriminantField];
+    const discriminantValue = Object.hasOwn(input, discriminantField) ? input[discriminantField] : undefined;
 
     // Ensure discriminant value exists and is a string
     if (typeof discriminantValue !== 'string') {

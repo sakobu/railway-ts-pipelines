@@ -1,0 +1,12 @@
+{
+  // Writes display.ts's declarations for check.mjs, which passes --outDir. Same consumer settings as
+  // ../tsconfig.json, which type-checks only the files directly in tests/package.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true
+  },
+  "include": [],
+  "files": ["display.ts"]
+}

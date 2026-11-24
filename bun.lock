@@ -51,7 +51,7 @@
         "zod": "^4.6.7",
       },
       "peerDependencies": {
-        "@railway-ts/pipelines": "^0.4.0",
+        "@railway-ts/pipelines": "^0.5.0",
         "react": "^19.0.0",
         "typescript": ">=6.0",
       },

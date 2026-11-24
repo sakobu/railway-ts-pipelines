@@ -36,7 +36,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:coverage": "mkdir -p coverage && bun test --coverage --coverage-reporter=lcov",
-    "test:package": "bun run build && tsc -p tests/package && node tests/package/runtime.mjs"
+    "test:package": "bun run build && tsc -p tests/package && node tests/package/runtime.mjs && node tests/package/display/check.mjs"
   },
   "keywords": [
     "railway",

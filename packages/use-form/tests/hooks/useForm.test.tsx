@@ -1,6 +1,7 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
+import { number, object, optional, required, string } from '@railway-ts/pipelines/schema';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -24,7 +25,7 @@ import {
 } from '../fixtures/validators';
 
 import type { UseFormReturn } from '../../src/types';
-import type { MaybeAsyncValidator, Validator } from '@railway-ts/pipelines/schema';
+import type { InferSchemaType, MaybeAsyncValidator, Validator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
@@ -407,6 +408,33 @@ describe('useForm', () => {
       });
 
       expect(onSubmit).toHaveBeenCalledWith(validValues);
+    });
+
+    // toHaveBeenCalledWith ignores undefined properties, so the argument is checked with toStrictEqual.
+    const withOptionalAge = object({ name: required(string()), age: optional(number()) });
+
+    test('onSubmit gets no key the form values do not have', async () => {
+      const onSubmit = mock((_values: InferSchemaType<typeof withOptionalAge>) => {});
+      const { result } = renderHook(() => useForm(withOptionalAge, { initialValues: { name: 'a' }, onSubmit }));
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit.mock.calls[0]![0]).toStrictEqual({ name: 'a' });
+    });
+
+    test('onSubmit gets a key the form values hold as undefined', async () => {
+      const onSubmit = mock((_values: InferSchemaType<typeof withOptionalAge>) => {});
+      const { result } = renderHook(() =>
+        useForm(withOptionalAge, { initialValues: { name: 'a', age: undefined }, onSubmit }),
+      );
+
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+
+      expect(onSubmit.mock.calls[0]![0]).toStrictEqual({ name: 'a', age: undefined });
     });
 
     test('does not call onSubmit with invalid data', async () => {

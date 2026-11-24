@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import { ok, err, isResult } from '@/result';
-import { date, object, optional, parseISODate, required, string } from '@/schema';
+import { date, number, object, optional, parseISODate, required, string } from '@/schema';
 import { decodeResult } from '@/schema/decode';
 
 import type { AsyncValidator, ValidationError } from '@/schema/core';
@@ -119,6 +119,15 @@ describe('decodeResult', () => {
   test('a Response passed without .json() is rejected, not read through its prototype', () => {
     const res = Response.json(ok({ id: 'u1' }), { status: 201 });
     expect(decodeResult(res, optional(string()))).toEqual(failed(noOk));
+  });
+
+  test('a value that omits an optional field decodes without the key', () => {
+    const user = object({ name: required(string()), age: optional(number()) });
+    const r = decodeResult(JSON.parse('{"ok":true,"value":{"name":"a"}}'), user);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value).toStrictEqual({ name: 'a' });
+    }
   });
 
   test('uses a custom message', () => {

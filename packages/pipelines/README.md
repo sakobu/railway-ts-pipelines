@@ -32,9 +32,9 @@ Fully tree-shakable:
 - `result` -- 855 B
 - `option` -- 540 B
 - `composition` -- 269 B
-- `schema` -- 4.08 kB
+- `schema` -- 4.11 kB
 
-**~5.7 kB total** (minified + brotli)
+**~5.8 kB total** (minified + brotli)
 
 See how it compares at [schemabenchmarks.dev](https://schemabenchmarks.dev) — smallest bundle size of all benchmarked libraries.
 
@@ -182,7 +182,7 @@ const userSchema = object({
 });
 
 type User = InferSchemaType<typeof userSchema>;
-// { name: string; age: number; email?: string }
+// { name: string; age: number; email?: string | undefined }
 
 const result = validate(input, userSchema);
 // Result<User, ValidationError[]>

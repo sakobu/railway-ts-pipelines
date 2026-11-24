@@ -239,6 +239,35 @@ describe('Async Schema Validation', () => {
         expect(result.error.some((e) => e.message.includes('Unexpected field'))).toBe(true);
       }
     });
+
+    // toEqual ignores undefined properties, so presence is checked with toStrictEqual.
+    const slowNick: AsyncValidator<unknown, string | undefined> = async (value) =>
+      ok(typeof value === 'string' ? value : undefined);
+    const slowGuest: AsyncValidator<unknown, string> = async (value) => ok(typeof value === 'string' ? value : 'guest');
+
+    test('an async object leaves out a missing key whose validator returns undefined', async () => {
+      const result = await object({ nick: slowNick })({});
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({});
+      }
+    });
+
+    test('an async object keeps a key the input has as undefined', async () => {
+      const result = await object({ nick: slowNick })({ nick: undefined });
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ nick: undefined });
+      }
+    });
+
+    test('an async object writes a missing key when its validator returns a value', async () => {
+      const result = await object({ nick: slowGuest })({});
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ nick: 'guest' });
+      }
+    });
   });
 
   describe('required/optional/emptyAsOptional with async validators', () => {

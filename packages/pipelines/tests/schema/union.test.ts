@@ -289,6 +289,20 @@ describe('discriminatedUnion validator', () => {
     }
   });
 
+  test('should fail with a discriminant the input inherits', () => {
+    const validator = discriminatedUnion('type', {
+      text: textSchema,
+      image: imageSchema,
+    });
+
+    const result = validator(Object.create({ type: 'text', content: 'Hello' }));
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error[0]?.message || '').toContain('Missing or invalid discriminant field');
+    }
+  });
+
   test.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])(
     'should fail with discriminant value %p, an Object.prototype member',
     (name) => {

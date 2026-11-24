@@ -606,10 +606,10 @@ Options for controlling validation behavior. When `abortEarly` is `true`, valida
 #### `InferSchemaType<V>`
 
 ```typescript
-type InferSchemaType<V> = ProcessType<InferType<V>>;
+type InferSchemaType<V> = V extends MaybeAsyncValidator<never, infer O> ? O : never;
 ```
 
-Infer the output TypeScript type from a validator or schema.
+Infer the output TypeScript type from a validator or schema. It's the validator's output type, exactly what `validate()` returns, so class instances such as `URL` keep their type.
 
 ```typescript
 const schema = object({ name: required(string()), age: required(number()) });
@@ -639,7 +639,7 @@ function object<T extends Record<string, unknown>>(
 ): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 ```
 
-Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async. A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output: `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async. A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output: `object({ age: optional(number()) })` outputs `{ age?: number | undefined }`, the same type `InferSchemaType` gives. The output has a key when the input has it as an own property, or when its validator returns a value: `{}` gives `{}`, and `{ age: null }` gives `{ age: undefined }`. A key the input inherits, like `toString` or a getter declared on a class, is missing.
 
 ```typescript
 const userSchema = object({
@@ -1207,7 +1207,7 @@ function discriminatedUnion<const M extends Record<string, MaybeAsyncValidator<u
 ): MaybeAsyncValidator<unknown, ValidatorMapOutput<M>>;
 ```
 
-Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects. The discriminant's value must be one of the map's own keys: any other value, including an `Object.prototype` name like `'toString'`, fails with `fallbackMessage`.
+Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects. The discriminant is read from the input's own properties, as `object` reads its fields, and its value must be one of the map's own keys: any other value, including an `Object.prototype` name like `'toString'`, fails with `fallbackMessage`.
 
 ```typescript
 const validate = discriminatedUnion('type', {

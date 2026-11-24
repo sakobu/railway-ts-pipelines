@@ -43,53 +43,31 @@ export type MaybeAsyncValidator<I, O = I> = (
   path?: string[],
 ) => Result<O, ValidationError[]> | Promise<Result<O, ValidationError[]>>;
 
+// `extends infer U ? U : never` resolves the union, so editors show its members rather than this alias.
 /**
  * Extracts the union of output types from a validator map.
  * Used by {@link discriminatedUnion} to infer the output type from the map's validators.
  */
 export type ValidatorMapOutput<M extends Record<string, MaybeAsyncValidator<unknown, unknown>>> = {
   [K in keyof M]: M[K] extends MaybeAsyncValidator<unknown, infer O> ? O : never;
-}[keyof M];
+}[keyof M] extends infer U
+  ? U
+  : never;
 
-type AtomicType = string | number | boolean | Date | null | undefined | bigint;
-
-type RemoveUndefined<T> = T extends undefined ? never : T;
-
+// A key whose type accepts undefined is optional, and keeps undefined: the key can be missing or hold undefined.
 type ObjectOutput<T> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
-  [K in keyof T as undefined extends T[K] ? K : never]?: RemoveUndefined<T[K]>;
+  [K in keyof T as undefined extends T[K] ? K : never]?: T[K];
 } extends infer O
   ? { [K in keyof O]: O[K] }
   : never;
 
-type ProcessType<T> = T extends AtomicType
-  ? T
-  : T extends readonly [unknown, ...unknown[]]
-    ? { [K in keyof T]: ProcessType<T[K]> }
-    : T extends [unknown, ...unknown[]]
-      ? { [K in keyof T]: ProcessType<T[K]> }
-      : T extends Array<infer U>
-        ? Array<ProcessType<U>>
-        : T extends object
-          ? ObjectOutput<{ [K in keyof T]: ProcessType<T[K]> }>
-          : T;
-
-// Infer the output type of a validator or schema
-type InferType<V> =
-  V extends Validator<unknown, infer O>
-    ? O
-    : V extends AsyncValidator<unknown, infer O>
-      ? O
-      : V extends MaybeAsyncValidator<unknown, infer O>
-        ? O
-        : never;
-
 /**
- * Infer the output type of a validator or schema after processing.
- * Useful for getting the TypeScript type that a validator will produce.
+ * The output type of a validator: what it returns in `ok`, the same type `validate()` gives.
+ * Class instances such as `URL` or `File` keep their type.
  */
-export type InferSchemaType<V> = ProcessType<InferType<V>>;
+export type InferSchemaType<V> = V extends MaybeAsyncValidator<never, infer O> ? O : never;
 
 /**
  * A validation schema where each key maps to a synchronous validator for that field.
@@ -136,7 +114,9 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
  * Create a validator for objects based on a schema.
  *
  * A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output:
- * `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+ * `object({ age: optional(number()) })` outputs `{ age?: number | undefined }`, the same type `InferSchemaType` gives.
+ * The output has a key when the input has it as an own property, or when its validator returns a value: `{}` gives
+ * `{}`, and `{ age: null }` gives `{ age: undefined }`. A key the input inherits, like `toString`, is missing.
  *
  * @example
  * const userSchema = object({
@@ -171,7 +151,7 @@ export function object<T extends Record<string, unknown>>(
     const validatedObj: Record<string, unknown> = {};
 
     if (strict !== false) {
-      const extraKeys = Object.keys(obj as object).filter((key) => !Object.prototype.hasOwnProperty.call(schema, key));
+      const extraKeys = Object.keys(obj as object).filter((key) => !Object.hasOwn(schema, key));
 
       if (extraKeys.length > 0) {
         if (abortEarly) {
@@ -191,14 +171,17 @@ export function object<T extends Record<string, unknown>>(
     const pendingResults: Promise<void>[] = [];
 
     for (const key in schema) {
-      if (!Object.prototype.hasOwnProperty.call(schema, key)) continue;
+      if (!Object.hasOwn(schema, key)) continue;
 
       const validator = schema[key];
       if (!validator) continue;
 
       if (abortEarly && allErrors.length > 0) break;
 
-      const value = (obj as Record<string, unknown>)[key];
+      // The input has a key when it's an own property; a key it inherits, like `toString`, is missing.
+      // The output has the key when the input has it, or when the validator returns a value.
+      const present = Object.hasOwn(obj, key);
+      const value = present ? (obj as Record<string, unknown>)[key] : undefined;
       const fieldPath = [...parentPath, key];
 
       const result = validator(value, fieldPath);
@@ -208,14 +191,14 @@ export function object<T extends Record<string, unknown>>(
         pendingResults.push(
           result.then((r) => {
             if (isOk(r)) {
-              validatedObj[key] = r.value;
+              if (present || r.value !== undefined) validatedObj[key] = r.value;
             } else {
               allErrors.push(...r.error);
             }
           }),
         );
       } else if (isOk(result)) {
-        validatedObj[key] = result.value;
+        if (present || result.value !== undefined) validatedObj[key] = result.value;
       } else {
         allErrors.push(...result.error);
         if (abortEarly) break;
