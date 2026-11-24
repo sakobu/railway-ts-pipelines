@@ -119,12 +119,12 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
     if (!isDirty) lastValidatedRef.current = null;
     if (heldRef.current && !savingRef.current) {
       // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go.
-      // Values still being validated wait for their validation, which submits them if they pass.
       heldRef.current = false;
       if (isDirty && isValid && deepEqual(values, passedRef.current) && !deepEqual(values, savedRef.current)) {
         submit(values);
+        return;
       }
-      return;
+      // Otherwise values not validated yet, such as an edit that came in the same render, go the usual way below
     }
     if (!isDirty || deepEqual(values, lastValidatedRef.current)) return;
 

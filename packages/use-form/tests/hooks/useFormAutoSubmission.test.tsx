@@ -874,6 +874,32 @@ describe('useFormAutoSubmission', () => {
     });
   });
 
+  describe('a save that settles with an edit in the same render', () => {
+    test('the edit is validated and saved', async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // Held behind the running save
+      await sleep(150);
+
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+        result.current.setFieldValue('name', 'Jo');
+      });
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]![0].name).toBe('Jo');
+    });
+  });
+
   describe('values still validating', () => {
     /** The user schema, checked after a delay, as a server round trip would be. */
     const slowUserValidator: MaybeAsyncValidator<unknown, UserForm> = async (values) => {
