@@ -580,21 +580,28 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     [store, dispatch, validateForm, fieldValidators, runFieldAfterSchema],
   );
 
+  /**
+   * What `mount` mode does on mount and on a `resetKey` reset: validates the values and marks every field
+   * touched, nested and array items included, so the errors show at once.
+   *
+   * @param values - The values the form starts with
+   */
+  const validateAsOnMount = useCallback(
+    (values: TValues): void => {
+      void validateForm(values);
+      dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(values) });
+    },
+    [dispatch, validateForm],
+  );
+
   // Validate on mount if enabled
   const didMountRef = useRef(false);
   useEffect(() => {
     if (validateOnMount && !didMountRef.current) {
       didMountRef.current = true;
-      void validateForm(initialValues);
-
-      // Also mark all fields as touched (including nested and array items)
-      const allFields = collectFieldPaths(initialValues);
-      dispatch({
-        type: 'MARK_ALL_TOUCHED',
-        fields: allFields,
-      });
+      validateAsOnMount(initialValues);
     }
-  }, [dispatch, initialValues, validateForm, validateOnMount]);
+  }, [initialValues, validateAsOnMount, validateOnMount]);
 
   // ===========================================================================
   // Following initialValues
@@ -634,7 +641,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
-  // The store catches up with the synced state this render showed, then the follow's side effects run.
+  // The store catches up with the synced state this render showed, then the side effects of a follow or a
+  // `resetKey` reset run.
   // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
   // that's how the stability check tells an outside render, a catch-up and a form update apart.
   useLayoutEffect(() => {
@@ -648,10 +656,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         submitSchedulerRef.current.retire(prev.values);
         submitSchedulerRef.current = createSubmitScheduler();
 
-        if (validateOnMount) {
-          void validateForm(next.values);
-          dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
-        }
+        if (validateOnMount) validateAsOnMount(next.values);
       } else if (next.baselineEpoch !== prev.baselineEpoch) {
         runFollowEffects(prev, next);
       }
@@ -668,7 +673,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     resetKey,
     stabilityCheck,
     runFollowEffects,
-    validateForm,
+    validateAsOnMount,
     validateOnMount,
   ]);
 
