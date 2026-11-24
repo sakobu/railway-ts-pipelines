@@ -683,6 +683,16 @@ describe('useForm', () => {
       expect(result.current.serverErrors.email).toBe('Email already exists');
     });
 
+    test('a submit with no server errors keeps the serverErrors identity', async () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit: () => {} }));
+      const before = result.current.serverErrors;
+
+      await act(() => result.current.handleSubmit());
+
+      expect(result.current.submitCount).toBe(1);
+      expect(result.current.serverErrors).toBe(before);
+    });
+
     test('clearServerErrors removes all server errors', () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {

@@ -11,8 +11,9 @@ import {
 import type { FieldPath, FormAction, FormState, ResetKey } from './types';
 
 /**
- * The one empty map every fresh or cleared state shares. A render that derives a state and the store
- * that computes the same state then hold the same map, so values derived from it keep their identity.
+ * The one empty map shared by a fresh state's maps, a follow's server errors and cleared server errors.
+ * A render that derives a state and the store that computes the same state then hold the same map, and
+ * clearing server errors that were already empty keeps their identity, so values derived from them do too.
  * Frozen, since the reducer copies before every write: a mutation in place would throw.
  */
 const EMPTY: Readonly<Record<string, never>> = Object.freeze({});
@@ -196,7 +197,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       const { submitError: _submitError, ...rest } = state;
       return {
         ...rest,
-        serverErrors: {},
+        serverErrors: EMPTY,
       };
     }
 
