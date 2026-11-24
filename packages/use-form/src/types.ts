@@ -32,12 +32,23 @@ import type { ChangeEvent, SyntheticEvent } from 'react';
  */
 export type FieldPath = string;
 
-export type DeepPartial<T> = T extends Date | RegExp | File | Blob
-  ? T
-  : T extends Array<unknown>
+/** Whether any property of `T` is a function, as on `Date`, `File`, `Map`, `URL` or a class with methods. */
+type HasMethods<T> = true extends { [K in keyof T]-?: T[K] extends (...args: never) => unknown ? true : false }[keyof T]
+  ? true
+  : false;
+
+/**
+ * What `setValues` accepts: nested data objects may be partial, and merge into the values there.
+ * Arrays and values with methods, such as a `Date`, `File`, `Map`, `Set`, `URL`, Temporal or
+ * dayjs value, are given whole and stored as given, so their methods aren't lost.
+ */
+export type DeepPartial<T> =
+  T extends ReadonlyArray<unknown>
     ? T
     : T extends object
-      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      ? HasMethods<T> extends true
+        ? T
+        : { [K in keyof T]?: DeepPartial<T[K]> }
       : T;
 
 /** Identifies the record a form edits. Compared with `Object.is`. */
