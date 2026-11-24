@@ -1009,7 +1009,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           }
 
           // A successful save settles the baseline. A version that arrived while it ran is the save's own
-          // answer: the form follows it, or bases the edits on it. A latest version that is the base isn't: it's
+          // answer: the form follows it, or bases the edits on it. A latest version equal to the base isn't: it's
           // the previous save's answer or the old base coming back. Inside the try, so isSubmitting stays true
           // until the finally. A dropped write leaves the epoch as it was, so nothing follows.
           const settleSuccess = () => {

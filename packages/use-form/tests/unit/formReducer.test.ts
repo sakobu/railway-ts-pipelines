@@ -911,6 +911,20 @@ describe('SUBMIT_SUCCEEDED', () => {
     expect(result.baselineEpoch).toBe(0);
   });
 
+  test('the base is compared by content: one that comes back as a new object keeps the saved values too', () => {
+    const stale = formReducer({ ...s, values: edited }, sync(v2), v1);
+    const back = { ...v1 };
+    const state = formReducer(stale, sync(back), v1);
+
+    const result = formReducer(state, { ...succeeded, lastVersion: v2 }, v1);
+
+    expect(result.values).toBe(edited);
+    expect(result.lastVersion).toBe(back);
+    expect(result.cleanValues).toBe(edited);
+    expect(result.baseVersion).toBeUndefined();
+    expect(result.baselineEpoch).toBe(0);
+  });
+
   describe("while the previous save's answer was pending", () => {
     // The previous save submitted `earlier` and succeeded before its answer arrived, so this save started
     // with the base unset

@@ -274,9 +274,9 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'SUBMIT_SUCCEEDED': {
       if (action.baselineEpoch !== state.baselineEpoch) return state;
       // Within one epoch only a version arriving while the form has edits moves lastVersion. A latest version
-      // that is the base isn't this save's answer either: it's the previous save's answer, pending when this
-      // save started and made the base when it arrived, or the old base coming back
-      if (state.lastVersion === action.lastVersion || state.baseVersion === state.lastVersion) {
+      // equal to the base, by content, isn't this save's answer either: it's the previous save's answer, pending
+      // when this save started and made the base when it arrived, or the old base coming back
+      if (state.lastVersion === action.lastVersion || deepEqual(state.baseVersion, state.lastVersion)) {
         // None arrived for this submission: the next one to arrive is the server's answer
         return { ...state, cleanValues: action.values, baseVersion: undefined, isStale: false };
       }

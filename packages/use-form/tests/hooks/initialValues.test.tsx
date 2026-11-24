@@ -546,27 +546,69 @@ describe('saving', () => {
     expect(result.current.clientErrors.title).toBe('Title is required');
   });
 
-  test("the base coming back during a save isn't followed as the save's answer", async () => {
+  describe("the base coming back during a save isn't followed as the save's answer", () => {
+    /** Saves edits made on a stale form, while the version the edits started from comes back as `base`. */
+    const saveWhileTheBaseComesBack = async (base: PublishForm) => {
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+      const { result, rerender } = renderForm({ onSubmit });
+
+      act(() => result.current.setFieldValue('title', 'Mine'));
+      rerender({ initial: { ...draft, status: 'published' } });
+      let submitting!: Promise<unknown>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+      rerender({ initial: base });
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await submitting;
+      });
+
+      return result;
+    };
+
+    test('as the same object', async () => {
+      const result = await saveWhileTheBaseComesBack(draft);
+
+      expect(result.current.values.title).toBe('Mine');
+      expect(result.current.isDirty).toBe(true);
+      expect(result.current.isStale).toBe(false);
+    });
+
+    test('as a new object with the same content', async () => {
+      const result = await saveWhileTheBaseComesBack({ ...draft });
+
+      expect(result.current.values.title).toBe('Mine');
+      expect(result.current.isDirty).toBe(true);
+      expect(result.current.isStale).toBe(false);
+    });
+  });
+
+  test("a change undone during a save, then typing, doesn't make the save's answer raise isStale", async () => {
     const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
     const { result, rerender } = renderForm({ onSubmit });
 
     act(() => result.current.setFieldValue('title', 'Mine'));
-    rerender({ initial: { ...draft, status: 'published' } });
     let submitting!: Promise<unknown>;
     act(() => {
       submitting = result.current.handleSubmit();
     });
     await waitFor(() => expect(result.current.isSubmitting).toBe(true));
-    // The version the edits started from comes back, as the same object
-    rerender({ initial: draft });
+    // Someone else changes the record and undoes it, each version a new object
+    rerender({ initial: { ...draft, status: 'published' } });
+    rerender({ initial: { ...draft } });
+    act(() => result.current.setFieldValue('title', 'Mine more'));
     await act(async () => {
       saves[0]!.resolve(undefined);
       await submitting;
     });
+    // The save's answer
+    rerender({ initial: { ...draft, title: 'Mine' } });
 
-    expect(result.current.values.title).toBe('Mine');
-    expect(result.current.isDirty).toBe(true);
+    expect(result.current.values.title).toBe('Mine more');
     expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(true);
   });
 
   describe("back-to-back saves, the first one's answer arriving during the second", () => {

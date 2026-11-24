@@ -1037,8 +1037,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
   | {
       /**
        * Records a successful submission. A version that arrived while it ran is its answer, unless the latest
-       * version is the base. Then it's the previous save's answer, which became the base when it arrived, or
-       * the old base coming back.
+       * version equals the base, compared by content. Then it's the previous save's answer, which became the
+       * base when it arrived, or the old base coming back.
        */
       type: 'SUBMIT_SUCCEEDED';
       /** The values that were submitted */
