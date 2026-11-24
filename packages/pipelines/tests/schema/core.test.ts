@@ -12,7 +12,9 @@ import {
   type Validator,
   type ValidationError,
 } from '@/schema/core';
+import { number } from '@/schema/number';
 import { string } from '@/schema/string';
+import { validate } from '@/schema/utils';
 
 describe('core - object validator', () => {
   const stringValidator: Validator<unknown, string> = (value) => {
@@ -149,6 +151,74 @@ describe('core - object validator', () => {
       const error = result.error[0] || { path: [], message: '' };
       expect(error.path).toEqual(['user', 'details', 'name']);
     }
+  });
+
+  // toEqual ignores undefined properties, so presence is checked with toStrictEqual, Object.keys and `in`.
+  describe('key presence', () => {
+    const person = object({ name: required(string()), age: optional(number()) });
+
+    test('leaves out an optional key the input does not have', () => {
+      const result = person({ name: 'a' });
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ name: 'a' });
+        expect(Object.keys(result.value)).toEqual(['name']);
+      }
+    });
+
+    test('keeps a key the input has as undefined', () => {
+      const result = person({ name: 'a', age: undefined });
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ name: 'a', age: undefined });
+        expect('age' in result.value).toBe(true);
+      }
+    });
+
+    test('keeps a key the input has as null, as undefined', () => {
+      const result = person({ name: 'a', age: null });
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ name: 'a', age: undefined });
+      }
+    });
+
+    test('writes a missing key when its validator returns a value', () => {
+      const fallback: Validator<unknown, string> = (value) => ok(typeof value === 'string' ? value : 'guest');
+      const result = object({ name: fallback })({});
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ name: 'guest' });
+      }
+    });
+
+    test('reads inherited values and leaves out an inherited undefined', () => {
+      const schema = object({ age: optional(number()), nick: optional(string()) });
+      const result = schema(Object.create({ age: 3, nick: undefined }));
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ age: 3 });
+      }
+    });
+
+    test('applies the rule to nested objects', () => {
+      const schema = object({ profile: optional(object({ bio: optional(string()) })) });
+      const withProfile = schema({ profile: {} });
+      const withoutProfile = schema({});
+      expect(isOk(withProfile) && isOk(withoutProfile)).toBe(true);
+      if (isOk(withProfile) && isOk(withoutProfile)) {
+        expect(withProfile.value).toStrictEqual({ profile: {} });
+        expect(withoutProfile.value).toStrictEqual({});
+      }
+    });
+
+    test('leaves out a missing optional key with abortEarly', () => {
+      const result = validate({ name: 'a' }, person, { abortEarly: true });
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        expect(result.value).toStrictEqual({ name: 'a' });
+      }
+    });
   });
 });
 
@@ -482,7 +552,7 @@ describe('core - emptyAsOptional validator', () => {
 
     expect(isOk(result1)).toBe(true);
     if (isOk(result1)) {
-      expect(result1.value).toEqual({
+      expect(result1.value).toStrictEqual({
         username: 'john',
         bio: undefined,
         tags: undefined,

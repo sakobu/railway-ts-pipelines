@@ -111,7 +111,9 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
  * Create a validator for objects based on a schema.
  *
  * A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output:
- * `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+ * `object({ age: optional(number()) })` outputs `{ age?: number | undefined }`, the same type `InferSchemaType` gives.
+ * The output has a key when the input has it, or when its validator returns a value: `{}` gives `{}`, and
+ * `{ age: null }` gives `{ age: undefined }`.
  *
  * @example
  * const userSchema = object({
@@ -175,6 +177,8 @@ export function object<T extends Record<string, unknown>>(
 
       const value = (obj as Record<string, unknown>)[key];
       const fieldPath = [...parentPath, key];
+      // The output has the key when the input has it, or when the validator returns a value
+      const present = Object.prototype.hasOwnProperty.call(obj, key);
 
       const result = validator(value, fieldPath);
 
@@ -183,14 +187,14 @@ export function object<T extends Record<string, unknown>>(
         pendingResults.push(
           result.then((r) => {
             if (isOk(r)) {
-              validatedObj[key] = r.value;
+              if (present || r.value !== undefined) validatedObj[key] = r.value;
             } else {
               allErrors.push(...r.error);
             }
           }),
         );
       } else if (isOk(result)) {
-        validatedObj[key] = result.value;
+        if (present || result.value !== undefined) validatedObj[key] = result.value;
       } else {
         allErrors.push(...result.error);
         if (abortEarly) break;

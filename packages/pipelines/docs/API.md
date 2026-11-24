@@ -639,7 +639,7 @@ function object<T extends Record<string, unknown>>(
 ): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 ```
 
-Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async. A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output: `object({ age: optional(number()) })` outputs `{ age?: number }`, the same type `InferSchemaType` gives.
+Validate objects against a schema. Each key maps to a validator. Strict mode (default) rejects extra properties. Fields are validated in parallel when async. A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output: `object({ age: optional(number()) })` outputs `{ age?: number | undefined }`, the same type `InferSchemaType` gives. The output has a key when the input has it, or when its validator returns a value: `{}` gives `{}`, and `{ age: null }` gives `{ age: undefined }`.
 
 ```typescript
 const userSchema = object({
