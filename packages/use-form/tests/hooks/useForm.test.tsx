@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
@@ -67,6 +67,19 @@ describe('useForm', () => {
       expect(result.current.errors.name).toBe('Name is required');
       expect(result.current.errors.email).toBe('Email is required');
       expect(result.current.isValid).toBe(false);
+    });
+
+    test('in mount mode, a validator that throws on mount is logged, and every field is touched', () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const throws = () => {
+        throw new Error('boom');
+      };
+      const { result } = renderHook(() => useForm(throws, { initialValues: draft, validationMode: 'mount' }));
+
+      expect(result.current.values).toEqual(draft);
+      expect(result.current.touched).toEqual({ title: true, status: true, tags: true });
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      consoleError.mockRestore();
     });
   });
 
@@ -2338,6 +2351,45 @@ describe('useForm', () => {
       expect(result.current.clientErrors).toEqual({});
       expect(result.current.isValidating).toBe(false);
       expect(outcome).toEqual(err([{ path: ['title'], message: 'Title is required' }]));
+    });
+
+    describe('a validator that rejects while typing', () => {
+      let consoleError: ReturnType<typeof spyOn>;
+      beforeEach(() => {
+        consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      });
+      afterEach(() => {
+        consoleError.mockRestore();
+      });
+
+      test('a schema validator is logged, and isValidating clears', async () => {
+        const rejects: MaybeAsyncValidator<unknown, PublishForm> = () => Promise.reject(new Error('boom'));
+        const { result } = renderHook(() => useForm(rejects, { initialValues: draft, validationMode: 'live' }));
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        expect(result.current.isValidating).toBe(true);
+
+        await waitFor(() => expect(result.current.isValidating).toBe(false));
+        expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      });
+
+      test('a field validator is logged, and its validating flag clears', async () => {
+        const { result } = renderHook(() =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            validationMode: 'live',
+            fieldValidators: {
+              title: () => Promise.reject(new Error('boom')),
+            },
+          }),
+        );
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        expect(result.current.validatingFields).toEqual({ title: true });
+
+        await waitFor(() => expect(result.current.validatingFields).toEqual({}));
+        expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      });
     });
   });
 

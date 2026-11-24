@@ -50,6 +50,8 @@ const validator = v.object({
 });
 ```
 
+**A validator that throws.** A validation the form starts on its own (on mount, after a reset, or when it follows new `initialValues`) logs a throw from the schema or a field validator with `console.error('Form validation error:', error)`, and the form keeps rendering. So does an async check that rejects, whatever started it, and its validating state ends. A sync throw during typing or a blur reaches the `setFieldValue`, `setValues` or `setFieldTouched` call that started the check, `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+
 #### options
 
 Type: `FormOptions<TValues, TResult>`
@@ -773,7 +775,7 @@ validateForm(values: TValues): Result<TValues, ValidationError[]> | Promise<Resu
 - `values` - Values to validate
 
 **Returns:**
-Railway Result type with validated data or errors. Returns a Promise when using an async validator.
+Railway Result type with validated data or errors. Returns a Promise when using an async validator. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
 
 **Example:**
 

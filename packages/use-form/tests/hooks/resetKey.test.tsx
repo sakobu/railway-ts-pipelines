@@ -404,6 +404,25 @@ describe('resetKey', () => {
     expect(result.current.touched.title).toBe(true);
   });
 
+  test("in mount mode, a validator that throws on the new record is logged, and the new record's fields are touched", () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const throwsOnB = (value: unknown, path?: string[]) => {
+      if ((value as PublishForm).title === 'B') throw new Error('boom');
+      return publishValidator(value, path);
+    };
+    const { result, rerender } = renderHook(
+      ({ rec, id }: Props) => useForm(throwsOnB, { initialValues: rec, resetKey: id, validationMode: 'mount' }),
+      { initialProps: { rec: A, id: 'a' } },
+    );
+
+    rerender({ rec: B, id: 'b' });
+
+    expect(result.current.values).toEqual(B);
+    expect(result.current.touched.title).toBe(true);
+    expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+    consoleError.mockRestore();
+  });
+
   test('under StrictMode, a resetKey change validates once in mount mode', () => {
     const validator = mock((value: unknown, path?: string[]) => publishValidator(value, path));
     const { rerender } = renderHook(

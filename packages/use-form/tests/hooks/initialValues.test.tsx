@@ -436,6 +436,98 @@ describe('errors after a follow', () => {
     expect(result.current.clientErrors).toEqual({});
     expect(result.current.isValidating).toBe(false);
   });
+
+  describe('a validator that throws on the followed values', () => {
+    let consoleError: ReturnType<typeof spyOn>;
+    beforeEach(() => {
+      consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      consoleError.mockRestore();
+    });
+
+    /** The publish schema, except that a title of 'Boom' makes it throw, as a bug in a validator would. */
+    const throwsOnBoom: MaybeAsyncValidator<unknown, PublishForm> = (value, path) => {
+      if ((value as PublishForm).title === 'Boom') throw new Error('boom');
+      return publishValidator(value, path);
+    };
+
+    test("is logged, and the old values' errors are cleared", () => {
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(throwsOnBoom, { initialValues: initial }),
+        { initialProps: { initial: draft } },
+      );
+      rerender({ initial: { ...draft, title: '' } });
+      expect(result.current.clientErrors).toEqual({ title: 'Title is required' });
+
+      rerender({ initial: { ...draft, title: 'Boom' } });
+
+      expect(result.current.values.title).toBe('Boom');
+      expect(result.current.clientErrors).toEqual({});
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+    });
+
+    test('a field validator that throws is logged', () => {
+      const { result, rerender } = renderForm({
+        fieldValidators: {
+          title: (value) => {
+            if (value === 'Boom') throw new Error('boom');
+            return value === 'Bad' ? 'Bad title' : undefined;
+          },
+        },
+      });
+      act(() => result.current.setFieldValue('title', 'Bad'));
+      expect(result.current.fieldErrors).toEqual({ title: 'Bad title' });
+      // The values come to equal the latest version: the form has no edits, so it follows the next one
+      rerender({ initial: { ...draft, title: 'Bad' } });
+
+      rerender({ initial: { ...draft, title: 'Boom' } });
+
+      expect(result.current.values.title).toBe('Boom');
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+    });
+
+    test('an async validator that rejects is logged, and isValidating clears', async () => {
+      const rejectsOnBoom: MaybeAsyncValidator<unknown, PublishForm> = async (value, path) => throwsOnBoom(value, path);
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(rejectsOnBoom, { initialValues: initial }),
+        { initialProps: { initial: draft } },
+      );
+
+      rerender({ initial: { ...draft, title: 'Boom' } });
+      expect(result.current.isValidating).toBe(true);
+
+      await waitFor(() => expect(result.current.isValidating).toBe(false));
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+    });
+
+    test('a save whose saved record it throws on still succeeds', async () => {
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: PublishForm }) => useForm(throwsOnBoom, { initialValues: initial, onSubmit }),
+        { initialProps: { initial: draft } },
+      );
+
+      act(() => result.current.setFieldValue('title', ' Boom '));
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+      // The saved record, trimmed, arrives before onSubmit returns: the form follows it when the save settles
+      rerender({ initial: { ...draft, title: 'Boom' } });
+      let outcome!: Awaited<typeof submitting>;
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        outcome = await submitting;
+      });
+
+      expect(outcome).toEqual(ok({ ...draft, title: ' Boom ' }));
+      expect(result.current.values.title).toBe('Boom');
+      expect(result.current.errors._root).toBeUndefined();
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+    });
+  });
 });
 
 describe('isStale', () => {
