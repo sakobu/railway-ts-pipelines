@@ -1028,7 +1028,11 @@ export type FormAction<TValues extends Record<string, unknown>> =
       resetKey: ResetKey;
     }
   | {
-      /** Records a successful submission */
+      /**
+       * Records a successful submission. A version that arrived while it ran is its answer. When it started
+       * while the previous save's answer was pending, the first version to arrive answered that save, so only
+       * a later one answers this submission.
+       */
       type: 'SUBMIT_SUCCEEDED';
       /** The values that were submitted */
       values: TValues;
@@ -1036,6 +1040,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       baselineEpoch: number;
       /** The `lastVersion` when the submission started */
       lastVersion: TValues;
+      /** The `baseVersion` when the submission started. Unset means the previous save's answer was pending. */
+      baseVersion: TValues | undefined;
     }
   | {
       /** Updates a single field value and optionally triggers validation */

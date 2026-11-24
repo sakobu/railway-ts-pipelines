@@ -693,6 +693,42 @@ describe('useFormAutoSubmission', () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
     });
+
+    test("keeps saving when the previous save's answer arrives during the held save", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // The edit comes due during the save: it's held, and goes out once the save succeeds
+      await sleep(150);
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+
+      // The first save's answer arrives while the held save runs, and the user keeps typing
+      rerender({ values: { ...initial, name: 'Jane' } });
+      act(() => {
+        result.current.setFieldValue('name', 'Janette');
+      });
+      await act(async () => {
+        saves[1]!.resolve(undefined);
+        await nextTask();
+      });
+      // The held save's answer arrives
+      rerender({ values: { ...initial, name: 'Janet' } });
+      expect(result.current.isStale).toBe(false);
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(3), { timeout: 1000 });
+      expect(onSubmit.mock.calls[2]).toEqual([{ ...initial, name: 'Janette' }]);
+    });
   });
 
   describe('failed saves', () => {

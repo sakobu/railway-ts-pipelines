@@ -545,6 +545,66 @@ describe('saving', () => {
     expect(result.current.values.title).toBe('');
     expect(result.current.clientErrors.title).toBe('Title is required');
   });
+
+  describe("back-to-back saves, the first one's answer arriving during the second", () => {
+    /** Saves `First`, then queues a save of `second` that starts once the first succeeds, before its answer. */
+    const saveTwice = async (second: string) => {
+      const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+      const rendered = renderForm({ onSubmit });
+      const { result } = rendered;
+
+      act(() => result.current.setFieldValue('title', 'First'));
+      act(() => {
+        void result.current.handleSubmit();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      act(() => result.current.setFieldValue('title', second));
+      act(() => {
+        void result.current.handleSubmit();
+      });
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+
+      return { ...rendered, saves };
+    };
+
+    test("the second save's success isn't read as the answer to the first", async () => {
+      const { result, rerender, saves } = await saveTwice(' Second ');
+
+      rerender({ initial: { ...draft, title: 'First' } });
+      await act(async () => {
+        saves[1]!.resolve(undefined);
+        await nextTask();
+      });
+
+      expect(result.current.values.title).toBe(' Second ');
+
+      // The second save's answer is followed
+      rerender({ initial: { ...draft, title: 'Second' } });
+      expect(result.current.values.title).toBe('Second');
+      expect(result.current.isDirty).toBe(false);
+      expect(result.current.isStale).toBe(false);
+    });
+
+    test("typing during the second save doesn't make its answer raise isStale", async () => {
+      const { result, rerender, saves } = await saveTwice('Second');
+
+      rerender({ initial: { ...draft, title: 'First' } });
+      act(() => result.current.setFieldValue('title', 'Second and more'));
+      await act(async () => {
+        saves[1]!.resolve(undefined);
+        await nextTask();
+      });
+      rerender({ initial: { ...draft, title: 'Second' } });
+
+      expect(result.current.values.title).toBe('Second and more');
+      expect(result.current.isStale).toBe(false);
+      expect(result.current.isDirty).toBe(true);
+    });
+  });
 });
 
 describe('state identity', () => {

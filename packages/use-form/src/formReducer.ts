@@ -274,8 +274,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'SUBMIT_SUCCEEDED': {
       if (action.baselineEpoch !== state.baselineEpoch) return state;
       // Within one epoch only a version arriving while the form has edits moves lastVersion
-      if (state.lastVersion === action.lastVersion) {
-        // None arrived while the submission ran: the next one to arrive is the server's answer
+      const noneArrived = state.lastVersion === action.lastVersion;
+      // The submission started while the previous save's answer was pending, and the first version to arrive
+      // since, which became the base, is still the latest: it answered that save, not this one
+      const answeredPrevious = action.baseVersion === undefined && state.baseVersion === state.lastVersion;
+      if (noneArrived || answeredPrevious) {
+        // None arrived for this submission: the next one to arrive is the server's answer
         return { ...state, cleanValues: action.values, baseVersion: undefined, isStale: false };
       }
       // One arrived: the server's answer, delivered before onSubmit returned
