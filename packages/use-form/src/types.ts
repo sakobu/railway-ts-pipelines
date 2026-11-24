@@ -246,6 +246,11 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * `err([{ path: [], message: "Something went wrong. Please try again." }])`, which becomes the submit error.
    * The original error is logged with `console.error`. `messages.submitFailed` replaces the text.
    *
+   * The save counts as done when it returns, or its promise resolves, without an `err`. A fire-and-forget call
+   * like `(v) => mutation.mutate(v)` returns at once, so in an edit form fed by refetched `initialValues`, a
+   * failed request leaves the typed values to be replaced by the next version. Return the save's promise
+   * (`mutateAsync`) or a `Result` there.
+   *
    * With an explicit type argument, `useForm<TValues>` fixes the success value to the form values.
    * For an `onSubmit` that returns `Result<User, …>`, write `useForm<TValues, User>` or drop the type arguments.
    * With an explicit `useForm<TValues, User>`, always pass an `onSubmit` that returns a `Result`: without one,

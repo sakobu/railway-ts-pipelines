@@ -606,20 +606,28 @@ Error paths are handled automatically: `object()` constructs the field path (e.g
 
 ```tsx
 import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
+import { useState } from 'react';
+
+import type { InferSchemaType } from '@railway-ts/pipelines/schema';
+
+type Filters = InferSchemaType<typeof filterSchema>;
+
+// Built once, so the defaults are the same on every render
+const NO_FILTERS: Filters = { search: '', category: '', minPrice: undefined, maxPrice: undefined };
 
 function ProductFilters() {
+  // The filters last applied. Passed back as initialValues, they're what isDirty compares against, so going back
+  // to an earlier value, like clearing the search, applies too.
+  const [applied, setApplied] = useState(NO_FILTERS);
+
   const form = useForm(filterSchema, {
-    initialValues: {
-      search: '',
-      category: '',
-      minPrice: undefined,
-      maxPrice: undefined,
-    },
+    initialValues: applied,
     onSubmit: async (values) => {
       const params = new URLSearchParams();
       if (values.search) params.set('search', values.search);
       if (values.category) params.set('category', values.category);
       await fetch(`/api/products?${params}`);
+      setApplied(values);
     },
     validationMode: 'live',
   });

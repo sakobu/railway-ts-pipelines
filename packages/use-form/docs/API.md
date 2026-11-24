@@ -155,6 +155,8 @@ onSubmit: async (values) => {
 
 An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error.
 
+**The save counts as done when `onSubmit` returns,** or when its promise resolves, without an `err`. A fire-and-forget call like `(v) => mutation.mutate(v)` returns at once, so the values count as saved before the request ends. That's fine while `initialValues` stays fixed. In an edit form fed by refetched `initialValues`, though, a failed request leaves the typed values unprotected: a newer version that arrives is followed and replaces them. Return the save's promise instead (`async (v) => { await mutation.mutateAsync(v); }`), or a `Result`. `isSubmitting` then also stays true while the request runs.
+
 **Breaking change: a value that is neither `undefined` nor a `Result` is an error.** If `onSubmit` returns anything else, `handleSubmit` resolves to the generic submit error (`Something went wrong. Please try again.`) and logs `console.error('Form submission error:', error)`. Before, it resolved `ok(values)`. The usual trap is a prop typed `(v: T) => void` that the parent fills with `(v) => api.save(v)`: that returns a `Response` or `mutateAsync`'s data, type-checks, and then fails at runtime. Return nothing (`async (v) => { await save(v); }`) or return a `Result`.
 
 #### validationMode
@@ -1333,6 +1335,8 @@ is dirty, valid, and values have changed since the last validation.
 
 It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save, its own or a manual one, goes out as soon as that save settles, unless the form is then stale or invalid. It only submits values whose latest validation passed: values still being validated wait for their result.
 
+It saves values that differ from `initialValues` (`isDirty`). So pass what was saved back in as `initialValues`, as an edit form does with the saved record: `isDirty` then compares against what the server holds. With `initialValues` that never change, an edit back to them after an earlier save isn't saved, because the form counts it as clean, though the server still holds the earlier save.
+
 After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
 
 A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on.
@@ -1359,10 +1363,14 @@ Debounce delay in milliseconds before auto-submitting.
 ### Example
 
 ```typescript
+// The query last searched, passed back so clearing the box searches again
+const [searched, setSearched] = useState({ search: '' });
+
 const form = useForm(validator, {
-  initialValues: { search: '' },
+  initialValues: searched,
   onSubmit: async (values) => {
     await fetch(`/api/search?q=${values.search}`);
+    setSearched(values);
   },
   validationMode: 'live',
 });

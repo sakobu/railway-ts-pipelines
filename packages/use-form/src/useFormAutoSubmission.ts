@@ -29,6 +29,8 @@ type FormWithAutoSubmit<T> = {
  * 4. The form isn't stale (`isStale`): a save would overwrite a newer version of the record.
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
+ * Pass what was saved back in as `initialValues`, so `isDirty` compares against what the server holds. With
+ * `initialValues` that never change, an edit back to them after an earlier save counts as clean and isn't saved.
  * An edit made during a save goes out as soon as that save settles, unless the form is then stale or invalid.
  * It only submits values whose latest validation passed: values still being validated wait for their result.
  * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
@@ -42,21 +44,26 @@ type FormWithAutoSubmit<T> = {
  * @returns null (this hook only produces side effects)
  *
  * @example
- * // Auto-submit a preferences form
+ * // Auto-submit a preferences form. The saved preferences come back as initialValues, so switching
+ * // back to an earlier value saves too.
+ * const [saved, setSaved] = useState(loadedPreferences);
  * const form = useForm(preferencesSchema, {
- *   initialValues: { theme: 'light', notifications: true },
+ *   initialValues: saved,
  *   onSubmit: async (values) => {
- *     await updateUserPreferences(values);
+ *     setSaved(await updateUserPreferences(values));
  *   }
  * });
  *
  * useFormAutoSubmission(form, 500);
  *
  * @example
- * // Auto-save a draft
+ * // Auto-save a draft, passing the saved draft back
+ * const [draft, setDraft] = useState(loadedDraft);
  * const form = useForm(draftSchema, {
  *   initialValues: draft,
- *   onSubmit: saveDraft,
+ *   onSubmit: async (values) => {
+ *     setDraft(await saveDraft(values));
+ *   },
  *   validationMode: "live"
  * });
  *
