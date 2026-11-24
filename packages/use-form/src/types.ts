@@ -1286,7 +1286,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   handleSubmit: (e?: SyntheticEvent) => Promise<Result<TResult, ValidationError[]>>;
 
   /**
-   * Resets the form to its initial state — clears all values, errors, and touched state.
+   * Resets the form to its initial state — clears all values, errors, and touched state. In `mount` mode it then
+   * validates and marks every field touched, as on mount.
    *
    * @example
    * form.resetForm();

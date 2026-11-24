@@ -1184,7 +1184,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Resets the form to its initial state.
    * Clears all values (back to initialValues), errors, and touched state.
-   * If validationMode is "mount", triggers validation after reset.
+   * If validationMode is "mount", validates and marks every field touched, as on mount, so the errors show.
    *
    * @example
    * // Reset after successful submission
@@ -1215,10 +1215,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       type: 'RESET_FORM',
     });
 
-    if (validateOnMount) {
-      void validateForm(store.getState().values);
-    }
-  }, [store, dispatch, validateForm, validateOnMount]);
+    // As on mount: validate, and mark every field touched so the errors show
+    if (validateOnMount) validateAsOnMount(store.getState().values);
+  }, [store, dispatch, validateAsOnMount, validateOnMount]);
 
   // ===========================================================================
   // Error Helper

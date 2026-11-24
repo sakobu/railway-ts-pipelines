@@ -155,7 +155,7 @@ By default, validation runs on every change. That's great for short forms, but i
 | `mount`          | Mount           | Mount (all fields)  | Editing existing records            |
 | `submit`         | Submit only     | Submit (all fields) | Simple forms, minimal interruption  |
 
-`mount` mode also validates and marks every field touched when the form [follows new `initialValues`](./API.md#initialvalues) or its [`resetKey`](./API.md#resetkey) changes.
+`mount` mode also validates and marks every field touched when the form [follows new `initialValues`](./API.md#initialvalues), on `resetForm()`, and when its [`resetKey`](./API.md#resetkey) changes.
 
 ```typescript
 // Validate only when a field loses focus

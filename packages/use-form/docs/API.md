@@ -164,7 +164,7 @@ Controls when validation occurs.
 
 - `live` - Validate on change and blur, mark touched on change
 - `blur` - Validate on blur only
-- `mount` - Validate on mount and mark all fields touched, and again on a follow of new `initialValues` or a `resetKey` change
+- `mount` - Validate on mount and mark all fields touched, and again on a follow of new `initialValues`, `resetForm()` or a `resetKey` change
 - `submit` - Validate only on submit
 
 #### fieldValidators
@@ -634,7 +634,7 @@ Reset form to initial values and clear errors.
 resetForm(): void
 ```
 
-It resets to the `initialValues` passed in the latest render.
+It resets to the `initialValues` passed in the latest render. In `mount` mode it then validates and marks every field touched, as on mount, so the errors show.
 
 **Example:**
 

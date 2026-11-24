@@ -1335,6 +1335,25 @@ describe('useForm', () => {
       expect(result.current.errors.name).toBe('Name is required');
       expect(result.current.errors.email).toBe('Email is required');
     });
+
+    test('in mount mode, marks every field touched, so the errors show as on mount', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+          validationMode: 'mount',
+        }),
+      );
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+      });
+
+      act(() => {
+        result.current.resetForm();
+      });
+
+      expect(result.current.touched).toEqual({ name: true, email: true, age: true });
+      expect(result.current.getFieldError('name')).toBe('Name is required');
+    });
   });
 
   describe('handleSubmit error handling', () => {
