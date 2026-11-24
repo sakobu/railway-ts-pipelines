@@ -116,7 +116,7 @@ The form follows new `initialValues`, such as a refetched record:
   - An optimistic write of the submitted values, made while the save runs, is taken for the answer. When the server then changes the record, as by trimming `'Hello '` to `'Hello'`, and the user typed during or after the save, the form shows `isStale`.
   - A saved record equal to the version before the save, as when the server trims the only edit away, can't be told apart from the same data rendered again. The form keeps the typed values and stays dirty, and until another version arrives, it takes the next one for the save's answer, so a change by someone else then doesn't raise `isStale`.
 - Build `initialValues` the same way on every render. A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render) makes every render look like a new version. `useForm` notices from how the new versions line up with the form's own updates, and logs an error naming the cause. It can miss a value that holds still while the user types and changes only in a render an effect causes, such as one that `onValuesChange` triggers. The sign then is `isStale` turning true after every edit. Create such values once, at module scope or with `useState(() => …)`.
-- A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by identity. Built anew on every render, they cause the same error. Build them with `useMemo`, keyed on the data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt from refetched data still counts as a new version, even with the same items, so a form with edits shows `isStale`.
+- A `Set`, a `Map`, a typed array and a class instance with no own properties, such as a Temporal date, compare by identity. Built anew on every render, they cause the same error. A class instance with fields, such as a dayjs value, compares by those fields; state it keeps in `#private` fields doesn't count. Build them with `useMemo`, keyed on the data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt from refetched data still counts as a new version, even with the same items, so a form with edits shows `isStale`.
 
 See [Edit Forms: Loading, Refetching, and Switching Records](./RECIPES.md#edit-forms-loading-refetching-and-switching-records).
 
@@ -553,8 +553,8 @@ form.setFieldTouched('password', false);
 
 ### setValues
 
-Update multiple field values at once. Nested objects are deep-merged so
-sibling keys you don't mention are preserved.
+Update multiple field values at once. Plain nested objects merge into the
+values there, so sibling keys you don't mention are kept.
 
 ```typescript
 setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
@@ -562,7 +562,7 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 
 **Parameters:**
 
-- `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given.
+- `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given. To merge a class instance that holds only some fields, such as a model from a PATCH response, spread it into a plain object: `setValues({ address: { ...patch } })`.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
 
 **Example:**

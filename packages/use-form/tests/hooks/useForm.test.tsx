@@ -1746,15 +1746,30 @@ describe('useForm', () => {
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
     });
 
-    test('a value that cannot be traversed returns the generic submit error', async () => {
-      const consoleError = silenceConsoleError();
-      // Marking every field touched walks the values, and a cycle makes that walk throw
+    test('a value that contains itself submits', async () => {
       const cyclic: Record<string, unknown> = { name: 'John' };
       cyclic.self = cyclic;
+      const { result } = renderHook(() => useForm(alwaysValidValidator, { initialValues: cyclic }));
+
+      const submitResult = await act(async () => await result.current.handleSubmit());
+
+      expect(isOk(submitResult)).toBe(true);
+      expect(result.current.touched).toEqual({ name: true, self: true });
+    });
+
+    test('a value that throws when read returns the generic submit error', async () => {
+      const consoleError = silenceConsoleError();
+      // Marking every field touched reads the values, and this getter throws
+      const throwing = Object.defineProperty({ name: 'John' }, 'boom', {
+        enumerable: true,
+        get: () => {
+          throw new Error('boom');
+        },
+      });
 
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {
-          initialValues: cyclic,
+          initialValues: throwing,
         }),
       );
 

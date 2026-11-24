@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+import { runInNewContext } from 'node:vm';
 
 import {
   getValueByPath,
@@ -304,6 +305,19 @@ describe('collectFieldPaths', () => {
     expect(collectFieldPaths(obj)).toEqual(['avatar', 'tags', 'ids', 'address', 'address.street', 'address.city']);
   });
 
+  test('stops at a typed array instead of listing every byte', () => {
+    expect(collectFieldPaths({ bytes: new Uint8Array(3) })).toEqual(['bytes']);
+  });
+
+  test('lists a value that contains itself once, and a value shared by two fields under both', () => {
+    const root: Record<string, unknown> = { name: 'a' };
+    root.self = root;
+    const shared = { x: 1 };
+
+    expect(collectFieldPaths(root)).toEqual(['name', 'self']);
+    expect(collectFieldPaths({ p: shared, q: shared })).toEqual(['p', 'p.x', 'q', 'q.x']);
+  });
+
   test('handles complex nested structures', () => {
     const obj = {
       user: {
@@ -427,6 +441,22 @@ describe('deepMerge', () => {
     const tags = { a: 2 };
     const target: Record<string, unknown> = { tags: new Map([['a', 1]]) };
     expect(deepMerge(target, { tags }).tags).toBe(tags);
+  });
+
+  test('a plain object from another realm merges like any plain object', () => {
+    // As from an iframe, node:vm, or a test runner reading JSON from Node's own fetch
+    const source = runInNewContext('({ address: { city: "NYC" } })') as Record<string, unknown>;
+    const result = deepMerge({ address: { street: '1 Main', city: 'LA' } }, source);
+    expect(result).toEqual({ address: { street: '1 Main', city: 'NYC' } });
+  });
+
+  test('a __proto__ key in the data is skipped, so the values keep their prototype', () => {
+    const source = JSON.parse('{ "name": "Ann", "__proto__": { "isAdmin": true } }') as Record<string, unknown>;
+    const result: Record<string, unknown> = deepMerge({ name: '' }, source);
+
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect(result.isAdmin).toBeUndefined();
+    expect(result).toEqual({ name: 'Ann' });
   });
 
   test('a class instance replaces a plain object instead of being merged into', () => {
@@ -553,6 +583,47 @@ describe('deepEqual', () => {
 
     expect(deepEqual(copy, address)).toBe(true);
     expect(deepEqual(address, copy)).toBe(true);
+  });
+
+  test('two invalid Dates are equal', () => {
+    expect(deepEqual(new Date(''), new Date(''))).toBe(true);
+    expect(deepEqual(new Date(''), new Date('2024-01-01'))).toBe(false);
+  });
+
+  test('an object from another realm compares by content', () => {
+    expect(deepEqual(runInNewContext('({})'), {})).toBe(true);
+    expect(deepEqual(runInNewContext('({ name: "a" })'), { name: 'a' })).toBe(true);
+  });
+
+  test('a Map or Set compares by identity, even with fields of its own', () => {
+    class Registry extends Map<string, number> {
+      label = 'x';
+    }
+    class Tags extends Set<string> {
+      label = 'x';
+    }
+
+    expect(deepEqual(new Registry([['a', 1]]), new Registry([['b', 2]]))).toBe(false);
+    expect(deepEqual(new Tags(['a']), new Tags(['b']))).toBe(false);
+  });
+
+  test('typed arrays compare by identity', () => {
+    const bytes = new Uint8Array([1, 2]);
+
+    expect(deepEqual(bytes, bytes)).toBe(true);
+    expect(deepEqual(new Uint8Array([1, 2]), new Uint8Array([1, 2]))).toBe(false);
+  });
+
+  test('values that contain themselves compare without overflowing the stack', () => {
+    type TreeNode = { name: string; parent?: TreeNode; child?: TreeNode };
+    const tree = (name: string): TreeNode => {
+      const root: TreeNode = { name };
+      root.child = { name: 'leaf', parent: root };
+      return root;
+    };
+
+    expect(deepEqual(tree('a'), tree('a'))).toBe(true);
+    expect(deepEqual(tree('a'), tree('b'))).toBe(false);
   });
 });
 

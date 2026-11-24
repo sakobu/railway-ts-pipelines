@@ -263,13 +263,30 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
 export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffected(a, b) || isPathAffected(b, a);
 
 /**
- * Whether a value is a plain object: its prototype is `Object.prototype` or `null`.
+ * Whether a value is a plain object: an object literal, or one with a `null` prototype.
+ * Its prototype is a root object, so objects from another realm count too: an iframe,
+ * `node:vm`, or a test runner reading JSON from Node's own `fetch`.
  */
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (value === null || typeof value !== 'object') return false;
   const proto: unknown = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
+  return proto === null || Object.getPrototypeOf(proto) === null;
 };
+
+/**
+ * Whether a value keeps its contents out of its own fields, even when it has some: a `Date`'s
+ * time, a `RegExp`'s pattern, a file's contents, a `Map`'s or `Set`'s entries, or a typed array's
+ * bytes, which would be one field each.
+ */
+const hidesContents = (value: object): boolean =>
+  value instanceof Date ||
+  value instanceof RegExp ||
+  value instanceof Map ||
+  value instanceof Set ||
+  value instanceof WeakMap ||
+  value instanceof WeakSet ||
+  ArrayBuffer.isView(value) ||
+  (typeof Blob !== 'undefined' && value instanceof Blob);
 
 /**
  * Whether the form looks inside a value, or treats it as one value. `setValues` ({@link deepMerge}),
@@ -277,20 +294,17 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  *
  * The form looks inside arrays and objects that keep their state in their own fields: plain
  * objects, and class instances with fields, such as a record class or a dayjs value. That's how
- * `setFieldValue` edits them. Every other value is one value: primitives, `Date`, `RegExp`,
- * `File` and `Blob`, and objects that keep their state out of their fields, such as `Map`, `Set`,
- * Temporal values and classes with only private fields.
+ * `setFieldValue` edits them. Every other value is one value: primitives, `Date`, `RegExp`, `File`,
+ * `Blob`, `Map`, `Set`, typed arrays, and objects with no fields of their own, such as Temporal
+ * values and classes with only private fields.
  *
  * @param value - Any form value
  * @returns Whether the form looks inside the value
  */
 const isBranch = (value: unknown): value is object => {
   if (value === null || typeof value !== 'object') return false;
-  if (Array.isArray(value)) return true;
-  if (value instanceof Date || value instanceof RegExp) return false;
-  // A file's contents aren't in its fields, though test DOMs such as happy-dom give it some
-  if (typeof Blob !== 'undefined' && value instanceof Blob) return false;
-  return isPlainObject(value) || Object.keys(value).length > 0;
+  if (Array.isArray(value) || isPlainObject(value)) return true;
+  return !hidesContents(value) && Object.keys(value).length > 0;
 };
 
 /**
@@ -357,21 +371,24 @@ const isBranch = (value: unknown): value is object => {
  */
 export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   const paths: FieldPath[] = [];
+  // The values being walked, so a value that contains itself is listed once, where it repeats
+  const ancestors = new Set<object>();
 
   const visit = (value: unknown, path: string) => {
     if (path) paths.push(path);
 
-    if (!isBranch(value)) return;
+    if (!isBranch(value) || ancestors.has(value)) return;
+    ancestors.add(value);
 
     if (Array.isArray(value)) {
       value.forEach((item, i) => visit(item, path ? `${path}.${i}` : `${i}`));
-      return;
+    } else {
+      for (const [k, v] of Object.entries(value)) {
+        visit(v, path ? `${path}.${k}` : k);
+      }
     }
 
-    for (const [k, v] of Object.entries(value)) {
-      const childPath = path ? `${path}.${k}` : k;
-      visit(v, childPath);
-    }
+    ancestors.delete(value);
   };
 
   visit(obj, prefix);
@@ -401,6 +418,8 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
   const result: Record<string, unknown> = { ...target };
 
   for (const key of Object.keys(source)) {
+    // JSON.parse makes "__proto__" an own key. Assigning it would replace the values' prototype.
+    if (key === '__proto__') continue;
     const srcVal = source[key];
     const tgtVal = target[key];
     const merges = isPlainObject(srcVal) && isBranch(tgtVal) && !Array.isArray(tgtVal);
@@ -416,11 +435,14 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
  *
  * - Values the form looks inside (see {@link isBranch}) compare by content: arrays item by item,
  *   objects field by field. An array only equals an array. An object's class doesn't count,
- *   since `setFieldValue` rebuilds the objects on a field's path as plain objects.
- * - `Date` and `RegExp` compare by value.
- * - Every other value compares by identity: `File` and `Blob`, whose contents browsers keep out
- *   of their fields, and objects that keep their state out of their fields, such as `Map`, `Set`,
- *   Temporal values and classes with only private fields.
+ *   since `setFieldValue` rebuilds the objects on a field's path as plain objects. Neither does
+ *   state in a class's `#private` fields, which only the class can read.
+ * - `Date` and `RegExp` compare by value. Two invalid Dates are equal.
+ * - Every other value compares by identity: `File`, `Blob`, `Map`, `Set` and typed arrays, whose
+ *   contents aren't in their fields, and objects with no fields of their own, such as Temporal
+ *   values and classes with only private fields.
+ * - A value that contains itself compares without looping: a pair met again inside itself is
+ *   settled by the comparison already running on it.
  *
  * When unsure, it calls two values different. That costs at most an extra save or an
  * "unsaved changes" prompt, where calling them equal could drop a save.
@@ -434,26 +456,35 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
  * deepEqual(new Date("2024-01-01"), new Date("2024-01-01")); // true
  * deepEqual(new File(["a"], "a.txt"), new File(["a"], "a.txt")); // false: compared by identity
  */
-export const deepEqual = (a: unknown, b: unknown): boolean => {
+export const deepEqual = (a: unknown, b: unknown): boolean => equalWithin(a, b, []);
+
+/** {@link deepEqual}, given the pairs of values whose comparison is running, outermost first. */
+const equalWithin = (a: unknown, b: unknown, running: Array<readonly [object, object]>): boolean => {
   if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime());
   if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
   // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out
   if (!isBranch(a) || !isBranch(b)) return false;
   // The form's edits keep an array an array
   if (Array.isArray(a) !== Array.isArray(b)) return false;
+  // Met again inside itself: the comparison already running on this pair settles it
+  if (running.some(([x, y]) => x === a && y === b)) return true;
 
-  if (Array.isArray(a)) {
-    const arrB = b as unknown[];
-    return a.length === arrB.length && a.every((item, i) => deepEqual(item, arrB[i]));
-  }
+  running.push([a, b]);
+  const equal = Array.isArray(a) ? itemsEqual(a, b as unknown[], running) : fieldsEqual(a, b, running);
+  running.pop();
+  return equal;
+};
 
+const itemsEqual = (a: unknown[], b: unknown[], running: Array<readonly [object, object]>): boolean =>
+  a.length === b.length && a.every((item, i) => equalWithin(item, b[i], running));
+
+const fieldsEqual = (a: object, b: object, running: Array<readonly [object, object]>): boolean => {
   const keysA = Object.keys(a);
-  const keysB = Object.keys(b);
-  if (keysA.length !== keysB.length) return false;
+  if (keysA.length !== Object.keys(b).length) return false;
   return keysA.every(
     (key) =>
       Object.prototype.hasOwnProperty.call(b, key) &&
-      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+      equalWithin((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], running),
   );
 };
