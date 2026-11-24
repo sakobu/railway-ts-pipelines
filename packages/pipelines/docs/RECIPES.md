@@ -709,7 +709,10 @@ const formSchema = object({
 });
 
 validate({ name: 'Alice', nickname: '', age: '' }, formSchema);
-// Ok({ name: 'Alice' }) -- nickname and age are undefined, not errors
+// Ok({ name: 'Alice', nickname: undefined, age: undefined }) -- not errors
+
+validate({ name: 'Alice' }, formSchema);
+// Ok({ name: 'Alice' }) -- a field the input doesn't have stays out of the output
 ```
 
 ### Reusable Validators
