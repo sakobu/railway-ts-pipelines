@@ -162,7 +162,7 @@ Controls when validation occurs.
 
 - `live` - Validate on change and blur, mark touched on change
 - `blur` - Validate on blur only
-- `mount` - Validate once on mount, mark all fields touched
+- `mount` - Validate on mount and mark all fields touched, and again on a follow of new `initialValues` or a `resetKey` change
 - `submit` - Validate only on submit
 
 #### fieldValidators
@@ -197,9 +197,10 @@ Type: `(values: TValues, prevValues: TValues) => void`
 Optional
 
 Callback invoked whenever form values change. Fires on field edits,
-programmatic updates via `setFieldValue`/`setValues`, form reset, and
-once on mount (where `prevValues` equals `values`). Inline functions
-are safe — the callback is stored in a ref internally.
+programmatic updates via `setFieldValue`/`setValues`, form reset, a
+follow of new `initialValues`, a `resetKey` change, and once on mount
+(where `prevValues` equals `values`). Inline functions are safe — the
+callback is stored in a ref internally.
 
 ```typescript
 onValuesChange: (values, prevValues) => {
@@ -216,8 +217,9 @@ Optional
 
 Callback invoked when an individual field changes via `setFieldValue`.
 All native bindings route through `setFieldValue`, so this catches every
-user interaction. Does not fire for batch updates (`setValues`, `resetForm`)
-— use `onValuesChange` for those. Inline functions are safe.
+user interaction. Does not fire for batch updates (`setValues`, `resetForm`),
+a follow of new `initialValues` or a `resetKey` change — use `onValuesChange`
+for those. Inline functions are safe.
 
 Array helper operations (`push`, `remove`, `insert`, `swap`, `replace`) also
 route through `setFieldValue`, so `onFieldChange` fires for them with the
@@ -321,7 +323,7 @@ True when the values differ from the current `initialValues`.
 
 Type: `boolean`
 
-True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`.
+True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`. A `resetKey` change, a successful save, and the other person undoing their change clear it too.
 
 It reads false while a submission runs, since a version that arrives then may be the save's own answer. A failed save shows it again.
 
@@ -406,8 +408,8 @@ const errors = {
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()` or new `handleSubmit`
-- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, `resetForm()`, and at the start of each submit. It does not count toward `isValid`
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
+- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 

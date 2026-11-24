@@ -152,8 +152,10 @@ By default, validation runs on every change. That's great for short forms, but i
 | ---------------- | --------------- | ------------------- | ----------------------------------- |
 | `live` (default) | Change and blur | Change              | Short forms, immediate feedback     |
 | `blur`           | Blur only       | Blur                | Longer forms, less intrusive typing |
-| `mount`          | Mount (once)    | Mount (all fields)  | Editing existing records            |
+| `mount`          | Mount           | Mount (all fields)  | Editing existing records            |
 | `submit`         | Submit only     | Submit (all fields) | Simple forms, minimal interruption  |
+
+`mount` mode also validates and marks every field touched when the form [follows new `initialValues`](./API.md#initialvalues) or its [`resetKey`](./API.md#resetkey) changes.
 
 ```typescript
 // Validate only when a field loses focus

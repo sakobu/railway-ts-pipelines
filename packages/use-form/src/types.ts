@@ -94,8 +94,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * The error describing the submission attempt itself, not the values. It comes from a server
    * `ValidationError` at path `[]`, including the generic error from a failed submission.
    * Absent means none. It shows at `errors._root` and `serverErrors._root`, doesn't count toward
-   * `isValid`, and clears on any value change, `clearServerErrors()`, `resetForm()`, and at the
-   * start of each submit.
+   * `isValid`, and clears on any value change, `clearServerErrors()`, a follow of new `initialValues`,
+   * `resetForm()`, a `resetKey` change, and at the start of each submit.
    */
   submitError?: string;
 
@@ -270,7 +270,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **"blur"**: Validate only when a field loses focus. Don't mark touched on change.
    *   Best for reducing visual noise until user finishes with a field.
    *
-   * - **"mount"**: Validate once on mount and mark all fields as touched immediately. No validation on change/blur.
+   * - **"mount"**: Validate on mount and mark all fields as touched immediately, and again when the form follows
+   *   new `initialValues` or `resetKey` changes. No validation on change/blur.
    *   Best for displaying an existing record with validation errors visible upfront.
    *
    * - **"submit"**: Validate only when the form is submitted. Mark all fields as touched on submit.
@@ -296,9 +297,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   /**
    * Optional callback invoked whenever form values change.
    *
-   * Fires on every value update (field edits, setFieldValue, setValues, resetForm)
-   * and once on mount with initialValues. Receives both current and previous values
-   * to enable efficient diffing without external state.
+   * Fires on every value update (field edits, setFieldValue, setValues, resetForm, a follow
+   * of new initialValues, a resetKey change) and once on mount with initialValues. Receives
+   * both current and previous values to enable efficient diffing without external state.
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *
@@ -310,8 +311,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   /**
    * Optional callback invoked when an individual field value changes.
    *
-   * Fires from setFieldValue only — not from setValues, resetForm, or other batch
-   * updates. For batch change detection, use onValuesChange with prevValues.
+   * Fires from setFieldValue only — not from setValues, resetForm, a follow of new
+   * initialValues, a resetKey change, or other batch updates. For batch change detection,
+   * use onValuesChange with prevValues.
    *
    * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
    * route through setFieldValue, so this catches every user-driven field interaction.
@@ -1200,7 +1202,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * editing. Implies `isDirty`.
    *
    * It turns false again once the values equal the latest `initialValues`, as after `resetForm()` or
-   * when the user's edits come to match it.
+   * when the user's edits come to match it. A `resetKey` change, a successful save, and the other
+   * person undoing their change clear it too.
    *
    * It reads false while a submission runs, since a version that arrives then may be the save's own
    * answer. A failed save shows it again.

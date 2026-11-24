@@ -279,7 +279,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // =========================================================================
 
   // --- onValuesChange ---
-  // Ref avoids dependency-array issues with inline functions (same pattern as useDebounce).
+  // Ref avoids dependency-array issues with inline functions. Only the passive effect below calls it, and that
+  // effect is declared after this one, so a passive effect updates the ref in time.
   const onValuesChangeRef = useRef(onValuesChange);
   useEffect(() => {
     onValuesChangeRef.current = onValuesChange;

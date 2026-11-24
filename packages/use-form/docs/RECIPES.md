@@ -1100,7 +1100,8 @@ const form = useForm(schema, {
 `onFieldChange` fires from all native bindings (inputs, selects, checkboxes,
 sliders, radios, file inputs) and array helper operations (`push`, `remove`,
 `insert`, `swap`, `replace`). It does **not** fire for batch updates via
-`setValues` or `resetForm` — use `onValuesChange` for those.
+`setValues` or `resetForm`, a follow of new `initialValues` or a `resetKey`
+change — use `onValuesChange` for those.
 
 ---
 
@@ -1141,8 +1142,8 @@ const form = useForm(schema, {
 
 - `clientErrors` -- replaced on every schema validation run
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()` or new `handleSubmit`
-- the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, `resetForm()`, and at the start of each submit
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
+- the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 
