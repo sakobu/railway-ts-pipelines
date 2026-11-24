@@ -10,6 +10,22 @@ import {
   deepEqual,
 } from '../../src/utils';
 
+// Shaped like a dayjs value: a date picker creates a new one on every pick
+class DayjsLike {
+  $d: Date;
+  $y: number;
+  constructor(iso: string) {
+    this.$d = new Date(iso);
+    this.$y = this.$d.getUTCFullYear();
+  }
+}
+
+// A record built from a class, with fields the form edits
+class Address {
+  street = '1 Main';
+  city = 'LA';
+}
+
 describe('getValueByPath', () => {
   test('gets top-level property', () => {
     const obj = { name: 'John', age: 30 };
@@ -278,6 +294,16 @@ describe('collectFieldPaths', () => {
     expect(paths.length).toBe(1);
   });
 
+  test('stops at a File, Map or Set, and walks the fields of a class instance', () => {
+    const obj = {
+      avatar: new File(['a'], 'a.txt'),
+      tags: new Map([['a', 1]]),
+      ids: new Set([1]),
+      address: new Address(),
+    };
+    expect(collectFieldPaths(obj)).toEqual(['avatar', 'tags', 'ids', 'address', 'address.street', 'address.city']);
+  });
+
   test('handles complex nested structures', () => {
     const obj = {
       user: {
@@ -374,6 +400,47 @@ describe('deepMerge', () => {
     deepMerge(target, source);
     expect(target.address.city).toBe('LA');
   });
+
+  test('a File replaces the File before it', () => {
+    const next = new File(['b'], 'b.txt');
+    const result = deepMerge({ avatar: new File(['a'], 'a.txt') }, { avatar: next });
+    expect(result.avatar).toBe(next);
+  });
+
+  test('a Map, Set or class instance replaces the value before it', () => {
+    const tags = new Map([['b', 2]]);
+    const ids = new Set([2]);
+    const when = new DayjsLike('2025-01-01');
+    const target = { tags: new Map([['a', 1]]), ids: new Set([1]), when: new DayjsLike('2024-01-01') };
+    const result = deepMerge(target, { tags, ids, when });
+    expect(result.tags).toBe(tags);
+    expect(result.ids).toBe(ids);
+    expect(result.when).toBe(when);
+  });
+
+  test('a plain object merges into the fields of a class instance, as setFieldValue on each key would', () => {
+    const result = deepMerge({ address: new Address() }, { address: { city: 'NYC' } });
+    expect(result).toEqual({ address: { street: '1 Main', city: 'NYC' } });
+  });
+
+  test('a plain object replaces a value the form does not look inside', () => {
+    const tags = { a: 2 };
+    const target: Record<string, unknown> = { tags: new Map([['a', 1]]) };
+    expect(deepMerge(target, { tags }).tags).toBe(tags);
+  });
+
+  test('a class instance replaces a plain object instead of being merged into', () => {
+    const when = new DayjsLike('2025-01-01');
+    const target: Record<string, unknown> = { when: { $d: new Date('2024-01-01'), note: 'x' } };
+    const result = deepMerge(target, { when });
+    expect(result.when).toBe(when);
+  });
+
+  test('null-prototype objects merge like plain objects', () => {
+    const address = Object.assign(Object.create(null) as Record<string, unknown>, { city: 'NYC' });
+    const result = deepMerge({ address: { street: '1 Main', city: 'LA' } }, { address });
+    expect(result).toEqual({ address: { street: '1 Main', city: 'NYC' } });
+  });
 });
 
 describe('deepEqual', () => {
@@ -454,16 +521,6 @@ describe('deepEqual', () => {
   });
 
   test('class instances with own fields compare by content', () => {
-    // Shaped like a dayjs value: a date picker creates a new one on every pick
-    class DayjsLike {
-      $d: Date;
-      $y: number;
-      constructor(iso: string) {
-        this.$d = new Date(iso);
-        this.$y = this.$d.getUTCFullYear();
-      }
-    }
-
     expect(deepEqual(new DayjsLike('2024-01-01'), new DayjsLike('2024-01-01'))).toBe(true);
     expect(deepEqual(new DayjsLike('2024-01-01'), new DayjsLike('2024-06-15'))).toBe(false);
   });
@@ -474,6 +531,28 @@ describe('deepEqual', () => {
     expect(deepEqual(withName('a'), withName('a'))).toBe(true);
     expect(deepEqual(withName('a'), withName('b'))).toBe(false);
     expect(deepEqual(Object.create(null), Object.create(null))).toBe(true);
+  });
+
+  test('a null-prototype object equals a plain object with the same content', () => {
+    const bare = Object.assign(Object.create(null) as Record<string, unknown>, { name: 'a' });
+
+    expect(deepEqual(bare, { name: 'a' })).toBe(true);
+    expect(deepEqual({ name: 'a' }, bare)).toBe(true);
+  });
+
+  test('an array never equals an object with the same keys', () => {
+    expect(deepEqual({ 0: 'x' }, ['x'])).toBe(false);
+    expect(deepEqual(['x'], { 0: 'x' })).toBe(false);
+    expect(deepEqual({ tags: { 0: 'x' } }, { tags: ['x'] })).toBe(false);
+  });
+
+  test("an object's class doesn't count: a class instance equals a plain copy of its fields", () => {
+    // setFieldValue rebuilds the objects on a field's path as plain objects
+    const address = new Address();
+    const copy = { ...address };
+
+    expect(deepEqual(copy, address)).toBe(true);
+    expect(deepEqual(address, copy)).toBe(true);
   });
 });
 

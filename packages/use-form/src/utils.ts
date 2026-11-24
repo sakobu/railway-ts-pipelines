@@ -263,6 +263,37 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
 export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffected(a, b) || isPathAffected(b, a);
 
 /**
+ * Whether a value is a plain object: its prototype is `Object.prototype` or `null`.
+ */
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (value === null || typeof value !== 'object') return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+/**
+ * Whether the form looks inside a value, or treats it as one value. `setValues` ({@link deepMerge}),
+ * {@link deepEqual} and {@link collectFieldPaths} all follow it, so they agree on the shape of form values.
+ *
+ * The form looks inside arrays and objects that keep their state in their own fields: plain
+ * objects, and class instances with fields, such as a record class or a dayjs value. That's how
+ * `setFieldValue` edits them. Every other value is one value: primitives, `Date`, `RegExp`,
+ * `File` and `Blob`, and objects that keep their state out of their fields, such as `Map`, `Set`,
+ * Temporal values and classes with only private fields.
+ *
+ * @param value - Any form value
+ * @returns Whether the form looks inside the value
+ */
+const isBranch = (value: unknown): value is object => {
+  if (value === null || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return true;
+  if (value instanceof Date || value instanceof RegExp) return false;
+  // A file's contents aren't in its fields, though test DOMs such as happy-dom give it some
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return false;
+  return isPlainObject(value) || Object.keys(value).length > 0;
+};
+
+/**
  * Recursively collects all field paths from a nested object structure.
  * Traverses the entire object tree and generates path strings for every field,
  * including intermediate parent paths, nested objects, and array elements.
@@ -272,9 +303,10 @@ export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffec
  * - Collecting all error paths for validation
  * - Iterating over all form values
  *
- * Leaf values (primitives, Date, RegExp, null, undefined) are treated as terminal nodes.
- * All segments are joined with dot notation; numeric array indices appear as their
- * canonical dot form (e.g. "contacts.0.email"), matching the rest of form state.
+ * It looks inside the values the form looks inside (see {@link isBranch}). Every other value,
+ * such as a primitive, `null`, `Date`, `File` or `Map`, is a leaf. All segments are joined with
+ * dot notation; numeric array indices appear as their canonical dot form (e.g. "contacts.0.email"),
+ * matching the rest of form state.
  *
  * @param obj - The object to collect paths from (typically form values)
  * @param prefix - Internal parameter for recursion, starting path prefix (default: "")
@@ -326,20 +358,17 @@ export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffec
 export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   const paths: FieldPath[] = [];
 
-  const isLeaf = (v: unknown) => v == null || typeof v !== 'object' || v instanceof Date || v instanceof RegExp;
-
   const visit = (value: unknown, path: string) => {
     if (path) paths.push(path);
 
-    if (isLeaf(value)) return;
+    if (!isBranch(value)) return;
 
     if (Array.isArray(value)) {
       value.forEach((item, i) => visit(item, path ? `${path}.${i}` : `${i}`));
       return;
     }
 
-    const entries = Object.entries(value as Record<string, unknown>);
-    for (const [k, v] of entries) {
+    for (const [k, v] of Object.entries(value)) {
       const childPath = path ? `${path}.${k}` : k;
       visit(v, childPath);
     }
@@ -349,54 +378,49 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   return paths;
 };
 
+/**
+ * Merges `source` into `target` for `setValues`, returning a new object.
+ *
+ * A plain object in `source` is a partial update. It merges into the object there, as
+ * `setFieldValue` on each of its keys would, when that object is one the form looks inside
+ * (see {@link isBranch}) and isn't an array. Every other value in `source` (an array, `Date`,
+ * `File`, `Map`, `Set` or class instance) replaces the value before it, stored as given.
+ *
+ * @param target - The current values (not mutated)
+ * @param source - The values to write over them
+ * @returns A new object with `source` merged in
+ *
+ * @example
+ * deepMerge({ address: { city: "LA", zip: "90001" } }, { address: { city: "NYC" } });
+ * // { address: { city: "NYC", zip: "90001" } }
+ *
+ * @example
+ * deepMerge({ avatar: oldFile }, { avatar: newFile }); // { avatar: newFile }
+ */
 export const deepMerge = <T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T => {
-  const result = { ...target };
+  const result: Record<string, unknown> = { ...target };
 
   for (const key of Object.keys(source)) {
     const srcVal = source[key];
-    const tgtVal = (target as Record<string, unknown>)[key];
-
-    if (
-      srcVal != null &&
-      typeof srcVal === 'object' &&
-      !Array.isArray(srcVal) &&
-      !(srcVal instanceof Date) &&
-      !(srcVal instanceof RegExp) &&
-      tgtVal != null &&
-      typeof tgtVal === 'object' &&
-      !Array.isArray(tgtVal) &&
-      !(tgtVal instanceof Date) &&
-      !(tgtVal instanceof RegExp)
-    ) {
-      (result as Record<string, unknown>)[key] = deepMerge(
-        tgtVal as Record<string, unknown>,
-        srcVal as Record<string, unknown>,
-      );
-    } else {
-      (result as Record<string, unknown>)[key] = srcVal;
-    }
+    const tgtVal = target[key];
+    const merges = isPlainObject(srcVal) && isBranch(tgtVal) && !Array.isArray(tgtVal);
+    result[key] = merges ? deepMerge(tgtVal as Record<string, unknown>, srcVal) : srcVal;
   }
 
-  return result;
+  return result as T;
 };
 
 /**
- * Whether an object is a plain object: its prototype is `Object.prototype` or `null`.
- */
-const isPlainObject = (value: object): boolean => {
-  const proto: unknown = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-};
-
-/**
- * Compares two values by content wherever their content is visible, and by identity elsewhere.
- * Used for `isDirty` and for deciding whether a submit repeats the running one.
+ * Compares two values the way the form sees them. Used for `isDirty`, for following new
+ * `initialValues`, and for deciding whether a submit repeats the running one.
  *
+ * - Values the form looks inside (see {@link isBranch}) compare by content: arrays item by item,
+ *   objects field by field. An array only equals an array. An object's class doesn't count,
+ *   since `setFieldValue` rebuilds the objects on a field's path as plain objects.
  * - `Date` and `RegExp` compare by value.
- * - `Blob` and `File` compare by identity. Browsers keep a file's contents out of its fields.
- * - Any other non-plain object with no own enumerable keys compares by identity: `Map`, `Set`,
- *   `Temporal` values, and classes with only private fields keep their state where keys can't see it.
- * - Arrays, plain objects and class instances with own fields (such as dayjs values) compare by content.
+ * - Every other value compares by identity: `File` and `Blob`, whose contents browsers keep out
+ *   of their fields, and objects that keep their state out of their fields, such as `Map`, `Set`,
+ *   Temporal values and classes with only private fields.
  *
  * When unsure, it calls two values different. That costs at most an extra save or an
  * "unsaved changes" prompt, where calling them equal could drop a save.
@@ -414,22 +438,19 @@ export const deepEqual = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
   if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
-  if (a == null || b == null) return false;
-  if (typeof a !== 'object' || typeof b !== 'object') return false;
-
-  // Files and Blobs compare by identity, which Object.is has already ruled out
-  if (typeof Blob !== 'undefined' && (a instanceof Blob || b instanceof Blob)) return false;
+  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out
+  if (!isBranch(a) || !isBranch(b)) return false;
+  // The form's edits keep an array an array
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
 
   if (Array.isArray(a)) {
-    if (!Array.isArray(b) || a.length !== b.length) return false;
-    return a.every((item, i) => deepEqual(item, b[i]));
+    const arrB = b as unknown[];
+    return a.length === arrB.length && a.every((item, i) => deepEqual(item, arrB[i]));
   }
 
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
   if (keysA.length !== keysB.length) return false;
-  // With no own keys to compare, a non-plain object's state is hidden: compare by identity
-  if (keysA.length === 0 && !(isPlainObject(a) && isPlainObject(b))) return false;
   return keysA.every(
     (key) =>
       Object.prototype.hasOwnProperty.call(b, key) &&

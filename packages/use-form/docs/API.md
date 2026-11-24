@@ -562,7 +562,7 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 
 **Parameters:**
 
-- `values` - Deep-partial object with new values (nested objects merge recursively; arrays, Dates, and primitives replace)
+- `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
 
 **Example:**

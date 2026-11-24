@@ -904,7 +904,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * A record to load goes in `initialValues` instead, which the form follows while it has no unsaved edits.
    *
-   * @param newValues - Partial object containing the fields to update
+   * @param newValues - Partial object containing the fields to update. A plain nested object merges
+   *   into the object there, as `setFieldValue` on each of its keys would. Every other value, such as
+   *   an array, `File`, `Map` or class instance, replaces the value before it and is stored as given.
    * @param shouldValidate - Whether to trigger validation after update (default: depends on validationMode)
    *
    * @example

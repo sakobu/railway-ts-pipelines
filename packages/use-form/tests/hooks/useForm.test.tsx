@@ -24,7 +24,7 @@ import {
 } from '../fixtures/validators';
 
 import type { UseFormReturn } from '../../src/types';
-import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
+import type { MaybeAsyncValidator, Validator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
@@ -166,6 +166,53 @@ describe('useForm', () => {
       expect(result.current.values.address?.street).toBe('123 Main');
       expect(result.current.values.address?.zip).toBe('10001');
       expect(result.current.values.name).toBe('John');
+    });
+
+    test('stores a File, Map and Set as given, so putting the originals back reads clean', () => {
+      type Upload = { avatar: File; tags: Map<string, number>; ids: Set<number> };
+      const uploadValidator: Validator<unknown, Upload> = (input) => ok(input as Upload);
+      const initialValues: Upload = { avatar: new File(['a'], 'a.txt'), tags: new Map(), ids: new Set() };
+      const next: Upload = { avatar: new File(['b'], 'b.txt'), tags: new Map([['b', 2]]), ids: new Set([2]) };
+      const { result } = renderHook(() => useForm(uploadValidator, { initialValues }));
+
+      act(() => result.current.setValues(next));
+
+      expect(result.current.values.avatar).toBe(next.avatar);
+      expect(result.current.values.tags).toBe(next.tags);
+      expect(result.current.values.ids).toBe(next.ids);
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => result.current.setValues(initialValues));
+
+      expect(result.current.isDirty).toBe(false);
+    });
+  });
+
+  describe('a record built from classes', () => {
+    class Address {
+      street = '1 Main';
+      city = 'LA';
+    }
+    type Profile = { name: string; address: { street: string; city: string } };
+    const profileValidator: Validator<unknown, Profile> = (input) => ok(input as Profile);
+    const initialValues: Profile = { name: 'Ann', address: new Address() };
+
+    test('undoing an edit inside a class instance reads clean', () => {
+      const { result } = renderHook(() => useForm(profileValidator, { initialValues }));
+
+      act(() => result.current.setFieldValue('address.city', 'NYC'));
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => result.current.setFieldValue('address.city', 'LA'));
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    test('setValues with part of a class instance keeps its other fields', () => {
+      const { result } = renderHook(() => useForm(profileValidator, { initialValues }));
+
+      act(() => result.current.setValues({ address: { city: 'NYC' } }));
+
+      expect(result.current.values.address).toEqual({ street: '1 Main', city: 'NYC' });
     });
   });
 

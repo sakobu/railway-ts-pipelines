@@ -32,7 +32,11 @@ import type { ChangeEvent, SyntheticEvent } from 'react';
  */
 export type FieldPath = string;
 
-export type DeepPartial<T> = T extends Date | RegExp | File | Blob
+/**
+ * What `setValues` accepts: nested objects may be partial, and merge into the values there.
+ * Arrays and values such as `Date`, `File`, `Map` and `Set` are given whole, and stored as given.
+ */
+export type DeepPartial<T> = T extends Date | RegExp | Blob | ReadonlyMap<unknown, unknown> | ReadonlySet<unknown>
   ? T
   : T extends Array<unknown>
     ? T
