@@ -3030,6 +3030,37 @@ describe('useForm', () => {
       expect(result.current.fieldErrors).toEqual({});
     });
 
+    test('a field validator set to undefined leaves its field as a missing key does at submit', async () => {
+      // The field holds its validator's error, then the validator is switched off, by leaving the key out or by
+      // setting it to undefined. The submit must treat both the same way.
+      const submitAfterSwitchingOff = async (off: { name?: undefined }) => {
+        const { result, rerender } = renderHook(
+          ({ on }: { on: boolean }) =>
+            useForm(userValidator, {
+              initialValues: { name: 'John', email: 'john@test.com', age: 25 },
+              validationMode: 'live',
+              fieldValidators: on ? { name: () => 'Name is taken' } : off,
+              onSubmit: () => {},
+            }),
+          { initialProps: { on: true } },
+        );
+
+        act(() => {
+          result.current.setFieldValue('name', 'Jane');
+        });
+        await waitFor(() => expect(result.current.fieldErrors).toEqual({ name: 'Name is taken' }));
+        rerender({ on: false });
+
+        let outcome!: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+        await act(async () => {
+          outcome = await result.current.handleSubmit();
+        });
+        return { outcome, fieldErrors: result.current.fieldErrors };
+      };
+
+      expect(await submitAfterSwitchingOff({ name: undefined })).toEqual(await submitAfterSwitchingOff({}));
+    });
+
     test('resetForm clears validatingFields and fieldErrors', async () => {
       const { result } = renderHook(() =>
         useForm(userValidator, {
