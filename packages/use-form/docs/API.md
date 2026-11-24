@@ -105,7 +105,7 @@ The form follows new `initialValues`, such as a refetched record:
 
 - With no unsaved edits, the form shows the new values in the same render.
 - With edits, they stay, and [`isStale`](#isstale) reports that a newer version arrived.
-- New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed.
+- New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed. The one exception is a saved record equal to the version before the save, as when the server trims `'Hello '` back to `'Hello'`. It can't be told apart from the same data rendered again, so the form keeps the typed values and stays dirty.
 - Build `initialValues` the same way on every render. A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render) makes every render look like a new version, and `useForm` logs an error naming the cause. Create such values once, at module scope or with `useState(() => …)`.
 - A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by identity. Built anew on every render, they cause the same error. Build them with `useMemo`, keyed on the data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt from refetched data still counts as a new version, even with the same items, so a form with edits shows `isStale`.
 

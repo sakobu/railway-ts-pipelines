@@ -611,6 +611,20 @@ describe('saving', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
+  test('a saved record equal to the version before the save keeps the typed values', async () => {
+    const { result, rerender } = renderForm({ onSubmit: () => {} });
+
+    act(() => result.current.setFieldValue('title', 'Hello '));
+    await act(() => result.current.handleSubmit());
+    // The server trims the title back to the version the form already had. By content, that can't be told
+    // apart from the same data rendered again, so the form stays dirty (a documented gap)
+    rerender({ initial: { ...draft } });
+
+    expect(result.current.values.title).toBe('Hello ');
+    expect(result.current.isDirty).toBe(true);
+    expect(result.current.isStale).toBe(false);
+  });
+
   describe("back-to-back saves, the first one's answer arriving during the second", () => {
     /** Saves `First`, then queues a save of `second` that starts once the first succeeds, before its answer. */
     const saveTwice = async (second: string) => {
