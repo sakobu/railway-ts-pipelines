@@ -1,11 +1,12 @@
 import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
-import { isOk, isErr, ok, err, type Result } from '@railway-ts/pipelines/result';
+import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'react';
 import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
+import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
 import {
   userValidator,
   userWithAddressValidator,
@@ -22,12 +23,9 @@ import {
   type UserWithAddressForm,
 } from '../fixtures/validators';
 
-import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
+import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
-
-/** Waits one task, so the work queued behind promises settled before it runs first. */
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('useForm', () => {
   describe('initialization', () => {
@@ -2239,12 +2237,7 @@ describe('useForm', () => {
     });
 
     test('resetForm() drops a validation still running for the values it discarded', async () => {
-      const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
-      const gated: MaybeAsyncValidator<unknown, PublishForm> = () => {
-        const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
-        pending.push(d);
-        return d.promise;
-      };
+      const { pending, gated } = createGatedValidator<PublishForm>();
       const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
 
       act(() => result.current.setFieldValue('title', ''));
@@ -2260,13 +2253,9 @@ describe('useForm', () => {
     });
 
     test('a schema check that finishes at once replaces one still running', async () => {
-      const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
-      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) => {
-        if ((value as PublishForm).title.length <= 3) return publishValidator(value, path);
-        const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
-        pending.push(d);
-        return d.promise;
-      };
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title.length <= 3 ? publishValidator(value, path) : gated(value, path);
       const { result } = renderHook(() => useForm(mixed, { initialValues: draft, validationMode: 'live' }));
 
       act(() => result.current.setFieldValue('title', 'Long title'));
@@ -2837,17 +2826,6 @@ describe('useForm', () => {
       await waitFor(() => expect(callCount).toBe(1));
       expect(result.current.errors.name).toBeUndefined();
     });
-
-    /** A field validator whose calls stay pending until the test settles them, in call order. */
-    const createGatedFieldValidator = () => {
-      const calls: PromiseWithResolvers<string | undefined>[] = [];
-      const gate = () => {
-        const call = Promise.withResolvers<string | undefined>();
-        calls.push(call);
-        return call.promise;
-      };
-      return { calls, gate };
-    };
 
     test('a field validator that finishes at once replaces one still running', async () => {
       const { calls, gate } = createGatedFieldValidator();

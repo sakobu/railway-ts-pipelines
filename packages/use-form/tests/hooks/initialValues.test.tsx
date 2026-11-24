@@ -1,21 +1,19 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 
-import { err, ok, type Result } from '@railway-ts/pipelines/result';
+import { err, ok } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor, fireEvent } from '@testing-library/react';
 import { Component, StrictMode, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
+import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
 import type { FormOptions, UseFormReturn } from '../../src/types';
-import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
+import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
-
-/** Waits one task, so the work queued behind promises settled before it runs first. */
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** The default setup: a form whose initialValues come from the `initial` prop, starting at `draft`. */
 const renderForm = (options: Omit<FormOptions<PublishForm>, 'initialValues'> = {}) =>
@@ -41,28 +39,6 @@ const createGatedConflict = () => {
     return err([{ path: [], message: 'Conflict' }]);
   };
   return { onSubmit, release: () => gate.resolve() };
-};
-
-/** A schema validator whose checks stay pending until the test settles them, in call order. */
-const createGatedValidator = () => {
-  const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
-  const gated: MaybeAsyncValidator<unknown, PublishForm> = () => {
-    const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
-    pending.push(d);
-    return d.promise;
-  };
-  return { pending, gated };
-};
-
-/** A field validator whose calls stay pending until the test settles them, in call order. */
-const createGatedFieldValidator = () => {
-  const calls: PromiseWithResolvers<string | undefined>[] = [];
-  const gate = () => {
-    const call = Promise.withResolvers<string | undefined>();
-    calls.push(call);
-    return call.promise;
-  };
-  return { calls, gate };
 };
 
 describe('following new initialValues', () => {
@@ -212,7 +188,7 @@ describe('errors after a follow', () => {
   });
 
   test('a schema validation still running for the old values does not land on the followed values', async () => {
-    const { pending, gated } = createGatedValidator();
+    const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) => useForm(gated, { initialValues: initial, validationMode: 'blur' }),
       { initialProps: { initial: draft } },
@@ -247,7 +223,7 @@ describe('errors after a follow', () => {
   });
 
   test("a field validator waiting for a schema check started before the follow doesn't run", async () => {
-    const { pending, gated } = createGatedValidator();
+    const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) =>
         useForm(gated, {
@@ -290,13 +266,9 @@ describe('errors after a follow', () => {
   });
 
   test('a schema check that finishes at once for the followed values clears isValidating', async () => {
-    const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
-    const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) => {
-      if ((value as PublishForm).title !== 'Hello') return publishValidator(value, path);
-      const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
-      pending.push(d);
-      return d.promise;
-    };
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+      (value as PublishForm).title === 'Hello' ? gated(value, path) : publishValidator(value, path);
     const { result, rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) => useForm(mixed, { initialValues: initial, validationMode: 'blur' }),
       { initialProps: { initial: draft } },
