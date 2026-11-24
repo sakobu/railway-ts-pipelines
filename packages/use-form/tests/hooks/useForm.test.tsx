@@ -2392,6 +2392,79 @@ describe('useForm', () => {
       });
     });
 
+    describe("a submission's validation results", () => {
+      test("its schema errors don't land over a check of values edited since", async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await nextTask();
+        });
+        let outcome!: Awaited<typeof submitting>;
+        await act(async () => {
+          pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+          outcome = await submitting;
+        });
+
+        expect(result.current.clientErrors).toEqual({});
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Stale' }]));
+      });
+
+      test('a validation that passes clears the errors of an earlier attempt', async () => {
+        const onSubmit = mock((_values: PublishForm) => {});
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: draft, validationMode: 'submit', onSubmit }),
+        );
+
+        act(() => result.current.setFieldValue('title', ''));
+        await act(() => result.current.handleSubmit());
+        expect(result.current.clientErrors).toEqual({ title: 'Title is required' });
+
+        act(() => result.current.setFieldValue('title', 'Fixed'));
+        await act(() => result.current.handleSubmit());
+
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(result.current.clientErrors).toEqual({});
+        expect(result.current.isValid).toBe(true);
+      });
+
+      test("a field validator's result doesn't land over a check of the field started since", async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result } = renderHook(() =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            validationMode: 'live',
+            fieldValidators: { title: () => gate() },
+          }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await waitFor(() => expect(calls).toHaveLength(1));
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          calls[1]!.resolve(undefined);
+          await nextTask();
+        });
+        let outcome!: Awaited<typeof submitting>;
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          outcome = await submitting;
+        });
+
+        expect(result.current.fieldErrors).toEqual({});
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      });
+    });
+
     describe("a submission's validation keeps isValidating true until it ends", () => {
       test('through a check that finishes at once', async () => {
         const { pending, gated } = createGatedValidator<PublishForm>();

@@ -625,8 +625,8 @@ Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], m
 1. Calls `preventDefault` on the event (if provided)
 2. Marks all fields as touched
 3. Clears existing server errors
-4. Runs schema validation (awaits if async)
-5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
+4. Runs schema validation (awaits if async). Its errors show, or a pass clears those of an earlier attempt, unless a check of newer values started meanwhile, as typing starts one
+5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel. Each result shows unless a check of that field started meanwhile
 6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 

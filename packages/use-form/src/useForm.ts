@@ -1080,9 +1080,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         // The validation's results describe the submitted values, so they land only while those values are
         // still the baseline: a follow of new initialValues or a resetForm() drops them
         const isBaseline = (): boolean => store.getState().baselineEpoch === baselineEpoch;
-        const whileBaseline = (action: FormAction<TValues>): void => {
-          if (isBaseline()) send(action);
-        };
 
         // Whether the save would overwrite a newer version of the record. After a resetKey switch, the previous
         // record's save still goes out, as a remount's would.
@@ -1122,6 +1119,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           ++validationSeqRef.current;
           if (store.getState().isFormValidating) send({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
         }
+        // A check that starts after this one, as typing starts one, checks newer values: its result replaces this
+        // submission's, for the form or for its field
+        const seq = validationSeqRef.current;
+        const fieldSeqs = { ...fieldValidationSeqRef.current };
+        const isLatestCheck = (): boolean => isBaseline() && validationSeqRef.current === seq;
+        const isLatestFieldCheck = (field: FieldPath): boolean => {
+          const key = normalizePath(field);
+          return isBaseline() && fieldValidationSeqRef.current[key] === fieldSeqs[key];
+        };
 
         // Show validating state during submit validation. Its own flag: a check that typing starts meanwhile, and
         // ends, doesn't end this one.
@@ -1135,12 +1141,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
         }
 
-        if (isErr(validationResult)) {
-          whileBaseline({
+        // Its errors land, or a pass clears those of an earlier attempt
+        if (isLatestCheck()) {
+          send({
             type: 'SET_CLIENT_ERRORS',
-            errors: formatErrors(validationResult.error),
+            errors: isErr(validationResult) ? formatErrors(validationResult.error) : {},
           });
+        }
 
+        if (isErr(validationResult)) {
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
           return validationResult;
         }
@@ -1164,7 +1173,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               fieldEntries.map(async ([field, validatorFn]) => {
                 const fieldValue = getValueByPath(values, field);
                 const error = await validatorFn(fieldValue, values);
-                whileBaseline({ type: 'SET_FIELD_ERROR', field, error });
+                if (isLatestFieldCheck(field)) send({ type: 'SET_FIELD_ERROR', field, error });
                 return { field, error };
               }),
             );
