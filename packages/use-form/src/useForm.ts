@@ -68,8 +68,11 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 /** Logged once per form when initialValues keeps changing along with the form's own state. */
 const UNSTABLE_INITIAL_VALUES_MESSAGE =
   "useForm: initialValues or resetKey keeps changing along with the form's own state. " +
-  "It's probably built from something that changes on its own, such as crypto.randomUUID(), new Date(), new Set() or storage read during render. " +
-  'Create such values once, at module scope or with useState(() => …).';
+  "It's probably built from something that changes on its own, such as crypto.randomUUID(), new Date() or storage read during render, " +
+  'or holds a Set, Map or Temporal value built anew on every render. ' +
+  'Create generated values once, at module scope or with useState(() => …). ' +
+  'A Set, Map or Temporal value compares by identity, so build it with useMemo, keyed on the data it comes from, ' +
+  'or use an array or plain object.';
 
 /**
  * Takes the next validation number for a field. A check whose number is no longer the field's latest doesn't land.

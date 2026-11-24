@@ -206,9 +206,14 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * New values are compared by content, so an inline object is fine as long as it's built from the same
    * data the same way on every render.
    *
-   * A value that changes on its own (`crypto.randomUUID()`, `new Date()`, `new Set()`, storage read during
-   * render) makes renders look like new versions, and `useForm` logs an error naming the cause.
+   * A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render)
+   * makes renders look like new versions, and `useForm` logs an error naming the cause.
    * Create such values once, at module scope or with `useState(() => …)`.
+   *
+   * A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by
+   * identity, so one built anew on every render does the same. Build them with `useMemo`, keyed on the
+   * data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt
+   * from refetched data still counts as a new version, even with the same items.
    */
   initialValues: NoInfer<TValues>;
 
