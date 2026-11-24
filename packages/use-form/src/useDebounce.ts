@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useInsertionEffect } from 'react';
 
 /**
  * A React hook that debounces a callback function, delaying its execution until after
@@ -35,8 +35,9 @@ export function useDebounce<
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbackRef = useRef(callback);
 
-  // Keep callback ref up-to-date
-  useEffect(() => {
+  // Keep callback ref up-to-date. An insertion effect runs before any layout or passive effect of the commit,
+  // so a timer that comes due after a commit never runs the previous render's callback.
+  useInsertionEffect(() => {
     callbackRef.current = callback;
   }, [callback]);
 
