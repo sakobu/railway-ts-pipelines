@@ -9,6 +9,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": false,
+    // Consumers are checked with the strictest optional-property setting, so the published
+    // types must say when an optional key can hold undefined.
+    "exactOptionalPropertyTypes": true,
     "types": []
   },
   "include": ["*.ts", "*.cts"]

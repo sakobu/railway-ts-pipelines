@@ -4,13 +4,16 @@ import { pipe } from '@railway-ts/pipelines/composition';
 import { mapToResult, some, type Option } from '@railway-ts/pipelines/option';
 import { mapToOption, ok, type Result } from '@railway-ts/pipelines/result';
 import {
+  minLength,
   number,
   object,
   optional,
+  parseURL,
   required,
   string,
   tuple,
   validate,
+  type AsyncValidator,
   type InferSchemaType,
   type MaybeAsyncValidator,
   type ValidationError,
@@ -36,24 +39,47 @@ export const goodPair: PairOf<typeof pair> = ['a', 1];
 // @ts-expect-error element types are [string, number]
 export const badPair: PairOf<typeof pair> = [1, 'a'];
 
-// object() output makes undefined-accepting keys optional, matching InferSchemaType.
+// object() output makes undefined-accepting keys optional, keeping undefined: { age?: number | undefined }.
 type OutputOf<V> = V extends Validator<unknown, infer O> ? O : never;
 const user = object({ name: required(string()), age: optional(number()) });
 export const withoutAge: OutputOf<typeof user> = { name: 'a' };
+export const undefinedAge: OutputOf<typeof user> = { name: 'a', age: undefined };
+declare const maybeAge: number | undefined;
+export const fromMaybe: InferSchemaType<typeof user> = { name: 'a', age: maybeAge };
 declare const out: OutputOf<typeof user>;
-declare const inferred: InferSchemaType<typeof user>;
-export const outToInfer: InferSchemaType<typeof user> = out;
-export const inferToOut: OutputOf<typeof user> = inferred;
+// @ts-expect-error the output can hold age: undefined, so it isn't { age?: number } under the flag
+export const notExact: { name: string; age?: number } = out;
 // @ts-expect-error age is a number when present
 export const badAge: OutputOf<typeof user> = { name: 'a', age: '1' };
-export const validated: Result<{ name: string; age?: number }, ValidationError[]> = validate({}, user);
+export const validated: Result<{ name: string; age?: number | undefined }, ValidationError[]> = validate({}, user);
 
-// InferSchemaType of a hand-typed validator: the same before and after ProcessType reuses ObjectOutput.
+// InferSchemaType is the validator's output type, unchanged.
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+export const inferIsOutput: Equal<InferSchemaType<typeof user>, OutputOf<typeof user>> = true;
 type Hand = Validator<unknown, { a: number | undefined; list: { b: string | undefined }[] }>;
-export const handInferred: Equal<InferSchemaType<Hand>, { a?: number; list: { b?: string }[] }> = true;
+export const handInferred: Equal<
+  InferSchemaType<Hand>,
+  { a: number | undefined; list: { b: string | undefined }[] }
+> = true;
+const site = object({ home: required(parseURL()) });
+export const urlKept: Equal<InferSchemaType<typeof site>, { home: URL }> = true;
+class Money {
+  #cents = 0;
+  get cents(): number {
+    return this.#cents;
+  }
+}
+declare const money: Validator<unknown, Money>;
+export const classKept: Equal<InferSchemaType<typeof money>, Money> = true;
+const priced = object({ price: money });
+export const nestedClassKept: Equal<InferSchemaType<typeof priced>, { price: Money }> = true;
+const atLeast3 = minLength(3);
+export const nonUnknownInput: Equal<InferSchemaType<typeof atLeast3>, string> = true;
+declare const fetchName: AsyncValidator<unknown, string>;
+export const asyncInferred: Equal<InferSchemaType<typeof fetchName>, string> = true;
 
 declare const slow: MaybeAsyncValidator<unknown, string>;
 const userAsync = object({ name: slow, age: optional(number()) });
 type AsyncOutputOf<V> = V extends MaybeAsyncValidator<unknown, infer O> ? O : never;
-export const asyncOut: Equal<AsyncOutputOf<typeof userAsync>, { name: string; age?: number }> = true;
+export const asyncOut: Equal<AsyncOutputOf<typeof userAsync>, { name: string; age?: number | undefined }> = true;
+export const asyncInferIsOutput: Equal<InferSchemaType<typeof userAsync>, AsyncOutputOf<typeof userAsync>> = true;

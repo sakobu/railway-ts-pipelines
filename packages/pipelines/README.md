@@ -182,7 +182,7 @@ const userSchema = object({
 });
 
 type User = InferSchemaType<typeof userSchema>;
-// { name: string; age: number; email?: string }
+// { name: string; age: number; email?: string | undefined }
 
 const result = validate(input, userSchema);
 // Result<User, ValidationError[]>

@@ -606,10 +606,10 @@ Options for controlling validation behavior. When `abortEarly` is `true`, valida
 #### `InferSchemaType<V>`
 
 ```typescript
-type InferSchemaType<V> = ProcessType<InferType<V>>;
+type InferSchemaType<V> = V extends MaybeAsyncValidator<never, infer O> ? O : never;
 ```
 
-Infer the output TypeScript type from a validator or schema.
+Infer the output TypeScript type from a validator or schema. It's the validator's output type, exactly what `validate()` returns, so class instances such as `URL` keep their type.
 
 ```typescript
 const schema = object({ name: required(string()), age: required(number()) });

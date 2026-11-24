@@ -51,45 +51,20 @@ export type ValidatorMapOutput<M extends Record<string, MaybeAsyncValidator<unkn
   [K in keyof M]: M[K] extends MaybeAsyncValidator<unknown, infer O> ? O : never;
 }[keyof M];
 
-type AtomicType = string | number | boolean | Date | null | undefined | bigint;
-
-type RemoveUndefined<T> = T extends undefined ? never : T;
-
+// A key whose type accepts undefined is optional, and keeps undefined: the key can be missing or hold undefined.
 type ObjectOutput<T> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
-  [K in keyof T as undefined extends T[K] ? K : never]?: RemoveUndefined<T[K]>;
+  [K in keyof T as undefined extends T[K] ? K : never]?: T[K];
 } extends infer O
   ? { [K in keyof O]: O[K] }
   : never;
 
-type ProcessType<T> = T extends AtomicType
-  ? T
-  : T extends readonly [unknown, ...unknown[]]
-    ? { [K in keyof T]: ProcessType<T[K]> }
-    : T extends [unknown, ...unknown[]]
-      ? { [K in keyof T]: ProcessType<T[K]> }
-      : T extends Array<infer U>
-        ? Array<ProcessType<U>>
-        : T extends object
-          ? ObjectOutput<{ [K in keyof T]: ProcessType<T[K]> }>
-          : T;
-
-// Infer the output type of a validator or schema
-type InferType<V> =
-  V extends Validator<unknown, infer O>
-    ? O
-    : V extends AsyncValidator<unknown, infer O>
-      ? O
-      : V extends MaybeAsyncValidator<unknown, infer O>
-        ? O
-        : never;
-
 /**
- * Infer the output type of a validator or schema after processing.
- * Useful for getting the TypeScript type that a validator will produce.
+ * The output type of a validator: what it returns in `ok`, the same type `validate()` gives.
+ * Class instances such as `URL` or `File` keep their type.
  */
-export type InferSchemaType<V> = ProcessType<InferType<V>>;
+export type InferSchemaType<V> = V extends MaybeAsyncValidator<never, infer O> ? O : never;
 
 /**
  * A validation schema where each key maps to a synchronous validator for that field.
