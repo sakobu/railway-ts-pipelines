@@ -54,7 +54,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@railway-ts/pipelines": "^0.5.0",
+    "@railway-ts/pipelines": "^0.6.0",
     "react": "^19.0.0",
     "typescript": ">=6.0"
   },

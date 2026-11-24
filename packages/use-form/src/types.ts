@@ -299,7 +299,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *   return ok(user);
    * }
    */
-  onSubmit?: OnSubmit<TValues, TResult>;
+  onSubmit?: OnSubmit<TValues, TResult> | undefined;
 
   /**
    * Returns the form values a successful save stored, from `onSubmit`'s `ok` value (the submitted values when
@@ -317,7 +317,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * onSubmit: async (values) => saveContact(id, values), // Promise<Result<Contact, ValidationError[]>>
    * savedValues: toFormValues,
    */
-  savedValues?: (result: TResult) => NoInfer<TValues>;
+  savedValues?: ((result: TResult) => NoInfer<TValues>) | undefined;
 
   /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
@@ -337,7 +337,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * @default "live"
    */
-  validationMode?: 'live' | 'blur' | 'mount' | 'submit';
+  validationMode?: 'live' | 'blur' | 'mount' | 'submit' | undefined;
 
   /**
    * Per-field validator functions for field-level async validation.
@@ -346,12 +346,13 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
    */
-  fieldValidators?: {
-    [K in ExtractFieldPaths<TValues>]?: (
-      value: FieldTypeAtPath<TValues, K>,
-      values: TValues,
-    ) => string | undefined | Promise<string | undefined>;
-  };
+  fieldValidators?:
+    | {
+        [K in ExtractFieldPaths<TValues>]?:
+          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | undefined;
+      }
+    | undefined;
 
   /**
    * Optional callback invoked whenever form values change.
@@ -365,7 +366,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * @param values - The current form values after the change
    * @param prevValues - The form values before the change (same as values on mount)
    */
-  onValuesChange?: (values: TValues, prevValues: TValues) => void;
+  onValuesChange?: ((values: TValues, prevValues: TValues) => void) | undefined;
 
   /**
    * Optional callback invoked when an individual field value changes.
@@ -388,7 +389,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * @param value - The new value for the field
    * @param values - The complete form values after the change
    */
-  onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+  onFieldChange?: ((field: string, value: unknown, values: TValues) => void) | undefined;
 
   /**
    * Replaces the submit errors useForm writes itself, for other wording or a translation. Each one is
@@ -404,7 +405,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *   },
    * });
    */
-  messages?: FormMessages;
+  messages?: FormMessages | undefined;
 }
 
 /** The submit errors useForm writes itself. Each one has an English default. */
@@ -413,13 +414,13 @@ export interface FormMessages {
    * A submission threw, or `onSubmit` returned neither a `Result` nor nothing.
    * Default: "Something went wrong. Please try again."
    */
-  submitFailed?: string;
+  submitFailed?: string | undefined;
 
   /**
    * A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite.
    * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
    */
-  changedWhileSaving?: string;
+  changedWhileSaving?: string | undefined;
 }
 
 // =============================================================================

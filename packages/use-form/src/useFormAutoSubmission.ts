@@ -12,7 +12,7 @@ type FormWithAutoSubmit<T> = {
   isDirty: boolean;
   isValid: boolean;
   /** When true, auto-submission waits: a save would overwrite a newer version of the record. Optional, so any form-like object still fits. */
-  isStale?: boolean;
+  isStale?: boolean | undefined;
   /** A throw or rejection is logged with `console.error`, and the values it checked aren't saved. */
   validateForm: (values: T) => { ok: boolean } | Promise<{ ok: boolean }>;
   /** Its result, when a promise, marks when the save settles. A throw or rejection is logged with `console.error`, and auto-save carries on. */
