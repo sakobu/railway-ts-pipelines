@@ -4,12 +4,13 @@ import { createRoot } from 'react-dom/client';
 
 import ArrayHelpersForm from './array-helpers/ArrayHelpersForm';
 import AsyncUserForm from './async/AsyncUserForm';
+import EditRecordForm from './edit-record/EditRecordForm';
 import FieldValidatorForm from './field-validators/FieldValidatorForm';
 import ValibotForm from './standard-schema/ValibotForm';
 import ZodForm from './standard-schema/ZodForm';
 import UserForm from './sync/UserForm';
 
-type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers';
+type Tab = 'sync' | 'async' | 'zod' | 'valibot' | 'field-validators' | 'array-helpers' | 'edit-record';
 
 function App() {
   const [tab, setTab] = useState<Tab>('sync');
@@ -35,6 +36,9 @@ function App() {
         <button className={tab === 'array-helpers' ? 'active' : ''} onClick={() => setTab('array-helpers')}>
           Array Helpers
         </button>
+        <button className={tab === 'edit-record' ? 'active' : ''} onClick={() => setTab('edit-record')}>
+          Edit Record
+        </button>
       </div>
       {tab === 'sync' && <UserForm />}
       {tab === 'async' && <AsyncUserForm />}
@@ -42,6 +46,7 @@ function App() {
       {tab === 'valibot' && <ValibotForm />}
       {tab === 'field-validators' && <FieldValidatorForm />}
       {tab === 'array-helpers' && <ArrayHelpersForm />}
+      {tab === 'edit-record' && <EditRecordForm />}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 
 import { isOk, isErr, ok, err } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
@@ -6,6 +6,7 @@ import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'reac
 import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
+import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import {
   userValidator,
   userWithAddressValidator,
@@ -21,6 +22,9 @@ import {
   type AsyncUserForm,
   type UserWithAddressForm,
 } from '../fixtures/validators';
+
+import type { UseFormReturn } from '../../src/types';
+import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
@@ -63,6 +67,19 @@ describe('useForm', () => {
       expect(result.current.errors.name).toBe('Name is required');
       expect(result.current.errors.email).toBe('Email is required');
       expect(result.current.isValid).toBe(false);
+    });
+
+    test('in mount mode, a validator that throws on mount is logged, and every field is touched', () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const throws = () => {
+        throw new Error('boom');
+      };
+      const { result } = renderHook(() => useForm(throws, { initialValues: draft, validationMode: 'mount' }));
+
+      expect(result.current.values).toEqual(draft);
+      expect(result.current.touched).toEqual({ title: true, status: true, tags: true });
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      consoleError.mockRestore();
     });
   });
 
@@ -464,22 +481,8 @@ describe('useForm', () => {
       expect(preventDefault).toHaveBeenCalled();
     });
 
-    /** An onSubmit that stays pending until the test releases it, and reports when it started. */
-    const createGatedOnSubmit = () => {
-      const started = Promise.withResolvers<void>();
-      const gate = Promise.withResolvers<void>();
-      const onSubmit = mock(async (_values: UserForm) => {
-        started.resolve();
-        await gate.promise;
-      });
-      return { onSubmit, started: started.promise, release: gate.resolve };
-    };
-
-    /** Lets an overlapping submission run up to its onSubmit call, if it would make one. */
-    const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
-
     test('a second handleSubmit while onSubmit is pending shares its result', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -490,7 +493,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit();
-        await started;
+        await nextTask();
       });
 
       let second!: ReturnType<typeof result.current.handleSubmit>;
@@ -500,7 +503,7 @@ describe('useForm', () => {
       });
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
       });
 
@@ -509,7 +512,7 @@ describe('useForm', () => {
     });
 
     test('handleSubmit with changed values while onSubmit is pending submits them afterwards', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -520,7 +523,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit();
-        await started;
+        await nextTask();
       });
 
       act(() => {
@@ -536,8 +539,11 @@ describe('useForm', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
+        // The follow-up's own save
+        await nextTask();
+        saves[1]!.resolve(undefined);
         await second;
       });
 
@@ -548,7 +554,7 @@ describe('useForm', () => {
     });
 
     test('a shared handleSubmit still calls preventDefault', async () => {
-      const { onSubmit, started, release } = createGatedOnSubmit();
+      const { onSubmit, saves } = createGatedOnSubmit<UserForm>();
       const { result } = renderHook(() =>
         useForm(userValidator, {
           initialValues: { name: 'John', email: 'john@example.com', age: 25 },
@@ -562,7 +568,7 @@ describe('useForm', () => {
       let first!: ReturnType<typeof result.current.handleSubmit>;
       await act(async () => {
         first = result.current.handleSubmit({ preventDefault: firstPreventDefault } as unknown as React.SyntheticEvent);
-        await started;
+        await nextTask();
       });
 
       let second!: ReturnType<typeof result.current.handleSubmit>;
@@ -576,7 +582,7 @@ describe('useForm', () => {
       });
 
       await act(async () => {
-        release();
+        saves[0]!.resolve(undefined);
         await first;
         await second;
       });
@@ -681,6 +687,16 @@ describe('useForm', () => {
 
       expect(result.current.serverErrors.name).toBe('Name already exists');
       expect(result.current.serverErrors.email).toBe('Email already exists');
+    });
+
+    test('a submit with no server errors keeps the serverErrors identity', async () => {
+      const { result } = renderHook(() => useForm(publishValidator, { initialValues: draft, onSubmit: () => {} }));
+      const before = result.current.serverErrors;
+
+      await act(() => result.current.handleSubmit());
+
+      expect(result.current.submitCount).toBe(1);
+      expect(result.current.serverErrors).toBe(before);
     });
 
     test('clearServerErrors removes all server errors', () => {
@@ -1332,6 +1348,25 @@ describe('useForm', () => {
       expect(result.current.errors.name).toBe('Name is required');
       expect(result.current.errors.email).toBe('Email is required');
     });
+
+    test('in mount mode, marks every field touched, so the errors show as on mount', () => {
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: { name: '', email: '', age: 0 },
+          validationMode: 'mount',
+        }),
+      );
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+      });
+
+      act(() => {
+        result.current.resetForm();
+      });
+
+      expect(result.current.touched).toEqual({ name: true, email: true, age: true });
+      expect(result.current.getFieldError('name')).toBe('Name is required');
+    });
   });
 
   describe('handleSubmit error handling', () => {
@@ -1490,6 +1525,35 @@ describe('useForm', () => {
       }
       expect(result.current.errors._root).toBe(submitErrorMessage);
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('messages.submitFailed replaces the generic submit error', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            throw new Error('Network error');
+          },
+          messages: { submitFailed: 'Algo salió mal.' },
+        }),
+      );
+
+      const submitResult = await act(() => result.current.handleSubmit());
+
+      expect(submitResult).toEqual(err([{ path: [], message: 'Algo salió mal.' }]));
+      expect(result.current.errors._root).toBe('Algo salió mal.');
+    });
+
+    test('an inline messages object keeps handleSubmit the same', () => {
+      const { result, rerender } = renderHook(() =>
+        useForm(userValidator, { initialValues: validValues, messages: { submitFailed: 'Algo salió mal.' } }),
+      );
+      const before = result.current.handleSubmit;
+
+      rerender();
+
+      expect(result.current.handleSubmit).toBe(before);
     });
 
     test('a thrown onSubmit leaves isValid true', async () => {
@@ -2235,6 +2299,239 @@ describe('useForm', () => {
       expect(result.current.isValid).toBe(false);
       expect(result.current.errors.root).toBe('Async validation failed');
     });
+
+    test('resetForm() drops a validation still running for the values it discarded', async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+      act(() => result.current.setFieldValue('title', ''));
+      act(() => result.current.resetForm());
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        await nextTask();
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+      expect(result.current.isValidating).toBe(false);
+      expect(result.current.values).toEqual(draft);
+    });
+
+    test('a schema check that finishes at once replaces one still running', async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title.length <= 3 ? publishValidator(value, path) : gated(value, path);
+      const { result } = renderHook(() => useForm(mixed, { initialValues: draft, validationMode: 'live' }));
+
+      act(() => result.current.setFieldValue('title', 'Long title'));
+      act(() => result.current.setFieldValue('title', ''));
+      await act(async () => {
+        pending[0]!.resolve(ok({ ...draft, title: 'Long title' }));
+        await nextTask();
+      });
+
+      expect(result.current.clientErrors.title).toBe('Title is required');
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    test("resetForm() during a submission's validation drops its errors", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      act(() => result.current.resetForm());
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        outcome = await submitting;
+      });
+
+      expect(result.current.clientErrors).toEqual({});
+      expect(result.current.isValidating).toBe(false);
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Title is required' }]));
+    });
+
+    describe('a validator that rejects while typing', () => {
+      let consoleError: ReturnType<typeof spyOn>;
+      beforeEach(() => {
+        consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      });
+      afterEach(() => {
+        consoleError.mockRestore();
+      });
+
+      test('a schema validator is logged, and isValidating clears', async () => {
+        const rejects: MaybeAsyncValidator<unknown, PublishForm> = () => Promise.reject(new Error('boom'));
+        const { result } = renderHook(() => useForm(rejects, { initialValues: draft, validationMode: 'live' }));
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        expect(result.current.isValidating).toBe(true);
+
+        await waitFor(() => expect(result.current.isValidating).toBe(false));
+        expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      });
+
+      test('a field validator is logged, and its validating flag clears', async () => {
+        const { result } = renderHook(() =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            validationMode: 'live',
+            fieldValidators: {
+              title: () => Promise.reject(new Error('boom')),
+            },
+          }),
+        );
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        expect(result.current.validatingFields).toEqual({ title: true });
+
+        await waitFor(() => expect(result.current.validatingFields).toEqual({}));
+        expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
+      });
+    });
+
+    describe("a submission's validation results", () => {
+      test("its schema errors don't land over a check of values edited since", async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await nextTask();
+        });
+        let outcome!: Awaited<typeof submitting>;
+        await act(async () => {
+          pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+          outcome = await submitting;
+        });
+
+        expect(result.current.clientErrors).toEqual({});
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Stale' }]));
+      });
+
+      test('a validation that passes clears the errors of an earlier attempt', async () => {
+        const onSubmit = mock((_values: PublishForm) => {});
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: draft, validationMode: 'submit', onSubmit }),
+        );
+
+        act(() => result.current.setFieldValue('title', ''));
+        await act(() => result.current.handleSubmit());
+        expect(result.current.clientErrors).toEqual({ title: 'Title is required' });
+
+        act(() => result.current.setFieldValue('title', 'Fixed'));
+        await act(() => result.current.handleSubmit());
+
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(result.current.clientErrors).toEqual({});
+        expect(result.current.isValid).toBe(true);
+      });
+
+      test("a field validator's result doesn't land over a check of the field started since", async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result } = renderHook(() =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            validationMode: 'live',
+            fieldValidators: { title: () => gate() },
+          }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await waitFor(() => expect(calls).toHaveLength(1));
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          calls[1]!.resolve(undefined);
+          await nextTask();
+        });
+        let outcome!: Awaited<typeof submitting>;
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          outcome = await submitting;
+        });
+
+        expect(result.current.fieldErrors).toEqual({});
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      });
+    });
+
+    describe("a submission's validation keeps isValidating true until it ends", () => {
+      test('through a check that finishes at once', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+          (value as PublishForm).title === '' ? publishValidator(value, path) : gated(value, path);
+        const { result } = renderHook(() => useForm(mixed, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', ''));
+        expect(result.current.isValidating).toBe(true);
+
+        await act(async () => {
+          pending[0]!.resolve(ok(draft));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      test('through a check started during it that finishes first', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await nextTask();
+        });
+        expect(result.current.isValidating).toBe(true);
+
+        await act(async () => {
+          pending[0]!.resolve(ok(draft));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      test('and a check it replaced, still running when it started, leaves isValidating false after it', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+
+        // The replaced check's result doesn't land, nor change the flag
+        await act(async () => {
+          pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+          await nextTask();
+        });
+        expect(result.current.isValidating).toBe(false);
+        expect(result.current.clientErrors).toEqual({});
+      });
+    });
   });
 
   describe('isDirty', () => {
@@ -2793,6 +3090,146 @@ describe('useForm', () => {
       await waitFor(() => expect(callCount).toBe(1));
       expect(result.current.errors.name).toBeUndefined();
     });
+
+    test('a field validator that finishes at once replaces one still running', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: { title: (value) => (value.length > 3 ? gate() : 'Too short') },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('title', 'Long title'));
+      act(() => result.current.setFieldValue('title', 'ab'));
+      await act(async () => {
+        calls[0]!.resolve(undefined);
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors.title).toBe('Too short');
+      expect(result.current.validatingFields).toEqual({});
+    });
+
+    test('a schema error replaces a field validator still running', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: { title: () => gate() },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('title', 'x'));
+      act(() => result.current.setFieldValue('title', ''));
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.errors.title).toBe('Title is required');
+      expect(result.current.fieldErrors).toEqual({});
+      expect(result.current.validatingFields).toEqual({});
+    });
+
+    test('resetForm() drops a field validator still running for the value it discarded', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: { title: () => gate() },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('title', 'x'));
+      act(() => result.current.resetForm());
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors).toEqual({});
+      expect(result.current.validatingFields).toEqual({});
+      expect(result.current.values).toEqual(draft);
+    });
+
+    test("resetForm() during a submission's field checks drops their errors", async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, { initialValues: draft, fieldValidators: { title: () => gate() } }),
+      );
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      expect(calls).toHaveLength(1);
+      act(() => result.current.resetForm());
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        outcome = await submitting;
+      });
+
+      expect(result.current.fieldErrors).toEqual({});
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+    });
+
+    test("a field validator waiting on a replaced schema check doesn't run", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title.length > 3 ? gated(value, path) : publishValidator(value, path);
+      const { result } = renderHook(() =>
+        useForm(mixed, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: { title: (value) => (value.length > 3 ? undefined : 'Too short') },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('title', 'Long title'));
+      act(() => result.current.setFieldValue('title', 'ab'));
+      expect(result.current.fieldErrors.title).toBe('Too short');
+
+      await act(async () => {
+        pending[0]!.resolve(ok({ ...draft, title: 'Long title' }));
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors.title).toBe('Too short');
+    });
+
+    test("a replaced schema check's error doesn't drop the field check running for the newer value", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title === '' ? gated(value, path) : publishValidator(value, path);
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(mixed, { initialValues: draft, validationMode: 'live', fieldValidators: { title: () => gate() } }),
+      );
+
+      act(() => result.current.setFieldValue('title', ''));
+      act(() => result.current.setFieldValue('title', 'ab'));
+      expect(calls).toHaveLength(1);
+
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        await nextTask();
+      });
+      expect(result.current.validatingFields).toEqual({ title: true });
+
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors.title).toBe('Taken');
+      expect(result.current.validatingFields).toEqual({});
+    });
   });
 
   describe('calls in one handler', () => {
@@ -2982,6 +3419,34 @@ describe('useForm', () => {
         );
       };
 
+      // Resets, then types, in the commit that brings new initialValues. The values show which initialValues
+      // the reset itself used.
+      const LayoutResetThenTypeChild = ({
+        initial,
+        form,
+      }: {
+        initial: PublishForm;
+        form: UseFormReturn<PublishForm>;
+      }) => {
+        const { resetForm, setFieldValue } = form;
+        useLayoutEffect(() => {
+          if (initial === draft) return;
+          resetForm();
+          setFieldValue('title', 'Typed');
+        }, [initial, resetForm, setFieldValue]);
+        return null;
+      };
+
+      const ResetThenTypeForm = ({ initial }: { initial: PublishForm }) => {
+        const form = useForm(publishValidator, { initialValues: initial });
+        return (
+          <>
+            <output data-testid="status">{form.values.status}</output>
+            <LayoutResetThenTypeChild initial={initial} form={form} />
+          </>
+        );
+      };
+
       const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
 
       test('a passive effect resets to the new initialValues', () => {
@@ -3000,6 +3465,14 @@ describe('useForm', () => {
 
         expect(getByTestId('title').textContent).toBe('Loaded');
         expect(getByTestId('dirty').textContent).toBe('false');
+      });
+
+      test('a layout effect resets to the initialValues of the same commit, then types on them', () => {
+        const { rerender, getByTestId } = render(<ResetThenTypeForm initial={draft} />);
+
+        rerender(<ResetThenTypeForm initial={loaded} />);
+
+        expect(getByTestId('status').textContent).toBe('published');
       });
     });
 

@@ -1,6 +1,7 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect, mock, spyOn } from 'bun:test';
 
 import { renderHook, act } from '@testing-library/react';
+import { StrictMode, useLayoutEffect } from 'react';
 
 import { useDebounce } from '../../src/useDebounce';
 
@@ -97,6 +98,30 @@ describe('useDebounce', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  test('a call after unmount does nothing', async () => {
+    const callback = mock(() => {});
+    const { result, unmount } = renderHook(() => useDebounce(callback, 10));
+    const debounced = result.current;
+
+    unmount();
+    debounced();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  test('under StrictMode, calls still run after the simulated remount', async () => {
+    const callback = mock(() => {});
+    const { result } = renderHook(() => useDebounce(callback, 10), { wrapper: StrictMode });
+
+    act(() => {
+      result.current();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   test('handles zero delay', async () => {
     const callback = mock((_value: string) => {});
     const { result } = renderHook(() => useDebounce(callback, 0));
@@ -110,5 +135,37 @@ describe('useDebounce', () => {
 
     expect(callback).toHaveBeenCalledWith('test value');
     expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  test("a timer that comes due before the commit's passive effects runs that commit's callback", () => {
+    // Capture the timer, so the test can fire it between the commit and its passive effects
+    let fire: (() => void) | undefined;
+    const setTimeoutSpy = spyOn(globalThis, 'setTimeout').mockImplementation(((handler: () => void) => {
+      fire = handler;
+      return 0;
+    }) as unknown as typeof setTimeout);
+    const seen: string[] = [];
+
+    try {
+      const { rerender } = renderHook(
+        ({ value }: { value: string }) => {
+          const debounced = useDebounce(() => {
+            seen.push(value);
+          }, 50);
+          useLayoutEffect(() => {
+            // Layout effects run after the commit and before its passive effects
+            if (value === 'first') debounced();
+            else fire?.();
+          }, [value, debounced]);
+        },
+        { initialProps: { value: 'first' } },
+      );
+
+      rerender({ value: 'second' });
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+
+    expect(seen).toEqual(['second']);
   });
 });

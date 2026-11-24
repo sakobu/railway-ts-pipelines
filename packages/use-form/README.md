@@ -4,7 +4,7 @@
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 
-**~4.3 kB** minified + brotli (under 11 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
+**~6.4 kB** minified + brotli (under 13 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
 
 ## Why?
 
@@ -209,7 +209,8 @@ Cross-field validation, async username check, server errors, and React Query int
 - **Three error layers** -- client, per-field async, and server errors with automatic priority
 - **Array helpers** -- type-safe `push`, `remove`, `swap`, `insert`, `replace` with field bindings
 - **Four validation modes** -- `live`, `blur`, `mount`, `submit`
-- **Auto-submission** -- `useFormAutoSubmission` for search/filter forms with debounced submit
+- **Auto-submission** -- `useFormAutoSubmission` for auto-saved, search and filter forms, with debounced submit that pauses while `isStale`
+- **Edit forms** -- follows refetched `initialValues` without overwriting edits, `isStale` when someone else changed the record, `resetKey` to switch records, `savedValues` so an optimistic write isn't taken for the save's answer
 - **React 19** -- tree-shakeable ESM
 
 ## Works With
@@ -254,6 +255,7 @@ Then open http://localhost:3000. The interactive app has tabs for:
 - **Valibot** -- Standard Schema integration with Valibot
 - **Field Validators** -- Per-field async validation with loading indicators
 - **Array Helpers** -- Dynamic arrays with push, remove, swap, and per-item field bindings
+- **Edit Record** -- Refetching, saving, and switching records with `isStale`, `resetKey` and `savedValues`
 
 Or try it live on [StackBlitz](https://stackblitz.com/edit/vitejs-vite-c3zpmon9?embed=1&file=src%2FApp.tsx).
 

@@ -40,6 +40,9 @@ export type DeepPartial<T> = T extends Date | RegExp | File | Blob
       ? { [K in keyof T]?: DeepPartial<T[K]> }
       : T;
 
+/** Identifies the record a form edits. Compared with `Object.is`. */
+export type ResetKey = string | number | bigint | boolean | null | undefined;
+
 /**
  * Internal state maintained by the form hook.
  *
@@ -91,8 +94,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * The error describing the submission attempt itself, not the values. It comes from a server
    * `ValidationError` at path `[]`, including the generic error from a failed submission.
    * Absent means none. It shows at `errors._root` and `serverErrors._root`, doesn't count toward
-   * `isValid`, and clears on any value change, `clearServerErrors()`, `resetForm()`, and at the
-   * start of each submit.
+   * `isValid`, and clears on any value change, `clearServerErrors()`, a follow of new `initialValues`,
+   * `resetForm()`, a `resetKey` change, and at the start of each submit.
    */
   submitError?: string;
 
@@ -103,8 +106,11 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
-  /** Whether form-level async validation is currently in progress. */
+  /** Whether a form-level async validation that the form or `validateForm` started, outside a submission, is in progress. */
   isFormValidating: boolean;
+
+  /** Whether a submission's validation is in progress. Kept apart, so a check that typing started can't end it. */
+  isSubmitValidating: boolean;
 
   /** Per-field async validation tracking. True when that field's async validator is running. */
   validatingFields: Record<FieldPath, boolean>;
@@ -118,6 +124,42 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Useful in submit mode for patterns like `submitCount === 0 || form.isValid`.
    */
   submitCount: number;
+
+  /** The last `initialValues` synced, compared by content. */
+  lastVersion: TValues;
+
+  /** The values when the form last had no unsaved edits. */
+  cleanValues: TValues;
+
+  /**
+   * The version the edits are based on. Undefined after a successful submit, until the server's
+   * answer arrives.
+   */
+  baseVersion: TValues | undefined;
+
+  /** What the save whose answer is pending stored, when `savedValues` gave it: the answer is the version equal to it. */
+  saved?: TValues;
+
+  /** Whether someone else changed the record under unsaved edits. `UseFormReturn.isStale` also reads false while `isSubmitting`. */
+  isStale: boolean;
+
+  /**
+   * How many versions have arrived that weren't a save's answer: the one that arrives while the answer is pending is
+   * that answer. A submission tells by it whether a newer version arrived while it ran.
+   */
+  otherVersions: number;
+
+  /** The `resetKey` of the latest sync. */
+  resetKey: ResetKey;
+
+  /** Increments on each `resetKey` reset. A submission's writes land only in the generation it started in. */
+  generation: number;
+
+  /**
+   * Increments on each follow, `RESET_FORM` and `resetKey` reset. Async validation results and
+   * `SUBMIT_SUCCEEDED` land only in the epoch they started in.
+   */
+  baselineEpoch: number;
 }
 
 /**
@@ -168,10 +210,39 @@ type OnSubmit<TValues, TResult> =
  */
 export interface FormOptions<TValues extends Record<string, unknown>, TResult = TValues> {
   /**
-   * Initial values for the form fields.
-   * These values are used when the form is reset.
+   * Initial values for the form fields, and the values `resetForm()` resets to.
+   *
+   * The form follows new values while it has no unsaved edits, such as a refetched record. A form with
+   * edits keeps them, and `isStale` reports that a newer version arrived. Values that equal the latest
+   * `initialValues` count as having no edits, except while `isSubmitting`, when the version may be an
+   * optimistic write.
+   *
+   * New values are compared by content, so an inline object is fine as long as it's built from the same
+   * data the same way on every render.
+   *
+   * A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render)
+   * makes renders look like new versions, and `useForm` logs an error naming the cause when it notices. One it
+   * misses still shows: the form turns stale after every edit.
+   * Create such values once, at module scope or with `useState(() => …)`.
+   *
+   * A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by
+   * identity, so one built anew on every render does the same. Build them with `useMemo`, keyed on the
+   * data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt
+   * from refetched data still counts as a new version, even with the same items.
    */
   initialValues: NoInfer<TValues>;
+
+  /**
+   * Identifies the record the form edits. When it changes, the form starts over on the current
+   * `initialValues` as if it had remounted, without remounting the component.
+   *
+   * Key on the id of the *loaded* record (`data?.id`), not the id the user selected, so the form
+   * starts over when the new record's data arrives.
+   *
+   * Only primitives are accepted, compared with `Object.is`. Passing the record itself would start
+   * the form over on every refetch.
+   */
+  resetKey?: ResetKey;
 
   /**
    * Callback function that runs when the form is submitted with valid data.
@@ -181,11 +252,20 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **Nothing:** `handleSubmit` resolves to `ok(values)`.
    * - **`ok(value)`:** `handleSubmit` resolves to `ok(value)`.
    * - **`err(errors)`:** each error is placed on its field, as `setServerErrors` does, and an error at
-   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`.
+   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`. An error for a field the
+   *   user changed during the save doesn't land: it's about the value they replaced.
+   *
+   * Without `onSubmit`, a submit only validates. Nothing is saved, so the values stay edits: a newer
+   * `initialValues` raises `isStale` rather than replacing them.
    *
    * If it throws, rejects, or returns anything else, `handleSubmit` resolves to
    * `err([{ path: [], message: "Something went wrong. Please try again." }])`, which becomes the submit error.
-   * The original error is logged with `console.error`.
+   * The original error is logged with `console.error`. `messages.submitFailed` replaces the text.
+   *
+   * The save counts as done when it returns, or its promise resolves, without an `err`. A fire-and-forget call
+   * like `(v) => mutation.mutate(v)` returns at once, so in an edit form fed by refetched `initialValues`, a
+   * failed request leaves the typed values to be replaced by the next version. Return the save's promise
+   * (`mutateAsync`) or a `Result` there.
    *
    * With an explicit type argument, `useForm<TValues>` fixes the success value to the form values.
    * For an `onSubmit` that returns `Result<User, …>`, write `useForm<TValues, User>` or drop the type arguments.
@@ -211,6 +291,24 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   onSubmit?: OnSubmit<TValues, TResult>;
 
   /**
+   * Returns the form values a successful save stored, from `onSubmit`'s `ok` value (the submitted values when
+   * `onSubmit` returns nothing). In an edit form, map the saved record as `initialValues` is mapped.
+   *
+   * With it, the form knows which version is the save's answer: the one equal to these values, whenever it
+   * arrives. An optimistic copy of the submitted values in `initialValues`' source isn't taken for the answer, a
+   * change by someone else that arrives during the save shows as `isStale` until the answer arrives after it, and a
+   * saved record equal to the version before the save is followed.
+   *
+   * Without it, the form takes a version that arrived during the save, or else the next one, for the save's answer.
+   * So it does when it throws: the save still succeeds, and the throw is logged with `console.error`.
+   *
+   * @example
+   * onSubmit: async (values) => saveContact(id, values), // Promise<Result<Contact, ValidationError[]>>
+   * savedValues: toFormValues,
+   */
+  savedValues?: (result: TResult) => NoInfer<TValues>;
+
+  /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
    *
    * - **"live"** (default): Validate on both change and blur events. Mark fields as touched on first change.
@@ -219,7 +317,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **"blur"**: Validate only when a field loses focus. Don't mark touched on change.
    *   Best for reducing visual noise until user finishes with a field.
    *
-   * - **"mount"**: Validate once on mount and mark all fields as touched immediately. No validation on change/blur.
+   * - **"mount"**: Validate on mount and mark all fields as touched immediately, and again when the form follows
+   *   new `initialValues` or `resetKey` changes. No validation on change/blur.
    *   Best for displaying an existing record with validation errors visible upfront.
    *
    * - **"submit"**: Validate only when the form is submitted. Mark all fields as touched on submit.
@@ -245,9 +344,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   /**
    * Optional callback invoked whenever form values change.
    *
-   * Fires on every value update (field edits, setFieldValue, setValues, resetForm)
-   * and once on mount with initialValues. Receives both current and previous values
-   * to enable efficient diffing without external state.
+   * Fires on every value update (field edits, setFieldValue, setValues, resetForm, a follow
+   * of new initialValues, a resetKey change) and once on mount with initialValues. Receives
+   * both current and previous values to enable efficient diffing without external state.
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *
@@ -259,8 +358,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   /**
    * Optional callback invoked when an individual field value changes.
    *
-   * Fires from setFieldValue only — not from setValues, resetForm, or other batch
-   * updates. For batch change detection, use onValuesChange with prevValues.
+   * Fires from setFieldValue only — not from setValues, resetForm, a follow of new
+   * initialValues, a resetKey change, or other batch updates. For batch change detection,
+   * use onValuesChange with prevValues.
    *
    * All native bindings (getFieldProps, getSliderProps, getCheckboxProps, etc.)
    * route through setFieldValue, so this catches every user-driven field interaction.
@@ -277,6 +377,37 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * @param values - The complete form values after the change
    */
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+
+  /**
+   * Replaces the submit errors useForm writes itself, for other wording or a translation. Each one is
+   * shown at `errors._root` and returned in `handleSubmit`'s `err`. Errors that come from the schema,
+   * the field validators or `onSubmit` are yours already, so they aren't listed here.
+   *
+   * @example
+   * useForm(schema, {
+   *   initialValues,
+   *   messages: {
+   *     submitFailed: t('form.submitFailed'),
+   *     changedWhileSaving: t('form.changedWhileSaving'),
+   *   },
+   * });
+   */
+  messages?: FormMessages;
+}
+
+/** The submit errors useForm writes itself. Each one has an English default. */
+export interface FormMessages {
+  /**
+   * A submission threw, or `onSubmit` returned neither a `Result` nor nothing.
+   * Default: "Something went wrong. Please try again."
+   */
+  submitFailed?: string;
+
+  /**
+   * A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite.
+   * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
+   */
+  changedWhileSaving?: string;
 }
 
 // =============================================================================
@@ -969,6 +1100,30 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  */
 export type FormAction<TValues extends Record<string, unknown>> =
   | {
+      /** Syncs a new `initialValues` version and `resetKey` into the form state */
+      type: 'SYNC_INITIAL_VALUES';
+      /** The `initialValues` of the latest render */
+      initialValues: TValues;
+      /** The `resetKey` of the latest render */
+      resetKey: ResetKey;
+    }
+  | {
+      /**
+       * Records a successful submission. A version that arrived while it ran is its answer, unless the latest
+       * version equals the base, compared by content. Then it's the previous save's answer, which became the
+       * base when it arrived, or the old base coming back.
+       */
+      type: 'SUBMIT_SUCCEEDED';
+      /** The values that were submitted */
+      values: TValues;
+      /** The `baselineEpoch` when the submission started */
+      baselineEpoch: number;
+      /** The `lastVersion` when the submission started */
+      lastVersion: TValues;
+      /** What the save stored, from `savedValues` */
+      saved?: TValues;
+    }
+  | {
       /** Updates a single field value and optionally triggers validation */
       type: 'SET_FIELD_VALUE';
       /** The field path to update (e.g., "email" or "user.address.city") */
@@ -1035,6 +1190,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isFormValidating: boolean;
     }
   | {
+      /** Sets whether a submission's validation is in progress */
+      type: 'SET_SUBMIT_VALIDATING';
+      /** Whether the submission's validation is in progress */
+      isSubmitValidating: boolean;
+    }
+  | {
       /** Sets per-field async validation state */
       type: 'SET_FIELD_VALIDATING';
       /** The field path being validated */
@@ -1078,37 +1239,37 @@ export type FormAction<TValues extends Record<string, unknown>> =
  *   `UseFormReturn<V, U>` for an `onSubmit` that returns `Result<U, …>`.
  */
 export interface UseFormReturn<TValues extends Record<string, unknown>, TResult = unknown> {
-  // Form state
+  // Form state. The maps are read-only: an empty one is a shared frozen object, so a write would throw.
 
   /** Current values of all form fields. */
   values: TValues;
 
   /** Record of which fields have been interacted with by the user. */
-  touched: Record<FieldPath, boolean>;
+  touched: Readonly<Record<FieldPath, boolean>>;
 
   /** Merged validation errors (server errors take precedence over field errors, which take precedence over client errors). */
-  errors: Record<FieldPath, string>;
+  errors: Readonly<Record<FieldPath, string>>;
 
   /** Validation errors from client-side (schema) validation only. */
-  clientErrors: Record<FieldPath, string>;
+  clientErrors: Readonly<Record<FieldPath, string>>;
 
   /**
    * Validation errors set via `setServerErrors()`, keyed by field path. Automatically cleared when the related
    * field value changes. Includes the submit error at `_root` when one is set.
    */
-  serverErrors: Record<FieldPath, string>;
+  serverErrors: Readonly<Record<FieldPath, string>>;
 
   /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
-  fieldErrors: Record<FieldPath, string>;
+  fieldErrors: Readonly<Record<FieldPath, string>>;
 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 
-  /** Whether any async validation (form-level or field-level) is currently in progress. */
+  /** Whether any async validation (form-level, a submission's, or field-level) is currently in progress. */
   isValidating: boolean;
 
   /** Per-field async validation tracking. `true` when that field's async validator is running. */
-  validatingFields: Record<FieldPath, boolean>;
+  validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**
    * Whether the form is currently valid: no client, field-validator or per-path server errors.
@@ -1116,8 +1277,24 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    */
   isValid: boolean;
 
-  /** Whether any form values have changed since initialization or last reset. */
+  /** Whether the values differ from the current `initialValues`. */
   isDirty: boolean;
+
+  /**
+   * Whether a newer `initialValues` arrived that the form didn't follow, because it would have
+   * overwritten unsaved edits. In other words, someone else changed the record since the user started
+   * editing. Implies `isDirty`.
+   *
+   * It turns false again once the values equal the latest `initialValues`, as after `resetForm()` or
+   * when the user's edits come to match it, and once the user undoes every edit: the form then shows the
+   * latest version. A `resetKey` change, a successful save, and the other person undoing their change
+   * clear it too.
+   *
+   * It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own
+   * answer. While the submission is still validating, a newer version shows, and the save is then cancelled.
+   * A failed save shows it again.
+   */
+  isStale: boolean;
 
   /** Number of times the form has been submitted via `handleSubmit`. Incremented at the start of each attempt. */
   submitCount: number;
@@ -1172,10 +1349,16 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   /**
    * Validates all fields, marks them as touched, and calls `onSubmit` if valid. Resolves to a Railway `Result`
    * and never rejects:
-   * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent
+   * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent. Without
+   *   `onSubmit`, nothing is saved, so the values stay edits.
    * - `err` with the validation errors, or with `onSubmit`'s `err`
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
-   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error.
+   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`
+   *   replaces the text.
+   * - `err` with a submit error, without calling `onSubmit`, when the save would overwrite a newer `initialValues`:
+   *   one that arrived while it validated and made the form stale or was followed, or one that made the form
+   *   stale while a running submission hid `isStale`. A save started while `isStale` read true still goes out.
+   *   `messages.changedWhileSaving` sets the text.
    *
    * @example
    * <form onSubmit={form.handleSubmit}>
@@ -1186,7 +1369,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   handleSubmit: (e?: SyntheticEvent) => Promise<Result<TResult, ValidationError[]>>;
 
   /**
-   * Resets the form to its initial state — clears all values, errors, and touched state.
+   * Resets the form to its initial state — clears all values, errors, and touched state. In `mount` mode it then
+   * validates and marks every field touched, as on mount.
    *
    * @example
    * form.resetForm();
@@ -1194,7 +1378,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   resetForm: () => void;
 
   /**
-   * Runs the validator against the given values and returns a Railway `Result`.
+   * Runs the validator against the given values and returns a Railway `Result`. A validator that throws or rejects
+   * makes it throw or reject too, and leaves the errors as they were.
    *
    * @example
    * const result = form.validateForm(currentValues);

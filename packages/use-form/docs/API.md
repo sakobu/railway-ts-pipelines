@@ -50,6 +50,8 @@ const validator = v.object({
 });
 ```
 
+**A validator that throws.** A validation the form starts on its own (on mount, after a reset, or when it follows new `initialValues`) logs a throw from the schema or a field validator with `console.error('Form validation error:', error)`, and the form keeps rendering. So does an async check that rejects, whatever started it, and its validating state ends. A sync throw during typing or a blur reaches the `setFieldValue`, `setValues` or `setFieldTouched` call that started the check, `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+
 #### options
 
 Type: `FormOptions<TValues, TResult>`
@@ -59,10 +61,14 @@ Configuration object.
 ```typescript
 {
   initialValues: NoInfer<TValues>;
+  // Identifies the record being edited. A change starts the form over; see resetKey below
+  resetKey?: string | number | bigint | boolean | null | undefined;
   // Returning nothing is allowed only when TResult is the form values; see onSubmit below
   onSubmit?:
     | ((values: TValues) => void | Promise<void>)
     | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
+  // The form values a successful save stored, from onSubmit's ok value; see savedValues below
+  savedValues?: (result: TResult) => TValues;
   validationMode?: "live" | "blur" | "mount" | "submit";
   fieldValidators?: {
     [K in ExtractFieldPaths<TValues>]?: (
@@ -72,6 +78,8 @@ Configuration object.
   };
   onValuesChange?: (values: TValues, prevValues: TValues) => void;
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+  // Replaces the submit errors useForm writes itself; see messages below
+  messages?: { submitFailed?: string; changedWhileSaving?: string };
 }
 ```
 
@@ -90,7 +98,7 @@ Configuration options for useForm.
 Type: `NoInfer<TValues>`
 Required
 
-Initial values for form fields. Used when form is reset. The values type comes from the validator or schema, not from `initialValues`.
+Initial values for form fields, and the values `resetForm()` resets to. The values type comes from the validator or schema, not from `initialValues`.
 
 ```typescript
 initialValues: {
@@ -98,6 +106,38 @@ initialValues: {
   password: "",
 }
 ```
+
+The form follows new `initialValues`, such as a refetched record:
+
+- With no unsaved edits, the form shows the new values in the same render. Its errors then describe them: it re-validates in `live` and `mount` modes, in `blur` mode once a field was blurred, after a submit attempt, and whenever errors already show. A mode that wouldn't have validated yet still doesn't.
+- With edits, they stay, and [`isStale`](#isstale) reports that a newer version arrived. An edit that undoes every unsaved edit leaves none, so the form then shows the latest version, as a form with no edits does.
+- Values that equal the latest `initialValues` count as having no edits, so the next version is followed. That covers a save made outside `onSubmit` whose record is passed back in, a wrapper that feeds the values back as `initialValues`, and typing that matches the latest version. The form doesn't see a save made outside `onSubmit`, though: when the server changes the record, for example by trimming a value, the form keeps the typed values and shows `isStale`. In an edit form, save in `onSubmit`. While `isSubmitting`, matching values still count as edits: the version may be an optimistic write that a failed save rolls back.
+- New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed. Pass [`savedValues`](#savedvalues) so the form knows which version is the save's answer. Without it, the form takes a version that arrived during the save, or else the next one, for the answer, so:
+  - An optimistic write of the submitted values, made while the save runs, is taken for the answer. When the server then changes the record, as by trimming `'Hello '` to `'Hello'`, and the user typed during or after the save, the form shows `isStale`.
+  - A saved record equal to the version before the save, as when the server trims the only edit away, can't be told apart from the same data rendered again. The form keeps the typed values and stays dirty, and until another version arrives, it takes the next one for the save's answer, so a change by someone else then doesn't raise `isStale`.
+- Build `initialValues` the same way on every render. A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render) makes every render look like a new version. `useForm` notices from how the new versions line up with the form's own updates, and logs an error naming the cause. It can miss a value that holds still while the user types and changes only in a render an effect causes, such as one that `onValuesChange` triggers. The sign then is `isStale` turning true after every edit. Create such values once, at module scope or with `useState(() => …)`.
+- A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by identity. Built anew on every render, they cause the same error. Build them with `useMemo`, keyed on the data they come from, or use an array or plain object, which compare by content. A `Set` rebuilt from refetched data still counts as a new version, even with the same items, so a form with edits shows `isStale`.
+
+See [Edit Forms: Loading, Refetching, and Switching Records](./RECIPES.md#edit-forms-loading-refetching-and-switching-records).
+
+#### resetKey
+
+Type: `ResetKey` (`string | number | bigint | boolean | null | undefined`)
+Optional
+
+Identifies the record the form edits. When it changes, the form starts over on the current `initialValues`, as if the component had remounted, without remounting it. Values, touched state, errors and `isStale` are dropped, and edits are lost. A submission that is still running for the previous record finishes on its own, and its result doesn't touch the new record.
+
+Key on the id of the loaded record, not the id the user selected, so the form starts over when the new record's data arrives:
+
+```typescript
+const form = useForm(contactSchema, {
+  initialValues: toFormValues(data),
+  resetKey: data?.id,
+  onSubmit,
+});
+```
+
+Only primitives are accepted, compared with `Object.is`. Passing the record itself would start the form over on every refetch.
 
 #### onSubmit
 
@@ -119,9 +159,36 @@ onSubmit: async (values) => {
 };
 ```
 
-An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error.
+An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error. An error for a field the user changed during the save doesn't land: it's about the value they replaced, and an edit clears a server error anyway.
+
+**Without `onSubmit`, a submit only validates.** Nothing is saved, so the values stay edits: a newer `initialValues` raises `isStale` rather than replacing them.
+
+**The save counts as done when `onSubmit` returns,** or when its promise resolves, without an `err`. A fire-and-forget call like `(v) => mutation.mutate(v)` returns at once, so the values count as saved before the request ends. That's fine while `initialValues` stays fixed. In an edit form fed by refetched `initialValues`, though, a failed request leaves the typed values unprotected: a newer version that arrives is followed and replaces them. Return the save's promise instead (`async (v) => { await mutation.mutateAsync(v); }`), or a `Result`. `isSubmitting` then also stays true while the request runs.
 
 **Breaking change: a value that is neither `undefined` nor a `Result` is an error.** If `onSubmit` returns anything else, `handleSubmit` resolves to the generic submit error (`Something went wrong. Please try again.`) and logs `console.error('Form submission error:', error)`. Before, it resolved `ok(values)`. The usual trap is a prop typed `(v: T) => void` that the parent fills with `(v) => api.save(v)`: that returns a `Response` or `mutateAsync`'s data, type-checks, and then fails at runtime. Return nothing (`async (v) => { await save(v); }`) or return a `Result`.
+
+#### savedValues
+
+Type: `(result: TResult) => TValues`
+Optional
+
+Returns the form values a successful save stored, from `onSubmit`'s `ok` value (the submitted values when `onSubmit` returns nothing). In an edit form, map the saved record the way `initialValues` is mapped:
+
+```typescript
+useForm(contactSchema, {
+  initialValues: toFormValues(data),
+  onSubmit: (values) => saveContact(data.id, values), // Promise<Result<Contact, ValidationError[]>>
+  savedValues: toFormValues,
+});
+```
+
+The form then knows which version is the save's answer: the one equal to these values, whenever it arrives.
+
+- An optimistic write of the submitted values to `initialValues`' source isn't taken for the answer, so the server's changed record, arriving after it, doesn't raise `isStale`.
+- A change by someone else that arrives during the save shows as `isStale`, until the save's answer arrives after it.
+- A saved record equal to the version before the save, as when the server trims the only edit away, is followed.
+
+Without it, the form takes a version that arrived during the save, or else the next one, for the save's answer (see [`initialValues`](#initialvalues)). A throw from it is logged with `console.error('Form submission error:', error)`, and the save still succeeds: the form then finds the save's answer as it does without `savedValues`.
 
 #### validationMode
 
@@ -132,7 +199,7 @@ Controls when validation occurs.
 
 - `live` - Validate on change and blur, mark touched on change
 - `blur` - Validate on blur only
-- `mount` - Validate once on mount, mark all fields touched
+- `mount` - Validate on mount and mark all fields touched, and again on a follow of new `initialValues`, `resetForm()` or a `resetKey` change
 - `submit` - Validate only on submit
 
 #### fieldValidators
@@ -167,9 +234,10 @@ Type: `(values: TValues, prevValues: TValues) => void`
 Optional
 
 Callback invoked whenever form values change. Fires on field edits,
-programmatic updates via `setFieldValue`/`setValues`, form reset, and
-once on mount (where `prevValues` equals `values`). Inline functions
-are safe — the callback is stored in a ref internally.
+programmatic updates via `setFieldValue`/`setValues`, form reset, a
+follow of new `initialValues`, a `resetKey` change, and once on mount
+(where `prevValues` equals `values`). Inline functions are safe — the
+callback is stored in a ref internally.
 
 ```typescript
 onValuesChange: (values, prevValues) => {
@@ -186,8 +254,9 @@ Optional
 
 Callback invoked when an individual field changes via `setFieldValue`.
 All native bindings route through `setFieldValue`, so this catches every
-user interaction. Does not fire for batch updates (`setValues`, `resetForm`)
-— use `onValuesChange` for those. Inline functions are safe.
+user interaction. Does not fire for batch updates (`setValues`, `resetForm`),
+a follow of new `initialValues` or a `resetKey` change — use `onValuesChange`
+for those. Inline functions are safe.
 
 Array helper operations (`push`, `remove`, `insert`, `swap`, `replace`) also
 route through `setFieldValue`, so `onFieldChange` fires for them with the
@@ -210,9 +279,31 @@ onFieldChange: (field, value, values) => {
 },
 ```
 
+#### messages
+
+Type: `FormMessages`
+Optional
+
+Replaces the submit errors useForm writes itself, for other wording or a translation. Each one shows at `errors._root` and comes back in `handleSubmit`'s `err`. Errors from the schema, the field validators and `onSubmit` are already yours, so they aren't here.
+
+| Key                  | When                                                                                                                                      | Default                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `submitFailed`       | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                 | "Something went wrong. Please try again."                                                          |
+| `changedWhileSaving` | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit)) | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+
+```typescript
+const form = useForm(contactSchema, {
+  initialValues,
+  messages: {
+    submitFailed: t('form.submitFailed'),
+    changedWhileSaving: t('form.changedWhileSaving'),
+  },
+});
+```
+
 ## Form State
 
-Properties returned by useForm.
+Properties returned by useForm. The maps (`touched`, `errors` and the rest) are read-only: an empty one is a shared frozen object, so writing into it throws. Copy one before changing it.
 
 ### values
 
@@ -227,7 +318,7 @@ form.values.password; // "password123"
 
 ### touched
 
-Type: `Record<FieldPath, boolean>`
+Type: `Readonly<Record<FieldPath, boolean>>`
 
 Record of which fields have been interacted with.
 
@@ -238,7 +329,7 @@ form.touched.password; // false
 
 ### errors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Combined client, field validator, and server errors. Server errors take highest precedence (server > field > client). The submit error shows at `form.errors._root` (`ROOT_ERROR_KEY`).
 
@@ -249,7 +340,7 @@ form.errors['addresses.0.city']; // "City is required"
 
 ### clientErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Validation errors from the validator function.
 
@@ -259,7 +350,7 @@ form.clientErrors.email; // "Invalid email format"
 
 ### serverErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Errors from the server: set by `setServerErrors(...)`, or by `onSubmit` returning `err`. The submit error (a server error at path `[]`) shows at `serverErrors._root`.
 
@@ -281,10 +372,26 @@ True when there are no validation errors. The submit error (a server error at pa
 
 Type: `boolean`
 
-True when any values have changed from initial state.
+True when the values differ from the current `initialValues`.
 
 ```typescript
 <button disabled={!form.isDirty}>Save Changes</button>
+```
+
+### isStale
+
+Type: `boolean`
+
+True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`, or once the user undoes every edit: the form then shows the latest version. A `resetKey` change, a successful save, and the other person undoing their change clear it too.
+
+It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own answer. While the submission is still validating, before `isSubmitting` turns true, a newer version shows, and the save is then cancelled. A failed save shows it again. A save that was waiting behind it, such as a queued Save or an auto-save, then isn't sent: see [`handleSubmit`](#handlesubmit).
+
+```typescript
+{form.isStale && (
+  <div role="alert">
+    This record changed. <button onClick={() => form.resetForm()}>Reload</button>
+  </div>
+)}
 ```
 
 ### isSubmitting
@@ -303,7 +410,7 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-Derived property. True when **any** async validation is in progress -- either form-level (from an async schema like `chainAsync`) or field-level (from `fieldValidators`). Use this to disable the submit button during any async check.
+Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). Use this to disable the submit button during any async check.
 
 ```typescript
 <button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
@@ -313,7 +420,7 @@ Derived property. True when **any** async validation is in progress -- either fo
 
 ### validatingFields
 
-Type: `Record<FieldPath, boolean>`
+Type: `Readonly<Record<FieldPath, boolean>>`
 
 Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running. Use this to show inline loading indicators next to individual fields.
 
@@ -325,7 +432,7 @@ Per-field tracking for `fieldValidators` only. Shows which specific fields curre
 
 ### fieldErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Errors from per-field validators (stored separately from schema errors).
 These are merged into the `errors` object with priority above schema errors
@@ -360,8 +467,8 @@ const errors = {
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
 - `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()` or new `handleSubmit`
-- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, `resetForm()`, and at the start of each submit. It does not count toward `isValid`
+- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
+- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 
@@ -390,9 +497,9 @@ React state.
 
 Call form methods from event handlers and effects, not while rendering. The
 form's state lives outside React, so a call during render makes React log a
-warning. To load new values when a prop changes, give the form's component a
-`key`, or pass the new values as `initialValues` and call `resetForm()` in an
-effect (see [resetForm](#resetform)).
+warning. To load new values when a prop changes, pass them as `initialValues`:
+the form follows them (see [initialValues](#initialvalues)). For a different
+record, also change [`resetKey`](#resetkey).
 
 ### setFieldValue
 
@@ -526,21 +633,30 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 
 **Returns:** `Promise<Result<TResult, ValidationError[]>>` -- `Ok` with `onSubmit`'s `ok` value (the validated values when `onSubmit` returns nothing or is absent), `Err` with validation errors or `onSubmit`'s `err` on failure.
 
-**It never rejects.** A throw in the schema validator, a field validator or `onSubmit`, or an `onSubmit` value that is neither `undefined` nor a `Result`, is logged with `console.error('Form submission error:', error)` and resolves to `err([{ path: [], message: 'Something went wrong. Please try again.' }])`. That error becomes the submit error at `form.errors._root`, and `isSubmitting` and `isValidating` reset.
+**It never rejects.** A throw in the schema validator, a field validator or `onSubmit`, or an `onSubmit` value that is neither `undefined` nor a `Result`, is logged with `console.error('Form submission error:', error)` and resolves to `err([{ path: [], message: 'Something went wrong. Please try again.' }])`. That error becomes the submit error at `form.errors._root`, and `isSubmitting` and `isValidating` reset. [`messages.submitFailed`](#messages) replaces the text.
 
 **Overlapping submits:**
 
 - Same values as the running submission: the call shares its promise, so `onSubmit` does not run twice on a double-click during a slow request.
 - Different values: the call waits for the running submission, then submits the latest values. At most one follow-up waits, so auto-save does not miss edits made during a save.
 
+**A save that would overwrite a newer version isn't sent.** Just before `onSubmit`, the submission checks whether a newer `initialValues` arrived that it would overwrite:
+
+- one that arrived while it validated, and made the form stale or was followed
+- one that made the form stale while a running submission hid `isStale`, as for a follow-up queued behind a save that then failed
+
+The previous save's answer isn't a newer version: when it's still to come as the save starts, the first version to arrive is that answer.
+
+Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite. So does one the user reset the form during (`resetForm()`), as with `handleSubmit(); resetForm()` to submit and clear.
+
 **What it does:**
 
 1. Calls `preventDefault` on the event (if provided)
 2. Marks all fields as touched
 3. Clears existing server errors
-4. Runs schema validation (awaits if async)
-5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
-6. If everything passes, calls `onSubmit` (if provided); an `err` it returns is placed on the form
+4. Runs schema validation (awaits if async). Its errors show, or a pass clears those of an earlier attempt, unless a check of newer values started meanwhile, as typing starts one
+5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel. Each result shows unless a check of that field started meanwhile
+6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 
 **Example:**
@@ -577,18 +693,15 @@ Reset form to initial values and clear errors.
 resetForm(): void
 ```
 
-It resets to the `initialValues` passed in the latest render.
+It resets to the `initialValues` passed in the latest render. In `mount` mode it then validates and marks every field touched, as on mount, so the errors show.
 
 **Example:**
 
 ```typescript
 <button onClick={() => form.resetForm()}>Reset</button>
 
-// Load another record: pass it as initialValues, then reset in an effect
-const { resetForm } = form;
-useEffect(() => {
-  resetForm();
-}, [user, resetForm]);
+// Someone else changed the record: offer a Reload
+{form.isStale && <button onClick={() => form.resetForm()}>Reload</button>}
 ```
 
 ### getFieldError
@@ -691,7 +804,7 @@ validateForm(values: TValues): Result<TValues, ValidationError[]> | Promise<Resu
 - `values` - Values to validate
 
 **Returns:**
-Railway Result type with validated data or errors. Returns a Promise when using an async validator.
+Railway Result type with validated data or errors. Returns a Promise when using an async validator. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
 
 **Example:**
 
@@ -1253,6 +1366,16 @@ Hook for auto-submitting forms after debounced changes.
 Monitors form values and automatically triggers submission when the form
 is dirty, valid, and values have changed since the last validation.
 
+It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save, its own or a manual one, goes out as soon as that save settles, unless the form is then stale or invalid. It only submits values whose latest validation passed: values still being validated wait for their result.
+
+It saves values that differ from `initialValues` (`isDirty`). So pass what was saved back in as `initialValues`, as an edit form does with the saved record: `isDirty` then compares against what the server holds. With `initialValues` that never change, an edit back to them after an earlier save isn't saved, because the form counts it as clean, though the server still holds the earlier save.
+
+After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
+
+An edit it hasn't sent when the record switches or the form unmounts is dropped, like the form's other unsaved edits: one still in its delay, being validated, or waiting for a running save. A Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
+
+A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on. So is a `validateForm` that throws or rejects, and the values it checked aren't saved.
+
 ### Signature
 
 ```typescript
@@ -1263,7 +1386,7 @@ function useFormAutoSubmission<T>(form: FormWithAutoSubmit<T>, delay?: number): 
 
 #### form
 
-A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`).
+A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`, and optionally `isStale`).
 
 #### delay
 
@@ -1275,10 +1398,14 @@ Debounce delay in milliseconds before auto-submitting.
 ### Example
 
 ```typescript
+// The query last searched, passed back so clearing the box searches again
+const [searched, setSearched] = useState({ search: '' });
+
 const form = useForm(validator, {
-  initialValues: { search: '' },
+  initialValues: searched,
   onSubmit: async (values) => {
     await fetch(`/api/search?q=${values.search}`);
+    setSearched(values);
   },
   validationMode: 'live',
 });
@@ -1289,7 +1416,7 @@ useFormAutoSubmission(form, 500);
 
 ## useDebounce
 
-Hook for debouncing a callback function.
+Hook for debouncing a callback function. Unmounting cancels a call still waiting, and a call made after unmount does nothing, such as one from a promise that settles later.
 
 ### Signature
 

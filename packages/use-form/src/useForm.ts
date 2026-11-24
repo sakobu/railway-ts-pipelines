@@ -11,6 +11,7 @@ import {
   useMemo,
   useEffect,
   useInsertionEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -28,7 +29,9 @@ import {
   createNativeFileFieldProps,
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
+import { createInitialFormState, formReducer } from './formReducer';
 import { createFormStore } from './formStore';
+import { createStabilityCheck } from './stabilityCheck';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
 import {
@@ -47,7 +50,9 @@ import type {
   FieldPath,
   NativeCheckboxProps,
   NativeCheckboxGroupOptionProps,
+  FormAction,
   FormOptions,
+  FormState,
   NativeSelectProps,
   NativeSliderProps,
   NativeSwitchProps,
@@ -57,8 +62,78 @@ import type {
   UseFormReturn,
 } from './types';
 
-/** The submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
+/** The default submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
 const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+/** The default submit error for a save cancelled before `onSubmit`, because it would overwrite a newer version. */
+const CHANGED_WHILE_SAVING_MESSAGE =
+  'The record changed while saving, so nothing was saved. Review the latest version and save again.';
+
+/** Logged once per form when initialValues keeps changing along with the form's own state. */
+const UNSTABLE_INITIAL_VALUES_MESSAGE =
+  "useForm: initialValues or resetKey keeps changing along with the form's own state. " +
+  "It's probably built from something that changes on its own, such as crypto.randomUUID(), new Date() or storage read during render, " +
+  'or holds a Set, Map or Temporal value built anew on every render. ' +
+  'Create generated values once, at module scope or with useState(() => …). ' +
+  'A Set, Map or Temporal value compares by identity, so build it with useMemo, keyed on the data it comes from, ' +
+  'or use an array or plain object.';
+
+/** A schema check a field validator waits on: its result, or undefined once its validator threw or rejected. */
+type SchemaCheck<TValues> =
+  | Result<TValues, ValidationError[]>
+  | Promise<Result<TValues, ValidationError[]> | undefined>
+  | undefined;
+
+/**
+ * Logs a validator's throw or rejection that nothing could catch: in a check the form started on its own, or in an
+ * async check, which settles after the call that started it returned.
+ *
+ * @param error - What the validator threw or rejected with
+ * @returns undefined, since the check has no result
+ */
+const logValidationError = (error: unknown): undefined => {
+  console.error('Form validation error:', error);
+  return undefined;
+};
+
+/**
+ * Takes the next validation number for a field. A check whose number is no longer the field's latest doesn't land.
+ *
+ * @param seqs - The latest number of each field, by normalized path
+ * @param key - The field's normalized path
+ * @returns The number the new check holds
+ */
+const takeNextFieldSeq = (seqs: Record<FieldPath, number>, key: FieldPath): number => {
+  const seq = (seqs[key] ?? 0) + 1;
+  seqs[key] = seq;
+  return seq;
+};
+
+/**
+ * Places server errors on the form: an error at path `[]` becomes the submit error, and every other
+ * error goes on its path, marked touched so it shows.
+ *
+ * @param send - Dispatches each write, or drops it when the errors no longer belong to the form's state
+ * @param errors - Server validation errors, each with a `path` and a `message`
+ * @param lands - Whether the error at a path still describes the value shown there. Without it, every error lands.
+ */
+const placeErrorsWith = <TValues extends Record<string, unknown>>(
+  send: (action: FormAction<TValues>) => void,
+  errors: ValidationError[],
+  lands: (path: FieldPath) => boolean = () => true,
+): void => {
+  const { [ROOT_ERROR_KEY]: submitError, ...all } = formatErrors(errors);
+  const perPath = Object.fromEntries(Object.entries(all).filter(([path]) => lands(path)));
+  send({
+    type: 'SET_SERVER_ERRORS',
+    errors: perPath,
+    ...(submitError !== undefined && { submitError }),
+  });
+  send({
+    type: 'MARK_ALL_TOUCHED',
+    fields: Object.keys(perPath),
+  });
+};
 
 // =============================================================================
 // Main Hook
@@ -78,7 +153,8 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
  *
  * @param validator - Railway-oriented validator (sync or async) from @railway-ts/pipelines that validates form values
  * @param options - Configuration options for form behavior
- * @param options.initialValues - Initial values for form fields (used on mount and reset)
+ * @param options.initialValues - Initial values. The form follows new ones while it has no unsaved edits.
+ * @param options.resetKey - Identifies the record the form edits. A change starts the form over, as if remounted.
  * @param options.onSubmit - Callback invoked when form is submitted with valid data
  * @param options.validationMode - Controls when validation occurs: "live" | "blur" | "mount" | "submit"
  *
@@ -90,7 +166,8 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
  * - `clientErrors` - Validation errors from the validator function
  * - `serverErrors` - Manually set errors from server responses
  * - `isValid` - Whether the form has no validation errors
- * - `isDirty` - Whether any values have changed from initial state
+ * - `isDirty` - Whether the values differ from the current `initialValues`
+ * - `isStale` - Whether a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits
  * - `isSubmitting` - Whether the form is currently being submitted
  * - `isValidating` - Whether async validation is currently in progress
  *
@@ -182,7 +259,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   validatorOrSchema: FormValidator<TValues>,
   options: FormOptions<TValues, TResult>,
 ): UseFormReturn<TValues, TResult> => {
-  const { initialValues, onSubmit, validationMode, fieldValidators, onValuesChange, onFieldChange } = options;
+  const {
+    initialValues,
+    resetKey,
+    onSubmit,
+    savedValues,
+    validationMode,
+    fieldValidators,
+    onValuesChange,
+    onFieldChange,
+    messages,
+  } = options;
+
+  // The submit errors useForm writes itself. Read out as strings, so an inline `messages` object keeps the methods
+  // the same.
+  const submitFailedMessage = messages?.submitFailed ?? SUBMIT_ERROR_MESSAGE;
+  const changedWhileSavingMessage = messages?.changedWhileSaving ?? CHANGED_WHILE_SAVING_MESSAGE;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
@@ -202,40 +294,36 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // State Store
   // ===========================================================================
 
-  // The reducer uses the initialValues of the latest commit. An insertion effect updates them before
-  // any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
-  const initialValuesRef = useRef(initialValues);
-  useInsertionEffect(() => {
-    initialValuesRef.current = initialValues;
-  });
-
   // The state lives in a store, so every method reads the state left by the calls before it,
   // not the state of the last render. React renders from the store.
   const [store] = useState(() =>
-    createFormStore<TValues>(
-      {
-        values: initialValues,
-        touched: {},
-        clientErrors: {},
-        serverErrors: {},
-        fieldErrors: {},
-        validatingFields: {},
-        isSubmitting: false,
-        isFormValidating: false,
-        submitCount: 0,
-      },
-      () => initialValuesRef.current,
-    ),
+    createFormStore<TValues>(createInitialFormState(initialValues, resetKey), initialValues),
   );
-  const formState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+
+  // resetForm() resets to the initialValues of the latest commit. An insertion effect hands them to the store
+  // before any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
+  useInsertionEffect(() => {
+    store.setInitialValues(initialValues);
+  });
+
+  const storedState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { dispatch } = store;
+
+  // The render shows the state synced with this render's initialValues and resetKey, so this commit's
+  // effects never see the old values. Pure, with no store write: a layout effect (Following initialValues,
+  // below) dispatches the same sync, and the store catches up with what was rendered.
+  const formState = useMemo(
+    () => formReducer(storedState, { type: 'SYNC_INITIAL_VALUES', initialValues, resetKey }, initialValues),
+    [storedState, initialValues, resetKey],
+  );
 
   // =========================================================================
   // Value change callbacks
   // =========================================================================
 
   // --- onValuesChange ---
-  // Ref avoids dependency-array issues with inline functions (same pattern as useDebounce).
+  // Ref avoids dependency-array issues with inline functions. Only the passive effect below calls it, and that
+  // effect is declared after this one, so a passive effect updates the ref in time.
   const onValuesChangeRef = useRef(onValuesChange);
   useEffect(() => {
     onValuesChangeRef.current = onValuesChange;
@@ -250,7 +338,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   }, [formState.values]);
 
   // --- onFieldChange ---
-  // Fired imperatively from setFieldValue. Updated in an insertion effect, like initialValuesRef,
+  // Fired imperatively from setFieldValue. Updated in an insertion effect, like the store's initial values,
   // so a setFieldValue from any effect of the same commit, a child's included, gets this render's callback.
   const onFieldChangeRef = useRef(onFieldChange);
   useInsertionEffect(() => {
@@ -263,8 +351,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Per-field sequence counters for race condition protection on field-level async validation
   const fieldValidationSeqRef = useRef<Record<string, number>>({});
 
-  // Decides what an overlapping handleSubmit does: share the running submission, or follow it
-  const [submitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
+  // Decides what an overlapping handleSubmit does: share the running submission, or follow it.
+  // A resetKey reset replaces it, so the new record's submits don't join or wait behind the old record's.
+  const [firstSubmitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
+  const submitSchedulerRef = useRef(firstSubmitScheduler);
 
   // ===========================================================================
   // Computed State
@@ -319,10 +409,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
   const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
-  // Derived: true when any async validation (form-level or field-level) is running
+  // Derived: true when any async validation (form-level, a submission's, or field-level) is running
   const isValidating = useMemo(
-    () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
-    [formState.isFormValidating, formState.validatingFields],
+    () =>
+      formState.isFormValidating || formState.isSubmitValidating || Object.keys(formState.validatingFields).length > 0,
+    [formState.isFormValidating, formState.isSubmitValidating, formState.validatingFields],
   );
 
   // ===========================================================================
@@ -359,73 +450,202 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *   A sequence counter protects against race conditions: only the latest async validation
    *   result dispatches state updates.
    *
+   * Every call replaces the validations before it, even one that finishes at once, and a sync result
+   * ends the validating state of an async one it replaced. An async result also lands only while the
+   * values it checked are still the baseline: a follow of new `initialValues` or a reset drops it.
+   *
+   * A validator that throws or rejects leaves the errors as they were, ends the validating state as a result
+   * would, and the throw or rejection reaches the caller.
+   *
    * @param values - The form values to validate (usually form.values)
    * @returns Railway Result or Promise<Result> depending on the validator
    */
   const validateForm = useCallback(
     (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
-      const validationResult = validate(values, validator);
+      const seq = ++validationSeqRef.current;
+      const { baselineEpoch } = store.getState();
+      // Only the latest validation lands, and only while no follow or reset came since
+      const isLatest = () => seq === validationSeqRef.current && store.getState().baselineEpoch === baselineEpoch;
+      // Ends an async validation this one replaced
+      const endReplaced = () => {
+        if (store.getState().isFormValidating) dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+      };
 
-      if (validationResult instanceof Promise) {
-        const seq = ++validationSeqRef.current;
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
-
-        return validationResult.then((result) => {
-          // Only dispatch if this is still the latest validation
-          if (seq === validationSeqRef.current) {
-            dispatchValidationResult(result);
-            dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
-          }
-          return result;
-        });
+      let validationResult: Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>>;
+      try {
+        validationResult = validate(values, validator);
+      } catch (error) {
+        endReplaced();
+        throw error;
       }
 
-      // Sync path — no race conditions possible
+      if (validationResult instanceof Promise) {
+        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+
+        return validationResult.then(
+          (result) => {
+            if (isLatest()) {
+              dispatchValidationResult(result);
+              dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+            }
+            return result;
+          },
+          (error: unknown) => {
+            if (isLatest()) dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+            throw error;
+          },
+        );
+      }
+
+      // Sync path: it lands at once, and ends an async validation it replaced
       dispatchValidationResult(validationResult);
+      endReplaced();
       return validationResult;
     },
-    [dispatch, validator, dispatchValidationResult],
+    [store, dispatch, validator, dispatchValidationResult],
+  );
+
+  /**
+   * Starts a schema check that nothing awaits, as typing, a blur, a follow or a reset do. A rejection is logged,
+   * since nothing could catch it, and leaves the check with no result. A sync throw reaches the caller.
+   *
+   * @param values - The form values to validate
+   * @returns The check, for a field validator to wait on
+   */
+  const startValidation = useCallback(
+    (values: TValues): SchemaCheck<TValues> => {
+      const result = validateForm(values);
+      return result instanceof Promise ? result.catch(logValidationError) : result;
+    },
+    [validateForm],
+  );
+
+  /**
+   * Clears a field's validator error and validating flag, each only if present, so a field with
+   * nothing to clear doesn't add a store update.
+   *
+   * @param field - The field whose check is cleared
+   */
+  const clearFieldCheck = useCallback(
+    (field: FieldPath): void => {
+      const key = normalizePath(field);
+      const { fieldErrors, validatingFields } = store.getState();
+      if (fieldErrors[key] !== undefined) dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+      if (validatingFields[key]) dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+    },
+    [store, dispatch],
   );
 
   /**
    * Runs a single field's validator with per-field race condition protection.
-   * Only runs when the field has a registered fieldValidator.
+   * Only runs when the field has a registered fieldValidator. A field whose validator was removed
+   * clears the error and validating flag its earlier check left, since nothing else would.
+   *
+   * Every call replaces the field's checks before it, even one that finishes at once, and a sync result
+   * clears the validating flag of an async one it replaced. An async result also lands only while the
+   * values it checked are still the baseline.
+   *
+   * A validator that throws ends the validating flag as a result would, and the throw reaches the caller. One that
+   * rejects does too, and the rejection is logged, since nothing awaits it.
    */
   const runFieldValidator = useCallback(
     (field: FieldPath, values: TValues): void => {
       const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
-      if (!validatorFn) return;
+      if (!validatorFn) {
+        clearFieldCheck(field);
+        return;
+      }
+
+      const seqKey = normalizePath(field);
+      const seq = takeNextFieldSeq(fieldValidationSeqRef.current, seqKey);
+      const { baselineEpoch } = store.getState();
+
+      const isLatest = () =>
+        seq === fieldValidationSeqRef.current[seqKey] && store.getState().baselineEpoch === baselineEpoch;
+      // Ends an async check of the field this one replaced
+      const endReplaced = () => {
+        if (store.getState().validatingFields[seqKey]) {
+          dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+        }
+      };
 
       dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
 
       const fieldValue = getValueByPath(values, field);
-      const result = (
-        validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>
-      )(fieldValue, values);
+      let result: string | undefined | Promise<string | undefined>;
+      try {
+        result = (validatorFn as (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>)(
+          fieldValue,
+          values,
+        );
+      } catch (error) {
+        endReplaced();
+        throw error;
+      }
 
       if (result instanceof Promise) {
-        const seqKey = normalizePath(field);
-        if (!fieldValidationSeqRef.current[seqKey]) {
-          fieldValidationSeqRef.current[seqKey] = 0;
-        }
-        const seq = ++fieldValidationSeqRef.current[seqKey];
         dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: true });
 
-        void result.then((error) => {
-          if (seq === fieldValidationSeqRef.current[seqKey]) {
-            dispatch({ type: 'SET_FIELD_ERROR', field, error });
-            dispatch({
-              type: 'SET_FIELD_VALIDATING',
-              field,
-              isValidating: false,
-            });
-          }
-        });
+        void result.then(
+          (error) => {
+            if (isLatest()) {
+              dispatch({ type: 'SET_FIELD_ERROR', field, error });
+              dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            }
+          },
+          (error: unknown) => {
+            if (isLatest()) dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+            logValidationError(error);
+          },
+        );
       } else {
         dispatch({ type: 'SET_FIELD_ERROR', field, error: result });
+        endReplaced();
       }
     },
-    [dispatch, fieldValidators],
+    [store, dispatch, fieldValidators, clearFieldCheck],
+  );
+
+  /**
+   * Once the schema result is in, runs the field's validator, or clears the field's error and
+   * validating flag when the schema has an error for the field, so the schema's error shows. A schema
+   * check with no result, because its validator threw or rejected, clears them too.
+   *
+   * It replaces the field's checks before it as soon as it's called, so a field validator still
+   * running, or one still waiting for its own schema result, can't land over it. Its schema result
+   * is dropped once a newer check of the field starts, or a follow or a reset comes: it checked
+   * values the form no longer holds.
+   *
+   * @param field - The field whose validator runs
+   * @param values - The values the schema checked
+   * @param schemaResult - The schema's check of `values`, from `startValidation`
+   */
+  const runFieldAfterSchema = useCallback(
+    (field: FieldPath, values: TValues, schemaResult: SchemaCheck<TValues>): void => {
+      const key = normalizePath(field);
+      const seq = takeNextFieldSeq(fieldValidationSeqRef.current, key);
+      const { baselineEpoch } = store.getState();
+
+      const afterSchema = (result: Result<TValues, ValidationError[]> | undefined) => {
+        if (seq !== fieldValidationSeqRef.current[key] || store.getState().baselineEpoch !== baselineEpoch) return;
+
+        const schemaErrors = result && isErr(result) ? normalizePathKeys(formatErrors(result.error)) : {};
+        if (result && !schemaErrors[key]) {
+          runFieldValidator(field, values);
+          return;
+        }
+
+        clearFieldCheck(field);
+      };
+
+      if (schemaResult instanceof Promise) {
+        // The field validator then runs after the caller returned: a throw from it is logged
+        void schemaResult.then(afterSchema).catch(logValidationError);
+      } else {
+        afterSchema(schemaResult);
+      }
+    },
+    [store, runFieldValidator, clearFieldCheck],
   );
 
   /**
@@ -447,31 +667,32 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'SET_CLIENT_ERRORS', errors: cleaned });
       }
 
-      const schemaResult = validateForm(values);
+      const schemaResult = startValidation(values);
 
       if (fieldValidators?.[field as ExtractFieldPaths<TValues>]) {
-        const afterSchema = (result: Result<TValues, ValidationError[]>) => {
-          const schemaErrors = isErr(result) ? normalizePathKeys(formatErrors(result.error)) : {};
-          if (!schemaErrors[normalizePath(field)]) {
-            runFieldValidator(field, values);
-          } else {
-            dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
-            dispatch({
-              type: 'SET_FIELD_VALIDATING',
-              field,
-              isValidating: false,
-            });
-          }
-        };
-
-        if (schemaResult instanceof Promise) {
-          void schemaResult.then(afterSchema);
-        } else {
-          afterSchema(schemaResult);
-        }
+        runFieldAfterSchema(field, values, schemaResult);
       }
     },
-    [store, dispatch, validateForm, fieldValidators, runFieldValidator],
+    [store, dispatch, startValidation, fieldValidators, runFieldAfterSchema],
+  );
+
+  /**
+   * What `mount` mode does on mount and on a reset: validates the values and marks every field touched,
+   * nested and array items included, so the errors show at once. A validator that throws is logged: on mount
+   * and on a `resetKey` reset, an effect runs this, with no caller to throw to.
+   *
+   * @param values - The values the form starts with
+   */
+  const validateAsOnMount = useCallback(
+    (values: TValues): void => {
+      try {
+        void startValidation(values);
+      } catch (error) {
+        logValidationError(error);
+      }
+      dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(values) });
+    },
+    [dispatch, startValidation],
   );
 
   // Validate on mount if enabled
@@ -479,20 +700,154 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   useEffect(() => {
     if (validateOnMount && !didMountRef.current) {
       didMountRef.current = true;
-      void validateForm(initialValues);
-
-      // Also mark all fields as touched (including nested and array items)
-      const allFields = collectFieldPaths(initialValues);
-      dispatch({
-        type: 'MARK_ALL_TOUCHED',
-        fields: allFields,
-      });
+      validateAsOnMount(initialValues);
     }
-  }, [dispatch, initialValues, validateForm, validateOnMount]);
+  }, [initialValues, validateAsOnMount, validateOnMount]);
+
+  // ===========================================================================
+  // Following initialValues
+  // ===========================================================================
+
+  /**
+   * Runs the side effects of a follow, so the errors describe the values shown. It re-validates when the
+   * mode calls for it, when the form has validated before (a blurred field in `blur` mode, a submit attempt in
+   * any mode), or when errors are shown or still being checked. It re-runs the field validators that have an
+   * error or are still running, and in `mount` mode marks the new version's fields touched. While an async check
+   * runs, the old values' errors are cleared, as when typing. A mode that wouldn't have validated yet still doesn't.
+   *
+   * It never throws: it runs from a layout effect, or once a save succeeded. A validator that throws is logged, and
+   * a schema validator that throws leaves the old values' errors cleared.
+   *
+   * @param prev - The state before the follow
+   * @param next - The state after it
+   */
+  const runFollowEffects = useCallback(
+    (prev: FormState<TValues>, next: FormState<TValues>): void => {
+      const fields = Array.from(new Set([...Object.keys(prev.fieldErrors), ...Object.keys(prev.validatingFields)]));
+      const blurred = validateOnBlur && Object.values(prev.touched).some(Boolean);
+
+      if (
+        validateOnChange ||
+        validateOnMount ||
+        blurred ||
+        prev.submitCount > 0 ||
+        Object.keys(prev.clientErrors).length > 0 ||
+        prev.isFormValidating ||
+        fields.length > 0
+      ) {
+        let schemaResult: SchemaCheck<TValues>;
+        try {
+          schemaResult = startValidation(next.values);
+        } catch (error) {
+          schemaResult = logValidationError(error);
+        }
+        if (schemaResult === undefined || schemaResult instanceof Promise) {
+          // As when typing: the old values' errors don't show on the new ones while the check runs, or once it threw
+          if (Object.keys(store.getState().clientErrors).length > 0)
+            dispatch({ type: 'SET_CLIENT_ERRORS', errors: {} });
+          fields.forEach((field) => {
+            if (store.getState().fieldErrors[normalizePath(field)] !== undefined) {
+              dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+            }
+          });
+        }
+        fields.forEach((field) => {
+          try {
+            runFieldAfterSchema(field, next.values, schemaResult);
+          } catch (error) {
+            logValidationError(error);
+          }
+        });
+      }
+
+      if (validateOnMount) {
+        dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
+      }
+    },
+    [store, dispatch, validateOnChange, validateOnBlur, validateOnMount, startValidation, runFieldAfterSchema],
+  );
+
+  // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
+  const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
+
+  // The state before this commit's sync, when the sync changed it. The layout effect below runs its side effects.
+  const syncedFromRef = useRef<FormState<TValues> | undefined>(undefined);
+
+  // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
+  // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
+  // here: the sync, and on a resetKey reset, the switch to a fresh submit scheduler. Quietly, since an insertion
+  // effect mustn't schedule a render: the layout effect below notifies.
+  useInsertionEffect(() => {
+    const prev = store.getState();
+    store.dispatchQuietly({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
+    const next = store.getState();
+    if (next === prev) return;
+    syncedFromRef.current = prev;
+    if (next.generation !== prev.generation) {
+      // Started over. The old record's running submission and waiting follow-up still run as the old record's,
+      // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
+      submitSchedulerRef.current.retire(prev.values);
+      submitSchedulerRef.current = createSubmitScheduler();
+    }
+  });
+
+  // Renders the state the store caught up to, then runs the side effects of a follow or a `resetKey` reset on the
+  // values the form now holds.
+  // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
+  // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
+  // resetKey are, so a commit whose sync changed the state always runs it.
+  useLayoutEffect(() => {
+    store.flush();
+    const prev = syncedFromRef.current;
+    syncedFromRef.current = undefined;
+    if (prev) {
+      const now = store.getState();
+      if (now.generation !== prev.generation) {
+        if (validateOnMount) validateAsOnMount(now.values);
+      } else if (now.baselineEpoch !== prev.baselineEpoch) {
+        runFollowEffects(prev, now);
+      }
+    }
+    // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
+    // A version equal to the values the render used came from the form's own state.
+    const changed = prev !== undefined;
+    const echo = changed && deepEqual(initialValues, storedState.values);
+    if (stabilityCheck.record(storedState, changed, store.getState(), echo)) {
+      console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);
+    }
+  }, [
+    store,
+    storedState,
+    initialValues,
+    resetKey,
+    stabilityCheck,
+    runFollowEffects,
+    validateAsOnMount,
+    validateOnMount,
+  ]);
 
   // ===========================================================================
   // Field Management Functions
   // ===========================================================================
+
+  /**
+   * Applies an edit. One that undoes the last unsaved edit makes the form follow the latest version: it then runs a
+   * follow's side effects, which replace the edit's own validation.
+   *
+   * @param action - The edit
+   * @returns Whether the edit made the form follow the latest version
+   */
+  const applyEdit = useCallback(
+    (action: FormAction<TValues>): boolean => {
+      const prev = store.getState();
+      dispatch(action);
+      const next = store.getState();
+      if (next.baselineEpoch === prev.baselineEpoch) return false;
+      runFollowEffects(prev, next);
+      return true;
+    },
+    [store, dispatch, runFollowEffects],
+  );
 
   /**
    * Updates a single field value and optionally triggers validation.
@@ -525,11 +880,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void => {
       // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
-      dispatch({
-        type: 'SET_FIELD_VALUE',
-        field,
-        value,
-      });
+      const followed = applyEdit({ type: 'SET_FIELD_VALUE', field, value });
 
       onFieldChangeRef.current?.(field, value, store.getState().values);
 
@@ -538,18 +889,20 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
-      // Validate the values as they are after any onFieldChange cascade
-      if (shouldValidate) {
+      // Validate the values as they are after any onFieldChange cascade. A follow has validated them already.
+      if (shouldValidate && !followed) {
         runValidationPipeline(field, store.getState().values);
       }
     },
-    [store, dispatch, validateOnChange, touchOnChange, runValidationPipeline],
+    [store, dispatch, applyEdit, validateOnChange, touchOnChange, runValidationPipeline],
   );
 
   /**
    * Updates multiple field values simultaneously and optionally triggers validation.
    * More efficient than calling setFieldValue multiple times when updating several fields.
    * Automatically clears server errors for affected fields.
+   *
+   * A record to load goes in `initialValues` instead, which the form follows while it has no unsaved edits.
    *
    * @param newValues - Partial object containing the fields to update
    * @param shouldValidate - Whether to trigger validation after update (default: depends on validationMode)
@@ -567,24 +920,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * form.setValues({ theme: "dark", language: "en" }, false);
    *
    * @example
-   * // Populate form from API response
-   * const loadUser = async (id: string) => {
-   *   const user = await api.getUser(id);
-   *   form.setValues(user);
+   * // Fill in an address picked from suggestions
+   * const handlePick = ({ street, city, zip }: Suggestion) => {
+   *   form.setValues({ address: { street, city, zip } });
    * };
    */
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void => {
-      dispatch({
-        type: 'SET_VALUES',
-        values: newValues,
-      });
+      const followed = applyEdit({ type: 'SET_VALUES', values: newValues });
 
-      if (shouldValidate) {
-        void validateForm(store.getState().values);
+      // A follow has validated the values already
+      if (shouldValidate && !followed) {
+        void startValidation(store.getState().values);
       }
     },
-    [store, dispatch, validateOnChange, validateForm],
+    [store, applyEdit, validateOnChange, startValidation],
   );
 
   /**
@@ -626,11 +976,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         } else if (!wasTouched) {
           // Live mode: only validate on first touch (focus→blur without typing).
           // After onChange has run (which sets touched), blur is redundant.
-          void validateForm(store.getState().values);
+          void startValidation(store.getState().values);
         }
       }
     },
-    [store, dispatch, validateOnBlur, validateOnChange, validateForm, runValidationPipeline],
+    [store, dispatch, validateOnBlur, validateOnChange, startValidation, runValidationPipeline],
   );
 
   // ===========================================================================
@@ -665,18 +1015,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * form.setServerErrors([{ path: [], message: "Service unavailable" }]);
    */
   const placeServerErrors = useCallback(
-    (errors: ValidationError[]): void => {
-      const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
-      dispatch({
-        type: 'SET_SERVER_ERRORS',
-        errors: perPath,
-        ...(submitError !== undefined && { submitError }),
-      });
-      dispatch({
-        type: 'MARK_ALL_TOUCHED',
-        fields: Object.keys(perPath),
-      });
-    },
+    (errors: ValidationError[]): void => placeErrorsWith(dispatch, errors),
     [dispatch],
   );
 
@@ -710,21 +1049,64 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
+   * Returns a dispatch for the writes of one generation: they land only while the form is still in it,
+   * so after a `resetKey` reset, the previous record's writes are dropped.
+   *
+   * @param generation - The generation the writes belong to
+   * @returns A dispatch that drops each write once `generation` is no longer current
+   */
+  const dispatchIn = useCallback(
+    (generation: number) =>
+      (action: FormAction<TValues>): void => {
+        if (store.getState().generation === generation) dispatch(action);
+      },
+    [store, dispatch],
+  );
+
+  /**
    * Runs one submission of the given values: marks every field touched, counts the attempt,
    * clears server errors, validates, runs the field validators, then calls `onSubmit`.
    * `handleSubmit` decides when it runs, through the submit scheduler.
+   *
+   * The submission belongs to the form state of `generation`. After a `resetKey` reset it still runs
+   * and resolves, but none of its writes land.
+   *
+   * It doesn't call `onSubmit` when the save would overwrite a newer version of the record: one that arrived
+   * while it validated and made the form stale or was followed, or a staleness that a running submission hid
+   * from the caller. It resolves to a submit error instead.
    *
    * Never rejects. A throw anywhere, or an `onSubmit` value that is neither a `Result` nor nothing,
    * is logged and resolves to the generic submit error.
    *
    * @param values - The form values to submit
+   * @param generation - The generation current when `handleSubmit` was called
+   * @param staleShown - Whether `isStale` read true when `handleSubmit` was called: the app chose to overwrite
    * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
   const runSubmission = useCallback(
-    async (values: TValues): Promise<Result<TResult, ValidationError[]>> => {
+    async (values: TValues, generation: number, staleShown: boolean): Promise<Result<TResult, ValidationError[]>> => {
+      const send = dispatchIn(generation);
+
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
-        const { clientErrors, serverErrors } = store.getState();
+        const { clientErrors, serverErrors, baselineEpoch, lastVersion, otherVersions } = store.getState();
+
+        // The validation's results describe the submitted values, so they land only while those values are
+        // still the baseline: a follow of new initialValues or a resetForm() drops them
+        const isBaseline = (): boolean => store.getState().baselineEpoch === baselineEpoch;
+
+        // Whether the save would overwrite a newer version of the record. After a resetKey switch, the previous
+        // record's save still goes out, as a remount's would.
+        const isOvertaken = (): boolean => {
+          const now = store.getState();
+          if (now.generation !== generation) return false;
+          // A staleness the caller couldn't see, because isStale reads false while isSubmitting
+          if (now.isStale && !staleShown) return true;
+          // None arrived since, other than the previous save's answer: the save doesn't overwrite that save's own
+          if (now.otherVersions === otherVersions) return false;
+          // A version that arrived since: the form went stale, or followed it and no longer shows these values
+          return now.isStale || (!isBaseline() && !deepEqual(now.values, values));
+        };
 
         // Mark all fields and error paths as touched (deep)
         const valuePaths = collectFieldPaths(values);
@@ -732,39 +1114,57 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           new Set([...valuePaths, ...Object.keys(clientErrors), ...Object.keys(serverErrors)]),
         );
 
-        dispatch({
+        send({
           type: 'MARK_ALL_TOUCHED',
           fields: allPaths,
         });
 
         // Increment submit count on every attempt (regardless of validation outcome)
-        dispatch({ type: 'INCREMENT_SUBMIT_COUNT' });
+        send({ type: 'INCREMENT_SUBMIT_COUNT' });
 
         // Clear any existing server errors
-        dispatch({
+        send({
           type: 'CLEAR_SERVER_ERRORS',
         });
 
-        // Invalidate any pending live async validations
-        ++validationSeqRef.current;
+        // Invalidate any pending live async validations, and end their validating state, unless a resetKey reset
+        // replaced this submission's state: a follow-up of the previous record can start during the new record's,
+        // whose validations stay
+        if (store.getState().generation === generation) {
+          ++validationSeqRef.current;
+          if (store.getState().isFormValidating) send({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+        }
+        // A check that starts after this one, as typing starts one, checks newer values: its result replaces this
+        // submission's, for the form or for its field
+        const seq = validationSeqRef.current;
+        const fieldSeqs = { ...fieldValidationSeqRef.current };
+        const isLatestCheck = (): boolean => isBaseline() && validationSeqRef.current === seq;
+        const isLatestFieldCheck = (field: FieldPath): boolean => {
+          const key = normalizePath(field);
+          return isBaseline() && fieldValidationSeqRef.current[key] === fieldSeqs[key];
+        };
 
-        // Show validating state during submit validation
-        dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+        // Show validating state during submit validation. Its own flag: a check that typing starts meanwhile, and
+        // ends, doesn't end this one.
+        send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
         let validationResult: Result<TValues, ValidationError[]>;
         try {
           // Validate the form (await handles both sync and async validators)
           validationResult = await validate(values, validator);
         } finally {
-          dispatch({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+          send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
+        }
+
+        // Its errors land, or a pass clears those of an earlier attempt
+        if (isLatestCheck()) {
+          send({
+            type: 'SET_CLIENT_ERRORS',
+            errors: isErr(validationResult) ? formatErrors(validationResult.error) : {},
+          });
         }
 
         if (isErr(validationResult)) {
-          dispatch({
-            type: 'SET_CLIENT_ERRORS',
-            errors: formatErrors(validationResult.error),
-          });
-
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
           return validationResult;
         }
@@ -772,7 +1172,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         const validData = validationResult.value;
 
         // Only set isSubmitting after validation passes
-        dispatch({
+        send({
           type: 'SET_SUBMITTING',
           isSubmitting: true,
         });
@@ -788,15 +1188,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               fieldEntries.map(async ([field, validatorFn]) => {
                 const fieldValue = getValueByPath(values, field);
                 const error = await validatorFn(fieldValue, values);
-                if (error) {
-                  dispatch({ type: 'SET_FIELD_ERROR', field, error });
-                } else {
-                  dispatch({
-                    type: 'SET_FIELD_ERROR',
-                    field,
-                    error: undefined,
-                  });
-                }
+                if (isLatestFieldCheck(field)) send({ type: 'SET_FIELD_ERROR', field, error });
                 return { field, error };
               }),
             );
@@ -807,22 +1199,77 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             }
           }
 
-          const outcome = onSubmit ? await onSubmit(validData) : undefined;
+          // A successful save settles the baseline. With savedValues, the save's answer is the version equal to what
+          // it stored. Without, a version that arrived while it ran is the answer: the form follows it, or bases the
+          // edits on it. A latest version equal to the base isn't: it's the previous save's answer or the old base
+          // coming back. Inside the try, so isSubmitting stays true until the finally. A dropped write leaves the
+          // epoch as it was, so nothing follows.
+          const settleSuccess = (result: TResult) => {
+            let saved: TValues | undefined;
+            try {
+              saved = savedValues?.(result);
+            } catch (error) {
+              // The save succeeded all the same: without what it stored, the form finds its answer as it does without
+              // savedValues
+              console.error('Form submission error:', error);
+            }
+            const before = store.getState();
+            send({
+              type: 'SUBMIT_SUCCEEDED',
+              values,
+              baselineEpoch,
+              lastVersion,
+              ...(saved !== undefined && { saved }),
+            });
+            const after = store.getState();
+            if (after.baselineEpoch !== before.baselineEpoch) runFollowEffects(before, after);
+          };
+
+          // The last check before the save goes out
+          if (isOvertaken()) {
+            send({ type: 'SET_SUBMIT_ERROR', submitError: changedWhileSavingMessage });
+            return err([{ path: [], message: changedWhileSavingMessage }]);
+          }
+
+          if (!onSubmit) {
+            // Nothing was saved, so the values stay edits: a newer version arriving later doesn't replace them.
+            // Cast: without an onSubmit TResult defaults to TValues, so the validated values are the success value.
+            // The one hole is an explicit useForm<T, U> with no onSubmit at all.
+            return ok(validData) as Result<TResult, ValidationError[]>;
+          }
+
+          const outcome = await onSubmit(validData);
 
           if (outcome === undefined) {
-            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues, and without an
-            // onSubmit TResult defaults to TValues, so the validated values are the success value. The one
-            // hole is an explicit useForm<T, U> with no onSubmit at all.
-            return ok(validData) as Result<TResult, ValidationError[]>;
+            // Cast: OnSubmit's member that returns nothing requires TResult ≡ TValues
+            const result = validData as unknown as TResult;
+            settleSuccess(result);
+            return ok(result);
           }
 
           if (!isResult(outcome)) throw new TypeError('onSubmit must return a Result or nothing');
 
-          if (isErr(outcome)) placeServerErrors(outcome.error);
+          if (isErr(outcome)) {
+            if (isBaseline()) {
+              // An error describes the submitted value, so it doesn't land on a field edited during the save, just
+              // as an edit after the save clears it
+              const shown = store.getState().values;
+              placeErrorsWith(send, outcome.error, (path) =>
+                deepEqual(getValueByPath(shown, path), getValueByPath(values, path)),
+              );
+            } else {
+              // A follow or resetForm() replaced the submitted values, so the field errors would describe values no
+              // longer shown. The submit error is about the attempt, and still shows.
+              const submitError = formatErrors(outcome.error)[ROOT_ERROR_KEY];
+              if (submitError !== undefined) send({ type: 'SET_SUBMIT_ERROR', submitError });
+            }
+          } else {
+            settleSuccess(outcome.value);
+          }
 
           return outcome;
         } finally {
-          dispatch({
+          send({
             type: 'SET_SUBMITTING',
             isSubmitting: false,
           });
@@ -831,25 +1278,43 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         console.error('Form submission error:', error);
 
         // Sets only the submit error: field errors placed during the submission stay
-        dispatch({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
-        return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
+        send({ type: 'SET_SUBMIT_ERROR', submitError: submitFailedMessage });
+        return err([{ path: [], message: submitFailedMessage }]);
       }
     },
-    [store, dispatch, validator, onSubmit, fieldValidators, placeServerErrors],
+    [
+      store,
+      validator,
+      onSubmit,
+      savedValues,
+      fieldValidators,
+      runFollowEffects,
+      dispatchIn,
+      submitFailedMessage,
+      changedWhileSavingMessage,
+    ],
   );
 
   /**
    * Handles form submission using the Railway-oriented programming pattern.
    * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
    * Returns a Promise that resolves to a Result and never rejects:
-   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent
-   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields
+   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent.
+   *   Without `onSubmit`, nothing is saved, so the values stay edits.
+   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields, except
+   *   on fields changed during the save
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
    *   error is logged with `console.error`.
+   * - `err` with a submit error, without calling `onSubmit`, when the save would overwrite a newer version of
+   *   the record that the caller hadn't seen (see `runSubmission`)
    *
    * While a submission is running, a call with the same values shares its Promise, and a call
    * with changed values submits them once it finishes. Every call with an event calls `preventDefault()`.
+   *
+   * A submission belongs to the record the form held when it was called. After a `resetKey` change it
+   * still runs and its Promise still resolves, but none of its results land on the new record's form,
+   * and the new record's submit doesn't wait for it.
    *
    * @param e - Optional form event (will preventDefault if provided)
    * @returns Promise<Result<TResult, ValidationError[]>> - Railway Result with `onSubmit`'s value, the validated data, or errors
@@ -892,15 +1357,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const handleSubmit = useCallback(
     (e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>> => {
       e?.preventDefault();
-      return submitScheduler.submit(() => store.getState().values, runSubmission);
+      const { generation, isStale, isSubmitting } = store.getState();
+      // What isStale read: a submission running hides it
+      const staleShown = isStale && !isSubmitting;
+      return submitSchedulerRef.current.submit(
+        () => store.getState().values,
+        (values) => runSubmission(values, generation, staleShown),
+      );
     },
-    [store, submitScheduler, runSubmission],
+    [store, runSubmission],
   );
 
   /**
    * Resets the form to its initial state.
    * Clears all values (back to initialValues), errors, and touched state.
-   * If validationMode is "mount", triggers validation after reset.
+   * If validationMode is "mount", validates and marks every field touched, as on mount, so the errors show.
    *
    * @example
    * // Reset after successful submission
@@ -931,10 +1402,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       type: 'RESET_FORM',
     });
 
-    if (validateOnMount) {
-      void validateForm(store.getState().values);
-    }
-  }, [store, dispatch, validateForm, validateOnMount]);
+    // As on mount: validate, and mark every field touched so the errors show
+    if (validateOnMount) validateAsOnMount(store.getState().values);
+  }, [store, dispatch, validateAsOnMount, validateOnMount]);
 
   // ===========================================================================
   // Error Helper
@@ -1343,6 +1813,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     validatingFields: formState.validatingFields,
     isValid,
     isDirty,
+    // A version that arrives during a save may be the save's own answer, and SUBMIT_SUCCEEDED settles it
+    isStale: formState.isStale && !formState.isSubmitting,
     submitCount: formState.submitCount,
 
     // Error helper
