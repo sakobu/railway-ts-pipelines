@@ -30,6 +30,7 @@ type FormWithAutoSubmit<T> = {
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
  * An edit made during a save goes out as soon as that save settles, unless the form is then stale or invalid.
+ * It only submits values whose latest validation passed: values still being validated wait for their result.
  * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
  * and goes out as soon as it settles.
  * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on.
@@ -64,6 +65,9 @@ type FormWithAutoSubmit<T> = {
 export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 200) => {
   const { values, isDirty, isValid, isStale = false, validateForm, handleSubmit } = form;
   const lastValidatedRef = useRef<T | null>(null);
+  // The values whose validation, the latest this hook started, passed. `isValid` describes the last validation
+  // that finished, which may be of older values, so a save goes out only for these.
+  const passedRef = useRef<T | null>(null);
   // This hook's last save: its values, and whether it's still running
   const savedRef = useRef<T | null>(null);
   const savingRef = useRef(false);
@@ -92,8 +96,9 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
   );
 
   const debouncedSubmit = useDebounce(() => {
-    // The delay can end after the form went clean, as after a follow or resetForm(): there's nothing to save then
-    if (!isDirty || !isValid) return;
+    // The delay can end after the form went clean, as after a follow or resetForm(): there's nothing to save then.
+    // It can also end while newer values are still being validated: their validation submits them if they pass.
+    if (!isDirty || !isValid || !deepEqual(values, passedRef.current)) return;
     // While the form is stale, the effect forgets the validated values, so it submits them once it no longer is
     if (isStale) return;
     if (savingRef.current) {
@@ -113,22 +118,31 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
     // or a resetKey switch, be validated and saved.
     if (!isDirty) lastValidatedRef.current = null;
     if (heldRef.current && !savingRef.current) {
-      // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go
+      // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go.
+      // Values still being validated wait for their validation, which submits them if they pass.
       heldRef.current = false;
-      if (isDirty && isValid && !deepEqual(values, savedRef.current)) submit(values);
+      if (isDirty && isValid && deepEqual(values, passedRef.current) && !deepEqual(values, savedRef.current)) {
+        submit(values);
+      }
       return;
     }
     if (!isDirty || deepEqual(values, lastValidatedRef.current)) return;
 
     lastValidatedRef.current = values;
     const result = validateForm(values);
+    const passed = () => {
+      // Only the latest validation this hook started counts
+      if (lastValidatedRef.current !== values) return;
+      passedRef.current = values;
+      debouncedSubmit();
+    };
 
     if (result instanceof Promise) {
       void result.then((r) => {
-        if (r.ok) debouncedSubmit();
+        if (r.ok) passed();
       });
     } else if (result.ok) {
-      debouncedSubmit();
+      passed();
     }
     // `settled` re-runs the effect once a save settles, so a held save goes out
   }, [values, isDirty, isValid, isStale, settled, submit, debouncedSubmit, validateForm]);

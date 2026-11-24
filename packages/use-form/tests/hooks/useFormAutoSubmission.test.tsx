@@ -1,11 +1,12 @@
 import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 
 import { ok, err, type Result } from '@railway-ts/pipelines/result';
+import { validate, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
-import { createGatedOnSubmit, nextTask } from '../fixtures/gates';
+import { createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -13,8 +14,6 @@ import {
   alwaysValidAsyncValidator,
   type UserForm,
 } from '../fixtures/validators';
-
-import type { ValidationError } from '@railway-ts/pipelines/schema';
 
 const initial: UserForm = { name: 'John', email: 'john@example.com', age: 25 };
 
@@ -872,6 +871,74 @@ describe('useFormAutoSubmission', () => {
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(3), { timeout: 1000 });
       expect(onSubmit.mock.calls[2]).toEqual([{ ...initial, name: 'Janette' }]);
+    });
+  });
+
+  describe('values still validating', () => {
+    /** The user schema, checked after a delay, as a server round trip would be. */
+    const slowUserValidator: MaybeAsyncValidator<unknown, UserForm> = async (values) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return validate(values, userValidator);
+    };
+
+    const renderSlowForm = (onSubmit: (values: UserForm) => Promise<Result<UserForm, ValidationError[]>>) =>
+      renderHook(() => {
+        const form = useForm(slowUserValidator, { initialValues: initial, onSubmit });
+        useFormAutoSubmission(form, 50);
+        return form;
+      });
+
+    test('a held save waits for the validation of the values it would submit', async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result } = renderSlowForm(onSubmit);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // The edit comes due during the save, and is held
+      await sleep(150);
+      act(() => {
+        result.current.setFieldValue('name', '');
+      });
+      // The save settles while '' is still being validated
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      await sleep(150);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.submitCount).toBe(1);
+    });
+
+    test('a delay that ends while the latest values are still being validated waits for their result', async () => {
+      const { pending, gated } = createGatedValidator<UserForm>();
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result } = renderHook(() => {
+        const form = useForm(gated, { initialValues: initial, onSubmit });
+        useFormAutoSubmission(form, 50);
+        return form;
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // Jane passes: its delay starts
+      await act(async () => {
+        for (const check of pending) check.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+      act(() => {
+        result.current.setFieldValue('name', '');
+      });
+      // The delay ends while '' is still being validated
+      await sleep(150);
+
+      expect(result.current.submitCount).toBe(0);
     });
   });
 
