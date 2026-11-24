@@ -40,6 +40,9 @@ export type DeepPartial<T> = T extends Date | RegExp | File | Blob
       ? { [K in keyof T]?: DeepPartial<T[K]> }
       : T;
 
+/** Identifies the record a form edits. Compared with `Object.is`. */
+export type ResetKey = string | number | bigint | boolean | null | undefined;
+
 /**
  * Internal state maintained by the form hook.
  *
@@ -118,6 +121,33 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * Useful in submit mode for patterns like `submitCount === 0 || form.isValid`.
    */
   submitCount: number;
+
+  /** The last `initialValues` synced, compared by content. */
+  lastVersion: TValues;
+
+  /** The values when the form last had no unsaved edits. */
+  cleanValues: TValues;
+
+  /**
+   * The version the edits are based on. Undefined after a successful submit, until the server's
+   * answer arrives.
+   */
+  baseVersion: TValues | undefined;
+
+  /** Whether someone else changed the record under unsaved edits. `UseFormReturn.isStale` also reads false while `isSubmitting`. */
+  isStale: boolean;
+
+  /** The `resetKey` of the latest sync. */
+  resetKey: ResetKey;
+
+  /** Increments on each `resetKey` reset. A submission's writes land only in the generation it started in. */
+  generation: number;
+
+  /**
+   * Increments on each follow, `RESET_FORM` and `resetKey` reset. Async validation results and
+   * `SUBMIT_SUCCEEDED` land only in the epoch they started in.
+   */
+  baselineEpoch: number;
 }
 
 /**
@@ -968,6 +998,24 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  * });
  */
 export type FormAction<TValues extends Record<string, unknown>> =
+  | {
+      /** Syncs a new `initialValues` version and `resetKey` into the form state */
+      type: 'SYNC_INITIAL_VALUES';
+      /** The `initialValues` of the latest render */
+      initialValues: TValues;
+      /** The `resetKey` of the latest render */
+      resetKey: ResetKey;
+    }
+  | {
+      /** Records a successful submission */
+      type: 'SUBMIT_SUCCEEDED';
+      /** The values that were submitted */
+      values: TValues;
+      /** The `baselineEpoch` when the submission started */
+      baselineEpoch: number;
+      /** The `lastVersion` when the submission started */
+      lastVersion: TValues;
+    }
   | {
       /** Updates a single field value and optionally triggers validation */
       type: 'SET_FIELD_VALUE';

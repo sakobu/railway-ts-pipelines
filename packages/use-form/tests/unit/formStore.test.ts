@@ -1,22 +1,13 @@
 import { describe, test, expect, mock } from 'bun:test';
 
+import { createInitialFormState } from '../../src/formReducer';
 import { createFormStore } from '../../src/formStore';
 
 import type { FormState } from '../../src/types';
 
 type Values = { name: string };
 
-const initialState: FormState<Values> = {
-  values: { name: '' },
-  touched: {},
-  clientErrors: {},
-  serverErrors: {},
-  fieldErrors: {},
-  validatingFields: {},
-  isSubmitting: false,
-  isFormValidating: false,
-  submitCount: 0,
-};
+const initialState: FormState<Values> = createInitialFormState({ name: '' }, undefined);
 
 describe('createFormStore', () => {
   test('dispatch applies the reducer immediately', () => {

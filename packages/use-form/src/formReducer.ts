@@ -1,6 +1,55 @@
-import { deepMerge, getValueByPath, normalizePath, normalizePathKeys, pathsOverlap, setValueByPath } from './utils';
+import {
+  deepEqual,
+  deepMerge,
+  getValueByPath,
+  normalizePath,
+  normalizePathKeys,
+  pathsOverlap,
+  setValueByPath,
+} from './utils';
 
-import type { FieldPath, FormAction, FormState } from './types';
+import type { FieldPath, FormAction, FormState, ResetKey } from './types';
+
+/** Creates the state of a form that has just mounted on `initialValues`. */
+export const createInitialFormState = <TValues extends Record<string, unknown>>(
+  initialValues: TValues,
+  resetKey: ResetKey,
+): FormState<TValues> => ({
+  values: initialValues,
+  touched: {},
+  clientErrors: {},
+  serverErrors: {},
+  fieldErrors: {},
+  validatingFields: {},
+  isSubmitting: false,
+  isFormValidating: false,
+  submitCount: 0,
+  lastVersion: initialValues,
+  cleanValues: initialValues,
+  baseVersion: initialValues,
+  isStale: false,
+  resetKey,
+  generation: 0,
+  baselineEpoch: 0,
+});
+
+/** Shows `version`, and treats it as clean and as the base of any later edits. */
+const followVersion = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  version: TValues,
+): FormState<TValues> => {
+  const { submitError: _submitError, ...rest } = state;
+  return {
+    ...rest,
+    values: version,
+    serverErrors: {},
+    lastVersion: version,
+    cleanValues: version,
+    baseVersion: version,
+    isStale: false,
+    baselineEpoch: state.baselineEpoch + 1,
+  };
+};
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
@@ -76,6 +125,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...rest,
         values: newValues,
         serverErrors: newServerErrors,
+        isStale: state.isStale && !deepEqual(newValues, state.lastVersion),
       };
     }
 
@@ -97,6 +147,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...rest,
         values: newValues,
         serverErrors: newServerErrors,
+        isStale: state.isStale && !deepEqual(newValues, state.lastVersion),
       };
     }
 
@@ -183,16 +234,42 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 
     case 'RESET_FORM':
       return {
-        values: initialValues,
-        touched: {},
-        clientErrors: {},
-        serverErrors: {},
-        fieldErrors: {},
-        validatingFields: {},
-        isSubmitting: false,
-        isFormValidating: false,
-        submitCount: 0,
+        ...createInitialFormState(initialValues, state.resetKey),
+        generation: state.generation,
+        baselineEpoch: state.baselineEpoch + 1,
       };
+
+    case 'SYNC_INITIAL_VALUES': {
+      const { initialValues: version, resetKey } = action;
+      if (!Object.is(resetKey, state.resetKey)) {
+        return {
+          ...createInitialFormState(version, resetKey),
+          generation: state.generation + 1,
+          baselineEpoch: state.baselineEpoch + 1,
+        };
+      }
+      if (deepEqual(version, state.lastVersion)) return state;
+      if (deepEqual(state.values, state.cleanValues)) return followVersion(state, version);
+      const baseVersion = state.baseVersion ?? version;
+      return {
+        ...state,
+        lastVersion: version,
+        baseVersion,
+        isStale: !deepEqual(state.values, version) && !deepEqual(baseVersion, version),
+      };
+    }
+
+    case 'SUBMIT_SUCCEEDED': {
+      if (action.baselineEpoch !== state.baselineEpoch) return state;
+      // Within one epoch only a version arriving while the form has edits moves lastVersion
+      if (state.lastVersion === action.lastVersion) {
+        // None arrived while the submission ran: the next one to arrive is the server's answer
+        return { ...state, cleanValues: action.values, baseVersion: undefined, isStale: false };
+      }
+      // One arrived: the server's answer, delivered before onSubmit returned
+      if (deepEqual(state.values, action.values)) return followVersion(state, state.lastVersion);
+      return { ...state, cleanValues: action.values, baseVersion: state.lastVersion, isStale: false };
+    }
 
     case 'MARK_ALL_TOUCHED': {
       const allTouched: Record<FieldPath, boolean> = {};

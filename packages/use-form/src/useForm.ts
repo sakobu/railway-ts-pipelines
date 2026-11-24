@@ -28,6 +28,7 @@ import {
   createNativeFileFieldProps,
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
+import { createInitialFormState } from './formReducer';
 import { createFormStore } from './formStore';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
@@ -212,20 +213,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // The state lives in a store, so every method reads the state left by the calls before it,
   // not the state of the last render. React renders from the store.
   const [store] = useState(() =>
-    createFormStore<TValues>(
-      {
-        values: initialValues,
-        touched: {},
-        clientErrors: {},
-        serverErrors: {},
-        fieldErrors: {},
-        validatingFields: {},
-        isSubmitting: false,
-        isFormValidating: false,
-        submitCount: 0,
-      },
-      () => initialValuesRef.current,
-    ),
+    createFormStore<TValues>(createInitialFormState(initialValues, undefined), () => initialValuesRef.current),
   );
   const formState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { dispatch } = store;
