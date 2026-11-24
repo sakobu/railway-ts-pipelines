@@ -1514,6 +1514,35 @@ describe('useForm', () => {
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
     });
 
+    test('messages.submitFailed replaces the generic submit error', async () => {
+      silenceConsoleError();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: validValues,
+          onSubmit: () => {
+            throw new Error('Network error');
+          },
+          messages: { submitFailed: 'Algo salió mal.' },
+        }),
+      );
+
+      const submitResult = await act(() => result.current.handleSubmit());
+
+      expect(submitResult).toEqual(err([{ path: [], message: 'Algo salió mal.' }]));
+      expect(result.current.errors._root).toBe('Algo salió mal.');
+    });
+
+    test('an inline messages object keeps handleSubmit the same', () => {
+      const { result, rerender } = renderHook(() =>
+        useForm(userValidator, { initialValues: validValues, messages: { submitFailed: 'Algo salió mal.' } }),
+      );
+      const before = result.current.handleSubmit;
+
+      rerender();
+
+      expect(result.current.handleSubmit).toBe(before);
+    });
+
     test('a thrown onSubmit leaves isValid true', async () => {
       silenceConsoleError();
       const { result } = renderHook(() =>

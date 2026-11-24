@@ -244,7 +244,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * If it throws, rejects, or returns anything else, `handleSubmit` resolves to
    * `err([{ path: [], message: "Something went wrong. Please try again." }])`, which becomes the submit error.
-   * The original error is logged with `console.error`.
+   * The original error is logged with `console.error`. `messages.submitFailed` replaces the text.
    *
    * With an explicit type argument, `useForm<TValues>` fixes the success value to the form values.
    * For an `onSubmit` that returns `Result<User, …>`, write `useForm<TValues, User>` or drop the type arguments.
@@ -338,6 +338,37 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * @param values - The complete form values after the change
    */
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+
+  /**
+   * Replaces the submit errors useForm writes itself, for other wording or a translation. Each one is
+   * shown at `errors._root` and returned in `handleSubmit`'s `err`. Errors that come from the schema,
+   * the field validators or `onSubmit` are yours already, so they aren't listed here.
+   *
+   * @example
+   * useForm(schema, {
+   *   initialValues,
+   *   messages: {
+   *     submitFailed: t('form.submitFailed'),
+   *     changedWhileSaving: t('form.changedWhileSaving'),
+   *   },
+   * });
+   */
+  messages?: FormMessages;
+}
+
+/** The submit errors useForm writes itself. Each one has an English default. */
+export interface FormMessages {
+  /**
+   * A submission threw, or `onSubmit` returned neither a `Result` nor nothing.
+   * Default: "Something went wrong. Please try again."
+   */
+  submitFailed?: string;
+
+  /**
+   * A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite.
+   * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
+   */
+  changedWhileSaving?: string;
 }
 
 // =============================================================================
@@ -1272,10 +1303,12 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent
    * - `err` with the validation errors, or with `onSubmit`'s `err`
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
-   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error.
+   *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`
+   *   replaces the text.
    * - `err` with a submit error, without calling `onSubmit`, when the save would overwrite a newer `initialValues`:
    *   one that arrived while it validated and made the form stale or was followed, or one that made the form
    *   stale while a running submission hid `isStale`. A save started while `isStale` read true still goes out.
+   *   `messages.changedWhileSaving` sets the text.
    *
    * @example
    * <form onSubmit={form.handleSubmit}>

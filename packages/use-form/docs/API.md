@@ -74,6 +74,8 @@ Configuration object.
   };
   onValuesChange?: (values: TValues, prevValues: TValues) => void;
   onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+  // Replaces the submit errors useForm writes itself; see messages below
+  messages?: { submitFailed?: string; changedWhileSaving?: string };
 }
 ```
 
@@ -242,6 +244,28 @@ onFieldChange: (field, value) => {
 onFieldChange: (field, value, values) => {
   analytics.track('field_edited', { field });
 },
+```
+
+#### messages
+
+Type: `FormMessages`
+Optional
+
+Replaces the submit errors useForm writes itself, for other wording or a translation. Each one shows at `errors._root` and comes back in `handleSubmit`'s `err`. Errors from the schema, the field validators and `onSubmit` are already yours, so they aren't here.
+
+| Key                  | When                                                                                                                                      | Default                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `submitFailed`       | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                 | "Something went wrong. Please try again."                                                          |
+| `changedWhileSaving` | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit)) | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+
+```typescript
+const form = useForm(contactSchema, {
+  initialValues,
+  messages: {
+    submitFailed: t('form.submitFailed'),
+    changedWhileSaving: t('form.changedWhileSaving'),
+  },
+});
 ```
 
 ## Form State
@@ -576,7 +600,7 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 
 **Returns:** `Promise<Result<TResult, ValidationError[]>>` -- `Ok` with `onSubmit`'s `ok` value (the validated values when `onSubmit` returns nothing or is absent), `Err` with validation errors or `onSubmit`'s `err` on failure.
 
-**It never rejects.** A throw in the schema validator, a field validator or `onSubmit`, or an `onSubmit` value that is neither `undefined` nor a `Result`, is logged with `console.error('Form submission error:', error)` and resolves to `err([{ path: [], message: 'Something went wrong. Please try again.' }])`. That error becomes the submit error at `form.errors._root`, and `isSubmitting` and `isValidating` reset.
+**It never rejects.** A throw in the schema validator, a field validator or `onSubmit`, or an `onSubmit` value that is neither `undefined` nor a `Result`, is logged with `console.error('Form submission error:', error)` and resolves to `err([{ path: [], message: 'Something went wrong. Please try again.' }])`. That error becomes the submit error at `form.errors._root`, and `isSubmitting` and `isValidating` reset. [`messages.submitFailed`](#messages) replaces the text.
 
 **Overlapping submits:**
 
@@ -588,7 +612,7 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 - one that arrived while it validated, and made the form stale or was followed
 - one that made the form stale while a running submission hid `isStale`, as for a follow-up queued behind a save that then failed
 
-Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. A save started while `isStale` read true still goes out: the app chose to overwrite.
+Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite.
 
 **What it does:**
 

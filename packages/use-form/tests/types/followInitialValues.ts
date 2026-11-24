@@ -46,3 +46,17 @@ export function writeMaps(form: UseFormReturn<Flat>) {
   const touched: Record<string, boolean> = form.touched;
   return touched.name === true && form.errors.name !== undefined;
 }
+
+export function useMessages() {
+  // Replaces the built-in submit errors, for wording or translation
+  useForm(flat, {
+    initialValues: { name: '' },
+    messages: { submitFailed: 'Algo salió mal.', changedWhileSaving: 'Otra persona cambió este registro.' },
+  });
+
+  useForm(flat, {
+    initialValues: { name: '' },
+    // @ts-expect-error only the built-in submit errors can be replaced
+    messages: { required: 'Required' },
+  });
+}

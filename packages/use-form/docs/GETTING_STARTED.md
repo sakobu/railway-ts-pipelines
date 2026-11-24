@@ -239,7 +239,7 @@ Three things to know about server errors:
 
 You can also set server errors yourself, for example from a mutation callback: `form.setServerErrors([{ path: ['username'], message: 'Username already taken' }])` takes the same `ValidationError[]`.
 
-`handleSubmit` accepts an optional event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard). It never rejects: if a validator or `onSubmit` throws, it logs the error and resolves to an `err` that shows as the submit error ("Something went wrong. Please try again."). An `onSubmit` must return nothing or a `Result`; any other value is treated the same way.
+`handleSubmit` accepts an optional event. When passed, it calls `e.preventDefault()` automatically. You can also call `handleSubmit()` without an event -- useful for programmatic submission (e.g., after a "Next" button in a wizard). It never rejects: if a validator or `onSubmit` throws, it logs the error and resolves to an `err` that shows as the submit error ("Something went wrong. Please try again.", or your own via [`messages`](./API.md#messages)). An `onSubmit` must return nothing or a `Result`; any other value is treated the same way.
 
 `handleSubmit` also resolves to a `Result`, so you can pattern-match on the outcome where you call it, for example to navigate once `onSubmit` returns `ok`. See [Recipes](./RECIPES.md#pattern-matching-submit-results) for that pattern.
 

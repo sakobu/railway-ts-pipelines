@@ -135,7 +135,7 @@ For form-level errors (network failures, rate limiting), use a path-`[]` error. 
 form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]);
 ```
 
-If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again."
+If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again." [`messages.submitFailed`](./API.md#messages) replaces it.
 
 ---
 

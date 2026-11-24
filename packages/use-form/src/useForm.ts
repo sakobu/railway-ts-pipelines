@@ -62,10 +62,10 @@ import type {
   UseFormReturn,
 } from './types';
 
-/** The submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
+/** The default submit error for a submission that threw, or whose `onSubmit` returned neither a `Result` nor nothing. */
 const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
-/** The submit error for a save cancelled before `onSubmit`, because it would overwrite a newer version. */
+/** The default submit error for a save cancelled before `onSubmit`, because it would overwrite a newer version. */
 const CHANGED_WHILE_SAVING_MESSAGE =
   'The record changed while saving, so nothing was saved. Review the latest version and save again.';
 
@@ -238,7 +238,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   validatorOrSchema: FormValidator<TValues>,
   options: FormOptions<TValues, TResult>,
 ): UseFormReturn<TValues, TResult> => {
-  const { initialValues, resetKey, onSubmit, validationMode, fieldValidators, onValuesChange, onFieldChange } = options;
+  const {
+    initialValues,
+    resetKey,
+    onSubmit,
+    validationMode,
+    fieldValidators,
+    onValuesChange,
+    onFieldChange,
+    messages,
+  } = options;
+
+  // The submit errors useForm writes itself. Read out as strings, so an inline `messages` object keeps the methods
+  // the same.
+  const submitFailedMessage = messages?.submitFailed ?? SUBMIT_ERROR_MESSAGE;
+  const changedWhileSavingMessage = messages?.changedWhileSaving ?? CHANGED_WHILE_SAVING_MESSAGE;
 
   // Normalize: if a Standard Schema v1 object was passed, adapt it into a MaybeAsyncValidator.
   // useMemo ensures referential stability since fromStandardSchema creates a new function.
@@ -1067,8 +1081,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
           // The last check before the save goes out
           if (isOvertaken()) {
-            send({ type: 'SET_SUBMIT_ERROR', submitError: CHANGED_WHILE_SAVING_MESSAGE });
-            return err([{ path: [], message: CHANGED_WHILE_SAVING_MESSAGE }]);
+            send({ type: 'SET_SUBMIT_ERROR', submitError: changedWhileSavingMessage });
+            return err([{ path: [], message: changedWhileSavingMessage }]);
           }
 
           const outcome = onSubmit ? await onSubmit(validData) : undefined;
@@ -1107,11 +1121,20 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         console.error('Form submission error:', error);
 
         // Sets only the submit error: field errors placed during the submission stay
-        send({ type: 'SET_SUBMIT_ERROR', submitError: SUBMIT_ERROR_MESSAGE });
-        return err([{ path: [], message: SUBMIT_ERROR_MESSAGE }]);
+        send({ type: 'SET_SUBMIT_ERROR', submitError: submitFailedMessage });
+        return err([{ path: [], message: submitFailedMessage }]);
       }
     },
-    [store, validator, onSubmit, fieldValidators, runFollowEffects, dispatchIn],
+    [
+      store,
+      validator,
+      onSubmit,
+      fieldValidators,
+      runFollowEffects,
+      dispatchIn,
+      submitFailedMessage,
+      changedWhileSavingMessage,
+    ],
   );
 
   /**

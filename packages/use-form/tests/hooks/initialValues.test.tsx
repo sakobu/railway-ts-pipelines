@@ -493,11 +493,14 @@ describe('saving', () => {
     'The record changed while saving, so nothing was saved. Review the latest version and save again.';
 
   /** A form in submit mode, so only the submission calls the gated validator. */
-  const renderGatedForm = (onSubmit: (values: PublishForm) => void) => {
+  const renderGatedForm = (
+    onSubmit: (values: PublishForm) => void,
+    options: Omit<FormOptions<PublishForm>, 'initialValues' | 'onSubmit'> = {},
+  ) => {
     const gate = createGatedValidator<PublishForm>();
     const rendered = renderHook(
       ({ initial }: { initial: PublishForm }) =>
-        useForm(gate.gated, { initialValues: initial, onSubmit, validationMode: 'submit' }),
+        useForm(gate.gated, { initialValues: initial, onSubmit, validationMode: 'submit', ...options }),
       { initialProps: { initial: draft } },
     );
     return { ...rendered, pending: gate.pending };
@@ -524,6 +527,27 @@ describe('saving', () => {
     expect(result.current.errors._root).toBe(CHANGED_WHILE_SAVING);
     expect(result.current.isStale).toBe(true);
     expect(result.current.values.title).toBe('Mine');
+  });
+
+  test('messages.changedWhileSaving replaces the message of a cancelled save', async () => {
+    const { result, rerender, pending } = renderGatedForm(() => {}, {
+      messages: { changedWhileSaving: 'Otra persona cambió este registro.' },
+    });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ initial: { ...draft, status: 'published' } });
+    let outcome!: Awaited<typeof submitting>;
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, title: 'Mine' }));
+      outcome = await submitting;
+    });
+
+    expect(outcome).toEqual(err([{ path: [], message: 'Otra persona cambió este registro.' }]));
+    expect(result.current.errors._root).toBe('Otra persona cambió este registro.');
   });
 
   test('a version followed while the save validates cancels it too', async () => {
