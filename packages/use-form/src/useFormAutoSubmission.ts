@@ -14,7 +14,7 @@ type FormWithAutoSubmit<T> = {
   /** When true, auto-submission waits: a save would overwrite a newer version of the record. Optional, so any form-like object still fits. */
   isStale?: boolean;
   validateForm: (values: T) => { ok: boolean } | Promise<{ ok: boolean }>;
-  /** Its result, when a promise, marks when the save settles. */
+  /** Its result, when a promise, marks when the save settles. A throw or rejection is logged with `console.error`, and auto-save carries on. */
   handleSubmit: () => unknown;
 };
 
@@ -30,8 +30,9 @@ type FormWithAutoSubmit<T> = {
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
  * An edit made during a save goes out as soon as that save settles, unless the form is then stale.
- * After a `resetKey` switch, the new record's auto-save waits for the previous record's running save,
+ * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
  * and goes out as soon as it settles.
+ * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on.
  *
  * @template T - The type of form values
  *
@@ -92,7 +93,7 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
 
   const debouncedSubmit = useDebounce(() => {
     if (!isValid) return;
-    // The effect already forgot the validated values, so it submits them once the form is no longer stale
+    // While the form is stale, the effect forgets the validated values, so it submits them once it no longer is
     if (isStale) return;
     if (savingRef.current) {
       heldRef.current = true;

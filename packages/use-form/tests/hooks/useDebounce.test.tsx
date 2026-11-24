@@ -112,7 +112,8 @@ describe('useDebounce', () => {
     expect(callback).toHaveBeenCalledWith('test value');
     expect(callback).toHaveBeenCalledTimes(1);
   });
-  test("a timer that comes due before the commit's passive effects run the callback of that commit", () => {
+
+  test("a timer that comes due before the commit's passive effects runs that commit's callback", () => {
     // Capture the timer, so the test can fire it between the commit and its passive effects
     let fire: (() => void) | undefined;
     const setTimeoutSpy = spyOn(globalThis, 'setTimeout').mockImplementation(((handler: () => void) => {
