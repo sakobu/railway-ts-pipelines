@@ -106,7 +106,7 @@ Two packages, five pieces. Each piece is its own import, so you only ship what y
 - **Option**: values that may be missing, without null checks. [API](packages/pipelines/docs/API.md#option)
 - **Composition**: `pipe` and `flow`, plus async versions that await each step. [API](packages/pipelines/docs/API.md#composition)
 - **Schema**: parse unknown input into typed values, collecting every error in one pass. [API](packages/pipelines/docs/API.md#schema)
-- **use-form**: a React form hook driven by the schema, with typed field paths, native input bindings, async field checks and server errors. [API](packages/use-form/docs/API.md)
+- **use-form**: a React form hook driven by the schema, with typed field paths, native input bindings, async field checks, server errors, and edit forms that follow refetched records without losing the user's edits. [API](packages/use-form/docs/API.md)
 
 ```bash
 bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
