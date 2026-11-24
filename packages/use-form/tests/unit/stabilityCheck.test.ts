@@ -51,6 +51,27 @@ describe('createStabilityCheck', () => {
     expect(formUpdate(true)).toBe(true);
   });
 
+  test("a version that echoes the form's values resets the count, as one that held still", () => {
+    // A wrapper feeding the values back as initialValues: the version arrives with the form's own change
+    const echo = () => {
+      const after = fresh();
+      const reported = check.record(fresh(), true, after, true);
+      check.record(after, false, after);
+      last = after;
+      return reported;
+    };
+
+    expect(formUpdate(true)).toBe(false);
+    expect(formUpdate(true)).toBe(false);
+    expect(echo()).toBe(false);
+    expect(echo()).toBe(false);
+    expect(echo()).toBe(false);
+    expect(formUpdate(true)).toBe(false);
+    expect(formUpdate(true)).toBe(false);
+
+    expect(formUpdate(true)).toBe(true);
+  });
+
   test('a form update where initialValues held still resets the count', () => {
     expect(formUpdate(true)).toBe(false);
     expect(formUpdate(true)).toBe(false);

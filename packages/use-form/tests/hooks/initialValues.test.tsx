@@ -871,6 +871,51 @@ describe('initialValues that changes on its own', () => {
     expect((getByLabelText('status') as HTMLInputElement).value).toBe('g');
   });
 
+  test('logs it when the parent also re-renders from onValuesChange', () => {
+    // Stands in for new Date() at typing speed: it moves before each keystroke, and before the render that
+    // onValuesChange causes
+    let clock = 0;
+    const Previewed = () => {
+      const [, setPreview] = useState<PublishForm>();
+      const form = useForm(publishValidator, {
+        initialValues: { ...draft, title: `t${clock}` },
+        onValuesChange: (values) => {
+          if (values.status !== draft.status) clock += 1;
+          setPreview(values);
+        },
+      });
+      return <input aria-label="status" {...form.getFieldProps('status')} />;
+    };
+    const { getByLabelText } = render(<Previewed />);
+    const type = (value: string) => {
+      clock += 1;
+      fireEvent.change(getByLabelText('status'), { target: { value } });
+    };
+
+    type('a');
+    type('b');
+    type('c');
+
+    expect(reports()).toBe(1);
+  });
+
+  test("a wrapper that feeds the values back as initialValues logs nothing: the version echoes the form's values", () => {
+    const Controlled = () => {
+      const [value, setValue] = useState(draft);
+      const form = useForm(publishValidator, {
+        initialValues: value,
+        onFieldChange: (_field, _value, values) => setValue(values),
+      });
+      return <input aria-label="title" {...form.getFieldProps('title')} />;
+    };
+    const { getByLabelText } = render(<Controlled />);
+
+    for (const value of ['a', 'ab', 'abc', 'abcd']) fireEvent.change(getByLabelText('title'), { target: { value } });
+
+    expect((getByLabelText('title') as HTMLInputElement).value).toBe('abcd');
+    expect(reports()).toBe(0);
+  });
+
   test("a parent's layout effect that adjusts initialValues during a follow logs nothing", () => {
     const Child = ({ data, extra }: { data: PublishForm; extra: number }) => {
       const form = useForm(publishValidator, { initialValues: { ...data, tags: [String(extra)] } });

@@ -209,7 +209,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * data the same way on every render.
    *
    * A value that changes on its own (`crypto.randomUUID()`, `new Date()`, storage read during render)
-   * makes renders look like new versions, and `useForm` logs an error naming the cause.
+   * makes renders look like new versions, and `useForm` logs an error naming the cause when it notices. One it
+   * misses still shows: the form turns stale after every edit.
    * Create such values once, at module scope or with `useState(() => …)`.
    *
    * A `Set`, a `Map` and a class instance with no own properties, such as a Temporal date, compare by

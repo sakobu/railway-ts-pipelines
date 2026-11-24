@@ -666,7 +666,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       }
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
-    if (stabilityCheck.record(storedState, next !== prev, store.getState())) {
+    // A version equal to the values the render used came from the form's own state.
+    const echo = next !== prev && deepEqual(initialValues, storedState.values);
+    if (stabilityCheck.record(storedState, next !== prev, store.getState(), echo)) {
       console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);
     }
   }, [

@@ -14,16 +14,18 @@ export type StabilityCheck<TState> = {
    * @param rendered - The state the render used
    * @param changed - Whether the sync changed the state
    * @param after - The state once the sync and its side effects are done
+   * @param echo - Whether the new version equals the values the render used, as when a wrapper feeds the
+   *   values back as `initialValues`. It came from the form's own state, so it doesn't change on its own.
    * @returns `true` once per check: the first time `initialValues` looks like it changes on its own
    */
-  record: (rendered: TState, changed: boolean, after: TState) => boolean;
+  record: (rendered: TState, changed: boolean, after: TState, echo?: boolean) => boolean;
 };
 
 /**
  * Creates a {@link StabilityCheck}. Each sync falls into one of three kinds of render, and the kind
  * decides the count of suspect versions:
  *
- * | Render | The sync changed the state | It didn't |
+ * | Render | The sync changed the state | It didn't, or the version echoes the values |
  * | --- | --- | --- |
  * | outside: the state is what the last sync saw | reset to 0 | keep |
  * | catch-up: the state is what the last changing sync left | +1 | keep |
@@ -44,7 +46,7 @@ export const createStabilityCheck = <TState>(): StabilityCheck<TState> => {
   let suspect = 0;
   let reported = false;
 
-  const record = (rendered: TState, changed: boolean, after: TState): boolean => {
+  const record = (rendered: TState, changed: boolean, after: TState, echo = false): boolean => {
     // Outside: the state is what the last sync saw. Catch-up: exactly what the last changing sync left.
     // Any other state came from a form update: a keystroke, a blur, a validation result, an app write.
     const formChanged = rendered !== lastSeen;
@@ -52,8 +54,9 @@ export const createStabilityCheck = <TState>(): StabilityCheck<TState> => {
     lastSeen = rendered;
     lastSynced = changed ? after : undefined;
 
-    if (!changed) {
-      // The form's state changed and initialValues held still, so it doesn't change on its own
+    if (!changed || echo) {
+      // The form's state changed and initialValues held still, or followed the form's values, so it doesn't
+      // change on its own
       if (formChanged && !catchUp) suspect = 0;
       return false;
     }

@@ -8,7 +8,7 @@ Forms now follow new `initialValues`. **Behavior change:** before, a form kept t
 
 New `resetKey` option: pass the loaded record's id (`resetKey: data?.id`). When it changes, the form starts over as if remounted, without remounting the component. Results of a save or validation still running for the previous record don't land on the new one.
 
-`initialValues` must be built the same way on every render. A value that changes on its own, such as `crypto.randomUUID()`, `new Date()` or storage read during render, makes renders look like new versions. `useForm` now logs an error naming the cause. Create generated values once, at module scope or with `useState(() => …)`. A `Set`, `Map` or Temporal value compares by identity, so build it with `useMemo`, keyed on the data it comes from, or use an array or plain object.
+`initialValues` must be built the same way on every render. A value that changes on its own, such as `crypto.randomUUID()`, `new Date()` or storage read during render, makes renders look like new versions. `useForm` now logs an error naming the cause when it notices one. A form that shows `isStale` after every edit is the other sign. Create generated values once, at module scope or with `useState(() => …)`. A `Set`, `Map` or Temporal value compares by identity, so build it with `useMemo`, keyed on the data it comes from, or use an array or plain object.
 
 `resetForm()` no longer lets an async validation still running for the discarded values write its errors onto the reset form.
 
