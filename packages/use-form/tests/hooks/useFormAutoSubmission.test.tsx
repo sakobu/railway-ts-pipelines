@@ -869,6 +869,75 @@ describe('useFormAutoSubmission', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Jane' }]);
     });
 
+    describe("a resetKey switch drops the previous record's unsent edits", () => {
+      const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
+      const renderSwitchingForm = (
+        onSubmit: (values: UserForm) => Promise<Result<UserForm, ValidationError[]>>,
+        delay: number,
+      ) =>
+        renderHook(
+          ({ values, id }: { values: UserForm; id: string }) => {
+            const form = useForm(userValidator, { initialValues: values, resetKey: id, onSubmit });
+            useFormAutoSubmission(form, delay);
+            return form;
+          },
+          { initialProps: { values: initial, id: 'a' } },
+        );
+
+      test('one held behind a running save', async () => {
+        const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+        const { result, rerender } = renderSwitchingForm(onSubmit, 50);
+
+        act(() => {
+          result.current.setFieldValue('name', 'Jane');
+        });
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+        act(() => {
+          result.current.setFieldValue('name', 'Janet');
+        });
+        // The edit comes due during the save: it's held
+        await sleep(150);
+
+        rerender({ values: other, id: 'b' });
+        await act(async () => {
+          saves[0]!.resolve(undefined);
+          await nextTask();
+        });
+        await sleep(150);
+
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+      });
+
+      test("and its hold doesn't send the new record's edit before that edit's delay ends", async () => {
+        const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+        const { result, rerender } = renderSwitchingForm(onSubmit, 200);
+
+        act(() => {
+          result.current.setFieldValue('name', 'Jane');
+        });
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+        act(() => {
+          result.current.setFieldValue('name', 'Janet');
+        });
+        // The edit comes due during the save: it's held
+        await sleep(250);
+
+        rerender({ values: other, id: 'b' });
+        act(() => {
+          result.current.setFieldValue('name', 'Bobby');
+        });
+        await act(async () => {
+          saves[0]!.resolve(undefined);
+          await nextTask();
+        });
+        await sleep(50);
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+        expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
+      });
+    });
+
     test("a failed save's field error about a value edited during it doesn't stop the edit's save", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result } = renderAutoSubmitForm(onSubmit, 50);
@@ -994,6 +1063,20 @@ describe('useFormAutoSubmission', () => {
 
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(result.current.submitCount).toBe(1);
+    });
+
+    test("an edit whose validation finishes after the form unmounted isn't saved", async () => {
+      const onSubmit = mock((_values: UserForm) => Promise.resolve(ok(initial)));
+      const { result, unmount } = renderSlowForm(onSubmit);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // Unmounted while the edit is still being validated
+      unmount();
+      await sleep(200);
+
+      expect(onSubmit).not.toHaveBeenCalled();
     });
 
     test('a delay that ends while the latest values are still being validated waits for their result', async () => {

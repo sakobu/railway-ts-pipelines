@@ -1343,6 +1343,8 @@ It saves values that differ from `initialValues` (`isDirty`). So pass what was s
 
 After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
 
+An edit it hasn't sent when the record switches or the form unmounts is dropped, like the form's other unsaved edits: one still in its delay, being validated, or waiting for a running save. A Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
+
 A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on. So is a `validateForm` that throws or rejects, and the values it checked aren't saved.
 
 ### Signature
@@ -1385,7 +1387,7 @@ useFormAutoSubmission(form, 500);
 
 ## useDebounce
 
-Hook for debouncing a callback function.
+Hook for debouncing a callback function. Unmounting cancels a call still waiting, and a call made after unmount does nothing, such as one from a promise that settles later.
 
 ### Signature
 

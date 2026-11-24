@@ -41,6 +41,9 @@ const logError = (error: unknown): void => {
  * It only submits values whose latest validation passed: values still being validated wait for their result.
  * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
  * and goes out as soon as it settles.
+ * An edit not sent yet when the record switches or the form unmounts is dropped, like the form's other unsaved
+ * edits: one still in its delay, being validated, or waiting for a running save. A Save the user clicked still goes
+ * out.
  * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on. So is one from
  * `validateForm`, and the values it checked aren't saved.
  *
@@ -126,11 +129,13 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       heldRef.current = false;
       return;
     }
-    // A clean form has nothing to save. Forgetting the validated and saved values lets an edit back to them, after
-    // a follow or a resetKey switch, be validated and saved: after a switch they're the previous record's.
+    // A clean form has nothing to save: a held save is dropped. Forgetting the validated and saved values lets an
+    // edit back to them, after a follow or a resetKey switch, be validated and saved: after a switch they're the
+    // previous record's.
     if (!isDirty) {
       lastValidatedRef.current = null;
       savedRef.current = null;
+      heldRef.current = false;
     }
     if (heldRef.current && !savingRef.current) {
       // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go.

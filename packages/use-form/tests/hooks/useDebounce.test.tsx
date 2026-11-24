@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, spyOn } from 'bun:test';
 
 import { renderHook, act } from '@testing-library/react';
-import { useLayoutEffect } from 'react';
+import { StrictMode, useLayoutEffect } from 'react';
 
 import { useDebounce } from '../../src/useDebounce';
 
@@ -96,6 +96,30 @@ describe('useDebounce', () => {
 
     // Callback should not be called
     expect(callback).not.toHaveBeenCalled();
+  });
+
+  test('a call after unmount does nothing', async () => {
+    const callback = mock(() => {});
+    const { result, unmount } = renderHook(() => useDebounce(callback, 10));
+    const debounced = result.current;
+
+    unmount();
+    debounced();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  test('under StrictMode, calls still run after the simulated remount', async () => {
+    const callback = mock(() => {});
+    const { result } = renderHook(() => useDebounce(callback, 10), { wrapper: StrictMode });
+
+    act(() => {
+      result.current();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(callback).toHaveBeenCalledTimes(1);
   });
 
   test('handles zero delay', async () => {

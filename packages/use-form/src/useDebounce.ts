@@ -7,6 +7,9 @@ import { useRef, useCallback, useEffect, useInsertionEffect } from 'react';
  * Useful for optimizing performance by limiting the rate at which a function is called,
  * such as in response to rapid user input or scroll events.
  *
+ * Unmounting cancels a call still waiting, and a call made after unmount does nothing, such as one from a
+ * promise that settles later.
+ *
  * @template T - The callback function type
  * @template Params - The parameter types of the callback function
  * @template Return - The return type of the callback function
@@ -34,6 +37,7 @@ export function useDebounce<
 >(callback: T, delay: number): (...args: Params) => void {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbackRef = useRef(callback);
+  const unmountedRef = useRef(false);
 
   // Keep callback ref up-to-date. An insertion effect runs before any layout or passive effect of the commit,
   // so a timer that comes due after a commit never runs the previous render's callback.
@@ -41,9 +45,11 @@ export function useDebounce<
     callbackRef.current = callback;
   }, [callback]);
 
-  // Cleanup timeout on unmount
+  // Cancel the waiting call on unmount. Set again on mount, as StrictMode remounts.
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
+      unmountedRef.current = true;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
@@ -52,6 +58,7 @@ export function useDebounce<
 
   return useCallback(
     (...args: Params) => {
+      if (unmountedRef.current) return;
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
