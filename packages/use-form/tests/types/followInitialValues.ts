@@ -2,7 +2,7 @@ import * as S from '@railway-ts/pipelines/schema';
 
 import { useForm } from '../../src';
 
-import type { UseFormReturn } from '../../src';
+import type { ResetKey, UseFormReturn } from '../../src';
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
@@ -59,4 +59,9 @@ export function useMessages() {
     // @ts-expect-error only the built-in submit errors can be replaced
     messages: { required: 'Required' },
   });
+}
+
+// A wrapper that forwards resetKey names its type
+export function useRecordForm({ id }: { id: ResetKey }) {
+  return useForm(flat, { initialValues: { name: '' }, resetKey: id });
 }
