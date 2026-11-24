@@ -205,7 +205,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * The form follows new values while it has no unsaved edits, such as a refetched record. A form with
    * edits keeps them, and `isStale` reports that a newer version arrived. Values that equal the latest
-   * `initialValues` count as having no edits, except while a submission runs, when the version may be an
+   * `initialValues` count as having no edits, except while `isSubmitting`, when the version may be an
    * optimistic write.
    *
    * New values are compared by content, so an inline object is fine as long as it's built from the same
@@ -1260,8 +1260,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * when the user's edits come to match it. A `resetKey` change, a successful save, and the other
    * person undoing their change clear it too.
    *
-   * It reads false while a submission runs, since a version that arrives then may be the save's own
-   * answer. A failed save shows it again.
+   * It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own
+   * answer. While the submission is still validating, a newer version shows, and the save is then cancelled.
+   * A failed save shows it again.
    */
   isStale: boolean;
 

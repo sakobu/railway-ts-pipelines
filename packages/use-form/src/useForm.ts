@@ -1086,7 +1086,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         const isOvertaken = (): boolean => {
           const now = store.getState();
           if (now.generation !== generation) return false;
-          // A staleness the caller couldn't see, because isStale reads false while a submission runs
+          // A staleness the caller couldn't see, because isStale reads false while isSubmitting
           if (now.isStale && !staleShown) return true;
           if (now.lastVersion === lastVersion) return false;
           // A version that arrived since: the form went stale, or followed it and no longer shows these values

@@ -357,7 +357,7 @@ Type: `boolean`
 
 True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`. A `resetKey` change, a successful save, and the other person undoing their change clear it too.
 
-It reads false while a submission runs, since a version that arrives then may be the save's own answer. A failed save shows it again. A save that was waiting behind it, such as a queued Save or an auto-save, then isn't sent: see [`handleSubmit`](#handlesubmit).
+It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own answer. While the submission is still validating, before `isSubmitting` turns true, a newer version shows, and the save is then cancelled. A failed save shows it again. A save that was waiting behind it, such as a queued Save or an auto-save, then isn't sent: see [`handleSubmit`](#handlesubmit).
 
 ```typescript
 {form.isStale && (
