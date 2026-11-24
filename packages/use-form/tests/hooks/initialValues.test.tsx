@@ -1049,6 +1049,67 @@ describe('saving', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
+  describe("a second Save while the first save's answer is pending", () => {
+    /** Saves ' Mine ' once, with its answer still to come, then starts a second Save held in its field check. */
+    const startSecondSave = async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const onSubmit = mock((_values: PublishForm) => {});
+      const rendered = renderForm({ onSubmit, validationMode: 'submit', fieldValidators: { title: () => gate() } });
+      const { result } = rendered;
+
+      act(() => result.current.setFieldValue('title', ' Mine '));
+      let first!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        first = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(calls).toHaveLength(1));
+      await act(async () => {
+        calls[0]!.resolve(undefined);
+        await first;
+      });
+      expect(result.current.isDirty).toBe(true);
+
+      let second!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        second = result.current.handleSubmit();
+      });
+      await waitFor(() => expect(calls).toHaveLength(2));
+      const finish = async () => {
+        let outcome!: Awaited<typeof second>;
+        await act(async () => {
+          calls[1]!.resolve(undefined);
+          outcome = await second;
+        });
+        return outcome;
+      };
+      return { ...rendered, onSubmit, finish };
+    };
+
+    test("isn't cancelled when that answer arrives during it", async () => {
+      const { result, rerender, onSubmit, finish } = await startSecondSave();
+
+      // The first save's answer, trimmed by the server
+      rerender({ initial: { ...draft, title: 'Mine' } });
+      const outcome = await finish();
+
+      expect(outcome).toEqual(ok({ ...draft, title: ' Mine ' }));
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+      expect(result.current.errors._root).toBeUndefined();
+    });
+
+    test('is cancelled by a change from someone else that arrives after that answer', async () => {
+      const { result, rerender, onSubmit, finish } = await startSecondSave();
+
+      rerender({ initial: { ...draft, title: 'Mine' } });
+      rerender({ initial: { ...draft, title: 'Mine', status: 'published' } });
+      const outcome = await finish();
+
+      expect(outcome).toEqual(err([{ path: [], message: CHANGED_WHILE_SAVING }]));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.errors._root).toBe(CHANGED_WHILE_SAVING);
+    });
+  });
+
   test('a saved record equal to the version before the save keeps the typed values', async () => {
     const { result, rerender } = renderForm({ onSubmit: () => {} });
 

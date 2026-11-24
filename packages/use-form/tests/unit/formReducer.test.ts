@@ -752,6 +752,24 @@ describe('SYNC_INITIAL_VALUES', () => {
     expect(formReducer(s, sync({ ...v1 }), v1)).toBe(s);
   });
 
+  describe('otherVersions', () => {
+    test('counts a version that arrives, followed or not', () => {
+      expect(formReducer(s, sync(v2), v2).otherVersions).toBe(1);
+      expect(stale.otherVersions).toBe(1);
+    });
+
+    test("doesn't count the version that arrives while a save's answer is pending: it's that answer", () => {
+      const pending = { ...s, values: edited, cleanValues: edited, baseVersion: undefined };
+
+      expect(formReducer(pending, sync(v2), v2).otherVersions).toBe(0);
+      expect(formReducer({ ...pending, values: v1 }, sync(v2), v2).otherVersions).toBe(0);
+    });
+
+    test('resetForm() keeps the count', () => {
+      expect(formReducer(stale, { type: 'RESET_FORM' }, v2).otherVersions).toBe(1);
+    });
+  });
+
   test('follows a new version when the values equal cleanValues', () => {
     const result = formReducer(s, sync(v2), v2);
 

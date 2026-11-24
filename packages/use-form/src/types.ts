@@ -140,6 +140,12 @@ export interface FormState<TValues extends Record<string, unknown>> {
   /** Whether someone else changed the record under unsaved edits. `UseFormReturn.isStale` also reads false while `isSubmitting`. */
   isStale: boolean;
 
+  /**
+   * How many versions have arrived that weren't a save's answer: the one that arrives while the answer is pending is
+   * that answer. A submission tells by it whether a newer version arrived while it ran.
+   */
+  otherVersions: number;
+
   /** The `resetKey` of the latest sync. */
   resetKey: ResetKey;
 

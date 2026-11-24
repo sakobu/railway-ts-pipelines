@@ -1075,7 +1075,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
       try {
-        const { clientErrors, serverErrors, baselineEpoch, lastVersion } = store.getState();
+        const { clientErrors, serverErrors, baselineEpoch, lastVersion, otherVersions } = store.getState();
 
         // The validation's results describe the submitted values, so they land only while those values are
         // still the baseline: a follow of new initialValues or a resetForm() drops them
@@ -1088,7 +1088,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           if (now.generation !== generation) return false;
           // A staleness the caller couldn't see, because isStale reads false while isSubmitting
           if (now.isStale && !staleShown) return true;
-          if (now.lastVersion === lastVersion) return false;
+          // None arrived since, other than the previous save's answer: the save doesn't overwrite that save's own
+          if (now.otherVersions === otherVersions) return false;
           // A version that arrived since: the form went stale, or followed it and no longer shows these values
           return now.isStale || (!isBaseline() && !deepEqual(now.values, values));
         };

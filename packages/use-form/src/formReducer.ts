@@ -37,6 +37,7 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   cleanValues: initialValues,
   baseVersion: initialValues,
   isStale: false,
+  otherVersions: 0,
   resetKey,
   generation: 0,
   baselineEpoch: 0,
@@ -270,6 +271,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       const version = deepEqual(initialValues, state.lastVersion) ? state.lastVersion : initialValues;
       return {
         ...createInitialFormState(version, state.resetKey),
+        otherVersions: state.otherVersions,
         generation: state.generation,
         baselineEpoch: state.baselineEpoch + 1,
       };
@@ -285,9 +287,10 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         };
       }
       if (deepEqual(version, state.lastVersion)) return state;
-      if (deepEqual(state.values, state.cleanValues)) return followVersion(state, version);
-      // A version arriving while a save's answer is pending is that answer, and becomes the base
-      const arrived = { ...state, lastVersion: version, baseVersion: state.baseVersion ?? version };
+      // A version arriving while a save's answer is pending is that answer, and becomes the base. Any other counts.
+      const counted = state.baseVersion === undefined ? state : { ...state, otherVersions: state.otherVersions + 1 };
+      if (deepEqual(state.values, state.cleanValues)) return followVersion(counted, version);
+      const arrived = { ...counted, lastVersion: version, baseVersion: state.baseVersion ?? version };
       if (deepEqual(state.values, version)) {
         return latestIsSettled(arrived) ? settleOnLatest(arrived) : { ...arrived, isStale: false };
       }
