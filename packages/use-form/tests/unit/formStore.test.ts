@@ -43,6 +43,43 @@ describe('createFormStore', () => {
     expect(store.getState()).toBe(before);
   });
 
+  test('dispatchQuietly applies the reducer without notifying, and flush notifies once', () => {
+    const store = createFormStore(initialState, initialState.values);
+    const listener = mock(() => {});
+    store.subscribe(listener);
+
+    store.dispatchQuietly({ type: 'SET_FIELD_VALUE', field: 'name', value: 'Ada' });
+    expect(store.getState().values).toEqual({ name: 'Ada' });
+    expect(listener).not.toHaveBeenCalled();
+
+    store.flush();
+    store.flush();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test('a dispatch after dispatchQuietly notifies of both, so flush has nothing left', () => {
+    const store = createFormStore(initialState, initialState.values);
+    const listener = mock(() => {});
+    store.subscribe(listener);
+
+    store.dispatchQuietly({ type: 'SET_FIELD_VALUE', field: 'name', value: 'Ada' });
+    store.dispatch({ type: 'SET_FIELD_TOUCHED', field: 'name', isTouched: true });
+    store.flush();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test('flush does not notify when dispatchQuietly changed nothing', () => {
+    const store = createFormStore(initialState, initialState.values);
+    const listener = mock(() => {});
+    store.subscribe(listener);
+
+    store.dispatchQuietly({ type: 'SET_FIELD_VALUE', field: 'name', value: '' });
+    store.flush();
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   test('an unsubscribed listener is not notified', () => {
     const store = createFormStore(initialState, initialState.values);
     const listener = mock(() => {});

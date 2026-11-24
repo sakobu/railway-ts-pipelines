@@ -645,35 +645,53 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
-  // The store catches up with the synced state this render showed, then the side effects of a follow or a
-  // `resetKey` reset run.
-  // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
-  // that's how the stability check tells an outside render, a catch-up and a form update apart.
-  useLayoutEffect(() => {
-    const prev = store.getState();
-    dispatch({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
-    const next = store.getState();
-    if (next !== prev) {
-      if (next.generation !== prev.generation) {
-        // Started over. The old record's running submission and waiting follow-up still run as the old record's,
-        // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
-        submitSchedulerRef.current.retire(prev.values);
-        submitSchedulerRef.current = createSubmitScheduler();
+  // The state before this commit's sync, when the sync changed it. The layout effect below runs its side effects.
+  const syncedFromRef = useRef<FormState<TValues> | undefined>(undefined);
 
-        if (validateOnMount) validateAsOnMount(next.values);
-      } else if (next.baselineEpoch !== prev.baselineEpoch) {
-        runFollowEffects(prev, next);
+  // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
+  // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
+  // here: the sync, and on a resetKey reset, the switch to a fresh submit scheduler. Quietly, since an insertion
+  // effect mustn't schedule a render: the layout effect below notifies.
+  useInsertionEffect(() => {
+    const prev = store.getState();
+    store.dispatchQuietly({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
+    const next = store.getState();
+    if (next === prev) return;
+    syncedFromRef.current = prev;
+    if (next.generation !== prev.generation) {
+      // Started over. The old record's running submission and waiting follow-up still run as the old record's,
+      // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
+      submitSchedulerRef.current.retire(prev.values);
+      submitSchedulerRef.current = createSubmitScheduler();
+    }
+  });
+
+  // Renders the state the store caught up to, then runs the side effects of a follow or a `resetKey` reset on the
+  // values the form now holds.
+  // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
+  // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
+  // resetKey are, so a commit whose sync changed the state always runs it.
+  useLayoutEffect(() => {
+    store.flush();
+    const prev = syncedFromRef.current;
+    syncedFromRef.current = undefined;
+    if (prev) {
+      const now = store.getState();
+      if (now.generation !== prev.generation) {
+        if (validateOnMount) validateAsOnMount(now.values);
+      } else if (now.baselineEpoch !== prev.baselineEpoch) {
+        runFollowEffects(prev, now);
       }
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
     // A version equal to the values the render used came from the form's own state.
-    const echo = next !== prev && deepEqual(initialValues, storedState.values);
-    if (stabilityCheck.record(storedState, next !== prev, store.getState(), echo)) {
+    const changed = prev !== undefined;
+    const echo = changed && deepEqual(initialValues, storedState.values);
+    if (stabilityCheck.record(storedState, changed, store.getState(), echo)) {
       console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);
     }
   }, [
     store,
-    dispatch,
     storedState,
     initialValues,
     resetKey,

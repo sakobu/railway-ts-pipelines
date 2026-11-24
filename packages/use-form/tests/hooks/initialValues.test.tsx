@@ -61,6 +61,32 @@ describe('following new initialValues', () => {
     expect(onValuesChange).not.toHaveBeenCalled();
   });
 
+  test("a child's layout effect that writes in the commit that brings a new version builds on the followed version", () => {
+    let form!: UseFormReturn<PublishForm>;
+    const TagChild = ({
+      initial,
+      setFieldValue,
+    }: {
+      initial: PublishForm;
+      setFieldValue: (f: 'tags', v: string[]) => void;
+    }) => {
+      useLayoutEffect(() => {
+        if (initial !== draft) setFieldValue('tags', ['x']);
+      }, [initial, setFieldValue]);
+      return null;
+    };
+    const Probe = ({ initial }: { initial: PublishForm }) => {
+      form = useForm(publishValidator, { initialValues: initial });
+      return <TagChild initial={initial} setFieldValue={form.setFieldValue} />;
+    };
+    const { rerender } = render(<Probe initial={draft} />);
+
+    rerender(<Probe initial={loaded} />);
+
+    expect(form.values).toEqual({ ...loaded, tags: ['x'] });
+    expect(form.isStale).toBe(false);
+  });
+
   test('effects in the commit that receives a new version see the followed values', () => {
     const seen: string[] = [];
     const Probe = ({ initial }: { initial: PublishForm }) => {
@@ -876,15 +902,20 @@ describe('initialValues that changes on its own', () => {
     // onValuesChange causes
     let clock = 0;
     const Previewed = () => {
-      const [, setPreview] = useState<PublishForm>();
+      const [preview, setPreview] = useState('');
       const form = useForm(publishValidator, {
         initialValues: { ...draft, title: `t${clock}` },
         onValuesChange: (values) => {
           if (values.status !== draft.status) clock += 1;
-          setPreview(values);
+          setPreview(values.status);
         },
       });
-      return <input aria-label="status" {...form.getFieldProps('status')} />;
+      return (
+        <>
+          <input aria-label="status" {...form.getFieldProps('status')} />
+          <output>{preview}</output>
+        </>
+      );
     };
     const { getByLabelText } = render(<Previewed />);
     const type = (value: string) => {

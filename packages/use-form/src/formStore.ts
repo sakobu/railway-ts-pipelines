@@ -17,6 +17,13 @@ export type FormStore<TValues extends Record<string, unknown>> = {
    */
   dispatch: (action: FormAction<TValues>) => void;
   /**
+   * Applies an action like `dispatch`, without notifying subscribers, so an insertion effect can use it: one
+   * mustn't schedule a render. The next `dispatch` or `flush` notifies them.
+   */
+  dispatchQuietly: (action: FormAction<TValues>) => void;
+  /** Notifies subscribers of a change `dispatchQuietly` made, unless a `dispatch` since has notified them. */
+  flush: () => void;
+  /**
    * Sets the initial values `RESET_FORM` resets to, from the next dispatch on. The state doesn't change,
    * and no subscriber is notified.
    *
@@ -53,15 +60,33 @@ export const createFormStore = <TValues extends Record<string, unknown>>(
 ): FormStore<TValues> => {
   let state = initialState;
   let latestInitialValues = initialValues;
+  // A change dispatchQuietly made that no subscriber has heard of yet
+  let unheard = false;
   const listeners = new Set<() => void>();
+
+  /** Applies `action`, and tells whether the state changed. */
+  const apply = (action: FormAction<TValues>): boolean => {
+    const next = formReducer(state, action, latestInitialValues);
+    if (next === state) return false;
+    state = next;
+    return true;
+  };
+
+  const notify = () => {
+    unheard = false;
+    listeners.forEach((listener) => listener());
+  };
 
   return {
     getState: () => state,
     dispatch: (action) => {
-      const next = formReducer(state, action, latestInitialValues);
-      if (next === state) return;
-      state = next;
-      listeners.forEach((listener) => listener());
+      if (apply(action)) notify();
+    },
+    dispatchQuietly: (action) => {
+      if (apply(action)) unheard = true;
+    },
+    flush: () => {
+      if (unheard) notify();
     },
     setInitialValues: (values) => {
       latestInitialValues = values;

@@ -3178,8 +3178,8 @@ describe('useForm', () => {
         );
       };
 
-      // Resets, then types, in the commit that brings new initialValues. The edit stops a follow, so the
-      // values show which initialValues the reset itself used.
+      // Resets, then types, in the commit that brings new initialValues. The values show which initialValues
+      // the reset itself used.
       const LayoutResetThenTypeChild = ({
         initial,
         form,
@@ -3226,7 +3226,7 @@ describe('useForm', () => {
         expect(getByTestId('dirty').textContent).toBe('false');
       });
 
-      test('a layout effect resets to the initialValues of the same commit, when an edit then stops the follow', () => {
+      test('a layout effect resets to the initialValues of the same commit, then types on them', () => {
         const { rerender, getByTestId } = render(<ResetThenTypeForm initial={draft} />);
 
         rerender(<ResetThenTypeForm initial={loaded} />);

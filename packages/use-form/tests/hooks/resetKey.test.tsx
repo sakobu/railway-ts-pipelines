@@ -2,13 +2,13 @@ import { describe, test, expect, mock, spyOn } from 'bun:test';
 
 import { err, isErr, isOk, type Result } from '@railway-ts/pipelines/result';
 import { render, renderHook, act, waitFor } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, useLayoutEffect } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
-import type { FormOptions, ResetKey } from '../../src/types';
+import type { FormOptions, ResetKey, UseFormReturn } from '../../src/types';
 import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
 
 type Outcome = Result<PublishForm, ValidationError[]>;
@@ -204,6 +204,32 @@ describe('resetKey', () => {
     act(() => {
       void result.current.handleSubmit();
     });
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect(onSubmit.mock.calls[1]![0]).toEqual(B);
+  });
+
+  test("a child's layout effect that submits in the switch's commit submits B's values, without waiting for A's", async () => {
+    const { onSubmit } = createGatedOnSubmit<PublishForm>();
+    let form!: UseFormReturn<PublishForm, PublishForm>;
+    const SubmitChild = ({ id, handleSubmit }: { id: ResetKey; handleSubmit: () => Promise<Outcome> }) => {
+      useLayoutEffect(() => {
+        if (id === 'b') void handleSubmit();
+      }, [id, handleSubmit]);
+      return null;
+    };
+    const Editor = ({ rec, id }: Props) => {
+      form = useForm(publishValidator, { initialValues: rec, resetKey: id, onSubmit });
+      return <SubmitChild id={id} handleSubmit={form.handleSubmit} />;
+    };
+    const { rerender } = render(<Editor rec={A} id="a" />);
+    act(() => form.setFieldValue('title', 'A1'));
+    act(() => {
+      void form.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    rerender(<Editor rec={B} id="b" />);
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
     expect(onSubmit.mock.calls[1]![0]).toEqual(B);
