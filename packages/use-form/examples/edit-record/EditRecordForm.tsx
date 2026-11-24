@@ -64,7 +64,8 @@ export default function EditRecordForm() {
   };
 
   // While the next contact loads, the form still shows the last one. The form starts over when the next one
-  // arrives, so typing meanwhile would be lost: the fields are disabled until then.
+  // arrives, so typing meanwhile would be lost, and so would the outcome of a save of the last one: the fields
+  // and Save are disabled until then.
   const loading = data?.id !== selectedId;
 
   const touchedCount = Object.values(form.touched).filter(Boolean).length;
@@ -128,7 +129,7 @@ export default function EditRecordForm() {
       </div>
 
       <div className="actions">
-        <button type="submit" disabled={!data || form.isSubmitting || form.isStale}>
+        <button type="submit" disabled={!data || loading || form.isSubmitting || form.isStale}>
           {form.isSubmitting ? 'Saving...' : 'Save'}
         </button>
         <button type="button" onClick={() => form.resetForm()} disabled={form.isSubmitting}>

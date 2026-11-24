@@ -219,7 +219,7 @@ function EditContact({ ids }: { ids: string[] }) {
           </div>
         )}
 
-        {/* Typing while the next contact loads would be lost when it arrives */}
+        {/* Typing while the next contact loads would be lost when it arrives, and so would a save's outcome */}
         <fieldset disabled={isPlaceholderData}>
           <input {...form.getFieldProps('name')} />
           <input type="email" {...form.getFieldProps('email')} />
@@ -227,7 +227,7 @@ function EditContact({ ids }: { ids: string[] }) {
 
         {form.errors[ROOT_ERROR_KEY] && <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>}
 
-        <button type="submit" disabled={form.isSubmitting || form.isStale || !data}>
+        <button type="submit" disabled={form.isSubmitting || form.isStale || !data || isPlaceholderData}>
           Save
         </button>
       </form>
@@ -248,7 +248,7 @@ Things to get right:
 
 - **Key on the loaded id, not the selected id.** `resetKey: data?.id` starts the form over when the new record's data is in `initialValues`. Keying on the selected `id` would reset it while the old record's values are still there.
 - **Keep the previous record while the next one loads** (`placeholderData: keepPreviousData`). Without it, `data` turns `undefined`, so the form resets to empty and then to the next record.
-- **Disable the fields while the next record loads** (`isPlaceholderData`). Either way, the form starts over when the next record arrives, so anything typed meanwhile is lost.
+- **Disable the fields and Save while the next record loads** (`isPlaceholderData`). Either way, the form starts over when the next record arrives, so anything typed meanwhile is lost. A Save clicked then would save the previous record, and its outcome, such as a conflict, would show nowhere.
 - **A failed save for a record the user switched away from shows nowhere.** Block switching while `isSubmitting`, as above, or `await form.handleSubmit()` and report the `err` in a toast.
 - **Two checks prevent lost updates together.** `isStale` covers a change the app has fetched. Save is disabled then, because `data.version` is already the newer version and the server would accept it. The server's version check covers a change the app hasn't fetched yet.
 - **Build `initialValues` the same way on every render.** Create generated values, like a new row's id or today's date, once, and don't read storage during render. Otherwise every render looks like a new version, and `useForm` logs an error naming the cause, or the form shows `isStale` after every edit. Have `toFormValues` return arrays and plain objects, which compare by content. A `Set`, `Map` or Temporal value compares by identity, so a new one on every render does the same. If the form needs one, build `initialValues` with `useMemo`, keyed on `data`. A refetch still rebuilds it, and then it counts as a new version even with the same items.
