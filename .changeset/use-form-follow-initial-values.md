@@ -1,0 +1,19 @@
+---
+'@railway-ts/use-form': minor
+---
+
+Forms now follow new `initialValues`. **Behavior change:** before, a form kept the values it mounted with when `initialValues` changed. Now, when the form has no unsaved edits, it shows the new values in the same render, with no flash of the old ones. When it has edits, they stay, and the new `isStale` flag turns true if someone else changed the record, so you can hold Save and offer a Reload (`resetForm()`). After a successful submit, the saved record passed back in is followed even if the server changed it, for example by trimming a value. That holds whether it arrives before or after `onSubmit` returns. `isStale` reads false while a submission runs, since a version that arrives then may be the save's own answer.
+
+`useFormAutoSubmission` pauses while `isStale` is true, so an auto-save can't overwrite someone else's newer change. Once `isStale` clears, it saves the edits made meanwhile. An edit made during a running auto-save still goes out as soon as that save settles, with the same timing as before, but no longer if the save ended with the form stale. Its form parameter accepts an optional `isStale`, and its `handleSubmit` may return anything.
+
+New `resetKey` option: pass the loaded record's id (`resetKey: data?.id`). When it changes, the form starts over as if remounted, without remounting the component. Results of a save or validation still running for the previous record don't land on the new one.
+
+`initialValues` must be built the same way on every render. A value that changes on its own, such as `crypto.randomUUID()`, `new Date()` or storage read during render, makes renders look like new versions. `useForm` now logs an error naming the cause. Create such values once, at module scope or with `useState(() => …)`.
+
+`resetForm()` no longer lets an async validation still running for the discarded values write its errors onto the reset form.
+
+A validation that finishes at once now replaces one still running. Before, the older async result could land over it. For example, a field validator that checks a username on the server but rejects a short one at once showed the server's answer for the older, longer value. The same goes for a schema error over a field validator still running.
+
+This replaces the workarounds for loading new values: calling `setValues` during render, a `key` on the form's component, or `resetForm()` in an effect.
+
+Also in this release: `useFormAutoSubmission` logs a `handleSubmit` that throws or rejects with `console.error` and keeps auto-saving. After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out. `useDebounce` now runs the callback from the latest render, even when its timer fires before that render's effects. A submission's own validation no longer lands after a follow or `resetForm()`.
