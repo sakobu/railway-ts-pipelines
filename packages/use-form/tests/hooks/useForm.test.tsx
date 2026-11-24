@@ -2891,6 +2891,58 @@ describe('useForm', () => {
       expect(result.current.validatingFields).toEqual({});
       expect(result.current.values).toEqual(draft);
     });
+
+    test("a field validator waiting on a replaced schema check doesn't run", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title.length > 3 ? gated(value, path) : publishValidator(value, path);
+      const { result } = renderHook(() =>
+        useForm(mixed, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: { title: (value) => (value.length > 3 ? undefined : 'Too short') },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('title', 'Long title'));
+      act(() => result.current.setFieldValue('title', 'ab'));
+      expect(result.current.fieldErrors.title).toBe('Too short');
+
+      await act(async () => {
+        pending[0]!.resolve(ok({ ...draft, title: 'Long title' }));
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors.title).toBe('Too short');
+    });
+
+    test("a replaced schema check's error doesn't drop the field check running for the newer value", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+        (value as PublishForm).title === '' ? gated(value, path) : publishValidator(value, path);
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(mixed, { initialValues: draft, validationMode: 'live', fieldValidators: { title: () => gate() } }),
+      );
+
+      act(() => result.current.setFieldValue('title', ''));
+      act(() => result.current.setFieldValue('title', 'ab'));
+      expect(calls).toHaveLength(1);
+
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        await nextTask();
+      });
+      expect(result.current.validatingFields).toEqual({ title: true });
+
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.fieldErrors.title).toBe('Taken');
+      expect(result.current.validatingFields).toEqual({});
+    });
   });
 
   describe('calls in one handler', () => {

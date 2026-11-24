@@ -465,8 +465,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Once the schema result is in, runs the field's validator, or clears the field's error and
    * validating flag when the schema has an error for the field, so the schema's error shows.
-   * A schema result that arrives after a follow or a reset is dropped: it checked values the form
-   * no longer holds.
+   *
+   * It replaces the field's checks before it as soon as it's called, so a field validator still
+   * running, or one still waiting for its own schema result, can't land over it. Its schema result
+   * is dropped once a newer check of the field starts, or a follow or a reset comes: it checked
+   * values the form no longer holds.
    *
    * @param field - The field whose validator runs
    * @param values - The values the schema checked
@@ -478,20 +481,19 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       values: TValues,
       schemaResult: Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>>,
     ): void => {
+      const key = normalizePath(field);
+      const seq = takeNextFieldSeq(fieldValidationSeqRef.current, key);
       const { baselineEpoch } = store.getState();
 
       const afterSchema = (result: Result<TValues, ValidationError[]>) => {
-        if (store.getState().baselineEpoch !== baselineEpoch) return;
+        if (seq !== fieldValidationSeqRef.current[key] || store.getState().baselineEpoch !== baselineEpoch) return;
 
-        const key = normalizePath(field);
         const schemaErrors = isErr(result) ? normalizePathKeys(formatErrors(result.error)) : {};
         if (!schemaErrors[key]) {
           runFieldValidator(field, values);
           return;
         }
 
-        // Replaces a check of the field still running, so it can't land over the schema's error
-        takeNextFieldSeq(fieldValidationSeqRef.current, key);
         dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
         if (store.getState().validatingFields[key]) {
           dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
