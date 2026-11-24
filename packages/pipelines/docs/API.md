@@ -1207,7 +1207,7 @@ function discriminatedUnion<const M extends Record<string, MaybeAsyncValidator<u
 ): MaybeAsyncValidator<unknown, ValidatorMapOutput<M>>;
 ```
 
-Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects.
+Select a validator based on a discriminant field's value. More efficient than `union` for tagged objects. The discriminant's value must be one of the map's own keys: any other value, including an `Object.prototype` name like `'toString'`, fails with `fallbackMessage`.
 
 ```typescript
 const validate = discriminatedUnion('type', {

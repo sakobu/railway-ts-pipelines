@@ -289,6 +289,24 @@ describe('discriminatedUnion validator', () => {
     }
   });
 
+  test.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])(
+    'should fail with discriminant value %p, an Object.prototype member',
+    (name) => {
+      const validator = discriminatedUnion('type', {
+        text: textSchema,
+        image: imageSchema,
+      });
+
+      // Shaped like an ok Result, so a lookup that reaches Object.prototype would pass it through as valid
+      const result = validator({ type: name, ok: true, value: { evil: 1 } });
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error).toEqual([{ path: ['type'], message: `Invalid discriminant value for 'type': '${name}'` }]);
+      }
+    },
+  );
+
   test('should fail with non-object value', () => {
     const validator = discriminatedUnion('type', {
       text: textSchema,

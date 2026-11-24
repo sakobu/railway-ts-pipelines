@@ -245,9 +245,10 @@ export function discriminatedUnion<const M extends Record<string, MaybeAsyncVali
       ]);
     }
 
-    // Get the validator for this discriminant value
-    // eslint-disable-next-line security/detect-object-injection -- lookup against schema-defined validatorMap keys
-    const validator = validatorMap[discriminantValue];
+    // Get the validator for this discriminant value from the map's own keys, so a value like
+    // 'constructor' or 'toString' can't reach Object.prototype and run a built-in as the validator
+    // eslint-disable-next-line security/detect-object-injection -- discriminantValue is one of validatorMap's own keys
+    const validator = Object.hasOwn(validatorMap, discriminantValue) ? validatorMap[discriminantValue] : undefined;
 
     // If no validator is found for this discriminant value, return an error
     if (!validator) {
