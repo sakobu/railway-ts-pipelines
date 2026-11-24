@@ -62,9 +62,11 @@ const followVersion = <TValues extends Record<string, unknown>>(
  * - Server-side validation errors
  * - Form submission state
  * - Form reset to initial values
+ * - Syncing new initialValues: follow them, keep the edits and track isStale, or start over on a resetKey change
+ * - Settling a successful submit
  *
- * All state updates are performed immutably - the reducer always returns a new state object
- * rather than mutating the existing state. Server errors are automatically cleared when
+ * All state updates are performed immutably, never mutating the existing state. When an action
+ * changes nothing, the reducer returns the same state object. Server errors are automatically cleared when
  * related fields are modified to provide a smooth user experience.
  *
  * @template TValues - The type of form values being managed
@@ -72,7 +74,7 @@ const followVersion = <TValues extends Record<string, unknown>>(
  * @param state - The current form state before the action is applied
  * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
  * @param initialValues - Initial form values used when resetting the form
- * @returns A new form state object reflecting the changes from the action
+ * @returns The form state reflecting the action: a new object, or the same one when nothing changed
  *
  * @example
  * // Used internally by useForm's store, which applies each action as soon as it is dispatched
