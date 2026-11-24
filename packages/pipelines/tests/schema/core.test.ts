@@ -192,12 +192,22 @@ describe('core - object validator', () => {
       }
     });
 
-    test('reads inherited values and leaves out an inherited undefined', () => {
+    test('treats a key the input inherits as missing', () => {
       const schema = object({ age: optional(number()), nick: optional(string()) });
       const result = schema(Object.create({ age: 3, nick: undefined }));
       expect(isOk(result)).toBe(true);
       if (isOk(result)) {
-        expect(result.value).toStrictEqual({ age: 3 });
+        expect(result.value).toStrictEqual({});
+      }
+    });
+
+    test('treats a missing key named like an Object.prototype member as missing', () => {
+      const schema = object({ toString: optional(string()), constructor: optional(number()) });
+      const result = schema({});
+      expect(isOk(result)).toBe(true);
+      if (isOk(result)) {
+        // TypeScript types `{}` as having Object.prototype's toString, so the keys are compared instead
+        expect(Object.keys(result.value)).toEqual([]);
       }
     });
 

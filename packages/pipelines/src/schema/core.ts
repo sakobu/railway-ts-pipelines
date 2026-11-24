@@ -115,8 +115,8 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
  *
  * A key whose validator can return `undefined` (such as `optional(…)`) is an optional key in the output:
  * `object({ age: optional(number()) })` outputs `{ age?: number | undefined }`, the same type `InferSchemaType` gives.
- * The output has a key when the input has it, or when its validator returns a value: `{}` gives `{}`, and
- * `{ age: null }` gives `{ age: undefined }`.
+ * The output has a key when the input has it as an own property, or when its validator returns a value: `{}` gives
+ * `{}`, and `{ age: null }` gives `{ age: undefined }`. A key the input inherits, like `toString`, is missing.
  *
  * @example
  * const userSchema = object({
@@ -151,7 +151,7 @@ export function object<T extends Record<string, unknown>>(
     const validatedObj: Record<string, unknown> = {};
 
     if (strict !== false) {
-      const extraKeys = Object.keys(obj as object).filter((key) => !Object.prototype.hasOwnProperty.call(schema, key));
+      const extraKeys = Object.keys(obj as object).filter((key) => !Object.hasOwn(schema, key));
 
       if (extraKeys.length > 0) {
         if (abortEarly) {
@@ -171,17 +171,18 @@ export function object<T extends Record<string, unknown>>(
     const pendingResults: Promise<void>[] = [];
 
     for (const key in schema) {
-      if (!Object.prototype.hasOwnProperty.call(schema, key)) continue;
+      if (!Object.hasOwn(schema, key)) continue;
 
       const validator = schema[key];
       if (!validator) continue;
 
       if (abortEarly && allErrors.length > 0) break;
 
-      const value = (obj as Record<string, unknown>)[key];
+      // The input has a key when it's an own property; a key it inherits, like `toString`, is missing.
+      // The output has the key when the input has it, or when the validator returns a value.
+      const present = Object.hasOwn(obj, key);
+      const value = present ? (obj as Record<string, unknown>)[key] : undefined;
       const fieldPath = [...parentPath, key];
-      // The output has the key when the input has it, or when the validator returns a value
-      const present = Object.prototype.hasOwnProperty.call(obj, key);
 
       const result = validator(value, fieldPath);
 
