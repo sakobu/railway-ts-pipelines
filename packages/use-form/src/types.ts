@@ -198,10 +198,31 @@ type OnSubmit<TValues, TResult> =
  */
 export interface FormOptions<TValues extends Record<string, unknown>, TResult = TValues> {
   /**
-   * Initial values for the form fields.
-   * These values are used when the form is reset.
+   * Initial values for the form fields, and the values `resetForm()` resets to.
+   *
+   * The form follows new values while it has no unsaved edits, such as a refetched record. A form with
+   * edits keeps them, and `isStale` reports that a newer version arrived.
+   *
+   * New values are compared by content, so an inline object is fine as long as it's built from the same
+   * data the same way on every render.
+   *
+   * A value that changes on its own (`crypto.randomUUID()`, `new Date()`, `new Set()`, storage read during
+   * render) makes renders look like new versions, and `useForm` logs an error naming the cause.
+   * Create such values once, at module scope or with `useState(() => …)`.
    */
   initialValues: NoInfer<TValues>;
+
+  /**
+   * Identifies the record the form edits. When it changes, the form starts over on the current
+   * `initialValues` as if it had remounted, without remounting the component.
+   *
+   * Key on the id of the *loaded* record (`data?.id`), not the id the user selected, so the form
+   * starts over when the new record's data arrives.
+   *
+   * Only primitives are accepted, compared with `Object.is`. Passing the record itself would start
+   * the form over on every refetch.
+   */
+  resetKey?: ResetKey;
 
   /**
    * Callback function that runs when the form is submitted with valid data.
@@ -1164,8 +1185,21 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    */
   isValid: boolean;
 
-  /** Whether any form values have changed since initialization or last reset. */
+  /** Whether the values differ from the current `initialValues`. */
   isDirty: boolean;
+
+  /**
+   * Whether a newer `initialValues` arrived that the form didn't follow, because it would have
+   * overwritten unsaved edits. In other words, someone else changed the record since the user started
+   * editing. Implies `isDirty`.
+   *
+   * It turns false again once the values equal the latest `initialValues`, as after `resetForm()` or
+   * when the user's edits come to match it.
+   *
+   * It reads false while a submission runs, since a version that arrives then may be the save's own
+   * answer. A failed save shows it again.
+   */
+  isStale: boolean;
 
   /** Number of times the form has been submitted via `handleSubmit`. Incremented at the start of each attempt. */
   submitCount: number;

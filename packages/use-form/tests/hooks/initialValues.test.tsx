@@ -1,0 +1,661 @@
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
+
+import { err, ok, type Result } from '@railway-ts/pipelines/result';
+import { render, renderHook, act, waitFor, fireEvent } from '@testing-library/react';
+import { Component, StrictMode, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+
+import { useForm } from '../../src/useForm';
+import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
+import { publishValidator, type PublishForm } from '../fixtures/validators';
+
+import type { FormOptions, UseFormReturn } from '../../src/types';
+import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
+
+const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
+const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
+
+/** Waits one task, so the work queued behind promises settled before it runs first. */
+const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** The default setup: a form whose initialValues come from the `initial` prop, starting at `draft`. */
+const renderForm = (options: Omit<FormOptions<PublishForm>, 'initialValues'> = {}) =>
+  renderHook(
+    ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: initial, ...options }),
+    { initialProps: { initial: draft } },
+  );
+
+/** An onSubmit that stays pending until the test releases it. */
+const createGatedOnSubmit = () => {
+  const gate = Promise.withResolvers<void>();
+  const onSubmit = async (_values: PublishForm) => {
+    await gate.promise;
+  };
+  return { onSubmit, release: () => gate.resolve() };
+};
+
+/** An onSubmit that stays pending until the test releases it, then fails as a server's version check would. */
+const createGatedConflict = () => {
+  const gate = Promise.withResolvers<void>();
+  const onSubmit = async (_values: PublishForm) => {
+    await gate.promise;
+    return err([{ path: [], message: 'Conflict' }]);
+  };
+  return { onSubmit, release: () => gate.resolve() };
+};
+
+/** A schema validator whose checks stay pending until the test settles them, in call order. */
+const createGatedValidator = () => {
+  const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
+  const gated: MaybeAsyncValidator<unknown, PublishForm> = () => {
+    const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
+    pending.push(d);
+    return d.promise;
+  };
+  return { pending, gated };
+};
+
+/** A field validator whose calls stay pending until the test settles them, in call order. */
+const createGatedFieldValidator = () => {
+  const calls: PromiseWithResolvers<string | undefined>[] = [];
+  const gate = () => {
+    const call = Promise.withResolvers<string | undefined>();
+    calls.push(call);
+    return call.promise;
+  };
+  return { calls, gate };
+};
+
+describe('following new initialValues', () => {
+  test('follows a new version when the form has no edits', () => {
+    const { result, rerender } = renderForm();
+
+    rerender({ initial: loaded });
+
+    expect(result.current.values).toEqual(loaded);
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.isStale).toBe(false);
+  });
+
+  test('keeps edits and reports isStale when someone else changed the record', () => {
+    const { result, rerender } = renderForm();
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    rerender({ initial: { ...draft, status: 'published' } });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.values.status).toBe('draft');
+    expect(result.current.isDirty).toBe(true);
+    expect(result.current.isStale).toBe(true);
+  });
+
+  test('an inline object with the same content does nothing', () => {
+    const onValuesChange = mock((_values: PublishForm, _prev: PublishForm) => {});
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(publishValidator, { initialValues: { ...initial }, onValuesChange }),
+      { initialProps: { initial: draft } },
+    );
+    const before = result.current.values;
+    onValuesChange.mockClear();
+
+    rerender({ initial: draft });
+
+    expect(result.current.values).toBe(before);
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  test('effects in the commit that receives a new version see the followed values', () => {
+    const seen: string[] = [];
+    const Probe = ({ initial }: { initial: PublishForm }) => {
+      const form = useForm(publishValidator, { initialValues: initial });
+      useEffect(() => {
+        seen.push(`${form.values.title}:${String(form.isDirty)}`);
+      }, [form.values, form.isDirty]);
+      return null;
+    };
+    const { rerender } = render(<Probe initial={draft} />);
+    seen.length = 0;
+
+    rerender(<Probe initial={loaded} />);
+
+    expect(seen).toEqual(['Loaded:false']);
+  });
+
+  test('calls onValuesChange once for a follow, under StrictMode', () => {
+    const onValuesChange = mock((_values: PublishForm, _prev: PublishForm) => {});
+    const { rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(publishValidator, { initialValues: initial, onValuesChange }),
+      { initialProps: { initial: draft }, wrapper: StrictMode },
+    );
+    onValuesChange.mockClear();
+
+    rerender({ initial: loaded });
+
+    expect(onValuesChange).toHaveBeenCalledTimes(1);
+    expect(onValuesChange).toHaveBeenCalledWith(loaded, draft);
+  });
+
+  test('useFormAutoSubmission does not submit after a follow', async () => {
+    const onSubmit = mock((_values: PublishForm) => {});
+    const { rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => {
+        const form = useForm(publishValidator, { initialValues: initial, onSubmit });
+        useFormAutoSubmission(form, 10);
+      },
+      { initialProps: { initial: draft } },
+    );
+
+    rerender({ initial: loaded });
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('keeps isSubmitting true when a version lands during a submission', async () => {
+    const { onSubmit, release } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+
+    rerender({ initial: loaded });
+    expect(result.current.isSubmitting).toBe(true);
+
+    await act(async () => {
+      release();
+      await submitting;
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(false));
+  });
+});
+
+describe('errors after a follow', () => {
+  test('live mode re-validates the followed values', () => {
+    const { result, rerender } = renderForm();
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.clientErrors.title).toBe('Title is required');
+  });
+
+  test('submit mode does not start showing errors', () => {
+    const { result, rerender } = renderForm({ validationMode: 'submit' });
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.clientErrors).toEqual({});
+  });
+
+  test('blur mode re-validates when client errors already exist', () => {
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(publishValidator, { initialValues: initial, validationMode: 'blur' }),
+      { initialProps: { initial: { ...draft, title: '' } } },
+    );
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.clientErrors.title).toBe('Title is required');
+
+    rerender({ initial: draft });
+
+    expect(result.current.clientErrors).toEqual({});
+  });
+
+  test('mount mode marks the fields of a followed version touched', () => {
+    const { result, rerender } = renderForm({ validationMode: 'mount' });
+
+    rerender({ initial: { ...draft, tags: ['a', 'b'] } });
+
+    expect(result.current.touched['tags.1']).toBe(true);
+  });
+
+  test('a schema validation still running for the old values does not land on the followed values', async () => {
+    const { pending, gated } = createGatedValidator();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(gated, { initialValues: initial, validationMode: 'blur' }),
+      { initialProps: { initial: draft } },
+    );
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+      pending[1]!.resolve(ok(loaded));
+      await nextTask();
+    });
+
+    expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a field validator still running for the old value is re-run for the followed value', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const { result, rerender } = renderForm({ validationMode: 'blur', fieldValidators: { title: () => gate() } });
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    await act(async () => {
+      calls[0]!.resolve('Stale');
+      calls[1]!.resolve(undefined);
+      await nextTask();
+    });
+
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.validatingFields).toEqual({});
+  });
+
+  test("a field validator waiting for a schema check started before the follow doesn't run", async () => {
+    const { pending, gated } = createGatedValidator();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(gated, {
+          initialValues: initial,
+          validationMode: 'blur',
+          fieldValidators: { title: (value) => (value === 'Hello' ? 'Checked the old title' : undefined) },
+        }),
+      { initialProps: { initial: draft } },
+    );
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      pending[1]!.resolve(ok(loaded));
+      await nextTask();
+    });
+
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a field validator that finishes at once for the followed value clears its validating flag', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const { result, rerender } = renderForm({
+      validationMode: 'blur',
+      fieldValidators: { title: (value) => (value === 'Hello' ? gate() : undefined) },
+    });
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    await act(async () => {
+      calls[0]!.resolve('Stale');
+      await nextTask();
+    });
+
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.validatingFields).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a schema check that finishes at once for the followed values clears isValidating', async () => {
+    const pending: PromiseWithResolvers<Result<PublishForm, ValidationError[]>>[] = [];
+    const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) => {
+      if ((value as PublishForm).title !== 'Hello') return publishValidator(value, path);
+      const d = Promise.withResolvers<Result<PublishForm, ValidationError[]>>();
+      pending.push(d);
+      return d.promise;
+    };
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(mixed, { initialValues: initial, validationMode: 'blur' }),
+      { initialProps: { initial: draft } },
+    );
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+      await nextTask();
+    });
+
+    expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test("a field validator re-run for the followed values doesn't run when the schema fails for its field", () => {
+    const { result, rerender } = renderForm({ validationMode: 'blur', fieldValidators: { title: () => 'Taken' } });
+
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.fieldErrors.title).toBe('Taken');
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.errors.title).toBe('Title is required');
+    expect(result.current.fieldErrors).toEqual({});
+  });
+});
+
+describe('isStale', () => {
+  /** A form with an edit, after someone else published the record. */
+  const renderStaleForm = () => {
+    const rendered = renderForm();
+    act(() => rendered.result.current.setFieldValue('title', 'Mine'));
+    rendered.rerender({ initial: { ...draft, status: 'published' } });
+    return rendered;
+  };
+
+  test('clears when resetForm() reloads the latest version', () => {
+    const { result } = renderStaleForm();
+    expect(result.current.isStale).toBe(true);
+    expect(result.current.isDirty).toBe(true);
+
+    act(() => result.current.resetForm());
+
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.values).toEqual({ ...draft, status: 'published' });
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  test("clears when the user's edits come to match the latest version", () => {
+    const { result } = renderStaleForm();
+
+    act(() => result.current.setFieldValue('title', 'Hello'));
+    expect(result.current.isStale).toBe(true); // status still differs
+    expect(result.current.isDirty).toBe(true);
+
+    act(() => result.current.setFieldValue('status', 'published'));
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  test('reads false while a save runs, and shows again when the save fails', async () => {
+    const { onSubmit, release } = createGatedConflict();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+    rerender({ initial: { ...draft, status: 'published' } });
+    expect(result.current.isStale).toBe(false);
+
+    await act(async () => {
+      release();
+      await submitting;
+    });
+
+    expect(result.current.isStale).toBe(true);
+    expect(result.current.isDirty).toBe(true);
+    expect(result.current.errors._root).toBe('Conflict');
+  });
+});
+
+describe('saving', () => {
+  test('follows a saved record that differs from the submitted values', async () => {
+    const { result, rerender } = renderForm({ onSubmit: () => {} });
+
+    act(() => result.current.setFieldValue('title', ' Mine '));
+    await act(() => result.current.handleSubmit());
+    rerender({ initial: { ...draft, title: 'Mine' } });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.isStale).toBe(false);
+  });
+
+  test('keeps typing done during a save, without isStale, when the saved record arrives', async () => {
+    const { onSubmit, release } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'A'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    act(() => result.current.setFieldValue('title', 'AB'));
+    await act(async () => {
+      release();
+      await submitting;
+    });
+    rerender({ initial: { ...draft, title: 'A' } });
+
+    expect(result.current.values.title).toBe('AB');
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  test("keeps edits through an optimistic write and a failed save's rollback", async () => {
+    const { onSubmit, release } = createGatedConflict();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ initial: { ...draft, title: 'Mine' } });
+    await act(async () => {
+      release();
+      await submitting;
+    });
+    rerender({ initial: draft });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.errors._root).toBe('Conflict');
+  });
+
+  test('resetForm() inside onSubmit, then the saved record arrives: the form follows it', async () => {
+    let form!: UseFormReturn<PublishForm>;
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => {
+        const current = useForm(publishValidator, {
+          initialValues: initial,
+          onSubmit: () => {
+            form.resetForm();
+          },
+        });
+        form = current;
+        return current;
+      },
+      { initialProps: { initial: draft } },
+    );
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    await act(() => result.current.handleSubmit());
+    rerender({ initial: { ...draft, title: 'Mine' } });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.isStale).toBe(false);
+  });
+
+  test('follows a saved record that arrives before onSubmit returns', async () => {
+    const { onSubmit, release } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', ' Mine '));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+    rerender({ initial: { ...draft, title: 'Mine' } });
+    expect(result.current.isStale).toBe(false);
+
+    await act(async () => {
+      release();
+      await submitting;
+    });
+
+    expect(result.current.values.title).toBe('Mine');
+    expect(result.current.isDirty).toBe(false);
+    expect(result.current.isStale).toBe(false);
+  });
+
+  test('bases typing done during a save on a saved record that arrives before onSubmit returns', async () => {
+    const { onSubmit, release } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'A'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+    act(() => result.current.setFieldValue('title', 'AB'));
+    rerender({ initial: { ...draft, title: 'A' } });
+    await act(async () => {
+      release();
+      await submitting;
+    });
+
+    expect(result.current.values.title).toBe('AB');
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(true);
+
+    // The saved record is the base, so another user's later change still shows
+    rerender({ initial: { ...draft, title: 'A', status: 'published' } });
+    expect(result.current.isStale).toBe(true);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  test('a follow on a successful save re-validates like any follow', async () => {
+    const { onSubmit, release } = createGatedOnSubmit();
+    const { result, rerender } = renderForm({ onSubmit, validationMode: 'live' });
+
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(result.current.isSubmitting).toBe(true));
+    rerender({ initial: { ...draft, title: '' } });
+    await act(async () => {
+      release();
+      await submitting;
+    });
+
+    expect(result.current.values.title).toBe('');
+    expect(result.current.clientErrors.title).toBe('Title is required');
+  });
+});
+
+describe('initialValues that changes on its own', () => {
+  let consoleError: ReturnType<typeof spyOn<Console, 'error'>>;
+
+  beforeEach(() => {
+    consoleError = spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  /** How many times this form's message was logged. React reports caught errors to console.error too. */
+  const reports = () =>
+    consoleError.mock.calls.filter(
+      ([message]) => typeof message === 'string' && message.includes('keeps changing along with'),
+    ).length;
+
+  /** A random id still loops until React's own update-depth error ends it. Those tests render through this. */
+  class Boundary extends Component<{ children: ReactNode }, { message?: string }> {
+    override state: { message?: string } = {};
+    static getDerivedStateFromError(error: unknown) {
+      return { message: error instanceof Error ? error.message : String(error) };
+    }
+    override render() {
+      return this.state.message ?? this.props.children;
+    }
+  }
+
+  test("a random id logs the message within one cascade, and React's update-depth error ends the loop", () => {
+    const Generated = () => {
+      // eslint-disable-next-line @eslint-react/purity -- the impure render is the case under test
+      const form = useForm(publishValidator, { initialValues: { ...draft, title: crypto.randomUUID() } });
+      return <output>{form.values.status}</output>;
+    };
+    const { container, rerender } = render(
+      <Boundary>
+        <Generated />
+      </Boundary>,
+    );
+
+    rerender(
+      <Boundary>
+        <Generated />
+      </Boundary>,
+    );
+
+    expect(reports()).toBe(1);
+    expect(container.textContent).toContain('Maximum update depth exceeded');
+  });
+
+  test('logs it when the app also writes to the form after every change', () => {
+    const Generated = () => {
+      // eslint-disable-next-line @eslint-react/purity -- the impure render is the case under test
+      const form = useForm(publishValidator, { initialValues: { ...draft, title: crypto.randomUUID() } });
+      const { values, setFieldTouched } = form;
+      useEffect(() => {
+        setFieldTouched('title', true, false);
+      }, [values, setFieldTouched]);
+      return <output>{form.values.status}</output>;
+    };
+    const { container, rerender } = render(
+      <Boundary>
+        <Generated />
+      </Boundary>,
+    );
+
+    rerender(
+      <Boundary>
+        <Generated />
+      </Boundary>,
+    );
+
+    expect(reports()).toBe(1);
+    expect(container.textContent).toContain('Maximum update depth exceeded');
+  });
+
+  test('a value that changes between form updates logs on the third update, once, and the form keeps working', () => {
+    // Stands in for new Date() with a counter the test controls, so the clock can't make it flaky
+    let clock = 0;
+    const Clocked = () => {
+      const form = useForm(publishValidator, { initialValues: { ...draft, title: `t${clock}` } });
+      return <input aria-label="status" {...form.getFieldProps('status')} />;
+    };
+    const { getByLabelText } = render(<Clocked />);
+    const type = (value: string, tick: boolean) => {
+      if (tick) clock += 1;
+      fireEvent.change(getByLabelText('status'), { target: { value } });
+    };
+
+    type('a', true);
+    type('b', true);
+    type('c', false); // initialValues held still: the count resets
+    type('d', true);
+    type('e', true);
+    expect(reports()).toBe(0);
+
+    type('f', true);
+    expect(reports()).toBe(1);
+
+    type('g', true);
+    expect(reports()).toBe(1);
+    expect((getByLabelText('status') as HTMLInputElement).value).toBe('g');
+  });
+
+  test("a parent's layout effect that adjusts initialValues during a follow logs nothing", () => {
+    const Child = ({ data, extra }: { data: PublishForm; extra: number }) => {
+      const form = useForm(publishValidator, { initialValues: { ...data, tags: [String(extra)] } });
+      return <output data-testid="tags">{form.values.tags.join(',')}</output>;
+    };
+    const Parent = ({ data }: { data: PublishForm }) => {
+      const [extra, setExtra] = useState(0);
+      useLayoutEffect(() => {
+        // eslint-disable-next-line @eslint-react/set-state-in-effect -- the layout-effect update is the case under test
+        setExtra(data.title.length);
+      }, [data]);
+      return <Child data={data} extra={extra} />;
+    };
+    const { getByTestId, rerender } = render(<Parent data={draft} />);
+
+    rerender(<Parent data={loaded} />);
+
+    expect(getByTestId('tags').textContent).toBe('6');
+    expect(reports()).toBe(0);
+  });
+});
