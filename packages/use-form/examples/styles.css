@@ -308,13 +308,15 @@ input[type='checkbox']:focus-visible {
 }
 
 /* Edit Record */
-.record-list {
+.record-list,
+.button-row {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.record-list button {
+.record-list button,
+.button-row button {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
 }

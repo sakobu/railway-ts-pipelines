@@ -1,4 +1,4 @@
-import { err, ok } from '@railway-ts/pipelines/result';
+import { err } from '@railway-ts/pipelines/result';
 import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -52,11 +52,12 @@ export default function EditRecordForm() {
         // Fetch what the other user saved. isStale turns true when it arrives.
         void refetch(data.id);
       }
-      return result.ok ? ok(result.value) : err(result.error);
+      return result;
     },
   });
 
   const simulateOtherUser = (andRefetch: boolean) => {
+    // Both buttons are disabled until the contact loads, but the type needs the guard
     if (!data) return;
     simulateOtherUserEdit(data.id);
     if (andRefetch) void refetch(data.id);
@@ -82,7 +83,7 @@ export default function EditRecordForm() {
         ))}
       </div>
 
-      <div className="record-list">
+      <div className="button-row">
         <button type="button" onClick={() => simulateOtherUser(true)} disabled={!data}>
           Another user saves
         </button>
