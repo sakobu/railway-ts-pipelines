@@ -1238,6 +1238,49 @@ describe('useFormAutoSubmission', () => {
     });
   });
 
+  describe('a validateForm that throws or rejects', () => {
+    afterEach(() => {
+      mock.restore();
+    });
+
+    const boom = new Error('boom');
+
+    test("a throw is logged, those values aren't submitted, and later edits are", async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const handleSubmit = mock(() => {});
+      const validateForm = (values: { name: string }) => {
+        if (values.name === 'boom') throw boom;
+        return { ok: true };
+      };
+      const { rerender } = renderHook(
+        ({ values }: { values: { name: string } }) =>
+          useFormAutoSubmission({ values, isDirty: true, isValid: true, validateForm, handleSubmit }, 20),
+        { initialProps: { values: { name: 'boom' } } },
+      );
+
+      await sleep(80);
+      expect(handleSubmit).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith('Auto-submission error:', boom);
+
+      rerender({ values: { name: 'fine' } });
+      await sleep(80);
+      expect(handleSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test("a rejection is logged, and those values aren't submitted", async () => {
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      const handleSubmit = mock(() => {});
+      const validateForm = () => Promise.reject(boom);
+      renderHook(() =>
+        useFormAutoSubmission({ values: { name: 'a' }, isDirty: true, isValid: true, validateForm, handleSubmit }, 20),
+      );
+
+      await sleep(80);
+      expect(handleSubmit).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith('Auto-submission error:', boom);
+    });
+  });
+
   describe('a handleSubmit that throws', () => {
     afterEach(() => {
       mock.restore();

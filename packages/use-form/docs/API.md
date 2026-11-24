@@ -1343,7 +1343,7 @@ It saves values that differ from `initialValues` (`isDirty`). So pass what was s
 
 After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
 
-A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on.
+A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on. So is a `validateForm` that throws or rejects, and the values it checked aren't saved.
 
 ### Signature
 

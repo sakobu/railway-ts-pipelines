@@ -13,9 +13,15 @@ type FormWithAutoSubmit<T> = {
   isValid: boolean;
   /** When true, auto-submission waits: a save would overwrite a newer version of the record. Optional, so any form-like object still fits. */
   isStale?: boolean;
+  /** A throw or rejection is logged with `console.error`, and the values it checked aren't saved. */
   validateForm: (values: T) => { ok: boolean } | Promise<{ ok: boolean }>;
   /** Its result, when a promise, marks when the save settles. A throw or rejection is logged with `console.error`, and auto-save carries on. */
   handleSubmit: () => unknown;
+};
+
+/** Logs a throw or rejection from the form's `handleSubmit` or `validateForm`, so auto-save carries on. */
+const logError = (error: unknown): void => {
+  console.error('Auto-submission error:', error);
 };
 
 /**
@@ -35,7 +41,8 @@ type FormWithAutoSubmit<T> = {
  * It only submits values whose latest validation passed: values still being validated wait for their result.
  * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
  * and goes out as soon as it settles.
- * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on.
+ * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on. So is one from
+ * `validateForm`, and the values it checked aren't saved.
  *
  * @template T - The type of form values
  *
@@ -91,9 +98,7 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       void new Promise<unknown>((resolve) => {
         resolve(handleSubmit());
       })
-        .catch((error: unknown) => {
-          console.error('Auto-submission error:', error);
-        })
+        .catch(logError)
         .finally(() => {
           savingRef.current = false;
           setSettled((n) => n + 1);
@@ -139,7 +144,6 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
     if (!isDirty || deepEqual(values, lastValidatedRef.current)) return;
 
     lastValidatedRef.current = values;
-    const result = validateForm(values);
     const passed = () => {
       // Only the latest validation this hook started counts
       if (lastValidatedRef.current !== values) return;
@@ -147,10 +151,18 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       debouncedSubmit();
     };
 
+    // A validator that throws or rejects leaves the values unvalidated, so they aren't saved: an edit validates again
+    let result: ReturnType<typeof validateForm>;
+    try {
+      result = validateForm(values);
+    } catch (error) {
+      logError(error);
+      return;
+    }
     if (result instanceof Promise) {
-      void result.then((r) => {
+      result.then((r) => {
         if (r.ok) passed();
-      });
+      }, logError);
     } else if (result.ok) {
       passed();
     }
