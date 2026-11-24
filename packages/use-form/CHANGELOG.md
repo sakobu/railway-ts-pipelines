@@ -1,5 +1,13 @@
 # @railway-ts/use-form
 
+## 0.8.0
+
+### Minor Changes
+
+- c42edbb: Requires `@railway-ts/pipelines` 0.5.
+
+  In 0.5, `object()` leaves out an optional key its input doesn't have. So the values `onSubmit` receives, the `ok` value of `handleSubmit()` and `validateForm()`, and what `savedValues` reads when `onSubmit` returns nothing no longer hold an optional key that the form values don't have. A key the form values hold as `undefined` is kept.
+
 ## 0.7.0
 
 ### Minor Changes
