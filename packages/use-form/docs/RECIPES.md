@@ -7,33 +7,34 @@ Patterns and techniques. Each recipe is self-contained.
 ## Table of Contents
 
 1. [CRUD Form with Server Errors](#crud-form-with-server-errors)
-2. [Nested Objects](#nested-objects)
-3. [Tuple Fields (vec3, coordinates, fixed-length arrays)](#tuple-fields-vec3-coordinates-fixed-length-arrays)
-4. [Dynamic Arrays](#dynamic-arrays)
-5. [Checkbox and Radio Groups](#checkbox-and-radio-groups)
-6. [File Uploads](#file-uploads)
-7. [Auto-Submit and Debounced Search](#auto-submit-and-debounced-search)
-8. [Multi-Step Wizard](#multi-step-wizard)
-9. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
-10. [Conditional Validation](#conditional-validation)
-11. [Discriminated Unions](#discriminated-unions)
-12. [Custom Validators](#custom-validators)
-13. [Programmatic Field Updates](#programmatic-field-updates)
-14. [Syncing Values to External State](#syncing-values-to-external-state)
-15. [Reacting to Individual Field Changes](#reacting-to-individual-field-changes)
-16. [submitCount Patterns](#submitcount-patterns)
-17. [Understanding Error Priority](#understanding-error-priority)
-18. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
-19. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
-20. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
-21. [Custom Field Components](#custom-field-components)
-22. [Performance Patterns](#performance-patterns)
-23. [UI Library Integration](#ui-library-integration)
-24. [Testing Forms](#testing-forms)
-25. [Form State Persistence](#form-state-persistence)
-26. [Unsaved Changes Warning](#unsaved-changes-warning)
-27. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
-28. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
+2. [Edit Forms: Loading, Refetching, and Switching Records](#edit-forms-loading-refetching-and-switching-records)
+3. [Nested Objects](#nested-objects)
+4. [Tuple Fields (vec3, coordinates, fixed-length arrays)](#tuple-fields-vec3-coordinates-fixed-length-arrays)
+5. [Dynamic Arrays](#dynamic-arrays)
+6. [Checkbox and Radio Groups](#checkbox-and-radio-groups)
+7. [File Uploads](#file-uploads)
+8. [Auto-Submit and Debounced Search](#auto-submit-and-debounced-search)
+9. [Multi-Step Wizard](#multi-step-wizard)
+10. [Dependent Fields / Cross-Field Validation](#dependent-fields--cross-field-validation)
+11. [Conditional Validation](#conditional-validation)
+12. [Discriminated Unions](#discriminated-unions)
+13. [Custom Validators](#custom-validators)
+14. [Programmatic Field Updates](#programmatic-field-updates)
+15. [Syncing Values to External State](#syncing-values-to-external-state)
+16. [Reacting to Individual Field Changes](#reacting-to-individual-field-changes)
+17. [submitCount Patterns](#submitcount-patterns)
+18. [Understanding Error Priority](#understanding-error-priority)
+19. [Standard Schema: Bring Your Own Validator](#standard-schema-bring-your-own-validator)
+20. [Per-Field Async Validation (fieldValidators)](#per-field-async-validation-fieldvalidators)
+21. [Pattern-Matching Submit Results](#pattern-matching-submit-results)
+22. [Custom Field Components](#custom-field-components)
+23. [Performance Patterns](#performance-patterns)
+24. [UI Library Integration](#ui-library-integration)
+25. [Testing Forms](#testing-forms)
+26. [Form State Persistence](#form-state-persistence)
+27. [Unsaved Changes Warning](#unsaved-changes-warning)
+28. [Capstone: Full Registration Form (Result Pattern)](#capstone-full-registration-form-result-pattern)
+29. [Capstone: Full Registration Form (React Query)](#capstone-full-registration-form-react-query)
 
 ---
 
@@ -135,6 +136,119 @@ form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]
 ```
 
 If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again."
+
+---
+
+## Edit Forms: Loading, Refetching, and Switching Records
+
+**Problem:** You have an edit form fed by server data. The data refetches in the background, the user saves it, and the user switches to another record. The form must show fresh data without overwriting what the user typed, and it must not save over a change someone else made.
+
+**Solution:** Pass the record as `initialValues` and the loaded record's id as `resetKey`. The form follows refetches while it has no unsaved edits, keeps edits and raises `isStale` when a newer version arrives, and starts over when the id changes.
+
+```tsx
+import { err, ok } from '@railway-ts/pipelines/result';
+import { type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { useForm } from '@railway-ts/use-form';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+
+import { fetchContact, saveContact, type Contact } from './api';
+import { contactSchema } from './schemas';
+
+type ContactValues = InferSchemaType<typeof contactSchema>;
+
+// Built once, so the empty defaults are the same on every render
+const EMPTY_CONTACT: ContactValues = { name: '', email: '' };
+
+// Map only the fields the form shows. `updatedAt` and `version` change on every
+// refetch, so including them would make each refetch a new version.
+const toFormValues = (record?: Contact): ContactValues =>
+  record ? { name: record.name, email: record.email } : EMPTY_CONTACT;
+
+function EditContact({ ids }: { ids: string[] }) {
+  const queryClient = useQueryClient();
+  const [id, setId] = useState(ids[0] ?? '');
+
+  const { data } = useQuery({
+    queryKey: ['contact', id],
+    queryFn: () => fetchContact(id),
+    // Keep the last loaded contact while the next one loads
+    placeholderData: keepPreviousData,
+  });
+
+  const form = useForm(contactSchema, {
+    initialValues: toFormValues(data),
+    resetKey: data?.id,
+    onSubmit: async (values) => {
+      // Save is disabled until the contact loads, but the type needs the guard.
+      // Return a Result on every path: a bare `return` can't mix with them.
+      if (!data) return err([{ path: [], message: 'The contact has not loaded yet.' }]);
+
+      const result = await saveContact(data.id, values, data.version);
+
+      if (result.conflict) {
+        // Fetch what the other person saved. isStale turns true when it arrives.
+        void queryClient.invalidateQueries({ queryKey: ['contact', id] });
+        return err([{ path: [], message: 'Someone else saved this contact. Reload to see their changes.' }]);
+      }
+
+      queryClient.setQueryData(['contact', data.id], result.contact);
+      return ok(result.contact);
+    },
+  });
+
+  return (
+    <div>
+      <ul>
+        {ids.map((contactId) => (
+          <li key={contactId}>
+            <button type="button" onClick={() => setId(contactId)} disabled={form.isSubmitting}>
+              {contactId}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <form onSubmit={(e) => void form.handleSubmit(e)}>
+        {form.isStale && (
+          <div role="alert">
+            Someone else changed this contact.{' '}
+            <button type="button" onClick={() => form.resetForm()}>
+              Reload
+            </button>
+          </div>
+        )}
+
+        <input {...form.getFieldProps('name')} />
+        <input type="email" {...form.getFieldProps('email')} />
+
+        {form.errors._root && <div className="form-error">{form.errors._root}</div>}
+
+        <button type="submit" disabled={form.isSubmitting || form.isStale || !data}>
+          Save
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+What happens:
+
+- A refetch with no edits is followed: the form shows the new values in the same render.
+- With edits, the form keeps them, `isStale` turns true, and Save waits for a Reload.
+- A change the app hasn't fetched yet comes back from the server as a conflict. The refetch then turns `isStale` true.
+- A save is followed even if the server changes the record, such as by normalizing the email.
+- A record switch starts over: values, touched state and errors reset to the new record.
+
+Things to get right:
+
+- **Key on the loaded id, not the selected id.** `resetKey: data?.id` starts the form over when the new record's data is in `initialValues`. Keying on the selected `id` would reset it while the old record's values are still there.
+- **Keep the previous record while the next one loads** (`placeholderData: keepPreviousData`). Without it, `data` turns `undefined`, so the form resets to empty and then to the next record, and anything typed meanwhile is lost.
+- **A failed save for a record the user switched away from shows nowhere.** Block switching while `isSubmitting`, as above, or `await form.handleSubmit()` and report the `err` in a toast.
+- **Two checks prevent lost updates together.** `isStale` covers a change the app has fetched. Save is disabled then, because `data.version` is already the newer version and the server would accept it. The server's version check covers a change the app hasn't fetched yet.
+- **Build `initialValues` the same way on every render.** Create generated values, like a new row's id or today's date, once, and don't read storage during render. Otherwise every render looks like a new version, and `useForm` logs an error naming the cause.
+- **An auto-saved edit form** (`useFormAutoSubmission`) pauses while `isStale` is true, as Save would be disabled. Show the same banner, so the user can Reload.
 
 ---
 
@@ -481,10 +595,10 @@ Error paths are handled automatically: `object()` constructs the field path (e.g
 
 **Solution:** `useFormAutoSubmission` watches form values and triggers `handleSubmit` after a debounce delay. For manual control, `useDebounce` wraps any callback.
 
-| Tool                                 | Use case                | How it works                                                                |
-| ------------------------------------ | ----------------------- | --------------------------------------------------------------------------- |
-| `useFormAutoSubmission(form, delay)` | Auto-submit entire form | Watches `values`, waits `delay` ms, calls `handleSubmit` if valid and dirty |
-| `useDebounce(callback, delay)`       | Debounce any function   | Returns debounced version that resets timer on each call                    |
+| Tool                                 | Use case                | How it works                                                                           |
+| ------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------- |
+| `useFormAutoSubmission(form, delay)` | Auto-submit entire form | Watches `values`, waits `delay` ms, calls `handleSubmit` if valid, dirty and not stale |
+| `useDebounce(callback, delay)`       | Debounce any function   | Returns debounced version that resets timer on each call                               |
 
 ```tsx
 import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
@@ -1608,14 +1722,15 @@ describe('LoginForm', () => {
 
 ```tsx
 function PersistentForm() {
-  const saved = JSON.parse(localStorage.getItem('draftForm') || '{}');
+  // Read once. Reading it every render would feed each saved draft back in as a new version.
+  const [saved, setSaved] = useState(() => JSON.parse(localStorage.getItem('draftForm') || '{}'));
 
   const form = useForm(formSchema, {
     initialValues: { name: '', email: '', ...saved },
     onSubmit: async (values) => {
       await api.submit(values);
       localStorage.removeItem('draftForm');
-      form.resetForm();
+      setSaved({});
     },
   });
 
@@ -1633,6 +1748,8 @@ function PersistentForm() {
   );
 }
 ```
+
+After the submit, `initialValues` becomes the empty values, and the form follows them because the submit left it with no unsaved edits. `resetForm()` would reset to the draft read on mount, and the persistence effect would save that draft again.
 
 ---
 

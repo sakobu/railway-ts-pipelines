@@ -90,7 +90,7 @@ Configuration options for useForm.
 Type: `NoInfer<TValues>`
 Required
 
-Initial values for form fields. Used when form is reset. The values type comes from the validator or schema, not from `initialValues`.
+Initial values for form fields, and the values `resetForm()` resets to. The values type comes from the validator or schema, not from `initialValues`.
 
 ```typescript
 initialValues: {
@@ -98,6 +98,34 @@ initialValues: {
   password: "",
 }
 ```
+
+The form follows new `initialValues`, such as a refetched record:
+
+- With no unsaved edits, the form shows the new values in the same render.
+- With edits, they stay, and [`isStale`](#isstale) reports that a newer version arrived.
+- New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed.
+- Build `initialValues` the same way on every render. A value that changes on its own (`crypto.randomUUID()`, `new Date()`, `new Set()`, storage read during render) makes every render look like a new version, and `useForm` logs an error naming the cause. Create such values once, at module scope or with `useState(() => …)`.
+
+See [Edit Forms: Loading, Refetching, and Switching Records](./RECIPES.md#edit-forms-loading-refetching-and-switching-records).
+
+#### resetKey
+
+Type: `string | number | boolean | null | undefined`
+Optional
+
+Identifies the record the form edits. When it changes, the form starts over on the current `initialValues`, as if the component had remounted, without remounting it. Values, touched state, errors and `isStale` are dropped, and edits are lost. A submission that is still running for the previous record finishes on its own, and its result doesn't touch the new record.
+
+Key on the id of the loaded record, not the id the user selected, so the form starts over when the new record's data arrives:
+
+```typescript
+const form = useForm(contactSchema, {
+  initialValues: toFormValues(data),
+  resetKey: data?.id,
+  onSubmit,
+});
+```
+
+Only primitives are accepted, compared with `Object.is`. Passing the record itself would start the form over on every refetch.
 
 #### onSubmit
 
@@ -281,10 +309,26 @@ True when there are no validation errors. The submit error (a server error at pa
 
 Type: `boolean`
 
-True when any values have changed from initial state.
+True when the values differ from the current `initialValues`.
 
 ```typescript
 <button disabled={!form.isDirty}>Save Changes</button>
+```
+
+### isStale
+
+Type: `boolean`
+
+True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`.
+
+It reads false while a submission runs, since a version that arrives then may be the save's own answer. A failed save shows it again.
+
+```typescript
+{form.isStale && (
+  <div role="alert">
+    This record changed. <button onClick={() => form.resetForm()}>Reload</button>
+  </div>
+)}
 ```
 
 ### isSubmitting
@@ -390,9 +434,9 @@ React state.
 
 Call form methods from event handlers and effects, not while rendering. The
 form's state lives outside React, so a call during render makes React log a
-warning. To load new values when a prop changes, give the form's component a
-`key`, or pass the new values as `initialValues` and call `resetForm()` in an
-effect (see [resetForm](#resetform)).
+warning. To load new values when a prop changes, pass them as `initialValues`:
+the form follows them (see [initialValues](#initialvalues)). For a different
+record, also change [`resetKey`](#resetkey).
 
 ### setFieldValue
 
@@ -584,11 +628,8 @@ It resets to the `initialValues` passed in the latest render.
 ```typescript
 <button onClick={() => form.resetForm()}>Reset</button>
 
-// Load another record: pass it as initialValues, then reset in an effect
-const { resetForm } = form;
-useEffect(() => {
-  resetForm();
-}, [user, resetForm]);
+// Someone else changed the record: offer a Reload
+{form.isStale && <button onClick={() => form.resetForm()}>Reload</button>}
 ```
 
 ### getFieldError
@@ -1253,6 +1294,12 @@ Hook for auto-submitting forms after debounced changes.
 Monitors form values and automatically triggers submission when the form
 is dirty, valid, and values have changed since the last validation.
 
+It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save goes out as soon as that save settles, unless the form is then stale.
+
+After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
+
+A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on.
+
 ### Signature
 
 ```typescript
@@ -1263,7 +1310,7 @@ function useFormAutoSubmission<T>(form: FormWithAutoSubmit<T>, delay?: number): 
 
 #### form
 
-A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`).
+A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`, and optionally `isStale`).
 
 #### delay
 
