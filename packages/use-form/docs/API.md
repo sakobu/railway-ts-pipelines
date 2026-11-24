@@ -56,7 +56,7 @@ const validator = v.object({
 
 Type: `FormOptions<TValues, TResult>`
 
-Configuration object.
+Configuration object. Every option but `initialValues` can be set to `undefined`, which means the same as leaving it out, so a conditional option such as `validationMode: mode` type-checks, with `exactOptionalPropertyTypes` on too.
 
 ```typescript
 {
@@ -66,20 +66,22 @@ Configuration object.
   // Returning nothing is allowed only when TResult is the form values; see onSubmit below
   onSubmit?:
     | ((values: TValues) => void | Promise<void>)
-    | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>);
+    | ((values: TValues) => Result<TResult, ValidationError[]> | Promise<Result<TResult, ValidationError[]>>)
+    | undefined;
   // The form values a successful save stored, from onSubmit's ok value; see savedValues below
-  savedValues?: (result: TResult) => TValues;
-  validationMode?: "live" | "blur" | "mount" | "submit";
-  fieldValidators?: {
-    [K in ExtractFieldPaths<TValues>]?: (
-      value: FieldTypeAtPath<TValues, K>,
-      values: TValues,
-    ) => string | undefined | Promise<string | undefined>;
-  };
-  onValuesChange?: (values: TValues, prevValues: TValues) => void;
-  onFieldChange?: (field: string, value: unknown, values: TValues) => void;
+  savedValues?: ((result: TResult) => TValues) | undefined;
+  validationMode?: "live" | "blur" | "mount" | "submit" | undefined;
+  fieldValidators?:
+    | {
+        [K in ExtractFieldPaths<TValues>]?:
+          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | undefined;
+      }
+    | undefined;
+  onValuesChange?: ((values: TValues, prevValues: TValues) => void) | undefined;
+  onFieldChange?: ((field: string, value: unknown, values: TValues) => void) | undefined;
   // Replaces the submit errors useForm writes itself; see messages below
-  messages?: { submitFailed?: string; changedWhileSaving?: string };
+  messages?: { submitFailed?: string | undefined; changedWhileSaving?: string | undefined } | undefined;
 }
 ```
 
@@ -204,7 +206,7 @@ Controls when validation occurs.
 
 #### fieldValidators
 
-Type: `{ [K in ExtractFieldPaths<TValues>]?: (value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined> }`
+Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>) | undefined }`
 Optional
 
 Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator: on a change, only the changed field's validator runs; on submit, all of them run. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).

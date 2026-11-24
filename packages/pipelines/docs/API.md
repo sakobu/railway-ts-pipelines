@@ -582,7 +582,7 @@ A schema where all validators are synchronous. Preserves sync return types.
 #### `ValidationError`
 
 ```typescript
-type ValidationError = { path: string[]; message: string; cause?: ValidationError[] };
+type ValidationError = { path: string[]; message: string; cause?: ValidationError[] | undefined };
 ```
 
 A validation error with path information and a message. `cause` holds the errors that explain this one, like `Error.cause`. [`decodeResult`](#decoderesult) sets it, and the rest of the library ignores it.
@@ -598,10 +598,18 @@ The result of a validation-and-format operation.
 #### `ValidateOptions`
 
 ```typescript
-type ValidateOptions = { abortEarly?: boolean };
+type ValidateOptions = { abortEarly?: boolean | undefined };
 ```
 
 Options for controlling validation behavior. When `abortEarly` is `true`, validation stops after the first error instead of collecting all errors.
+
+#### `UnionOptions`
+
+```typescript
+type UnionOptions = { collectAllErrors?: boolean | undefined; errorPrefix?: string | undefined };
+```
+
+Options for [`union`](#union). When `collectAllErrors` is `true` (the default), a union that fails reports every validator's errors; when `false`, only the first validator's. `errorPrefix` is put before each error message, as `${errorPrefix}: ${message}`.
 
 #### `InferSchemaType<V>`
 
@@ -631,11 +639,11 @@ Extract the union of output types from a validator map. Used by `discriminatedUn
 ```typescript
 function object<T extends Record<string, unknown>>(
   schema: SyncSchema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): Validator<unknown, ObjectOutput<T>>;
 function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 ```
 
@@ -1180,11 +1188,11 @@ Ensure a value is one of the allowed values.
 ```typescript
 function union<I, O1, O2>(
   validators: [Validator<I, O1>, Validator<I, O2>],
-  options?: { collectAllErrors?: boolean; errorPrefix?: string },
+  options?: UnionOptions,
 ): Validator<I, O1 | O2>;
 ```
 
-Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware.
+Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware. Its options are a [`UnionOptions`](#unionoptions).
 
 ```typescript
 const validate = union([string(), number()]);
@@ -1380,17 +1388,21 @@ const validate = chainAsync(
 
 ```typescript
 function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
-function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[]): Result<T, ValidationError[]>;
 function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  options: ValidateOptions,
+  path: string[] | undefined,
 ): Result<T, ValidationError[]>;
 function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  path: string[],
-  options: ValidateOptions,
+  options: ValidateOptions | undefined,
+): Result<T, ValidationError[]>;
+function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  path: string[] | undefined,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]>;
 // MaybeAsync overloads mirror the above, returning Result | Promise<Result>
 ```

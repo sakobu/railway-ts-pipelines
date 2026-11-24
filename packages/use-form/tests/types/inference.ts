@@ -55,12 +55,16 @@ const discriminated = S.object({
 
 const chained = S.chain(
   S.object({ name: S.string(), age: S.optional(S.number()) }),
-  S.refineAt<{ name: string; age?: number }>('name', (d) => d.name.length > 0, 'Required'),
+  S.refineAt<{ name: string; age?: number | undefined }>('name', (d) => d.name.length > 0, 'Required'),
 );
 
 const chainedAsync = S.chainAsync(
   S.object({ name: S.string(), age: S.optional(S.number()) }),
-  S.refineAtAsync<{ name: string; age?: number }>('name', (d) => Promise.resolve(d.name.length > 0), 'Required'),
+  S.refineAtAsync<{ name: string; age?: number | undefined }>(
+    'name',
+    (d) => Promise.resolve(d.name.length > 0),
+    'Required',
+  ),
 );
 
 const zodSchema = z.object({

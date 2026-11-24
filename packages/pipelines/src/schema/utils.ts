@@ -8,7 +8,7 @@ import type { AsyncValidator, MaybeAsyncValidator, ValidationError, ValidationRe
 /**
  * Options for controlling validation behavior.
  */
-export type ValidateOptions = { abortEarly?: boolean };
+export type ValidateOptions = { abortEarly?: boolean | undefined };
 
 /**
  * The key used in formatted error objects for root-level validation errors (i.e. errors with an empty path).
@@ -232,18 +232,18 @@ export function validate<T>(value: unknown, validator: Validator<unknown, T>): R
 export function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  path: string[],
+  path: string[] | undefined,
 ): Result<T, ValidationError[]>;
 export function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  options: ValidateOptions,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]>;
 export function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  path: string[],
-  options: ValidateOptions,
+  path: string[] | undefined,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]>;
 export function validate<T>(
   value: unknown,
@@ -252,18 +252,18 @@ export function validate<T>(
 export function validate<T>(
   value: unknown,
   validator: MaybeAsyncValidator<unknown, T>,
-  path: string[],
+  path: string[] | undefined,
 ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
 export function validate<T>(
   value: unknown,
   validator: MaybeAsyncValidator<unknown, T>,
-  options: ValidateOptions,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
 export function validate<T>(
   value: unknown,
   validator: MaybeAsyncValidator<unknown, T>,
-  path: string[],
-  options: ValidateOptions,
+  path: string[] | undefined,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>>;
 export function validate<T>(
   value: unknown,

@@ -8,7 +8,7 @@ export type ValidationError = {
   path: string[];
   message: string;
   /** The errors that explain this one, like `Error.cause`. Set by `decodeResult`; the rest of the library ignores it. */
-  cause?: ValidationError[];
+  cause?: ValidationError[] | undefined;
 };
 
 /**
@@ -131,15 +131,15 @@ export function _withAbortEarly<T>(enabled: boolean, fn: () => T): T {
  */
 export function object<T extends Record<string, unknown>>(
   schema: SyncSchema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): Validator<unknown, ObjectOutput<T>>;
 export function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean | undefined },
 ): MaybeAsyncValidator<unknown, ObjectOutput<T>>;
 export function object<T extends Record<string, unknown>>(
   schema: Schema<T>,
-  { strict = true }: { strict?: boolean } = {},
+  { strict = true }: { strict?: boolean | undefined } = {},
 ): MaybeAsyncValidator<unknown, T> {
   return (obj, parentPath = []) => {
     if (obj === null || typeof obj !== 'object') {

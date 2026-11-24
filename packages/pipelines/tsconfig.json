@@ -8,8 +8,7 @@
     },
 
     // Stricter than the base
-    "noPropertyAccessFromIndexSignature": true,
-    "exactOptionalPropertyTypes": true
+    "noPropertyAccessFromIndexSignature": true
   },
   "include": ["src", "tests", "examples", "*.ts"],
   // tests/package type-checks the built package with its own tsconfig.json
