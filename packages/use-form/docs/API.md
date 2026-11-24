@@ -207,9 +207,9 @@ Controls when validation occurs.
 Type: `{ [K in ExtractFieldPaths<TValues>]?: (value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined> }`
 Optional
 
-Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator, only for the changed field. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
+Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator: on a change, only the changed field's validator runs; on submit, all of them run. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
 
-Return `undefined` for valid, or an error message string for invalid.
+Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
 ```typescript
 const form = useForm(userSchema, {
