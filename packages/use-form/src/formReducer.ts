@@ -10,17 +10,24 @@ import {
 
 import type { FieldPath, FormAction, FormState, ResetKey } from './types';
 
+/**
+ * The one empty map every fresh or cleared state shares. A render that derives a state and the store
+ * that computes the same state then hold the same map, so values derived from it keep their identity.
+ * Frozen, since the reducer copies before every write: a mutation in place would throw.
+ */
+const EMPTY: Readonly<Record<string, never>> = Object.freeze({});
+
 /** Creates the state of a form that has just mounted on `initialValues`. */
 export const createInitialFormState = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
   resetKey: ResetKey,
 ): FormState<TValues> => ({
   values: initialValues,
-  touched: {},
-  clientErrors: {},
-  serverErrors: {},
-  fieldErrors: {},
-  validatingFields: {},
+  touched: EMPTY,
+  clientErrors: EMPTY,
+  serverErrors: EMPTY,
+  fieldErrors: EMPTY,
+  validatingFields: EMPTY,
   isSubmitting: false,
   isFormValidating: false,
   submitCount: 0,
@@ -42,7 +49,7 @@ const followVersion = <TValues extends Record<string, unknown>>(
   return {
     ...rest,
     values: version,
-    serverErrors: {},
+    serverErrors: EMPTY,
     lastVersion: version,
     cleanValues: version,
     baseVersion: version,

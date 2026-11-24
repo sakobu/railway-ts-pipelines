@@ -534,6 +534,56 @@ describe('saving', () => {
   });
 });
 
+describe('state identity', () => {
+  test('a follow changes errors and serverErrors once', () => {
+    const runs = { errors: 0, serverErrors: 0 };
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => {
+        // blur mode: the follow doesn't re-validate, so only its own change shows
+        const form = useForm(publishValidator, { initialValues: initial, validationMode: 'blur' });
+        useEffect(() => {
+          runs.errors += 1;
+        }, [form.errors]);
+        useEffect(() => {
+          runs.serverErrors += 1;
+        }, [form.serverErrors]);
+        return form;
+      },
+      { initialProps: { initial: draft } },
+    );
+    act(() => result.current.setServerErrors([{ path: ['title'], message: 'Taken' }]));
+    runs.errors = 0;
+    runs.serverErrors = 0;
+
+    rerender({ initial: loaded });
+
+    expect(result.current.values).toEqual(loaded);
+    expect(result.current.serverErrors).toEqual({});
+    expect(runs).toEqual({ errors: 1, serverErrors: 1 });
+  });
+
+  test('a resetKey change changes touched once', () => {
+    let runs = 0;
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => {
+        const form = useForm(publishValidator, { initialValues: draft, resetKey: id });
+        useEffect(() => {
+          runs += 1;
+        }, [form.touched]);
+        return form;
+      },
+      { initialProps: { id: 'a' } },
+    );
+    act(() => result.current.setFieldTouched('title'));
+    runs = 0;
+
+    rerender({ id: 'b' });
+
+    expect(result.current.touched).toEqual({});
+    expect(runs).toBe(1);
+  });
+});
+
 describe('initialValues that changes on its own', () => {
   let consoleError: ReturnType<typeof spyOn<Console, 'error'>>;
 
