@@ -56,7 +56,7 @@ const validator = v.object({
 
 Type: `FormOptions<TValues, TResult>`
 
-Configuration object. An option set to `undefined` means the same as one left out, so a conditional option such as `validationMode: mode` type-checks, with `exactOptionalPropertyTypes` on too.
+Configuration object. Every option but `initialValues` can be set to `undefined`, which means the same as leaving it out, so a conditional option such as `validationMode: mode` type-checks, with `exactOptionalPropertyTypes` on too.
 
 ```typescript
 {
@@ -206,7 +206,7 @@ Controls when validation occurs.
 
 #### fieldValidators
 
-Type: `{ [K in ExtractFieldPaths<TValues>]?: (value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined> }`
+Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>) | undefined }`
 Optional
 
 Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator: on a change, only the changed field's validator runs; on submit, all of them run. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
