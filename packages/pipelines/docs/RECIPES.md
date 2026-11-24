@@ -700,7 +700,16 @@ const duration = chain(string(), isoDuration());
 `emptyAsOptional` treats empty strings (and `null`/`undefined`) as `undefined` instead of failing validation. Useful for HTML forms where blank fields submit as `""`:
 
 ```typescript
-import { object, required, optional, string, emptyAsOptional, chain, parseNumber } from '@railway-ts/pipelines/schema';
+import {
+  object,
+  required,
+  optional,
+  string,
+  emptyAsOptional,
+  chain,
+  parseNumber,
+  validate,
+} from '@railway-ts/pipelines/schema';
 
 const formSchema = object({
   name: required(string()),
