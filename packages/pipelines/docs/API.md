@@ -1192,7 +1192,7 @@ function union<I, O1, O2>(
 ): Validator<I, O1 | O2>;
 ```
 
-Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware.
+Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware. Its options are a [`UnionOptions`](#unionoptions).
 
 ```typescript
 const validate = union([string(), number()]);
@@ -1388,17 +1388,21 @@ const validate = chainAsync(
 
 ```typescript
 function validate<T>(value: unknown, validator: Validator<unknown, T>): Result<T, ValidationError[]>;
-function validate<T>(value: unknown, validator: Validator<unknown, T>, path: string[]): Result<T, ValidationError[]>;
 function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  options: ValidateOptions,
+  path: string[] | undefined,
 ): Result<T, ValidationError[]>;
 function validate<T>(
   value: unknown,
   validator: Validator<unknown, T>,
-  path: string[],
-  options: ValidateOptions,
+  options: ValidateOptions | undefined,
+): Result<T, ValidationError[]>;
+function validate<T>(
+  value: unknown,
+  validator: Validator<unknown, T>,
+  path: string[] | undefined,
+  options: ValidateOptions | undefined,
 ): Result<T, ValidationError[]>;
 // MaybeAsync overloads mirror the above, returning Result | Promise<Result>
 ```
