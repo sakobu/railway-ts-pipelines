@@ -443,6 +443,88 @@ describe('useFormAutoSubmission', () => {
     });
   });
 
+  describe('a form that goes clean', () => {
+    test("a save waiting out its delay doesn't go out once the form follows a refetch", async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      // An edit undone within the delay, then a refetch
+      act(() => {
+        result.current.setFieldValue('name', 'Jo');
+      });
+      act(() => {
+        result.current.setFieldValue('name', 'John');
+      });
+      rerender({ values: { ...initial, email: 'refetched@example.com' } });
+      expect(result.current.isDirty).toBe(false);
+      await sleep(150);
+
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    test("a save waiting out its delay doesn't go out once resetForm() makes the form clean", async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      act(() => {
+        result.current.resetForm();
+      });
+      await sleep(150);
+
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    test('saves an edit back to values it saved before a follow', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 20);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 500 });
+      // The saved record comes back, then someone else sets the name back to John
+      rerender({ values: { ...initial, name: 'Jane' } });
+      rerender({ values: { ...initial } });
+      expect(result.current.values.name).toBe('John');
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 500 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Jane' }]);
+    });
+
+    test('saves a new record edited to the values the previous record was saved with', async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const A: UserForm = { name: 'Ann', email: 'a@example.com', age: 30 };
+      const B: UserForm = { name: 'Bob', email: 'a@example.com', age: 30 };
+      const { result, rerender } = renderHook(
+        ({ values, id }: { values: UserForm; id: string }) => {
+          const form = useForm(userValidator, { initialValues: values, resetKey: id, onSubmit });
+          useFormAutoSubmission(form, 20);
+          return form;
+        },
+        { initialProps: { values: A, id: 'a' } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Same');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 500 });
+      rerender({ values: B, id: 'b' });
+      act(() => {
+        result.current.setFieldValue('name', 'Same');
+      });
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 500 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...B, name: 'Same' }]);
+    });
+  });
+
   describe('multiple field changes', () => {
     test('auto-submits after multiple field changes', async () => {
       const onSubmit = mock((_values: UserForm) => {});
@@ -660,6 +742,68 @@ describe('useFormAutoSubmission', () => {
       await sleep(150);
 
       expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test("a held save isn't sent when its values turned invalid during the save", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      // The edit comes due during the save: it's held
+      await sleep(150);
+      act(() => {
+        result.current.setFieldValue('email', 'not-an-email');
+      });
+      expect(result.current.isValid).toBe(false);
+
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      await sleep(150);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.submitCount).toBe(1);
+    });
+
+    test('saves an edit back to the held values once the save settles and the form follows its answer', async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      // Edits that come due during the save are held: the last one is the value being saved
+      act(() => {
+        result.current.setFieldValue('name', 'janet');
+      });
+      await sleep(150);
+      act(() => {
+        result.current.setFieldValue('name', 'jane');
+      });
+      await sleep(150);
+
+      // The save settles, and its answer, with the name capitalized, arrives in the same commit
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+        rerender({ values: { ...initial, name: 'Jane' } });
+      });
+      expect(result.current.isDirty).toBe(false);
+
+      act(() => {
+        result.current.setFieldValue('name', 'jane');
+      });
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'jane' }]);
     });
 
     test("after a resetKey switch, the new record's save waits for the previous record's running save", async () => {

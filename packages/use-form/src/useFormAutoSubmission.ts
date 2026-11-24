@@ -29,7 +29,7 @@ type FormWithAutoSubmit<T> = {
  * 4. The form isn't stale (`isStale`): a save would overwrite a newer version of the record.
  *
  * Submission is debounced to avoid excessive API calls during rapid user input.
- * An edit made during a save goes out as soon as that save settles, unless the form is then stale.
+ * An edit made during a save goes out as soon as that save settles, unless the form is then stale or invalid.
  * After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save,
  * and goes out as soon as it settles.
  * A throw or rejection from `handleSubmit` is logged with `console.error`, and auto-save carries on.
@@ -92,7 +92,8 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
   );
 
   const debouncedSubmit = useDebounce(() => {
-    if (!isValid) return;
+    // The delay can end after the form went clean, as after a follow or resetForm(): there's nothing to save then
+    if (!isDirty || !isValid) return;
     // While the form is stale, the effect forgets the validated values, so it submits them once it no longer is
     if (isStale) return;
     if (savingRef.current) {
@@ -108,14 +109,16 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       heldRef.current = false;
       return;
     }
+    // A clean form has nothing to save. Forgetting the validated values lets an edit back to them, after a follow
+    // or a resetKey switch, be validated and saved.
+    if (!isDirty) lastValidatedRef.current = null;
     if (heldRef.current && !savingRef.current) {
       // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go
       heldRef.current = false;
-      if (isDirty && !deepEqual(values, savedRef.current)) submit(values);
+      if (isDirty && isValid && !deepEqual(values, savedRef.current)) submit(values);
       return;
     }
-    if (!isDirty) return;
-    if (deepEqual(values, lastValidatedRef.current)) return;
+    if (!isDirty || deepEqual(values, lastValidatedRef.current)) return;
 
     lastValidatedRef.current = values;
     const result = validateForm(values);
@@ -128,7 +131,7 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       debouncedSubmit();
     }
     // `settled` re-runs the effect once a save settles, so a held save goes out
-  }, [values, isDirty, isStale, settled, submit, debouncedSubmit, validateForm]);
+  }, [values, isDirty, isValid, isStale, settled, submit, debouncedSubmit, validateForm]);
 
   return null;
 };

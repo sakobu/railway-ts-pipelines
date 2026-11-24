@@ -1296,7 +1296,7 @@ Hook for auto-submitting forms after debounced changes.
 Monitors form values and automatically triggers submission when the form
 is dirty, valid, and values have changed since the last validation.
 
-It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save goes out as soon as that save settles, unless the form is then stale.
+It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save goes out as soon as that save settles, unless the form is then stale or invalid.
 
 After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
 
