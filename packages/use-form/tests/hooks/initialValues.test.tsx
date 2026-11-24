@@ -1,6 +1,16 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 
 import { err, ok } from '@railway-ts/pipelines/result';
+import {
+  chain,
+  number,
+  object,
+  optional,
+  required,
+  string,
+  transform,
+  type MaybeAsyncValidator,
+} from '@railway-ts/pipelines/schema';
 import { render, renderHook, act, waitFor, fireEvent } from '@testing-library/react';
 import { Component, StrictMode, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
@@ -10,7 +20,6 @@ import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, n
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
 import type { FormOptions, UseFormReturn } from '../../src/types';
-import type { MaybeAsyncValidator } from '@railway-ts/pipelines/schema';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const loaded: PublishForm = { title: 'Loaded', status: 'published', tags: ['a'] };
@@ -1096,6 +1105,35 @@ describe('saving', () => {
         });
       };
     };
+
+    test('a refetched record without an optional key is the answer to a save of values without it', async () => {
+      // The schema trims, so the record the server stores differs from the typed values
+      const schema = object({
+        name: required(
+          chain(
+            string(),
+            transform((name: string) => name.trim()),
+          ),
+        ),
+        age: optional(number()),
+      });
+      // onSubmit returns nothing, so savedValues reads the validated values: no age key, as the form values have none
+      const { result, rerender } = renderHook(
+        ({ initial }: { initial: { name: string; age?: number | undefined } }) =>
+          useForm(schema, { initialValues: initial, onSubmit: () => {}, savedValues: (saved) => saved }),
+        { initialProps: { initial: { name: 'a' } } },
+      );
+
+      act(() => result.current.setFieldValue('name', ' b '));
+      await act(async () => {
+        await result.current.handleSubmit();
+      });
+      act(() => result.current.setFieldValue('name', 'c'));
+      rerender({ initial: { name: 'b' } });
+
+      expect(result.current.isStale).toBe(false);
+      expect(result.current.values).toStrictEqual({ name: 'c' });
+    });
 
     test("an optimistic copy of the saved values isn't taken for the save's answer, with typing during the save", async () => {
       const rendered = renderSavingForm();
