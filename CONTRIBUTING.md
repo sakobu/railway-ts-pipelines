@@ -43,6 +43,8 @@ use-form imports pipelines through its built output, exactly as npm users do. To
 
 Support floors are tested. The `typescript` peer floor in both packages is the repo's TypeScript minor, so the repo's own type check tests it; raise them together. `engines.node` is tested by CI's `node-floor` job; change its `node-version` with it.
 
+**Options accept `undefined`.** The repo type-checks with `exactOptionalPropertyTypes`, so an option whose absence means "use the default" must say it accepts an explicit `undefined`: a property is typed `?: T | undefined`, and an optional positional argument `T | undefined`. Then a conditional option like `{ strict: maybe }` compiles. Value types, such as schema outputs and the argument of use-form's `setValues`, mirror what is stored and keep plain `?: T`. A new options type gets a line in `packages/pipelines/tests/package/optional-options.ts` or `packages/use-form/tests/types/optionalOptions.ts`, which fail when one of its options rejects `undefined`.
+
 ## Changesets
 
 Every pull request that changes a published package needs a changeset. Run `bun run changeset`, pick the packages and the bump, and write the summary users will read in the changelog:
