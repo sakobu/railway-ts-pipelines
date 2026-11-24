@@ -59,22 +59,6 @@ const settleOnLatest = <TValues extends Record<string, unknown>>(state: FormStat
   isStale: false,
 });
 
-/**
- * The state after an edit set `values` and kept `serverErrors`. The edit clears the submit error. Values that
- * come to equal the latest version end `isStale`, and count as clean when {@link latestIsSettled} allows. The
- * comparison only runs once a version arrived under edits, so most forms pay nothing for it.
- */
-const withEdit = <TValues extends Record<string, unknown>>(
-  state: FormState<TValues>,
-  values: TValues,
-  serverErrors: Record<FieldPath, string>,
-): FormState<TValues> => {
-  const { submitError: _submitError, ...rest } = state;
-  const next = { ...rest, values, serverErrors };
-  if (state.cleanValues === state.lastVersion || !deepEqual(values, state.lastVersion)) return next;
-  return latestIsSettled(next) ? settleOnLatest(next) : { ...next, isStale: false };
-};
-
 /** Shows `version`, and treats it as clean and as the base of any later edits. */
 const followVersion = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
@@ -91,6 +75,27 @@ const followVersion = <TValues extends Record<string, unknown>>(
     isStale: false,
     baselineEpoch: state.baselineEpoch + 1,
   };
+};
+
+/**
+ * The state after an edit set `values` and kept `serverErrors`. The edit clears the submit error. Values that
+ * come to equal the latest version end `isStale`, and count as clean when {@link latestIsSettled} allows. Values
+ * that come back to the clean values leave no unsaved edits, so the form follows the latest version then, as a form
+ * with no edits does. The comparisons only run once a version arrived under edits, so most forms pay nothing for them.
+ */
+const withEdit = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  values: TValues,
+  serverErrors: Record<FieldPath, string>,
+): FormState<TValues> => {
+  const { submitError: _submitError, ...rest } = state;
+  const next = { ...rest, values, serverErrors };
+  if (state.cleanValues === state.lastVersion) return next;
+  if (deepEqual(values, state.lastVersion)) {
+    return latestIsSettled(next) ? settleOnLatest(next) : { ...next, isStale: false };
+  }
+  if (latestIsSettled(next) && deepEqual(values, state.cleanValues)) return followVersion(next, state.lastVersion);
+  return next;
 };
 
 /**

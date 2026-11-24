@@ -554,13 +554,37 @@ describe('isStale', () => {
   test("clears when the user's edits come to match the latest version", () => {
     const { result } = renderStaleForm();
 
-    act(() => result.current.setFieldValue('title', 'Hello'));
-    expect(result.current.isStale).toBe(true); // status still differs
+    act(() => result.current.setFieldValue('status', 'published'));
+    expect(result.current.isStale).toBe(true); // the title still differs
     expect(result.current.isDirty).toBe(true);
 
-    act(() => result.current.setFieldValue('status', 'published'));
+    act(() => result.current.setFieldValue('title', 'Hello'));
     expect(result.current.isStale).toBe(false);
     expect(result.current.isDirty).toBe(false);
+  });
+
+  test('an edit that undoes every edit shows the latest version, as a form with no edits does', () => {
+    const { result } = renderStaleForm();
+
+    act(() => result.current.setFieldValue('title', 'Hello'));
+
+    expect(result.current.values).toEqual({ ...draft, status: 'published' });
+    expect(result.current.isStale).toBe(false);
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  test('the version shown on such an edit is re-validated, as on any follow', () => {
+    const { result, rerender } = renderForm({ validationMode: 'blur' });
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldValue('status', 'published'));
+    // Someone else cleared the title
+    rerender({ initial: { ...draft, title: '' } });
+    expect(result.current.isStale).toBe(true);
+
+    act(() => result.current.setFieldValue('status', 'draft'));
+
+    expect(result.current.values.title).toBe('');
+    expect(result.current.errors.title).toBe('Title is required');
   });
 
   test('values that come to equal the latest version count as clean, so the next version is followed', () => {

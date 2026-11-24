@@ -1263,8 +1263,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * editing. Implies `isDirty`.
    *
    * It turns false again once the values equal the latest `initialValues`, as after `resetForm()` or
-   * when the user's edits come to match it. A `resetKey` change, a successful save, and the other
-   * person undoing their change clear it too.
+   * when the user's edits come to match it, and once the user undoes every edit: the form then shows the
+   * latest version. A `resetKey` change, a successful save, and the other person undoing their change
+   * clear it too.
    *
    * It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own
    * answer. While the submission is still validating, a newer version shows, and the save is then cancelled.

@@ -830,6 +830,25 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
+   * Applies an edit. One that undoes the last unsaved edit makes the form follow the latest version: it then runs a
+   * follow's side effects, which replace the edit's own validation.
+   *
+   * @param action - The edit
+   * @returns Whether the edit made the form follow the latest version
+   */
+  const applyEdit = useCallback(
+    (action: FormAction<TValues>): boolean => {
+      const prev = store.getState();
+      dispatch(action);
+      const next = store.getState();
+      if (next.baselineEpoch === prev.baselineEpoch) return false;
+      runFollowEffects(prev, next);
+      return true;
+    },
+    [store, dispatch, runFollowEffects],
+  );
+
+  /**
    * Updates a single field value and optionally triggers validation.
    * Automatically marks the field as touched (in "live" mode) and clears related server errors.
    *
@@ -860,11 +879,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void => {
       // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
-      dispatch({
-        type: 'SET_FIELD_VALUE',
-        field,
-        value,
-      });
+      const followed = applyEdit({ type: 'SET_FIELD_VALUE', field, value });
 
       onFieldChangeRef.current?.(field, value, store.getState().values);
 
@@ -873,12 +888,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
-      // Validate the values as they are after any onFieldChange cascade
-      if (shouldValidate) {
+      // Validate the values as they are after any onFieldChange cascade. A follow has validated them already.
+      if (shouldValidate && !followed) {
         runValidationPipeline(field, store.getState().values);
       }
     },
-    [store, dispatch, validateOnChange, touchOnChange, runValidationPipeline],
+    [store, dispatch, applyEdit, validateOnChange, touchOnChange, runValidationPipeline],
   );
 
   /**
@@ -911,16 +926,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void => {
-      dispatch({
-        type: 'SET_VALUES',
-        values: newValues,
-      });
+      const followed = applyEdit({ type: 'SET_VALUES', values: newValues });
 
-      if (shouldValidate) {
+      // A follow has validated the values already
+      if (shouldValidate && !followed) {
         void startValidation(store.getState().values);
       }
     },
-    [store, dispatch, validateOnChange, startValidation],
+    [store, applyEdit, validateOnChange, startValidation],
   );
 
   /**

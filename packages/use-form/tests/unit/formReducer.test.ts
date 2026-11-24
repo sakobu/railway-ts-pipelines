@@ -1108,4 +1108,38 @@ describe('isStale and edits', () => {
 
     expect(result.isStale).toBe(true);
   });
+
+  test('an edit back to the clean values follows the latest version, as a form with no edits does', () => {
+    const result = formReducer(stale, { type: 'SET_FIELD_VALUE', field: 'name', value: 'John' }, v1);
+
+    expect(result.values).toBe(v2);
+    expect(result.cleanValues).toBe(v2);
+    expect(result.baseVersion).toBe(v2);
+    expect(result.isStale).toBe(false);
+    expect(result.baselineEpoch).toBe(1);
+  });
+
+  test('an edit back to the clean values stays an edit during a submission', () => {
+    const result = formReducer({ ...stale, isSubmitting: true }, { type: 'SET_VALUES', values: { name: 'John' } }, v1);
+
+    expect(result.values).toEqual(v1);
+    expect(result.isStale).toBe(true);
+    expect(result.baselineEpoch).toBe(0);
+  });
+
+  test("an edit back to the clean values stays an edit while a save's answer is pending", () => {
+    // The save of `edited` succeeded before its answer arrived, so the latest version is the one before it
+    const pending: FormState<typeof v1> = {
+      ...s,
+      values: { ...edited, name: 'Janet' },
+      cleanValues: edited,
+      baseVersion: undefined,
+    };
+
+    const result = formReducer(pending, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, v1);
+
+    expect(result.values).toEqual(edited);
+    expect(result.lastVersion).toBe(v1);
+    expect(result.baselineEpoch).toBe(0);
+  });
 });
