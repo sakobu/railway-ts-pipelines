@@ -1161,28 +1161,28 @@ export type FormAction<TValues extends Record<string, unknown>> =
  *   `UseFormReturn<V, U>` for an `onSubmit` that returns `Result<U, …>`.
  */
 export interface UseFormReturn<TValues extends Record<string, unknown>, TResult = unknown> {
-  // Form state
+  // Form state. The maps are read-only: an empty one is a shared frozen object, so a write would throw.
 
   /** Current values of all form fields. */
   values: TValues;
 
   /** Record of which fields have been interacted with by the user. */
-  touched: Record<FieldPath, boolean>;
+  touched: Readonly<Record<FieldPath, boolean>>;
 
   /** Merged validation errors (server errors take precedence over field errors, which take precedence over client errors). */
-  errors: Record<FieldPath, string>;
+  errors: Readonly<Record<FieldPath, string>>;
 
   /** Validation errors from client-side (schema) validation only. */
-  clientErrors: Record<FieldPath, string>;
+  clientErrors: Readonly<Record<FieldPath, string>>;
 
   /**
    * Validation errors set via `setServerErrors()`, keyed by field path. Automatically cleared when the related
    * field value changes. Includes the submit error at `_root` when one is set.
    */
-  serverErrors: Record<FieldPath, string>;
+  serverErrors: Readonly<Record<FieldPath, string>>;
 
   /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
-  fieldErrors: Record<FieldPath, string>;
+  fieldErrors: Readonly<Record<FieldPath, string>>;
 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
@@ -1191,7 +1191,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   isValidating: boolean;
 
   /** Per-field async validation tracking. `true` when that field's async validator is running. */
-  validatingFields: Record<FieldPath, boolean>;
+  validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**
    * Whether the form is currently valid: no client, field-validator or per-path server errors.

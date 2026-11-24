@@ -246,7 +246,7 @@ onFieldChange: (field, value, values) => {
 
 ## Form State
 
-Properties returned by useForm.
+Properties returned by useForm. The maps (`touched`, `errors` and the rest) are read-only: an empty one is a shared frozen object, so writing into it throws. Copy one before changing it.
 
 ### values
 
@@ -261,7 +261,7 @@ form.values.password; // "password123"
 
 ### touched
 
-Type: `Record<FieldPath, boolean>`
+Type: `Readonly<Record<FieldPath, boolean>>`
 
 Record of which fields have been interacted with.
 
@@ -272,7 +272,7 @@ form.touched.password; // false
 
 ### errors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Combined client, field validator, and server errors. Server errors take highest precedence (server > field > client). The submit error shows at `form.errors._root` (`ROOT_ERROR_KEY`).
 
@@ -283,7 +283,7 @@ form.errors['addresses.0.city']; // "City is required"
 
 ### clientErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Validation errors from the validator function.
 
@@ -293,7 +293,7 @@ form.clientErrors.email; // "Invalid email format"
 
 ### serverErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Errors from the server: set by `setServerErrors(...)`, or by `onSubmit` returning `err`. The submit error (a server error at path `[]`) shows at `serverErrors._root`.
 
@@ -363,7 +363,7 @@ Derived property. True when **any** async validation is in progress -- either fo
 
 ### validatingFields
 
-Type: `Record<FieldPath, boolean>`
+Type: `Readonly<Record<FieldPath, boolean>>`
 
 Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running. Use this to show inline loading indicators next to individual fields.
 
@@ -375,7 +375,7 @@ Per-field tracking for `fieldValidators` only. Shows which specific fields curre
 
 ### fieldErrors
 
-Type: `Record<FieldPath, string>`
+Type: `Readonly<Record<FieldPath, string>>`
 
 Errors from per-field validators (stored separately from schema errors).
 These are merged into the `errors` object with priority above schema errors
