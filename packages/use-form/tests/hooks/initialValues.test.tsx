@@ -632,6 +632,18 @@ describe('saving', () => {
     expect(result.current.serverErrors).toEqual({});
   });
 
+  test('after a save of an unedited form, a later change by someone else still raises isStale', async () => {
+    const { result, rerender } = renderForm({ onSubmit: () => {} });
+
+    await act(() => result.current.handleSubmit());
+    // The saved record comes back with the same content
+    rerender({ initial: { ...draft } });
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    rerender({ initial: { ...draft, status: 'published' } });
+
+    expect(result.current.isStale).toBe(true);
+  });
+
   test('follows a saved record that differs from the submitted values', async () => {
     const { result, rerender } = renderForm({ onSubmit: () => {} });
 

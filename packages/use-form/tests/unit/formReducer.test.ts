@@ -898,6 +898,18 @@ describe('SUBMIT_SUCCEEDED', () => {
     expect(result.isStale).toBe(false);
   });
 
+  test('a save of values equal to the latest version keeps that version as the base', () => {
+    // Its answer has the same content, so it never arrives as a new version: waiting for it would leave the base
+    // unset, and the next version, someone else's change, would be taken for the answer
+    const unchanged = { ...v1 };
+
+    const result = formReducer({ ...s, values: unchanged }, { ...succeeded, values: unchanged }, v1);
+
+    expect(result.cleanValues).toBe(unchanged);
+    expect(result.baseVersion).toBe(v1);
+    expect(result.isStale).toBe(false);
+  });
+
   test('follows a version that arrived during the submission when nothing was typed since', () => {
     const result = formReducer({ ...s, values: edited, lastVersion: saved, isStale: true }, succeeded, v1);
 

@@ -292,8 +292,16 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       // equal to the base, by content, isn't this save's answer either: it's the previous save's answer, pending
       // when this save started and made the base when it arrived, or the old base coming back
       if (state.lastVersion === action.lastVersion || deepEqual(state.baseVersion, state.lastVersion)) {
-        // None arrived for this submission: the next one to arrive is the server's answer
-        return { ...state, cleanValues: action.values, baseVersion: undefined, isStale: false };
+        // None arrived for this submission: the next one to arrive is the server's answer. Unless the submitted
+        // values equal the latest version: the answer then has the same content, so it never arrives as a new
+        // version, and the latest version stays the base.
+        const answered = deepEqual(action.values, state.lastVersion);
+        return {
+          ...state,
+          cleanValues: action.values,
+          baseVersion: answered ? state.lastVersion : undefined,
+          isStale: false,
+        };
       }
       // One arrived: the server's answer, delivered before onSubmit returned. The save succeeded, so it's settled.
       if (deepEqual(state.values, action.values)) return followVersion(state, state.lastVersion);
