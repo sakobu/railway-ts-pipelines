@@ -228,18 +228,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // State Store
   // ===========================================================================
 
-  // The reducer uses the initialValues of the latest commit. An insertion effect updates them before
-  // any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
-  const initialValuesRef = useRef(initialValues);
-  useInsertionEffect(() => {
-    initialValuesRef.current = initialValues;
-  });
-
   // The state lives in a store, so every method reads the state left by the calls before it,
   // not the state of the last render. React renders from the store.
   const [store] = useState(() =>
-    createFormStore<TValues>(createInitialFormState(initialValues, resetKey), () => initialValuesRef.current),
+    createFormStore<TValues>(createInitialFormState(initialValues, resetKey), initialValues),
   );
+
+  // resetForm() resets to the initialValues of the latest commit. An insertion effect hands them to the store
+  // before any layout effect, passive effect or event handler of that commit can dispatch, including a child's.
+  useInsertionEffect(() => {
+    store.setInitialValues(initialValues);
+  });
+
   const storedState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { dispatch } = store;
 
@@ -271,7 +271,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   }, [formState.values]);
 
   // --- onFieldChange ---
-  // Fired imperatively from setFieldValue. Updated in an insertion effect, like initialValuesRef,
+  // Fired imperatively from setFieldValue. Updated in an insertion effect, like the store's initial values,
   // so a setFieldValue from any effect of the same commit, a child's included, gets this render's callback.
   const onFieldChangeRef = useRef(onFieldChange);
   useInsertionEffect(() => {

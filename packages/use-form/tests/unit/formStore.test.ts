@@ -11,7 +11,7 @@ const initialState: FormState<Values> = createInitialFormState({ name: '' }, und
 
 describe('createFormStore', () => {
   test('dispatch applies the reducer immediately', () => {
-    const store = createFormStore(initialState, () => initialState.values);
+    const store = createFormStore(initialState, initialState.values);
 
     store.dispatch({ type: 'SET_FIELD_VALUE', field: 'name', value: 'Ada' });
 
@@ -19,7 +19,7 @@ describe('createFormStore', () => {
   });
 
   test('notifies each listener once per state change', () => {
-    const store = createFormStore(initialState, () => initialState.values);
+    const store = createFormStore(initialState, initialState.values);
     const first = mock(() => {});
     const second = mock(() => {});
     store.subscribe(first);
@@ -32,7 +32,7 @@ describe('createFormStore', () => {
   });
 
   test('does not notify when the reducer returns the same state', () => {
-    const store = createFormStore(initialState, () => initialState.values);
+    const store = createFormStore(initialState, initialState.values);
     const listener = mock(() => {});
     store.subscribe(listener);
     const before = store.getState();
@@ -44,7 +44,7 @@ describe('createFormStore', () => {
   });
 
   test('an unsubscribed listener is not notified', () => {
-    const store = createFormStore(initialState, () => initialState.values);
+    const store = createFormStore(initialState, initialState.values);
     const listener = mock(() => {});
     const unsubscribe = store.subscribe(listener);
 
@@ -54,11 +54,10 @@ describe('createFormStore', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  test('the reducer gets the initial values current at dispatch time', () => {
-    let current: Values = { name: '' };
-    const store = createFormStore(initialState, () => current);
+  test('the reducer gets the initial values set most recently, at dispatch time', () => {
+    const store = createFormStore<Values>(initialState, { name: '' });
 
-    current = { name: 'B' };
+    store.setInitialValues({ name: 'B' });
     store.dispatch({ type: 'RESET_FORM' });
 
     expect(store.getState().values).toEqual({ name: 'B' });
