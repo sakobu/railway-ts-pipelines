@@ -837,6 +837,38 @@ describe('useFormAutoSubmission', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
     });
 
+    test("after a resetKey switch, the new record's held save goes out even with the values of the previous record's save", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const other: UserForm = { ...initial, name: 'Bob' };
+      const { result, rerender } = renderHook(
+        ({ values, id }: { values: UserForm; id: string }) => {
+          const form = useForm(userValidator, { initialValues: values, resetKey: id, onSubmit });
+          useFormAutoSubmission(form, 50);
+          return form;
+        },
+        { initialProps: { values: initial, id: 'a' } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      rerender({ values: other, id: 'b' });
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await sleep(300);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        saves[0]!.resolve(ok({ ...initial, name: 'Jane' }));
+        await nextTask();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Jane' }]);
+    });
+
     test("a failed save's field error about a value edited during it doesn't stop the edit's save", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result } = renderAutoSubmitForm(onSubmit, 50);

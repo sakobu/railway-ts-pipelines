@@ -121,9 +121,12 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       heldRef.current = false;
       return;
     }
-    // A clean form has nothing to save. Forgetting the validated values lets an edit back to them, after a follow
-    // or a resetKey switch, be validated and saved.
-    if (!isDirty) lastValidatedRef.current = null;
+    // A clean form has nothing to save. Forgetting the validated and saved values lets an edit back to them, after
+    // a follow or a resetKey switch, be validated and saved: after a switch they're the previous record's.
+    if (!isDirty) {
+      lastValidatedRef.current = null;
+      savedRef.current = null;
+    }
     if (heldRef.current && !savingRef.current) {
       // The save that held this one has settled, and the form isn't stale: send it now, as a queued save would go.
       heldRef.current = false;
