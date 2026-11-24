@@ -112,7 +112,7 @@ Two packages, five pieces. Each piece is its own import, so you only ship what y
 bun add @railway-ts/pipelines @railway-ts/use-form  # or npm, pnpm, yarn
 ```
 
-`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only and need TypeScript 6.0+ and Node.js 22.12+. use-form also needs React 19 and `@railway-ts/pipelines` 0.4.
+`@railway-ts/pipelines` also works on its own, on the server or anywhere else. Both packages are ESM-only and need TypeScript 6.0+ and Node.js 22.12+. use-form also needs React 19 and `@railway-ts/pipelines` 0.5.
 
 ## Works with what you have
 
