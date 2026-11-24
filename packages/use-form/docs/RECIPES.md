@@ -248,7 +248,7 @@ Things to get right:
 - **A failed save for a record the user switched away from shows nowhere.** Block switching while `isSubmitting`, as above, or `await form.handleSubmit()` and report the `err` in a toast.
 - **Two checks prevent lost updates together.** `isStale` covers a change the app has fetched. Save is disabled then, because `data.version` is already the newer version and the server would accept it. The server's version check covers a change the app hasn't fetched yet.
 - **Build `initialValues` the same way on every render.** Create generated values, like a new row's id or today's date, once, and don't read storage during render. Otherwise every render looks like a new version, and `useForm` logs an error naming the cause.
-- **An auto-saved edit form** (`useFormAutoSubmission`) pauses while `isStale` is true, as Save would be disabled. Show the same banner, so the user can Reload.
+- **An auto-saved edit form** (`useFormAutoSubmission`) pauses while `isStale` is true, as Save would be disabled. Show the same banner, so the user can Reload. Read the version at save time, from the cache: `queryClient.getQueryData<Contact>(['contact', data.id])?.version ?? data.version`. An edit made during a save goes out as soon as that save settles, which can be before the render that brings the saved record. `data.version` would then still be the old version, and the server would report a conflict that isn't one.
 
 ---
 
