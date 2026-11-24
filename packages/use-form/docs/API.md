@@ -59,6 +59,8 @@ Configuration object.
 ```typescript
 {
   initialValues: NoInfer<TValues>;
+  // Identifies the record being edited. A change starts the form over; see resetKey below
+  resetKey?: string | number | bigint | boolean | null | undefined;
   // Returning nothing is allowed only when TResult is the form values; see onSubmit below
   onSubmit?:
     | ((values: TValues) => void | Promise<void>)
@@ -110,7 +112,7 @@ See [Edit Forms: Loading, Refetching, and Switching Records](./RECIPES.md#edit-f
 
 #### resetKey
 
-Type: `string | number | boolean | null | undefined`
+Type: `string | number | bigint | boolean | null | undefined`
 Optional
 
 Identifies the record the form edits. When it changes, the form starts over on the current `initialValues`, as if the component had remounted, without remounting it. Values, touched state, errors and `isStale` are dropped, and edits are lost. A submission that is still running for the previous record finishes on its own, and its result doesn't touch the new record.

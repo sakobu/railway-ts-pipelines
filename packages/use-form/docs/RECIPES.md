@@ -147,7 +147,7 @@ If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic
 
 ```tsx
 import { err, ok } from '@railway-ts/pipelines/result';
-import { type InferSchemaType } from '@railway-ts/pipelines/schema';
+import { ROOT_ERROR_KEY, type InferSchemaType } from '@railway-ts/pipelines/schema';
 import { useForm } from '@railway-ts/use-form';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -188,7 +188,7 @@ function EditContact({ ids }: { ids: string[] }) {
 
       if (result.conflict) {
         // Fetch what the other person saved. isStale turns true when it arrives.
-        void queryClient.invalidateQueries({ queryKey: ['contact', id] });
+        void queryClient.invalidateQueries({ queryKey: ['contact', data.id] });
         return err([{ path: [], message: 'Someone else saved this contact. Reload to see their changes.' }]);
       }
 
@@ -222,7 +222,7 @@ function EditContact({ ids }: { ids: string[] }) {
         <input {...form.getFieldProps('name')} />
         <input type="email" {...form.getFieldProps('email')} />
 
-        {form.errors._root && <div className="form-error">{form.errors._root}</div>}
+        {form.errors[ROOT_ERROR_KEY] && <div className="form-error">{form.errors[ROOT_ERROR_KEY]}</div>}
 
         <button type="submit" disabled={form.isSubmitting || form.isStale || !data}>
           Save
