@@ -153,7 +153,7 @@ onSubmit: async (values) => {
 };
 ```
 
-An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error.
+An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error. An error for a field the user changed during the save doesn't land: it's about the value they replaced, and an edit clears a server error anyway.
 
 **Without `onSubmit`, a submit only validates.** Nothing is saved, so the values stay edits: a newer `initialValues` raises `isStale` rather than replacing them.
 
@@ -625,7 +625,7 @@ Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], m
 3. Clears existing server errors
 4. Runs schema validation (awaits if async)
 5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel
-6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form
+6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 
 **Example:**

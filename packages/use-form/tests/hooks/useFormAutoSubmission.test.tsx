@@ -837,6 +837,29 @@ describe('useFormAutoSubmission', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
     });
 
+    test("a failed save's field error about a value edited during it doesn't stop the edit's save", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const { result } = renderAutoSubmitForm(onSubmit, 50);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Taken');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      act(() => {
+        result.current.setFieldValue('name', 'Free');
+      });
+      // The edit comes due during the save: it's held
+      await sleep(150);
+
+      await act(async () => {
+        saves[0]!.resolve(err([{ path: ['name'], message: 'Name taken' }]));
+        await nextTask();
+      });
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Free' }]);
+    });
+
     test("keeps saving when the previous save's answer arrives during the held save", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const { result, rerender } = renderAutoSubmitForm(onSubmit, 50);

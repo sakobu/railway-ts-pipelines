@@ -97,12 +97,15 @@ const takeNextFieldSeq = (seqs: Record<FieldPath, number>, key: FieldPath): numb
  *
  * @param send - Dispatches each write, or drops it when the errors no longer belong to the form's state
  * @param errors - Server validation errors, each with a `path` and a `message`
+ * @param lands - Whether the error at a path still describes the value shown there. Without it, every error lands.
  */
 const placeErrorsWith = <TValues extends Record<string, unknown>>(
   send: (action: FormAction<TValues>) => void,
   errors: ValidationError[],
+  lands: (path: FieldPath) => boolean = () => true,
 ): void => {
-  const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
+  const { [ROOT_ERROR_KEY]: submitError, ...all } = formatErrors(errors);
+  const perPath = Object.fromEntries(Object.entries(all).filter(([path]) => lands(path)));
   send({
     type: 'SET_SERVER_ERRORS',
     errors: perPath,
@@ -1114,7 +1117,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
           if (isErr(outcome)) {
             if (isBaseline()) {
-              placeErrorsWith(send, outcome.error);
+              // An error describes the submitted value, so it doesn't land on a field edited during the save, just
+              // as an edit after the save clears it
+              const shown = store.getState().values;
+              placeErrorsWith(send, outcome.error, (path) =>
+                deepEqual(getValueByPath(shown, path), getValueByPath(values, path)),
+              );
             } else {
               // A follow or resetForm() replaced the submitted values, so the field errors would describe values no
               // longer shown. The submit error is about the attempt, and still shows.
@@ -1156,8 +1164,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Handles form submission using the Railway-oriented programming pattern.
    * Validates all fields, marks them as touched, and calls onSubmit if validation passes.
    * Returns a Promise that resolves to a Result and never rejects:
-   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent
-   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields
+   * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent.
+   *   Without `onSubmit`, nothing is saved, so the values stay edits.
+   * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields, except
+   *   on fields changed during the save
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
    *   error is logged with `console.error`.

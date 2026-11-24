@@ -714,6 +714,32 @@ describe('saving', () => {
     expect(result.current.isStale).toBe(true);
   });
 
+  test("a failed save's field error doesn't land on a field edited during the save; the others do", async () => {
+    const { onSubmit, saves } = createGatedOnSubmit<PublishForm>();
+    const { result } = renderForm({ onSubmit });
+
+    act(() => result.current.setFieldValue('title', 'Taken'));
+    let submitting!: Promise<unknown>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    act(() => result.current.setFieldValue('title', 'Free'));
+    await act(async () => {
+      saves[0]!.resolve(
+        err([
+          { path: ['title'], message: 'Title taken' },
+          { path: ['status'], message: 'Not allowed' },
+          { path: [], message: 'Not saved' },
+        ]),
+      );
+      await submitting;
+    });
+
+    expect(result.current.serverErrors).toEqual({ status: 'Not allowed', _root: 'Not saved' });
+    expect(result.current.isValid).toBe(false);
+  });
+
   test('follows a saved record that differs from the submitted values', async () => {
     const { result, rerender } = renderForm({ onSubmit: () => {} });
 
