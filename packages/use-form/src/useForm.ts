@@ -417,8 +417,25 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   /**
+   * Clears a field's validator error and validating flag, each only if present, so a field with
+   * nothing to clear doesn't add a store update.
+   *
+   * @param field - The field whose check is cleared
+   */
+  const clearFieldCheck = useCallback(
+    (field: FieldPath): void => {
+      const key = normalizePath(field);
+      const { fieldErrors, validatingFields } = store.getState();
+      if (fieldErrors[key] !== undefined) dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
+      if (validatingFields[key]) dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
+    },
+    [store, dispatch],
+  );
+
+  /**
    * Runs a single field's validator with per-field race condition protection.
-   * Only runs when the field has a registered fieldValidator.
+   * Only runs when the field has a registered fieldValidator. A field whose validator was removed
+   * clears the error and validating flag its earlier check left, since nothing else would.
    *
    * Every call replaces the field's checks before it, even one that finishes at once, and a sync result
    * clears the validating flag of an async one it replaced. An async result also lands only while the
@@ -427,7 +444,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const runFieldValidator = useCallback(
     (field: FieldPath, values: TValues): void => {
       const validatorFn = fieldValidators?.[field as ExtractFieldPaths<TValues>];
-      if (!validatorFn) return;
+      if (!validatorFn) {
+        clearFieldCheck(field);
+        return;
+      }
 
       const seqKey = normalizePath(field);
       const seq = takeNextFieldSeq(fieldValidationSeqRef.current, seqKey);
@@ -460,7 +480,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
       }
     },
-    [store, dispatch, fieldValidators],
+    [store, dispatch, fieldValidators, clearFieldCheck],
   );
 
   /**
@@ -495,10 +515,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           return;
         }
 
-        dispatch({ type: 'SET_FIELD_ERROR', field, error: undefined });
-        if (store.getState().validatingFields[key]) {
-          dispatch({ type: 'SET_FIELD_VALIDATING', field, isValidating: false });
-        }
+        clearFieldCheck(field);
       };
 
       if (schemaResult instanceof Promise) {
@@ -507,7 +524,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         afterSchema(schemaResult);
       }
     },
-    [store, dispatch, runFieldValidator],
+    [store, runFieldValidator, clearFieldCheck],
   );
 
   /**

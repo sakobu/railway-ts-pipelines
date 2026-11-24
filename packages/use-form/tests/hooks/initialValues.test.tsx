@@ -297,6 +297,36 @@ describe('errors after a follow', () => {
     expect(result.current.fieldErrors).toEqual({});
   });
 
+  test('a field whose validator was removed clears its error and validating flag when a follow re-runs it', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const { result, rerender } = renderHook(
+      ({ initial, checkFields }: { initial: PublishForm; checkFields: boolean }) =>
+        useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'blur',
+          fieldValidators: checkFields ? { title: () => gate(), status: () => 'Bad' } : undefined,
+        }),
+      { initialProps: { initial: draft, checkFields: true } },
+    );
+
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldTouched('status'));
+    expect(result.current.validatingFields).toEqual({ title: true });
+    expect(result.current.fieldErrors).toEqual({ status: 'Bad' });
+
+    rerender({ initial: draft, checkFields: false });
+    rerender({ initial: loaded, checkFields: false });
+    await act(async () => {
+      calls[0]!.resolve('Stale');
+      await nextTask();
+    });
+
+    expect(result.current.values).toEqual(loaded);
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.validatingFields).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
   test("a submission's validation of the old values does not land on the followed values", async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(
