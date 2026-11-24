@@ -31,6 +31,7 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   validatingFields: EMPTY,
   isSubmitting: false,
   isFormValidating: false,
+  isSubmitValidating: false,
   submitCount: 0,
   lastVersion: initialValues,
   cleanValues: initialValues,
@@ -231,6 +232,9 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         ...state,
         isFormValidating: action.isFormValidating,
       };
+
+    case 'SET_SUBMIT_VALIDATING':
+      return { ...state, isSubmitValidating: action.isSubmitValidating };
 
     case 'SET_FIELD_VALIDATING': {
       const key = normalizePath(action.field);

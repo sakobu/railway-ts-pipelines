@@ -2391,6 +2391,74 @@ describe('useForm', () => {
         expect(consoleError).toHaveBeenCalledWith('Form validation error:', expect.any(Error));
       });
     });
+
+    describe("a submission's validation keeps isValidating true until it ends", () => {
+      test('through a check that finishes at once', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const mixed: MaybeAsyncValidator<unknown, PublishForm> = (value, path) =>
+          (value as PublishForm).title === '' ? publishValidator(value, path) : gated(value, path);
+        const { result } = renderHook(() => useForm(mixed, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', ''));
+        expect(result.current.isValidating).toBe(true);
+
+        await act(async () => {
+          pending[0]!.resolve(ok(draft));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      test('through a check started during it that finishes first', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await nextTask();
+        });
+        expect(result.current.isValidating).toBe(true);
+
+        await act(async () => {
+          pending[0]!.resolve(ok(draft));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+      });
+
+      test('and a check it replaced, still running when it started, leaves isValidating false after it', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          pending[1]!.resolve(ok({ ...draft, title: 'Mine' }));
+          await submitting;
+        });
+        expect(result.current.isValidating).toBe(false);
+
+        // The replaced check's result doesn't land, nor change the flag
+        await act(async () => {
+          pending[0]!.resolve(err([{ path: ['title'], message: 'Stale' }]));
+          await nextTask();
+        });
+        expect(result.current.isValidating).toBe(false);
+        expect(result.current.clientErrors).toEqual({});
+      });
+    });
   });
 
   describe('isDirty', () => {

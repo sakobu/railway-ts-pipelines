@@ -408,10 +408,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
   const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
-  // Derived: true when any async validation (form-level or field-level) is running
+  // Derived: true when any async validation (form-level, a submission's, or field-level) is running
   const isValidating = useMemo(
-    () => formState.isFormValidating || Object.keys(formState.validatingFields).length > 0,
-    [formState.isFormValidating, formState.validatingFields],
+    () =>
+      formState.isFormValidating || formState.isSubmitValidating || Object.keys(formState.validatingFields).length > 0,
+    [formState.isFormValidating, formState.isSubmitValidating, formState.validatingFields],
   );
 
   // ===========================================================================
@@ -1114,19 +1115,24 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           type: 'CLEAR_SERVER_ERRORS',
         });
 
-        // Invalidate any pending live async validations, unless a resetKey reset replaced this submission's
-        // state: a follow-up of the previous record can start during the new record's, whose validations stay
-        if (store.getState().generation === generation) ++validationSeqRef.current;
+        // Invalidate any pending live async validations, and end their validating state, unless a resetKey reset
+        // replaced this submission's state: a follow-up of the previous record can start during the new record's,
+        // whose validations stay
+        if (store.getState().generation === generation) {
+          ++validationSeqRef.current;
+          if (store.getState().isFormValidating) send({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+        }
 
-        // Show validating state during submit validation
-        send({ type: 'SET_FORM_VALIDATING', isFormValidating: true });
+        // Show validating state during submit validation. Its own flag: a check that typing starts meanwhile, and
+        // ends, doesn't end this one.
+        send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
         let validationResult: Result<TValues, ValidationError[]>;
         try {
           // Validate the form (await handles both sync and async validators)
           validationResult = await validate(values, validator);
         } finally {
-          whileBaseline({ type: 'SET_FORM_VALIDATING', isFormValidating: false });
+          send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
         }
 
         if (isErr(validationResult)) {

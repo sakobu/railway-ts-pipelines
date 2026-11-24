@@ -106,8 +106,11 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
-  /** Whether form-level async validation is currently in progress. */
+  /** Whether a form-level async validation that the form or `validateForm` started, outside a submission, is in progress. */
   isFormValidating: boolean;
+
+  /** Whether a submission's validation is in progress. Kept apart, so a check that typing started can't end it. */
+  isSubmitValidating: boolean;
 
   /** Per-field async validation tracking. True when that field's async validator is running. */
   validatingFields: Record<FieldPath, boolean>;
@@ -1158,6 +1161,12 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isFormValidating: boolean;
     }
   | {
+      /** Sets whether a submission's validation is in progress */
+      type: 'SET_SUBMIT_VALIDATING';
+      /** Whether the submission's validation is in progress */
+      isSubmitValidating: boolean;
+    }
+  | {
       /** Sets per-field async validation state */
       type: 'SET_FIELD_VALIDATING';
       /** The field path being validated */
@@ -1227,7 +1236,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 
-  /** Whether any async validation (form-level or field-level) is currently in progress. */
+  /** Whether any async validation (form-level, a submission's, or field-level) is currently in progress. */
   isValidating: boolean;
 
   /** Per-field async validation tracking. `true` when that field's async validator is running. */
