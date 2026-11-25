@@ -209,7 +209,7 @@ Cross-field validation, async username check, server errors, and React Query int
 - **Three error layers** -- client, per-field async, and server errors with automatic priority
 - **Array helpers** -- type-safe `push`, `remove`, `swap`, `insert`, `replace` with field bindings
 - **Four validation modes** -- `live`, `blur`, `mount`, `submit`
-- **Auto-submission** -- `useFormAutoSubmission` for auto-saved, search and filter forms, with debounced submit that pauses while `isStale`
+- **Auto-save** -- the `autoSave` option saves after a debounced delay once the form is valid, pauses while `isStale`, and never resends values that already went out
 - **Edit forms** -- follows refetched `initialValues` without overwriting edits, `isStale` when someone else changed the record, `resetKey` to switch records, `savedValues` so an optimistic write isn't taken for the save's answer
 - **React 19** -- tree-shakeable ESM
 
