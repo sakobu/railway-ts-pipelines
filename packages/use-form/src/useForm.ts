@@ -618,6 +618,26 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
+   * Runs the schema check under `id`: starts it, then ends it with the errors of a result, or with none on a throw or
+   * rejection, which leaves the errors as they were. The throw or rejection still reaches the caller.
+   */
+  const checkSchema = useCallback(
+    (
+      write: (action: FormAction<TValues>) => void,
+      id: CheckId,
+      values: TValues,
+    ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
+      write({ type: 'START_SCHEMA_CHECK', id });
+      return settling(
+        () => validate(values, validator),
+        (result) => write({ type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) }),
+        () => write({ type: 'END_SCHEMA_CHECK', id }),
+      );
+    },
+    [validator],
+  );
+
+  /**
    * Validates the current form values using the Railway-oriented validator and updates error state.
    * Accepts both sync and async validators (MaybeAsyncValidator).
    *
@@ -635,18 +655,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * @returns Railway Result or Promise<Result> depending on the validator
    */
   const validateForm = useCallback(
-    (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
-      const id = store.takeCheckId();
-      dispatch({ type: 'START_SCHEMA_CHECK', id });
-      // A result ends the check with its errors, or a pass that clears those of an earlier check. A throw or rejection
-      // ends it with none, and leaves the errors as they were.
-      return settling(
-        () => validate(values, validator),
-        (result) => dispatch({ type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) }),
-        () => dispatch({ type: 'END_SCHEMA_CHECK', id }),
-      );
-    },
-    [store, dispatch, validator],
+    (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> =>
+      checkSchema(dispatch, store.takeCheckId(), values),
+    [store, dispatch, checkSchema],
   );
 
   /**
@@ -725,7 +736,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const runValidationPipeline = useCallback(
     (field: FieldPath, values: TValues): void => {
       // Clear stale client errors for this field before (potentially async) validation.
-      // For sync validators, SET_CLIENT_ERRORS immediately follows so the cleared state is never rendered.
+      // For sync validators, the schema check ends at once and sets them, so the cleared state is never rendered.
       // For async validators, this prevents the old error from flashing during the gap.
       const currentErrors = store.getState().clientErrors;
       const hasStale = Object.keys(currentErrors).some((p) => isPathAffected(p, field));
@@ -1204,7 +1215,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         // checks newer values, and replaces it in turn. After a resetKey reset, send drops the start: a follow-up of
         // the previous record can start during the new record's, whose checks stay.
         const checkId = store.takeCheckId();
-        send({ type: 'START_SCHEMA_CHECK', id: checkId });
 
         // Show validating state during submit validation. Its own flag: a check that typing starts meanwhile, and
         // ends, doesn't end this one.
@@ -1212,19 +1222,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
         let validationResult: Result<TValues, ValidationError[]>;
         try {
-          // Validate the form (await handles both sync and async validators)
-          validationResult = await validate(values, validator);
-        } catch (error) {
-          // Ends the check, so isValidating clears. Not in the finally: an end without errors there would close the
-          // check before the result's end could land.
-          send({ type: 'END_SCHEMA_CHECK', id: checkId });
-          throw error;
+          // Starts and ends the schema check (await handles both sync and async validators)
+          validationResult = await checkSchema(send, checkId, values);
         } finally {
           send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
         }
-
-        // Its errors land while it's still the current check, or a pass clears those of an earlier attempt
-        send({ type: 'END_SCHEMA_CHECK', id: checkId, errors: schemaErrorsOf(validationResult) });
 
         if (isErr(validationResult)) {
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
@@ -1337,7 +1339,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     },
     [
       store,
-      validator,
+      checkSchema,
       onSubmit,
       savedValues,
       runFollowEffects,
