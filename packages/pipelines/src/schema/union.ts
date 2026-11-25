@@ -113,14 +113,9 @@ export function union<I, O>(
       if (result instanceof Promise) {
         // Switch to async path: await this result, then continue sequentially
         return (async () => {
-          const asyncResult = await result;
-          if (isOk(asyncResult)) return asyncResult;
-          allErrors.push(asyncResult.error);
-
-          // Continue with remaining validators sequentially
-          for (let j = i + 1; j < validators.length; j++) {
+          for (let j = i; j < validators.length; j++) {
             // eslint-disable-next-line security/detect-object-injection -- numeric index over own array
-            const r = await validators[j]!(value, parentPath);
+            const r = await (j === i ? result : validators[j]!(value, parentPath));
             if (isOk(r)) return r;
             allErrors.push(r.error);
           }
