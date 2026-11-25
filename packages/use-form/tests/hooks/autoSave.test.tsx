@@ -425,10 +425,11 @@ describe('autoSave', () => {
       act(() => {
         result.current.setFieldValue('name', 'Jane');
       });
-      await sleep(100);
+      await sleep(150);
       expect(onSubmit).not.toHaveBeenCalled();
 
-      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      // Within 400 ms of the edit
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 250 });
     });
 
     test('switching autoSave on saves the edits already made, after the delay', async () => {
@@ -446,6 +447,8 @@ describe('autoSave', () => {
       expect(onSubmit).not.toHaveBeenCalled();
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await sleep(2 * delay);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
     test('switching autoSave off drops a save waiting out its delay', async () => {
@@ -465,6 +468,8 @@ describe('autoSave', () => {
       expect(onSubmit).not.toHaveBeenCalled();
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await sleep(2 * delay);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
     test('a new delay applies from the next change', async () => {
@@ -521,6 +526,8 @@ describe('autoSave', () => {
     });
 
     test('saves once under StrictMode', async () => {
+      // StrictMode reruns the effects only at mount, while the values are clean. So this guards that auto-save is still
+      // on after its simulated remount, and that nothing runs twice.
       const onSubmit = saving();
       const { result } = renderHook(
         () => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: { delay } }),
