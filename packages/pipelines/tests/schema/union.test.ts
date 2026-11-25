@@ -145,6 +145,12 @@ describe('union validator', () => {
     }
   });
 
+  test('errorPrefix goes before the error of a union with no validators', () => {
+    const validator = union([], { errorPrefix: 'Code' });
+
+    expect(validator('anything')).toEqual(err([{ path: [], message: 'Code: No validators provided to union' }]));
+  });
+
   test('should maintain path information', () => {
     const pathAwareValidator: Validator<unknown, string> = (value, path = []) => {
       if (typeof value !== 'string') {

@@ -101,7 +101,7 @@ export function union<I, O>(
 
   return (value, parentPath = []) => {
     if (validators.length === 0) {
-      return err([{ path: parentPath, message: 'No validators provided to union' }]);
+      return buildError([[{ path: parentPath, message: 'No validators provided to union' }]]);
     }
 
     const allErrors: ValidationError[][] = [];
