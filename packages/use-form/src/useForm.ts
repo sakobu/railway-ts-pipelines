@@ -1636,7 +1636,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       }, autoSaveDelayRef.current);
     }
 
-    const step = autoSaver.decide({
+    const step = autoSaver.decide(() => ({
       values: state.values,
       isDirty: !deepEqual(state.values, store.getInitialValues()),
       checkedValues: state.checkedValues,
@@ -1646,7 +1646,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       isStale: state.isStale,
       isSubmitting: submitSchedulerRef.current.isBusy(),
       wentOut: state.wentOut,
-    });
+    }));
 
     if (step === 'check') {
       // startValidation logs a rejection itself

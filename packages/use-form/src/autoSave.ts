@@ -67,10 +67,11 @@ export type AutoSave<TValues> = {
    * Decides for the tracked version. It returns `'check'` at most once per version and records it. It returns
    * `'submit'` only while its own save isn't running, and records that save as running.
    *
-   * @param view - What the form shows now
+   * @param readView - Reads what the form shows now. `decide` calls it once, only after the delay has ended, so a
+   *   caller pays for the view only then.
    * @returns What the caller does next
    */
-  decide: (view: AutoSaveView<TValues>) => AutoSaveStep;
+  decide: (readView: () => AutoSaveView<TValues>) => AutoSaveStep;
 
   /** Its own save settled. */
   saveSettled: () => void;
@@ -116,8 +117,10 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     delayPassed = true;
   };
 
-  const decide = (view: AutoSaveView<TValues>): AutoSaveStep => {
-    if (!delayPassed || !view.isDirty) return 'wait';
+  const decide = (readView: () => AutoSaveView<TValues>): AutoSaveStep => {
+    if (!delayPassed) return 'wait';
+    const view = readView();
+    if (!view.isDirty) return 'wait';
     if (view.wentOut !== undefined && deepEqual(view.values, view.wentOut)) return 'wait';
     if (!deepEqual(view.values, view.checkedValues)) {
       if (view.isChecking || checkStarted) return 'wait';

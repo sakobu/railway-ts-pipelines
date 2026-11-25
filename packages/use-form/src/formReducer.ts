@@ -3,7 +3,7 @@ import {
   endFieldCheck,
   endPendingChecks,
   endSchemaCheck,
-  fieldErrorsOf,
+  hasFieldError,
   hasPendingFieldCheck,
   markFieldCheckRunning,
   startFieldCheck,
@@ -62,7 +62,7 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
  */
 export const isValidState = <TValues extends Record<string, unknown>>(state: FormState<TValues>): boolean =>
   Object.keys(state.clientErrors).length === 0 &&
-  Object.keys(fieldErrorsOf(state.checks.fields)).length === 0 &&
+  !hasFieldError(state.checks.fields) &&
   Object.keys(state.serverErrors).length === 0;
 
 /**
