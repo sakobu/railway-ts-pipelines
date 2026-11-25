@@ -168,6 +168,8 @@ const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Re
  * Runs a step that answers at once or later, and tells how it settled: `onAnswer` gets its answer, and `onFail` hears
  * of a throw or rejection. Either way the caller still gets what the step gave, sync or async: its answer, its throw
  * or its rejection. An answer that settles later, whatever thenable it is, reaches the caller as a native promise.
+ * An answer `onAnswer` throws on, as on a validator's malformed result, fails the step: `onFail` hears of it, and the
+ * throw reaches the caller.
  *
  * @param run - The step
  * @param onAnswer - Called with the answer, before the caller gets it
@@ -175,39 +177,39 @@ const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Re
  * @returns The answer, or a promise of it
  */
 const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, onFail: () => void): T | Promise<T> => {
+  const fail = (error: unknown): never => {
+    onFail();
+    throw error;
+  };
+  const answered = (settled: T): T => {
+    try {
+      onAnswer(settled);
+    } catch (error) {
+      fail(error);
+    }
+    return settled;
+  };
   let answer: T | Promise<T>;
   try {
     answer = run();
   } catch (error) {
-    onFail();
-    throw error;
+    return fail(error);
   }
-  if (!isPromiseLike(answer)) {
-    onAnswer(answer);
-    return answer;
-  }
-  return Promise.resolve(answer).then(
-    (settled: T) => {
-      onAnswer(settled);
-      return settled;
-    },
-    (error: unknown) => {
-      onFail();
-      throw error;
-    },
-  );
+  return isPromiseLike(answer) ? Promise.resolve(answer).then(answered, fail) : answered(answer);
 };
 
 /**
  * A submit's field step. It runs the given field validators in parallel, each in the period its validator is in now,
  * and ends each check as its result arrives. Once every result is in, only a check whose validator stayed on, in the
  * same period, counts. Decided then, not as each result arrives, so the outcome agrees with the form: a validator
- * switched off meanwhile no longer shows its error.
+ * switched off meanwhile no longer shows its error. Once a resetKey switch retired the submission's record, every
+ * check counts, as a remount's would: the form no longer shows that record.
  *
  * @param store - The form's store, which holds each validator's period
- * @param validators - The field validators that are on now, by normalized path
+ * @param validators - The field validators to run, by normalized path
  * @param values - The submitted values
  * @param id - The submission's check id
+ * @param generation - The generation the submission belongs to
  * @param send - Dispatches the submission's writes
  * @param register - Whether the checks show while they run. Not once a follow or reset replaced the submitted values:
  *   they still run and count then, but describe values the form no longer shows.
@@ -220,6 +222,7 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   validators: ReadonlyMap<FieldPath, FieldCheckFn<TValues>>,
   values: TValues,
   id: CheckId,
+  generation: number,
   send: (action: FormAction<TValues>) => void,
   register: boolean,
 ): Promise<ValidationError[]> => {
@@ -249,13 +252,15 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
     }),
   );
 
-  // Which checks count, decided once, against the validators as they are now that every result is in
-  const { checks } = store.getState();
+  // Which checks count, decided once, against the validators as they are now that every result is in. Once a resetKey
+  // switch retired the submission's record, the validators belong to the new record: every check counts then, as a
+  // remount's would.
+  const { checks, generation: now } = store.getState();
   const errors: ValidationError[] = [];
   let failed: PromiseRejectedResult | undefined;
   for (const [index, { key, period }] of runs.entries()) {
     const outcome = settled[index]!;
-    if (validatorPeriod(checks, key) !== period) {
+    if (now === generation && validatorPeriod(checks, key) !== period) {
       // It counts as never run, so nothing else sees its throw or rejection: logged, as a live check's is
       if (outcome.status === 'rejected') logValidationError(outcome.reason);
     } else if (outcome.status === 'rejected') {
@@ -963,7 +968,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       onFieldChangeRef.current?.(field, value, store.getState().values);
 
       // Mark touched on first change for immediate error visibility
-      if (touchOnChange && !store.getState().touched[normalizePath(field)]) {
+      if (touchOnChange && !own(store.getState().touched, normalizePath(field))) {
         dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
       }
 
@@ -1042,7 +1047,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldTouched = useCallback(
     (field: FieldPath, isTouched = true, shouldValidate = validateOnBlur): void => {
-      const wasTouched = store.getState().touched[normalizePath(field)];
+      const wasTouched = own(store.getState().touched, normalizePath(field));
       dispatch({
         type: 'SET_FIELD_TOUCHED',
         field,
@@ -1152,7 +1157,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * they all end is still waited for, then counts as never run, as the form shows it.
    *
    * The submission belongs to the form state of `generation`. After a `resetKey` reset it still runs
-   * and resolves, but none of its writes land.
+   * and resolves, but none of its writes land. It then runs the field validators its record had when `handleSubmit`
+   * was called, not the new record's, and every check counts, as a remount's would.
    *
    * It doesn't call `onSubmit` when the save would overwrite a newer version of the record: one that arrived
    * while it validated and made the form stale or was followed, or a staleness that a running submission hid
@@ -1164,10 +1170,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * @param values - The form values to submit
    * @param generation - The generation current when `handleSubmit` was called
    * @param staleShown - Whether `isStale` read true when `handleSubmit` was called: the app chose to overwrite
+   * @param validatorsAtCall - The field validators when `handleSubmit` was called, for a record a `resetKey` reset
+   *   retired
    * @returns Promise<Result<TResult, ValidationError[]>> - `onSubmit`'s Result, the validated data, or errors
    */
   const runSubmission = useCallback(
-    async (values: TValues, generation: number, staleShown: boolean): Promise<Result<TResult, ValidationError[]>> => {
+    async (
+      values: TValues,
+      generation: number,
+      staleShown: boolean,
+      validatorsAtCall: ReadonlyMap<FieldPath, FieldCheckFn<TValues>>,
+    ): Promise<Result<TResult, ValidationError[]>> => {
       const send = dispatchIn(generation);
 
       // Every statement is inside this try and every step is awaited, so its catch sees every throw and rejection
@@ -1242,13 +1255,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         });
 
         try {
-          // Run the field validators that are on now, before calling onSubmit. Their checks show while they run, unless
-          // a follow or reset replaced the submitted values.
+          // Run the field validators that are on now, before calling onSubmit, or after a resetKey switch, those the
+          // record had. Their checks show while they run, unless a follow or reset replaced the submitted values.
           const checkErrors = await checkFieldsForSubmit(
             store,
-            fieldValidatorsRef.current,
+            store.getState().generation === generation ? fieldValidatorsRef.current : validatorsAtCall,
             values,
             checkId,
+            generation,
             send,
             isBaseline(),
           );
@@ -1414,9 +1428,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const { generation, isStale, isSubmitting } = store.getState();
       // What isStale read: a submission running hides it
       const staleShown = isStale && !isSubmitting;
+      // The record's field validators, for a submission that runs once a resetKey switch retired the record
+      const validatorsAtCall = fieldValidatorsRef.current;
       return submitSchedulerRef.current.submit(
         () => store.getState().values,
-        (values) => runSubmission(values, generation, staleShown),
+        (values) => runSubmission(values, generation, staleShown, validatorsAtCall),
       );
     },
     [store, runSubmission],
@@ -1494,7 +1510,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const getFieldError = useCallback(
     <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => {
       const key = normalizePath(field);
-      const err = errors[key];
+      const err = own(errors, key);
       if (!err) return undefined;
       // Visible iff the queried path itself or any descendant has been touched.
       // `isPathAffected(touchedKey, key)` already encodes "same path or
@@ -1825,7 +1841,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
       const getFieldErrorAtPath = (path: string) => {
         const key = normalizePath(path);
-        return formState.touched[key] ? errors[key] : undefined;
+        return own(formState.touched, key) ? own(errors, key) : undefined;
       };
 
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>

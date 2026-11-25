@@ -605,6 +605,83 @@ test('a submit whose schema validator rejects leaves isValidating false', async 
   }
 });
 
+test('a schema validator whose result is malformed leaves isValidating false', () => {
+  // A Result-like value with no errors to format: reading its errors throws
+  const malformed = (() => ({ ok: false })) as unknown as S.Validator<unknown, PublishForm>;
+  const { result, rerender } = renderHook(() => useForm(malformed, { initialValues: draft, validationMode: 'live' }));
+
+  expect(() => act(() => result.current.setFieldValue('title', 'x'))).toThrow();
+  // An act that throws doesn't render the store's change: render it, so the assertion reads the store
+  rerender();
+
+  expect(result.current.isValidating).toBe(false);
+});
+
+describe('a submission whose record a resetKey switch retired', () => {
+  test('counts a check of a validator the new record switched off', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const onSubmit = mock(() => {});
+    const { result, rerender } = renderHook(
+      ({ record }: { record: number }) =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          resetKey: record,
+          fieldValidators: record === 1 ? { title: () => gate() } : {},
+          onSubmit,
+        }),
+      { initialProps: { record: 1 } },
+    );
+
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    await act(async () => {
+      submitting = result.current.handleSubmit();
+      await nextTask();
+    });
+    rerender({ record: 2 });
+    let outcome: Awaited<typeof submitting> | undefined;
+    await act(async () => {
+      calls[0]!.resolve('Taken');
+      outcome = await submitting;
+    });
+
+    expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test("runs its record's field validators, not the new record's", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock(() => 'Taken');
+    const checkStatus = mock(() => undefined);
+    const onSubmit = mock(() => {});
+    const { result, rerender } = renderHook(
+      ({ record }: { record: number }) =>
+        useForm(gated, {
+          initialValues: draft,
+          resetKey: record,
+          fieldValidators: record === 1 ? { title: checkTitle } : { status: checkStatus },
+          onSubmit,
+        }),
+      { initialProps: { record: 1 } },
+    );
+
+    let submitting!: ReturnType<typeof result.current.handleSubmit>;
+    act(() => {
+      submitting = result.current.handleSubmit();
+    });
+    rerender({ record: 2 });
+    let outcome: Awaited<typeof submitting> | undefined;
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      outcome = await submitting;
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkStatus).not.toHaveBeenCalled();
+    expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
 test('a form with fieldValidators renders once on mount', () => {
   let renders = 0;
   renderHook(() => {
@@ -705,6 +782,32 @@ describe.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s',
     act(() => result.current.setFieldValue(name, 'x'));
 
     expect(result.current.errors).toEqual({ [name]: 'Bad', other: 'Other is wrong' });
+  });
+
+  test('is marked touched on change, so getFieldError shows its error', () => {
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, {
+        initialValues: { [name]: 'a' },
+        validationMode: 'live',
+        fieldValidators: { [name]: () => 'Bad' },
+      }),
+    );
+
+    act(() => result.current.setFieldValue(name, 'x'));
+
+    expect(result.current.touched).toEqual({ [name]: true });
+    expect(result.current.getFieldError(name)).toBe('Bad');
+  });
+
+  test('reads no error from getFieldError while it has none', () => {
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, { initialValues: { [name]: 'a' }, validationMode: 'live' }),
+    );
+
+    act(() => result.current.setFieldValue(name, 'x'));
+
+    expect(result.current.touched).toEqual({ [name]: true });
+    expect(result.current.getFieldError(name)).toBeUndefined();
   });
 });
 
