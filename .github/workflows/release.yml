@@ -4,11 +4,6 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write # push the version commit and tags, create Releases
-  pull-requests: write # open the "Version Packages" PR
-  id-token: write # npm trusted publishing (OIDC) and provenance
-
 concurrency: release
 
 jobs:
@@ -16,6 +11,14 @@ jobs:
     # Forks have no npm trusted publisher; don't try to release from them.
     if: github.repository == 'sakobu/railway-ts'
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # push the version commit and tags, create Releases
+      pull-requests: write # open the "Version Packages" PR
+      id-token: write # npm trusted publishing (OIDC) and provenance
+
+    outputs:
+      pr-number: ${{ steps.changesets.outputs.pr-number }}
 
     steps:
       # Actions are pinned to commit SHAs because this job can publish (id-token: write).
@@ -46,11 +49,27 @@ jobs:
       # publishes each new version with npm and tags it (ci:publish); the action
       # pushes the tags and creates the GitHub Releases. No npm token: npm trusts
       # this workflow via OIDC.
-      #
-      # The Version Packages PR is opened with github.token, so GitHub runs no CI
-      # on it; check it locally (bun install --frozen-lockfile && bun run check).
       - name: Version or publish
+        id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           version-script: bun run ci:version
           publish-script: bun run ci:publish
+
+  # The release job opens or updates the Version Packages PR with github.token, and
+  # GitHub starts no workflow for an event that token causes, so the PR gets no CI.
+  # workflow_dispatch is the exception, so this job starts CI on the PR's branch. It is
+  # a job of its own so that the publishing job's token never holds actions: write.
+  start-ci:
+    needs: release
+    if: needs.release.outputs.pr-number != ''
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write # dispatch ci.yml
+
+    steps:
+      - name: Run CI on the Version Packages PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
