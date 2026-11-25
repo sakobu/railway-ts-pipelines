@@ -31,7 +31,7 @@ import {
 } from './fieldPropsFactory';
 import { fieldErrorsOf, fieldsToRecheck, isCurrentFieldCheck, validatingFieldsOf, validatorPeriod } from './formChecks';
 import { createInitialFormState, formReducer } from './formReducer';
-import { createFormStore } from './formStore';
+import { createFormStore, type FormStore } from './formStore';
 import { createStabilityCheck } from './stabilityCheck';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler } from './submitScheduler';
@@ -47,6 +47,7 @@ import {
 
 import type {
   ArrayHelpers,
+  CheckId,
   DeepPartial,
   ExtractFieldPaths,
   FieldCheckResult,
@@ -91,6 +92,12 @@ type SchemaCheck<TValues> =
 type FieldValidatorFn<TValues> = (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>;
 
 /**
+ * A field validator as a check runs it: it answers with the error the field shows, so an empty message has already
+ * become no error. {@link answeringWithError} makes one from a `fieldValidators` entry.
+ */
+type FieldCheckFn<TValues> = (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>;
+
+/**
  * Logs a validator's throw or rejection that nothing could catch: in a check the form started on its own, or in an
  * async check, which settles after the call that started it returned.
  *
@@ -118,7 +125,7 @@ const errorOf = (answer: string | undefined): string | undefined => answer || un
  * @returns The same validator, answering with the error it shows
  */
 const answeringWithError =
-  <TValues>(validatorFn: FieldValidatorFn<TValues>): FieldValidatorFn<TValues> =>
+  <TValues>(validatorFn: FieldValidatorFn<TValues>): FieldCheckFn<TValues> =>
   (value, values) => {
     const answer = validatorFn(value, values);
     return answer instanceof Promise ? answer.then(errorOf) : errorOf(answer);
@@ -133,12 +140,117 @@ const answeringWithError =
  */
 const validatorsByPath = <TValues>(
   fieldValidators: Record<string, unknown> | undefined,
-): ReadonlyMap<FieldPath, FieldValidatorFn<TValues>> =>
+): ReadonlyMap<FieldPath, FieldCheckFn<TValues>> =>
   new Map(
     Object.entries(fieldValidators ?? {})
       .filter((entry): entry is [string, FieldValidatorFn<TValues>] => typeof entry[1] === 'function')
       .map(([field, validatorFn]) => [normalizePath(field), answeringWithError(validatorFn)]),
   );
+
+/**
+ * The errors a schema result places on the form: none for a pass.
+ *
+ * @param result - What the schema validator returned, or resolved to
+ * @returns Each error's message, by its path as `formatErrors` writes it
+ */
+const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Record<FieldPath, string> =>
+  isErr(result) ? formatErrors(result.error) : {};
+
+/**
+ * Runs a step that answers at once or later, and tells how it settled: `onAnswer` gets its answer, and `onFail` hears
+ * of a throw or rejection. Either way the caller still gets what the step gave, sync or async: its answer, its throw
+ * or its rejection.
+ *
+ * @param run - The step
+ * @param onAnswer - Called with the answer, before the caller gets it
+ * @param onFail - Called on a throw or rejection, before it reaches the caller
+ * @returns The answer, or a promise of it
+ */
+const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, onFail: () => void): T | Promise<T> => {
+  let answer: T | Promise<T>;
+  try {
+    answer = run();
+  } catch (error) {
+    onFail();
+    throw error;
+  }
+  if (!(answer instanceof Promise)) {
+    onAnswer(answer);
+    return answer;
+  }
+  return answer.then(
+    (settled: T) => {
+      onAnswer(settled);
+      return settled;
+    },
+    (error: unknown) => {
+      onFail();
+      throw error;
+    },
+  );
+};
+
+/**
+ * A submit's field step. It runs the given field validators in parallel, each in the period its validator is in now,
+ * and ends each check as its result arrives. Once every result is in, only a check whose validator stayed on, in the
+ * same period, counts. Decided then, not as each result arrives, so the outcome agrees with the form: a validator
+ * switched off meanwhile no longer shows its error.
+ *
+ * @param store - The form's store, which holds each validator's period
+ * @param validators - The field validators that are on now, by normalized path
+ * @param values - The submitted values
+ * @param id - The submission's check id
+ * @param send - Dispatches the submission's writes
+ * @param register - Whether the checks show while they run. Not once a follow or reset replaced the submitted values:
+ *   they still run and count then, but describe values the form no longer shows.
+ * @returns The errors of the checks that count, in the validators' order
+ * @throws What a check that counts threw or rejected with: it fails the submission, as a throw anywhere does
+ */
+const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
+  store: FormStore<TValues>,
+  validators: ReadonlyMap<FieldPath, FieldCheckFn<TValues>>,
+  values: TValues,
+  id: CheckId,
+  send: (action: FormAction<TValues>) => void,
+  register: boolean,
+): Promise<ValidationError[]> => {
+  const atStart = store.getState().checks;
+  const runs = Array.from(validators, ([key, validatorFn]) => ({
+    key,
+    validatorFn,
+    period: validatorPeriod(atStart, key),
+  }));
+  if (register) {
+    runs.forEach(({ key }) =>
+      send({ type: 'START_FIELD_CHECK', field: key, id, status: 'running', value: getValueByPath(values, key) }),
+    );
+  }
+
+  // Each runs in a promise, so a throw becomes a rejection: every check ends and is waited for, whatever the others do
+  const settled = await Promise.allSettled(
+    runs.map(({ key, validatorFn }) => {
+      const end = (result: FieldCheckResult) => send({ type: 'END_FIELD_CHECK', field: key, id, result });
+      return Promise.resolve().then(() =>
+        settling(
+          () => validatorFn(getValueByPath(values, key), values),
+          (error) => end({ error }),
+          () => end('none'),
+        ),
+      );
+    }),
+  );
+
+  // Which checks count, decided once, against the validators as they are now that every result is in
+  const { checks } = store.getState();
+  const errors: ValidationError[] = [];
+  for (const [index, { key, period }] of runs.entries()) {
+    if (validatorPeriod(checks, key) !== period) continue;
+    const outcome = settled[index]!;
+    if (outcome.status === 'rejected') throw outcome.reason;
+    if (outcome.value !== undefined) errors.push({ path: [key], message: outcome.value });
+  }
+  return errors;
+};
 
 /**
  * Places server errors on the form: an error at path `[]` becomes the submit error, and every other
@@ -506,33 +618,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
       const id = store.takeCheckId();
       dispatch({ type: 'START_SCHEMA_CHECK', id });
-      // Ends the check with its errors, or a pass that clears those of an earlier check
-      const land = (result: Result<TValues, ValidationError[]>) =>
-        dispatch({ type: 'END_SCHEMA_CHECK', id, errors: isErr(result) ? formatErrors(result.error) : {} });
-
-      let validationResult: Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>>;
-      try {
-        validationResult = validate(values, validator);
-      } catch (error) {
-        dispatch({ type: 'END_SCHEMA_CHECK', id });
-        throw error;
-      }
-
-      if (validationResult instanceof Promise) {
-        return validationResult.then(
-          (result) => {
-            land(result);
-            return result;
-          },
-          (error: unknown) => {
-            dispatch({ type: 'END_SCHEMA_CHECK', id });
-            throw error;
-          },
-        );
-      }
-
-      land(validationResult);
-      return validationResult;
+      // A result ends the check with its errors, or a pass that clears those of an earlier check. A throw or rejection
+      // ends it with none, and leaves the errors as they were.
+      return settling(
+        () => validate(values, validator),
+        (result) => dispatch({ type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) }),
+        () => dispatch({ type: 'END_SCHEMA_CHECK', id }),
+      );
     },
     [store, dispatch, validator],
   );
@@ -581,31 +673,19 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const afterSchema = (result: Result<TValues, ValidationError[]> | undefined): void => {
         if (!isCurrentFieldCheck(store.getState().checks, key, id)) return;
 
-        if (!result || (isErr(result) && own(normalizePathKeys(formatErrors(result.error)), key) !== undefined)) {
+        if (!result || own(normalizePathKeys(schemaErrorsOf(result)), key) !== undefined) {
           end({ error: undefined });
           return;
         }
 
         dispatch({ type: 'RUN_FIELD_CHECK', field: key, id });
-        let answer: string | undefined | Promise<string | undefined>;
-        try {
-          answer = validatorFor(field)?.(value, values);
-        } catch (error) {
-          end('none');
-          throw error;
-        }
-
-        if (answer instanceof Promise) {
-          void answer.then(
-            (error) => end({ error }),
-            (error: unknown) => {
-              end('none');
-              logValidationError(error);
-            },
-          );
-        } else {
-          end({ error: answer });
-        }
+        const answer = settling(
+          () => validatorFor(field)?.(value, values),
+          (error) => end({ error }),
+          () => end('none'),
+        );
+        // Nothing awaits an async answer, so a rejection is logged
+        if (answer instanceof Promise) void answer.catch(logValidationError);
       };
 
       if (schemaResult instanceof Promise) {
@@ -619,8 +699,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   /**
-   * Runs schema validation followed by field-level validation for a single field, when the field has a validator.
-   * If the schema produces an error for the field, the field validator is skipped.
+   * Validates the values with the schema, as typing or a blur does, and checks the field with its validator when it
+   * has one on. The field check waits on the schema's: a schema error for the field skips the validator.
    */
   const runValidationPipeline = useCallback(
     (field: FieldPath, values: TValues): void => {
@@ -1124,11 +1204,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         // Its errors land while it's still the current check, or a pass clears those of an earlier attempt
-        send({
-          type: 'END_SCHEMA_CHECK',
-          id: checkId,
-          errors: isErr(validationResult) ? formatErrors(validationResult.error) : {},
-        });
+        send({ type: 'END_SCHEMA_CHECK', id: checkId, errors: schemaErrorsOf(validationResult) });
 
         if (isErr(validationResult)) {
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
@@ -1144,54 +1220,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         });
 
         try {
-          // Run the field validators that are on now in parallel, before calling onSubmit, each with the period it
-          // starts in. Their checks show while they run, unless a follow or reset replaced the submitted values: they
-          // still run and count then, but describe values the form no longer shows.
-          const fieldChecks = Array.from(fieldValidatorsRef.current, ([key, validatorFn]) => ({
-            key,
-            validatorFn,
-            period: validatorPeriod(store.getState().checks, key),
-          }));
-          if (isBaseline()) {
-            fieldChecks.forEach(({ key }) =>
-              send({
-                type: 'START_FIELD_CHECK',
-                field: key,
-                id: checkId,
-                status: 'running',
-                value: getValueByPath(values, key),
-              }),
-            );
-          }
-          // A throw becomes a rejection, so every check ends and is waited for, whatever the others do
-          const settled = await Promise.allSettled(
-            fieldChecks.map(({ key, validatorFn }) =>
-              Promise.resolve()
-                .then(() => validatorFn(getValueByPath(values, key), values))
-                .then(
-                  (error) => {
-                    send({ type: 'END_FIELD_CHECK', field: key, id: checkId, result: { error } });
-                    return error;
-                  },
-                  (reason: unknown) => {
-                    send({ type: 'END_FIELD_CHECK', field: key, id: checkId, result: 'none' });
-                    throw reason;
-                  },
-                ),
-            ),
+          // Run the field validators that are on now, before calling onSubmit. Their checks show while they run, unless
+          // a follow or reset replaced the submitted values.
+          const checkErrors = await checkFieldsForSubmit(
+            store,
+            fieldValidatorsRef.current,
+            values,
+            checkId,
+            send,
+            isBaseline(),
           );
-
-          // Only a check whose validator stayed on until every result was in counts. Decided then, not as each result
-          // arrives, so the outcome agrees with the form: a validator switched off meanwhile no longer shows its error.
-          // A counted rejection fails the submission, as a throw anywhere does.
-          const counted = fieldChecks
-            .map((check, index) => ({ ...check, outcome: settled[index]! }))
-            .filter(({ key, period }) => validatorPeriod(store.getState().checks, key) === period);
-          const checkErrors: ValidationError[] = [];
-          for (const { key, outcome } of counted) {
-            if (outcome.status === 'rejected') throw outcome.reason;
-            if (outcome.value !== undefined) checkErrors.push({ path: [key], message: outcome.value });
-          }
           if (checkErrors.length > 0) return err(checkErrors);
 
           // A successful save settles the baseline. With savedValues, the save's answer is the version equal to what

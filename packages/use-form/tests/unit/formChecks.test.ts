@@ -8,7 +8,6 @@ import {
   fieldErrorsOf,
   fieldsToRecheck,
   isCurrentFieldCheck,
-  isCurrentSchemaCheck,
   markFieldCheckRunning,
   startFieldCheck,
   startOver,
@@ -79,7 +78,6 @@ test('isCurrentFieldCheck holds while pending, not once done or replaced', () =>
 });
 test('the newest schema check wins, and ending it clears it', () => {
   const second = startSchemaCheck(startSchemaCheck(NO_CHECKS, 1), 2);
-  expect(isCurrentSchemaCheck(second, 1)).toBe(false);
   expect(endSchemaCheck(second, 1)).toBe(second);
   expect(endSchemaCheck(second, 2).schema).toBeUndefined();
   expect(startSchemaCheck(second, 1)).toBe(second);

@@ -175,11 +175,14 @@ export interface FormState<TValues extends Record<string, unknown>> {
 /** A check's id. The store hands them out in increasing order for its lifetime. */
 export type CheckId = number;
 
+/** A field check's status before it ends. waiting: on the schema check of its values. running: its validator runs. */
+export type PendingStatus = 'waiting' | 'running';
+
 /** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
 export type FieldCheck = {
   id: CheckId;
-  /** waiting: on the schema check of its values. running: its validator runs. done: it ended. */
-  status: 'waiting' | 'running' | 'done';
+  /** Pending, or done: it ended */
+  status: PendingStatus | 'done';
   /** The field's value the check checks */
   value: unknown;
   /** The error shown: once done, the validator's; while pending, the last one, while the value is unchanged */
@@ -189,14 +192,17 @@ export type FieldCheck = {
 /** How a field check ended: with the validator's answer, or with none (it threw or rejected). */
 export type FieldCheckResult = { error: string | undefined } | 'none';
 
+/** A field validator as the checks know it: whether it's on, and its period, which goes up at each switch-off. */
+export type ValidatorState = { on: boolean; period: number };
+
 /** Every check the form runs, and which field validators are on. */
 export type ChecksState = {
   /** The running schema check whose result lands when it ends */
   schema: CheckId | undefined;
   /** Each field's latest check, by normalized path */
   fields: Readonly<Record<FieldPath, FieldCheck>>;
-  /** Each field that has had a validator: whether it's on, and its period, which goes up at each switch-off */
-  validators: Readonly<Record<FieldPath, { on: boolean; period: number }>>;
+  /** Each field that has had a validator */
+  validators: Readonly<Record<FieldPath, ValidatorState>>;
 };
 
 /**
@@ -1169,8 +1175,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       field: FieldPath;
       /** The check's id */
       id: CheckId;
-      /** waiting: on the schema check of its values. running: its validator runs. */
-      status: 'waiting' | 'running';
+      /** The status it starts in */
+      status: PendingStatus;
       /** The field's value the check checks */
       value: unknown;
     }

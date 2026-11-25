@@ -1,6 +1,14 @@
 import { deepEqual, own } from './utils';
 
-import type { CheckId, ChecksState, FieldCheck, FieldCheckResult, FieldPath } from './types';
+import type {
+  CheckId,
+  ChecksState,
+  FieldCheck,
+  FieldCheckResult,
+  FieldPath,
+  PendingStatus,
+  ValidatorState,
+} from './types';
 
 const EMPTY_FIELDS: Readonly<Record<FieldPath, FieldCheck>> = Object.freeze({});
 const EMPTY_VALIDATORS: ChecksState['validators'] = Object.freeze({});
@@ -25,7 +33,7 @@ export const startOver = (checks: ChecksState): ChecksState =>
  * ends its check with no error, and its period goes up. One that comes back keeps its period.
  */
 export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>): ChecksState => {
-  let validators: Record<FieldPath, { on: boolean; period: number }> | undefined;
+  let validators: Record<FieldPath, ValidatorState> | undefined;
   let fields: Record<FieldPath, FieldCheck> | undefined;
 
   for (const [key, validator] of Object.entries(checks.validators)) {
@@ -63,10 +71,7 @@ export const validatorPeriod = (checks: ChecksState, key: FieldPath): number | u
 export const startSchemaCheck = (checks: ChecksState, id: CheckId): ChecksState =>
   checks.schema !== undefined && checks.schema >= id ? checks : { ...checks, schema: id };
 
-/** Whether `id` is the schema check whose result lands. */
-export const isCurrentSchemaCheck = (checks: ChecksState, id: CheckId): boolean => checks.schema === id;
-
-/** Clears the schema check when it is `id`. */
+/** Clears the schema check when it is `id`, and returns its input otherwise. */
 export const endSchemaCheck = (checks: ChecksState, id: CheckId): ChecksState =>
   checks.schema === id ? { ...checks, schema: undefined } : checks;
 
@@ -78,7 +83,7 @@ export const startFieldCheck = (
   checks: ChecksState,
   key: FieldPath,
   id: CheckId,
-  status: 'waiting' | 'running',
+  status: PendingStatus,
   value: unknown,
 ): ChecksState => {
   if (!own(checks.validators, key)?.on) return checks;
@@ -89,11 +94,15 @@ export const startFieldCheck = (
   return { ...checks, fields: { ...checks.fields, [key]: next } };
 };
 
-/** Whether `id` is the field's latest check and it has not ended. */
-export const isCurrentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean => {
+/** The field's check `id`, while it is the field's latest check and has not ended. */
+const currentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
   const check = own(checks.fields, key);
-  return check !== undefined && check.id === id && check.status !== 'done';
+  return check?.id === id && check.status !== 'done' ? check : undefined;
 };
+
+/** Whether `id` is the field's latest check and it has not ended. */
+export const isCurrentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean =>
+  currentFieldCheck(checks, key, id) !== undefined;
 
 /** Moves the field's current check from waiting to running. */
 export const markFieldCheckRunning = (checks: ChecksState, key: FieldPath, id: CheckId): ChecksState => {
@@ -112,8 +121,8 @@ export const endFieldCheck = (
   id: CheckId,
   result: FieldCheckResult,
 ): ChecksState => {
-  const check = own(checks.fields, key);
-  if (!check || !isCurrentFieldCheck(checks, key, id)) return checks;
+  const check = currentFieldCheck(checks, key, id);
+  if (!check) return checks;
   const { error: kept, ...rest } = check;
   const error = result === 'none' ? kept : result.error;
   const ended: FieldCheck = { ...rest, status: 'done' };

@@ -3,7 +3,6 @@ import {
   endFieldCheck,
   endPendingChecks,
   endSchemaCheck,
-  isCurrentSchemaCheck,
   markFieldCheckRunning,
   startFieldCheck,
   startOver,
@@ -20,7 +19,7 @@ import {
   setValueByPath,
 } from './utils';
 
-import type { FieldPath, FormAction, FormState, ResetKey } from './types';
+import type { ChecksState, FieldPath, FormAction, FormState, ResetKey } from './types';
 
 /**
  * The one empty map shared by a fresh state's maps, a follow's server errors, cleared server errors and a valid
@@ -133,6 +132,12 @@ const withClientErrors = <TValues extends Record<string, unknown>>(
   // A valid result keeps the shared empty map, so values derived from it, like `errors`, keep their identity
   return { ...state, clientErrors: Object.keys(clientErrors).length === 0 ? EMPTY : clientErrors };
 };
+
+/** Sets the checks. Checks a rule left unchanged keep the state itself, so the store skips notifying. */
+const withChecks = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  checks: ChecksState,
+): FormState<TValues> => (checks === state.checks ? state : { ...state, checks });
 
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
@@ -271,37 +276,29 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'SET_SUBMIT_VALIDATING':
       return { ...state, isSubmitValidating: action.isSubmitValidating };
 
-    case 'SYNC_FIELD_VALIDATORS': {
-      const checks = syncValidators(state.checks, action.fields);
-      return checks === state.checks ? state : { ...state, checks };
-    }
+    case 'SYNC_FIELD_VALIDATORS':
+      return withChecks(state, syncValidators(state.checks, action.fields));
 
-    case 'START_SCHEMA_CHECK': {
-      const checks = startSchemaCheck(state.checks, action.id);
-      return checks === state.checks ? state : { ...state, checks };
-    }
+    case 'START_SCHEMA_CHECK':
+      return withChecks(state, startSchemaCheck(state.checks, action.id));
 
     case 'END_SCHEMA_CHECK': {
-      const current = isCurrentSchemaCheck(state.checks, action.id);
-      const checks = endSchemaCheck(state.checks, action.id);
-      const ended = checks === state.checks ? state : { ...state, checks };
-      return current && action.errors !== undefined ? withClientErrors(ended, action.errors) : ended;
+      // endSchemaCheck changes the checks only when the check is current, so a new state means its errors land
+      const ended = withChecks(state, endSchemaCheck(state.checks, action.id));
+      return ended !== state && action.errors !== undefined ? withClientErrors(ended, action.errors) : ended;
     }
 
-    case 'START_FIELD_CHECK': {
-      const checks = startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.value);
-      return checks === state.checks ? state : { ...state, checks };
-    }
+    case 'START_FIELD_CHECK':
+      return withChecks(
+        state,
+        startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.value),
+      );
 
-    case 'RUN_FIELD_CHECK': {
-      const checks = markFieldCheckRunning(state.checks, normalizePath(action.field), action.id);
-      return checks === state.checks ? state : { ...state, checks };
-    }
+    case 'RUN_FIELD_CHECK':
+      return withChecks(state, markFieldCheckRunning(state.checks, normalizePath(action.field), action.id));
 
-    case 'END_FIELD_CHECK': {
-      const checks = endFieldCheck(state.checks, normalizePath(action.field), action.id, action.result);
-      return checks === state.checks ? state : { ...state, checks };
-    }
+    case 'END_FIELD_CHECK':
+      return withChecks(state, endFieldCheck(state.checks, normalizePath(action.field), action.id, action.result));
 
     case 'RESET_FORM': {
       // initialValues built inline is a new object on every render. One equal to the latest version by content is
