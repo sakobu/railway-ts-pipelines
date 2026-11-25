@@ -1182,8 +1182,22 @@ describe('wentOut', () => {
     expect(formReducer(recorded, sync(edited), edited).wentOut).toBeUndefined();
   });
 
-  test('RESET_FORM drops it', () => {
-    expect(formReducer(recorded, { type: 'RESET_FORM' }, v1).wentOut).toBeUndefined();
+  describe('a reset leaves checkedValues and wentOut unset', () => {
+    const both: FormState<typeof v1> = { ...recorded, checkedValues: edited };
+
+    test('RESET_FORM', () => {
+      const reset = formReducer(both, { type: 'RESET_FORM' }, v1);
+
+      expect(reset.checkedValues).toBeUndefined();
+      expect(reset.wentOut).toBeUndefined();
+    });
+
+    test('a resetKey reset', () => {
+      const reset = formReducer(both, sync(v2, 'b'), v2);
+
+      expect(reset.checkedValues).toBeUndefined();
+      expect(reset.wentOut).toBeUndefined();
+    });
   });
 
   test('an action that changes nothing returns the same state', () => {

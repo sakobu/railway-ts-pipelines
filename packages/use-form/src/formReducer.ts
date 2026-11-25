@@ -139,61 +139,7 @@ const withChecks = <TValues extends Record<string, unknown>>(
   checks: ChecksState,
 ): FormState<TValues> => (checks === state.checks ? state : { ...state, checks });
 
-/**
- * Reducer function for form state management using the Redux-style reducer pattern.
- * Handles all form state transitions in an immutable, predictable way.
- *
- * This reducer processes various actions that modify form state including:
- * - Field value updates (single or batch)
- * - Touch state tracking (marking fields as interacted with)
- * - Client-side validation errors
- * - Server-side validation errors
- * - Form submission state
- * - Form reset to initial values
- * - Syncing new initialValues: follow them, keep the edits and track isStale, or start over on a resetKey change
- * - Settling a successful submit
- * - Tracking checks: the schema check, each field's validator and its checks
- *
- * All state updates are performed immutably, never mutating the existing state. Some actions
- * return the same state object when they change nothing, so the store can skip notifying:
- * SET_FIELD_VALUE with the field's current value, SYNC_INITIAL_VALUES with the version already
- * synced, a SUBMIT_SUCCEEDED from before a follow or reset, and a check action that changes no checks,
- * such as one for a check that is no longer current. Server errors are automatically cleared when
- * related fields are modified to provide a smooth user experience.
- *
- * @template TValues - The type of form values being managed
- *
- * @param state - The current form state before the action is applied
- * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
- * @param initialValues - Initial form values used when resetting the form
- * @returns A new state object, or the same one for the no-op cases above
- *
- * @example
- * // Used internally by useForm's store, which applies each action as soon as it is dispatched
- * const next = formReducer(state, action, initialValues);
- *
- * @example
- * // Dispatching a field value change
- * dispatch({
- *   type: "SET_FIELD_VALUE",
- *   field: "email",
- *   value: "user@example.com"
- * });
- *
- * @example
- * // Dispatching validation errors
- * dispatch({
- *   type: "SET_CLIENT_ERRORS",
- *   errors: { email: "Invalid email format", password: "Too short" }
- * });
- *
- * @example
- * // Marking all fields as touched on submit
- * dispatch({
- *   type: "MARK_ALL_TOUCHED",
- *   fields: ["name", "email", "password"]
- * });
- */
+/** Applies one action; `formReducer` then applies the clean rule to its result. */
 const reduce = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   action: FormAction<TValues>,
@@ -403,8 +349,62 @@ const reduce = <TValues extends Record<string, unknown>>(
 };
 
 /**
- * Applies `action` to `state`. Values equal to the initial values leave nothing that went out to remember, so
- * `wentOut` is dropped from the result of every action.
+ * Reducer function for form state management using the Redux-style reducer pattern.
+ * Handles all form state transitions in an immutable, predictable way.
+ *
+ * This reducer processes various actions that modify form state including:
+ * - Field value updates (single or batch)
+ * - Touch state tracking (marking fields as interacted with)
+ * - Client-side validation errors
+ * - Server-side validation errors
+ * - Form submission state
+ * - Form reset to initial values
+ * - Syncing new initialValues: follow them, keep the edits and track isStale, or start over on a resetKey change
+ * - Settling a successful submit
+ * - Tracking checks: the schema check, each field's validator and its checks
+ *
+ * Values equal to the initial values leave nothing that went out to remember, so `wentOut` is dropped from the
+ * result of every action, the ones that change nothing included.
+ *
+ * All state updates are performed immutably, never mutating the existing state. Some actions
+ * return the same state object when they change nothing, so the store can skip notifying:
+ * SET_FIELD_VALUE with the field's current value, SYNC_INITIAL_VALUES with the version already
+ * synced, a SUBMIT_SUCCEEDED from before a follow or reset, and a check action that changes no checks,
+ * such as one for a check that is no longer current. Server errors are automatically cleared when
+ * related fields are modified to provide a smooth user experience.
+ *
+ * @template TValues - The type of form values being managed
+ *
+ * @param state - The current form state before the action is applied
+ * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
+ * @param initialValues - Initial form values used when resetting the form
+ * @returns A new state object, or the same one for the no-op cases above
+ *
+ * @example
+ * // Used internally by useForm's store, which applies each action as soon as it is dispatched
+ * const next = formReducer(state, action, initialValues);
+ *
+ * @example
+ * // Dispatching a field value change
+ * dispatch({
+ *   type: "SET_FIELD_VALUE",
+ *   field: "email",
+ *   value: "user@example.com"
+ * });
+ *
+ * @example
+ * // Dispatching validation errors
+ * dispatch({
+ *   type: "SET_CLIENT_ERRORS",
+ *   errors: { email: "Invalid email format", password: "Too short" }
+ * });
+ *
+ * @example
+ * // Marking all fields as touched on submit
+ * dispatch({
+ *   type: "MARK_ALL_TOUCHED",
+ *   fields: ["name", "email", "password"]
+ * });
  */
 export const formReducer = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
