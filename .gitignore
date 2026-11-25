@@ -41,3 +41,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Local planning notes (design specs, plans). Anchored, so packages/*/docs stays tracked.
 /docs/
+
+# Claude Code: personal settings stay local. .claude/settings.json, skills and hooks are tracked.
+.claude/settings.local.json
