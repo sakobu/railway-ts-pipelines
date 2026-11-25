@@ -102,7 +102,30 @@ const logValidationError = (error: unknown): undefined => {
 };
 
 /**
+ * The error a field validator's answer shows. An empty message is no error, as no message is.
+ *
+ * @param answer - What the validator returned, or resolved to
+ * @returns The error, or undefined when the field passed
+ */
+const errorOf = (answer: string | undefined): string | undefined => answer || undefined;
+
+/**
+ * A field validator whose answer is the error it shows, read by {@link errorOf}. A throw still reaches the caller,
+ * and a rejection still rejects.
+ *
+ * @param validatorFn - A `fieldValidators` entry
+ * @returns The same validator, answering with the error it shows
+ */
+const answeringWithError =
+  <TValues>(validatorFn: FieldValidatorFn<TValues>): FieldValidatorFn<TValues> =>
+  (value, values) => {
+    const answer = validatorFn(value, values);
+    return answer instanceof Promise ? answer.then(errorOf) : errorOf(answer);
+  };
+
+/**
  * The field validators that are on, by normalized path. An entry set to undefined is off, as a missing key is.
+ * Each answers with the error it shows, so a field's checks and a submit's read an answer the same way.
  *
  * @param fieldValidators - The `fieldValidators` option
  * @returns Each validator, keyed by its field's normalized path
@@ -113,7 +136,7 @@ const validatorsByPath = <TValues>(
   new Map(
     Object.entries(fieldValidators ?? {})
       .filter((entry): entry is [string, FieldValidatorFn<TValues>] => typeof entry[1] === 'function')
-      .map(([field, validatorFn]) => [normalizePath(field), validatorFn]),
+      .map(([field, validatorFn]) => [normalizePath(field), answeringWithError(validatorFn)]),
   );
 
 /**

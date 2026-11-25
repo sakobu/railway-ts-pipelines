@@ -7,6 +7,13 @@ const EMPTY_VALIDATORS: ChecksState['validators'] = Object.freeze({});
 const NO_ERRORS: Readonly<Record<FieldPath, string>> = Object.freeze({});
 const NOT_VALIDATING: Readonly<Record<FieldPath, boolean>> = Object.freeze({});
 
+/**
+ * The record's own entry at `key`. A field may be named after an `Object.prototype` member, such as `constructor`,
+ * so a plain read would find the inherited member where the field has no entry.
+ */
+const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): T | undefined =>
+  Object.hasOwn(record, key) ? record[key] : undefined;
+
 /** The checks of a form that has run none, with no field validators. */
 export const NO_CHECKS: ChecksState = Object.freeze({
   schema: undefined,
@@ -32,7 +39,7 @@ export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>):
     if (validator.on && !on.has(key)) {
       validators ??= { ...checks.validators };
       validators[key] = { on: false, period: validator.period + 1 };
-      const check = checks.fields[key];
+      const check = own(checks.fields, key);
       if (check) {
         fields ??= { ...checks.fields };
         fields[key] = { id: check.id, status: 'done', value: check.value };
@@ -43,7 +50,7 @@ export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>):
     }
   }
   for (const key of on) {
-    if (!(key in checks.validators)) {
+    if (!Object.hasOwn(checks.validators, key)) {
       validators ??= { ...checks.validators };
       validators[key] = { on: true, period: 0 };
     }
@@ -55,7 +62,7 @@ export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>):
 
 /** The period of a field's validator, or `undefined` while it is off. */
 export const validatorPeriod = (checks: ChecksState, key: FieldPath): number | undefined => {
-  const validator = checks.validators[key];
+  const validator = own(checks.validators, key);
   return validator?.on ? validator.period : undefined;
 };
 
@@ -81,8 +88,8 @@ export const startFieldCheck = (
   status: 'waiting' | 'running',
   value: unknown,
 ): ChecksState => {
-  if (!checks.validators[key]?.on) return checks;
-  const replaced = checks.fields[key];
+  if (!own(checks.validators, key)?.on) return checks;
+  const replaced = own(checks.fields, key);
   if (replaced && replaced.id >= id) return checks;
   const next: FieldCheck = { id, status, value };
   if (replaced?.error !== undefined && deepEqual(replaced.value, value)) next.error = replaced.error;
@@ -91,13 +98,13 @@ export const startFieldCheck = (
 
 /** Whether `id` is the field's latest check and it has not ended. */
 export const isCurrentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean => {
-  const check = checks.fields[key];
+  const check = own(checks.fields, key);
   return check !== undefined && check.id === id && check.status !== 'done';
 };
 
 /** Moves the field's current check from waiting to running. */
 export const markFieldCheckRunning = (checks: ChecksState, key: FieldPath, id: CheckId): ChecksState => {
-  const check = checks.fields[key];
+  const check = own(checks.fields, key);
   if (check?.status !== 'waiting' || check.id !== id) return checks;
   return { ...checks, fields: { ...checks.fields, [key]: { ...check, status: 'running' } } };
 };
@@ -112,7 +119,7 @@ export const endFieldCheck = (
   id: CheckId,
   result: FieldCheckResult,
 ): ChecksState => {
-  const check = checks.fields[key];
+  const check = own(checks.fields, key);
   if (!check || !isCurrentFieldCheck(checks, key, id)) return checks;
   const { error: kept, ...rest } = check;
   const error = result === 'none' ? kept : result.error;

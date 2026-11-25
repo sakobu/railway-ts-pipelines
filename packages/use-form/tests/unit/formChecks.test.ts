@@ -118,3 +118,11 @@ test('selectors share one empty object when there is nothing to show', () => {
   expect(fieldErrorsOf({})).toBe(fieldErrorsOf(withName.fields));
   expect(validatingFieldsOf({})).toBe(validatingFieldsOf(failed.fields));
 });
+test('a field named after an Object.prototype member syncs on, starts, ends and shows its error', () => {
+  const synced = syncValidators(NO_CHECKS, on('constructor'));
+  expect(validatorPeriod(synced, 'constructor')).toBe(0);
+  const started = startFieldCheck(synced, 'constructor', 1, 'running', 'x');
+  expect(isCurrentFieldCheck(started, 'constructor', 1)).toBe(true);
+  const ended = endFieldCheck(started, 'constructor', 1, { error: 'Bad' });
+  expect(fieldErrorsOf(ended.fields)).toEqual({ constructor: 'Bad' });
+});

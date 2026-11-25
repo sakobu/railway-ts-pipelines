@@ -7,7 +7,7 @@ import { StrictMode } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
-import { publishValidator, userValidator, type PublishForm } from '../fixtures/validators';
+import { alwaysValidValidator, publishValidator, userValidator, type PublishForm } from '../fixtures/validators';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const user = { name: 'John', email: 'john@test.com', age: 25 };
@@ -554,4 +554,52 @@ test('a bracket path finds its field validator', () => {
   act(() => result.current.setFieldValue('r1[0]', 20));
 
   expect(result.current.fieldErrors).toEqual({ 'r1.0': 'Too big' });
+});
+
+describe('a validator that answers an empty message', () => {
+  test.each([
+    ['at once', () => ''],
+    ['asynchronously', () => Promise.resolve('')],
+  ])('shows no error when it answers %s', async (_, checkName) => {
+    const { result } = renderHook(() =>
+      useForm(userValidator, { initialValues: user, validationMode: 'live', fieldValidators: { name: checkName } }),
+    );
+
+    await act(async () => {
+      result.current.setFieldValue('name', 'Jane');
+      await nextTask();
+    });
+
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test('lets a submit save', async () => {
+    const onSubmit = mock(() => {});
+    const { result } = renderHook(() =>
+      useForm(userValidator, { initialValues: user, fieldValidators: { name: () => '' }, onSubmit }),
+    );
+
+    let outcome!: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+    await act(async () => {
+      outcome = await result.current.handleSubmit();
+    });
+
+    expect(outcome).toEqual(ok(user));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+test.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s gets its field validator', (name) => {
+  const { result } = renderHook(() =>
+    useForm(alwaysValidValidator, {
+      initialValues: { [name]: 'a' },
+      validationMode: 'live',
+      fieldValidators: { [name]: () => 'Bad' },
+    }),
+  );
+
+  act(() => result.current.setFieldValue(name, 'x'));
+
+  expect(result.current.fieldErrors).toEqual({ [name]: 'Bad' });
 });
