@@ -1155,7 +1155,7 @@ const form = useForm(schema, {
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run
-- `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
 - the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
 
