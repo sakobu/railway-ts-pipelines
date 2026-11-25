@@ -173,13 +173,17 @@ export const validatingFieldsOf = (
   return withEntries(EMPTY, validating);
 };
 
-/** The checks still waiting on a schema result, by field: those the newest schema check moves on when it lands. */
+/**
+ * The checks still waiting on a schema result that started before the schema check `before`, by field: those it moves
+ * on when it lands. A check that started after it waits on it as its own schema check, and moves on with its result.
+ */
 export const waitingFieldChecksOf = (
   fields: Readonly<Record<FieldPath, FieldCheck>>,
+  before: CheckId,
 ): Readonly<Record<FieldPath, FieldCheck>> =>
   withEntries(
     EMPTY,
-    Object.entries(fields).filter(([, check]) => check.status === 'waiting'),
+    Object.entries(fields).filter(([, check]) => check.status === 'waiting' && check.id < before),
   );
 
 /** Whether a field check is pending: waiting on a schema result, or running. */

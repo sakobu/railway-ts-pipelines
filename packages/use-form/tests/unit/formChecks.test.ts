@@ -106,7 +106,15 @@ test('waitingFieldChecksOf takes the checks that wait, not those running or done
   checks = startFieldCheck(checks, 'a', 1, 'waiting', 'x');
   checks = startFieldCheck(checks, 'b', 2, 'running', 'x');
   checks = endFieldCheck(startFieldCheck(checks, 'c', 3, 'waiting', 'x'), 'c', 3, 'none');
-  expect(waitingFieldChecksOf(checks.fields)).toEqual({ a: { id: 1, status: 'waiting', value: 'x' } });
+  expect(waitingFieldChecksOf(checks.fields, 4)).toEqual({ a: { id: 1, status: 'waiting', value: 'x' } });
+});
+test('waitingFieldChecksOf takes only the checks that started before the given schema check', () => {
+  let checks = syncValidators(NO_CHECKS, on('a', 'b'));
+  checks = startFieldCheck(checks, 'a', 1, 'waiting', 'x');
+  checks = startFieldCheck(checks, 'b', 3, 'waiting', 'x');
+  expect(Object.keys(waitingFieldChecksOf(checks.fields, 2))).toEqual(['a']);
+  expect(Object.keys(waitingFieldChecksOf(checks.fields, 3))).toEqual(['a']);
+  expect(waitingFieldChecksOf(checks.fields, 1)).toBe(waitingFieldChecksOf({}, 1));
 });
 test('the newest schema check wins, and ending it clears it', () => {
   const second = startSchemaCheck(startSchemaCheck(NO_CHECKS, 1), 2);
@@ -142,7 +150,7 @@ test('fieldsToRecheck takes pending checks and errors, not a check done without 
 test('selectors share one empty object when there is nothing to show', () => {
   expect(fieldErrorsOf({})).toBe(fieldErrorsOf(withName.fields));
   expect(validatingFieldsOf({})).toBe(validatingFieldsOf(failed.fields));
-  expect(waitingFieldChecksOf({})).toBe(waitingFieldChecksOf(failed.fields));
+  expect(waitingFieldChecksOf({}, 2)).toBe(waitingFieldChecksOf(failed.fields, 2));
 });
 test('a field named after an Object.prototype member syncs on, starts, ends and shows its error', () => {
   const synced = syncValidators(NO_CHECKS, on('constructor'));
@@ -167,7 +175,7 @@ test('a __proto__ key syncs on as its own entry, so syncing the same set again r
 test('a __proto__ field keeps its own entry in every record its checks write', () => {
   const synced = syncValidators(NO_CHECKS, on('__proto__'));
   const waiting = startFieldCheck(synced, '__proto__', 1, 'waiting', 'x');
-  expect(Object.entries(waitingFieldChecksOf(waiting.fields))).toEqual([
+  expect(Object.entries(waitingFieldChecksOf(waiting.fields, 2))).toEqual([
     ['__proto__', { id: 1, status: 'waiting', value: 'x' }],
   ]);
   const running = markFieldCheckRunning(waiting, '__proto__', 1);

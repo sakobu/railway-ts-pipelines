@@ -741,6 +741,108 @@ describe('a waiting field check follows the newest schema check', () => {
     }
   });
 
+  test('a landing check of values the form no longer holds leaves it waiting on its own result', async () => {
+    const { pending, checkTitle, result } = renderLiveTitle('Taken');
+    // The render's copy of the values, which the edit below leaves behind
+    const stale = result.current.values;
+
+    act(() => result.current.setFieldValue('title', 'x'));
+    act(() => {
+      void result.current.validateForm(stale);
+    });
+    await act(async () => {
+      pending[1]!.resolve(ok(stale));
+      await nextTask();
+    });
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(result.current.isValidating).toBe(true);
+
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, title: 'x' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('x', { ...draft, title: 'x' });
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a landing check of values the form no longer holds gives no validator those values', async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock((_value: string, values: PublishForm): string | undefined =>
+      values.status === 'draft' ? 'Draft needs a longer title' : undefined,
+    );
+    const { result } = renderHook(() =>
+      useForm(gated, { initialValues: draft, validationMode: 'blur', fieldValidators: { title: checkTitle } }),
+    );
+    const stale = result.current.values;
+
+    // blur mode: the change starts no check. The blur's check of title then waits on the values with status published.
+    act(() => result.current.setFieldValue('status', 'published'));
+    act(() => result.current.setFieldTouched('title'));
+    act(() => {
+      void result.current.validateForm(stale);
+    });
+    await act(async () => {
+      pending[1]!.resolve(ok(stale));
+      await nextTask();
+    });
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, status: 'published' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('Hello', { ...draft, status: 'published' });
+    expect(result.current.fieldErrors).toEqual({});
+  });
+
+  test("a sync schema result in a re-check of the field doesn't run its validator twice", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    // Sync for a bad status, async otherwise, as a schema whose async refinement runs once its sync checks pass
+    const mixed: S.MaybeAsyncValidator<unknown, PublishForm> = (values, path) =>
+      (values as PublishForm).status === 'bad'
+        ? err([{ path: ['status'], message: 'Bad status' }])
+        : gated(values, path);
+    const checkTitle = mock((_value: string, _values: PublishForm): string | undefined => undefined);
+    const { result } = renderHook(() =>
+      useForm(mixed, { initialValues: draft, validationMode: 'blur', fieldValidators: { title: checkTitle } }),
+    );
+
+    // The first blur's check of title waits on an async schema check. The second blur's schema check is sync.
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldValue('status', 'bad'));
+    act(() => result.current.setFieldTouched('title'));
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a schema validator that throws while typing ends the field check, and the throw reaches the caller', () => {
+    const down = new Error('down');
+    const throws: S.Validator<unknown, PublishForm> = () => {
+      throw down;
+    };
+    const checkTitle = mock((_value: string, _values: PublishForm): string | undefined => 'Taken');
+    const { result, rerender } = renderHook(() =>
+      useForm(throws, { initialValues: draft, validationMode: 'live', fieldValidators: { title: checkTitle } }),
+    );
+
+    expect(() => act(() => result.current.setFieldValue('title', 'x'))).toThrow(down);
+    // An act that throws doesn't render the store's change: render it, so the assertions read the store
+    rerender();
+
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(result.current.isValidating).toBe(false);
+  });
+
   test('a submit that stops at its schema step moves it on', async () => {
     const onSubmit = mock(() => {});
     const { pending, checkTitle, result } = renderLiveTitle('Taken', onSubmit);
