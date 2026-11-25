@@ -9,6 +9,7 @@ import {
   collectFieldPaths,
   deepMerge,
   deepEqual,
+  own,
 } from '../../src/utils';
 
 // Shaped like a dayjs value: a date picker creates a new one on every pick
@@ -640,5 +641,15 @@ describe('tuple field paths (runtime)', () => {
     const updated = setValueByPath(obj, 'position.1', 99);
     expect(updated.position[1]).toBe(99);
     expect(obj.position[1]).toBe(20); // original untouched
+  });
+});
+
+describe('own', () => {
+  test("reads the record's own entry, never an inherited member", () => {
+    const record: Record<string, string> = { name: 'a' };
+
+    expect(own(record, 'name')).toBe('a');
+    expect(own(record, 'constructor')).toBeUndefined();
+    expect(own({ constructor: 'b' }, 'constructor')).toBe('b');
   });
 });

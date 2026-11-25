@@ -236,6 +236,26 @@ describe('switching a field validator off', () => {
     expect(result.current.isValid).toBe(true);
   });
 
+  test("a follow in the commit that switches it off doesn't re-check its field", () => {
+    const { result, rerender } = renderHook(
+      ({ on, initial }: { on: boolean; initial: typeof user }) =>
+        useForm(userValidator, {
+          initialValues: initial,
+          validationMode: 'submit',
+          fieldValidators: on ? { name: () => 'Name is taken' } : {},
+        }),
+      { initialProps: { on: true, initial: user } },
+    );
+    act(() => result.current.setFieldValue('name', 'John', true));
+    expect(result.current.fieldErrors).toEqual({ name: 'Name is taken' });
+
+    rerender({ on: false, initial: { ...user, email: '' } });
+
+    // Nothing else calls for validation in submit mode, so the new version's schema error doesn't show yet
+    expect(result.current.values.email).toBe('');
+    expect(result.current.errors).toEqual({});
+  });
+
   test('an inline fieldValidators adds no render', () => {
     let renders = 0;
     const { rerender } = renderHook(() => {
@@ -603,3 +623,22 @@ test.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s gets 
 
   expect(result.current.fieldErrors).toEqual({ [name]: 'Bad' });
 });
+
+test.each(['constructor', 'toString', 'hasOwnProperty'])(
+  'a field named %s gets its field validator while the schema has an error on another field',
+  (name) => {
+    const otherFails: S.Validator<unknown, Record<string, unknown>> = () =>
+      err([{ path: ['other'], message: 'Other is wrong' }]);
+    const { result } = renderHook(() =>
+      useForm(otherFails, {
+        initialValues: { [name]: 'a', other: '' },
+        validationMode: 'live',
+        fieldValidators: { [name]: () => 'Bad' },
+      }),
+    );
+
+    act(() => result.current.setFieldValue(name, 'x'));
+
+    expect(result.current.errors).toEqual({ [name]: 'Bad', other: 'Other is wrong' });
+  },
+);

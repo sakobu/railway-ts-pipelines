@@ -42,6 +42,7 @@ import {
   isPathAffected,
   normalizePath,
   normalizePathKeys,
+  own,
 } from './utils';
 
 import type {
@@ -349,21 +350,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   });
 
   // The latest commit's field validators. A field check reads its validator from here when it runs, so no method
-  // depends on fieldValidators, and an inline object keeps the methods the same.
+  // depends on fieldValidators, and an inline object keeps the methods the same. The insertion effect that syncs the
+  // store with the props (Following initialValues, below) writes it.
   const fieldValidatorsRef = useRef(byPath);
   const validatorFor = useCallback((field: FieldPath) => fieldValidatorsRef.current.get(normalizePath(field)), []);
 
-  // The store catches up with this render's field validators before any effect of the commit runs, a child's
-  // included: a validator switched off ends its check, which drops its error and validating flag. Declared before the
-  // initialValues sync (Following initialValues, below), so a follow in the same commit starts from the switch-off.
-  // Quietly, since an insertion effect mustn't schedule a render: the layout effect after it notifies.
-  useInsertionEffect(() => {
-    fieldValidatorsRef.current = byPath;
-    store.dispatchQuietly({ type: 'SYNC_FIELD_VALIDATORS', fields: onFields });
-  });
-
-  // Notifies of a change the quiet syncs of this commit made, before any other layout effect of the form runs. On
-  // every commit, since one that only switches a validator off changes no prop the form otherwise watches.
+  // Notifies of a change the quiet syncs of this commit made (Following initialValues, below), before any other
+  // layout effect of the form runs. On every commit, since one that only switches a validator off changes no prop the
+  // form otherwise watches.
   useLayoutEffect(() => {
     store.flush();
   });
@@ -371,20 +365,23 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const storedState = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { dispatch } = store;
 
-  // The render shows the state synced with this render's initialValues and resetKey, so this commit's
-  // effects never see the old values. Pure, with no store write: an insertion effect (Following initialValues,
-  // below) dispatches the same sync, and the store catches up with what was rendered.
-  const syncedState = useMemo(
-    () => formReducer(storedState, { type: 'SYNC_INITIAL_VALUES', initialValues, resetKey }, initialValues),
-    [storedState, initialValues, resetKey],
+  // The render shows the state synced with this render's props, so this commit's effects never see a switched-off
+  // validator's error or the old values. Pure, with no store write: an insertion effect (Following initialValues,
+  // below) dispatches the same syncs in the same order, so the store catches up with what was rendered. That effect
+  // says why the order matters.
+  //
+  // The field validators first: a validator switched off ends its check, which drops its error and validating flag.
+  // An inline fieldValidators is new on every render, but when it switches nothing this returns the stored state
+  // itself, so the initialValues sync below doesn't rerun.
+  const validatorsSynced = useMemo(
+    () => formReducer(storedState, { type: 'SYNC_FIELD_VALIDATORS', fields: onFields }, initialValues),
+    [storedState, onFields, initialValues],
   );
 
-  // Synced with this render's field validators too, so a validator switched off shows no error or validating flag,
-  // in this render or in this commit's effects. Its own memo: an inline fieldValidators is new on every render, and
-  // leaves the initialValues sync alone. The insertion effect above dispatches the same sync.
+  // Then initialValues and resetKey, on the state that already holds this render's switch-offs
   const formState = useMemo(
-    () => formReducer(syncedState, { type: 'SYNC_FIELD_VALIDATORS', fields: onFields }, initialValues),
-    [syncedState, onFields, initialValues],
+    () => formReducer(validatorsSynced, { type: 'SYNC_INITIAL_VALUES', initialValues, resetKey }, initialValues),
+    [validatorsSynced, initialValues, resetKey],
   );
 
   // =========================================================================
@@ -584,7 +581,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const afterSchema = (result: Result<TValues, ValidationError[]> | undefined): void => {
         if (!isCurrentFieldCheck(store.getState().checks, key, id)) return;
 
-        if (!result || (isErr(result) && normalizePathKeys(formatErrors(result.error))[key] !== undefined)) {
+        if (!result || (isErr(result) && own(normalizePathKeys(formatErrors(result.error)), key) !== undefined)) {
           end({ error: undefined });
           return;
         }
@@ -742,9 +739,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
-  // here: the sync, and on a resetKey reset, the switch to a fresh submit scheduler. Quietly, since an insertion
-  // effect mustn't schedule a render: the layout effect that flushes the store (State Store, above) notifies.
+  // here: the syncs, and on a resetKey reset, the switch to a fresh submit scheduler. In the render's order, field
+  // validators first, so the state a follow starts from already holds this commit's switch-offs: the follow doesn't
+  // re-check a field whose validator just went off. Quietly, since an insertion effect mustn't schedule a render: the
+  // layout effect that flushes the store (State Store, above) notifies.
   useInsertionEffect(() => {
+    fieldValidatorsRef.current = byPath;
+    store.dispatchQuietly({ type: 'SYNC_FIELD_VALIDATORS', fields: onFields });
     const prev = store.getState();
     store.dispatchQuietly({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
     const next = store.getState();

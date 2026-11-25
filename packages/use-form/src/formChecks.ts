@@ -1,4 +1,4 @@
-import { deepEqual } from './utils';
+import { deepEqual, own } from './utils';
 
 import type { CheckId, ChecksState, FieldCheck, FieldCheckResult, FieldPath } from './types';
 
@@ -6,13 +6,6 @@ const EMPTY_FIELDS: Readonly<Record<FieldPath, FieldCheck>> = Object.freeze({});
 const EMPTY_VALIDATORS: ChecksState['validators'] = Object.freeze({});
 const NO_ERRORS: Readonly<Record<FieldPath, string>> = Object.freeze({});
 const NOT_VALIDATING: Readonly<Record<FieldPath, boolean>> = Object.freeze({});
-
-/**
- * The record's own entry at `key`. A field may be named after an `Object.prototype` member, such as `constructor`,
- * so a plain read would find the inherited member where the field has no entry.
- */
-const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): T | undefined =>
-  Object.hasOwn(record, key) ? record[key] : undefined;
 
 /** The checks of a form that has run none, with no field validators. */
 export const NO_CHECKS: ChecksState = Object.freeze({

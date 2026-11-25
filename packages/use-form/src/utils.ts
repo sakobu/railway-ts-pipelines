@@ -24,6 +24,13 @@ export const normalizePathKeys = <T>(map: Record<FieldPath, T>): Record<FieldPat
 };
 
 /**
+ * The record's own entry at `key`, for a record keyed by field path. A field may be named after an `Object.prototype`
+ * member, such as `constructor`, so a plain read would find the inherited member where the field has no entry.
+ */
+export const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): T | undefined =>
+  Object.hasOwn(record, key) ? record[key] : undefined;
+
+/**
  * Retrieves a value from a nested object using a path string.
  * Supports both dot notation for object properties and bracket notation for array indices.
  * Returns undefined if any part of the path doesn't exist.
