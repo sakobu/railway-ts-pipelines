@@ -91,13 +91,12 @@ export function union<I, O>(
 ): MaybeAsyncValidator<I, O> {
   const { collectAllErrors = true, errorPrefix } = options || {};
 
-  const buildError = (allErrors: ValidationError[][]) =>
-    err(
-      allErrors.flat().map((error) => ({
-        path: error.path,
-        message: errorPrefix ? `${errorPrefix}: ${error.message}` : error.message,
-      })),
+  const buildError = (allErrors: ValidationError[][]) => {
+    const reported = (collectAllErrors ? allErrors : allErrors.slice(0, 1)).flat();
+    return err(
+      errorPrefix ? reported.map((error) => ({ ...error, message: `${errorPrefix}: ${error.message}` })) : reported,
     );
+  };
 
   return (value, parentPath = []) => {
     if (validators.length === 0) {
@@ -117,7 +116,6 @@ export function union<I, O>(
           const asyncResult = await result;
           if (isOk(asyncResult)) return asyncResult;
           allErrors.push(asyncResult.error);
-          if (!collectAllErrors) return buildError(allErrors);
 
           // Continue with remaining validators sequentially
           for (let j = i + 1; j < validators.length; j++) {
@@ -125,7 +123,6 @@ export function union<I, O>(
             const r = await validators[j]!(value, parentPath);
             if (isOk(r)) return r;
             allErrors.push(r.error);
-            if (!collectAllErrors) break;
           }
           return buildError(allErrors);
         })();
@@ -138,11 +135,6 @@ export function union<I, O>(
 
       // Collect errors for error reporting
       allErrors.push(result.error);
-
-      // If we don't need to collect all errors, we can stop at the first failure
-      if (!collectAllErrors) {
-        break;
-      }
     }
 
     // If all validators failed, combine all errors
