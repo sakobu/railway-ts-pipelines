@@ -75,13 +75,7 @@ describe('union validator', () => {
     }
   });
 
-  test('collectAllErrors: false reports only the first validator errors', () => {
-    const validator = union([stringValidator, numberValidator], { collectAllErrors: false });
-
-    expect(validator({})).toEqual(err([{ path: [], message: 'Expected a string' }]));
-  });
-
-  test('collectAllErrors: false reports every error of the first validator', () => {
+  test('collectAllErrors: false reports every error of the first validator and none of the rest', () => {
     const twoErrors: Validator<unknown, string> = () =>
       err([
         { path: ['a'], message: 'First' },
@@ -238,31 +232,20 @@ describe('union async validator', () => {
     }
   });
 
-  test('collectAllErrors: false with async — reports only the first validator errors', async () => {
-    const validator = union([asyncStringValidator, asyncNumberValidator], { collectAllErrors: false });
+  describe.each<[string, Array<MaybeAsyncValidator<unknown, unknown>>, string]>([
+    ['async first', [asyncStringValidator, asyncNumberValidator, booleanValidator], 'Expected a string (async)'],
+    ['sync then async', [stringValidator, asyncNumberValidator, booleanValidator], 'Expected a string'],
+  ])('collectAllErrors: false, %s', (_chain, validators, firstMessage) => {
+    const validator = union(validators, { collectAllErrors: false });
 
-    expect(await validator({})).toEqual(err([{ path: [], message: 'Expected a string (async)' }]));
-  });
-
-  test('collectAllErrors: false with async — still accepts a value a later validator accepts', async () => {
-    const validator = union([asyncStringValidator, asyncNumberValidator, booleanValidator], {
-      collectAllErrors: false,
+    test('still accepts a value a later validator accepts', async () => {
+      expect(await validator(42)).toEqual(ok(42));
+      expect(await validator(true)).toEqual(ok(true));
     });
 
-    expect(await validator(42)).toEqual(ok(42));
-    expect(await validator(true)).toEqual(ok(true));
-  });
-
-  test('collectAllErrors: false with sync then async — tries the async validator after a sync failure', async () => {
-    const validator = union([stringValidator, asyncNumberValidator], { collectAllErrors: false });
-
-    expect(await validator(42)).toEqual(ok(42));
-  });
-
-  test('collectAllErrors: false with sync then async — reports the sync validator errors', async () => {
-    const validator = union([stringValidator, asyncNumberValidator], { collectAllErrors: false });
-
-    expect(await validator({})).toEqual(err([{ path: [], message: 'Expected a string' }]));
+    test('reports only the first validator errors', async () => {
+      expect(await validator({})).toEqual(err([{ path: [], message: firstMessage }]));
+    });
   });
 
   test('errorPrefix with async errors', async () => {
