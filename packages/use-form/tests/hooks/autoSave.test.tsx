@@ -3,7 +3,7 @@ import { describe, test, expect, mock, spyOn, afterEach } from 'bun:test';
 import { ok, err, type Result } from '@railway-ts/pipelines/result';
 import { validate, type MaybeAsyncValidator, type ValidationError } from '@railway-ts/pipelines/schema';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, useState } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { createGatedOnSubmit, createGatedValidator, nextTask, withoutAct } from '../fixtures/gates';
@@ -22,7 +22,10 @@ const initial: UserForm = { name: 'John', email: 'john@example.com', age: 25 };
 /** How long auto-save waits, unless a test sets its own. */
 const delay = 100;
 
-const sleep = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)));
+/** Waits without act, so each update commits as it does in the app. */
+const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const sleep = (ms: number) => act(() => pause(ms));
 
 /** An `onSubmit` that saves. */
 const saving = () => mock((_values: UserForm) => {});
@@ -160,6 +163,35 @@ describe('autoSave', () => {
       await sleep(3 * delay);
 
       expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test("doesn't resend values an optimistic write and its rollback hid", async () => {
+      const onSubmit = mock((_values: UserForm) => {});
+      const { result } = renderHook(() => {
+        const [record, setRecord] = useState(initial);
+        return useForm(userValidator, {
+          initialValues: record,
+          // Writes the values to the record before the server answers, and rolls back when the save fails
+          onSubmit: async (values): Promise<Result<UserForm, ValidationError[]>> => {
+            onSubmit(values);
+            setRecord(values);
+            await pause(10);
+            setRecord(initial);
+            await pause(10);
+            return err([{ path: [], message: 'Network down' }]);
+          },
+          autoSave: { delay },
+        });
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // Outside act, so the optimistic write commits before the rollback, as in the app
+      await withoutAct(() => pause(5 * delay));
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.values.name).toBe('Jane');
     });
 
     test('a form without onSubmit is submitted once per version', async () => {

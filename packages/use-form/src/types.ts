@@ -176,7 +176,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
 
   /**
    * The values of the latest submission that went out since the form was last clean: it called `onSubmit`, reached it
-   * with none set, or threw. Dropped whenever the values equal the initial values. Auto-save doesn't send them again.
+   * with none set, or threw. Dropped whenever the values equal the initial values and no submission runs: while one
+   * runs, the initial values may be an optimistic write that a failed save rolls back. Auto-save doesn't send them again.
    */
   wentOut?: TValues;
 }

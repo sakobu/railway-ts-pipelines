@@ -1182,6 +1182,22 @@ describe('wentOut', () => {
     expect(formReducer(recorded, sync(edited), edited).wentOut).toBeUndefined();
   });
 
+  describe('while a submission runs', () => {
+    const submitting = formReducer(recorded, { type: 'SET_SUBMITTING', isSubmitting: true }, v1);
+    // A write of the submitted values to the record before the server answers, which a failed save rolls back
+    const optimistic = formReducer(submitting, sync(edited), edited);
+
+    test('an optimistic write equal to the values keeps it', () => {
+      expect(optimistic.wentOut).toBe(edited);
+    });
+
+    test('the action that ends it with the values equal to the initial values drops it', () => {
+      const ended = formReducer(optimistic, { type: 'SET_SUBMITTING', isSubmitting: false }, edited);
+
+      expect(ended.wentOut).toBeUndefined();
+    });
+  });
+
   describe('a reset leaves checkedValues and wentOut unset', () => {
     const both: FormState<typeof v1> = { ...recorded, checkedValues: edited };
 

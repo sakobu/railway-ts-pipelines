@@ -389,7 +389,8 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Tracking checks: the schema check, each field's validator and its checks
  *
  * Values equal to the initial values leave nothing that went out to remember, so `wentOut` is dropped from the
- * result of every action, the ones that change nothing included.
+ * result of every action, the ones that change nothing included. Not while a submission runs: the initial values may
+ * then be an optimistic write that a failed save rolls back. The action that ends the submission drops it then.
  *
  * All state updates are performed immutably, never mutating the existing state. Some actions
  * return the same state object when they change nothing, so the store can skip notifying:
@@ -437,7 +438,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
 ): FormState<TValues> => {
   const next = reduce(state, action, initialValues);
-  if (next.wentOut === undefined || !deepEqual(next.values, initialValues)) return next;
+  if (next.wentOut === undefined || next.isSubmitting || !deepEqual(next.values, initialValues)) return next;
   const { wentOut: _wentOut, ...rest } = next;
   return rest;
 };
