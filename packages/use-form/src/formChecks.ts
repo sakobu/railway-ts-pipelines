@@ -10,10 +10,8 @@ import type {
   ValidatorState,
 } from './types';
 
-const EMPTY_FIELDS: Readonly<Record<FieldPath, FieldCheck>> = Object.freeze({});
-const EMPTY_VALIDATORS: ChecksState['validators'] = Object.freeze({});
-const NO_ERRORS: Readonly<Record<FieldPath, string>> = Object.freeze({});
-const NOT_VALIDATING: Readonly<Record<FieldPath, boolean>> = Object.freeze({});
+// One frozen empty record, shared by every selector and default that has nothing to show.
+const EMPTY: Readonly<Record<string, never>> = Object.freeze({});
 
 /**
  * The record with the entries set, or the record itself when there are none. Each becomes an own entry, even one keyed
@@ -27,15 +25,15 @@ const withEntries = <T>(
 /** The checks of a form that has run none, with no field validators. */
 export const NO_CHECKS: ChecksState = Object.freeze({
   schema: undefined,
-  fields: EMPTY_FIELDS,
-  validators: EMPTY_VALIDATORS,
+  fields: EMPTY,
+  validators: EMPTY,
 });
 
 /** Drops the schema check and every field check, and keeps the validators. */
 export const startOver = (checks: ChecksState): ChecksState =>
   checks.schema === undefined && Object.keys(checks.fields).length === 0
     ? checks
-    : { schema: undefined, fields: EMPTY_FIELDS, validators: checks.validators };
+    : { schema: undefined, fields: EMPTY, validators: checks.validators };
 
 /**
  * Brings the validators in line with the fields that have one on now. A validator that goes off
@@ -152,7 +150,7 @@ export const fieldErrorsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): 
   for (const [key, check] of Object.entries(fields)) {
     if (check.error !== undefined) errors.push([key, check.error]);
   }
-  return withEntries(NO_ERRORS, errors);
+  return withEntries(EMPTY, errors);
 };
 
 /** The fields whose validator is running now. */
@@ -163,7 +161,7 @@ export const validatingFieldsOf = (
   for (const [key, check] of Object.entries(fields)) {
     if (check.status === 'running') validating.push([key, true]);
   }
-  return withEntries(NOT_VALIDATING, validating);
+  return withEntries(EMPTY, validating);
 };
 
 /** Whether a field check is pending: waiting on the schema check of its values, or running. */
