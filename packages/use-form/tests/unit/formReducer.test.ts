@@ -480,10 +480,7 @@ describe('formReducer', () => {
         touched: { name: true, email: true },
         clientErrors: { name: 'Name error' },
         serverErrors: { email: 'Email error' },
-        fieldErrors: { name: 'Field error' },
-        validatingFields: { name: true },
         isSubmitting: true,
-        isFormValidating: true,
         submitCount: 3,
       };
 
@@ -499,10 +496,7 @@ describe('formReducer', () => {
       expect(result.touched).toEqual({});
       expect(result.clientErrors).toEqual({});
       expect(result.serverErrors).toEqual({});
-      expect(result.fieldErrors).toEqual({});
-      expect(result.validatingFields).toEqual({});
       expect(result.isSubmitting).toBe(false);
-      expect(result.isFormValidating).toBe(false);
       expect(result.submitCount).toBe(0);
     });
 
@@ -565,149 +559,6 @@ describe('formReducer', () => {
 
       expect(result.touched.name).toBe(true);
       expect(result.touched.email).toBe(true);
-    });
-  });
-
-  describe('SET_FIELD_VALIDATING', () => {
-    test('sets per-field validating state to true', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: true,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBe(true);
-    });
-
-    test('sets per-field validating state to false and removes key', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        validatingFields: { name: true },
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBeUndefined();
-    });
-
-    test('preserves other validating fields when one completes', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        validatingFields: { name: true, email: true },
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBeUndefined();
-      expect(result.validatingFields.email).toBe(true);
-    });
-  });
-
-  describe('SET_FORM_VALIDATING', () => {
-    test('sets form-level validating state to true', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FORM_VALIDATING',
-          isFormValidating: true,
-        },
-        initialValues,
-      );
-
-      expect(result.isFormValidating).toBe(true);
-    });
-
-    test('sets form-level validating state to false', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        isFormValidating: true,
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FORM_VALIDATING',
-          isFormValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.isFormValidating).toBe(false);
-    });
-  });
-
-  describe('SET_FIELD_ERROR', () => {
-    test('sets a per-field error', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: 'Name is taken',
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBe('Name is taken');
-    });
-
-    test('clears a per-field error when undefined', () => {
-      const stateWithFieldError: FormState<typeof initialValues> = {
-        ...initialState,
-        fieldErrors: { name: 'Name is taken' },
-      };
-
-      const result = formReducer(
-        stateWithFieldError,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: undefined,
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBeUndefined();
-    });
-
-    test('preserves other field errors', () => {
-      const stateWithFieldErrors: FormState<typeof initialValues> = {
-        ...initialState,
-        fieldErrors: { name: 'Name is taken', email: 'Email is taken' },
-      };
-
-      const result = formReducer(
-        stateWithFieldErrors,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: undefined,
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBeUndefined();
-      expect(result.fieldErrors.email).toBe('Email is taken');
     });
   });
 
@@ -888,11 +739,8 @@ describe('SYNC_INITIAL_VALUES', () => {
       touched: { name: true },
       clientErrors: { name: 'Client' },
       serverErrors: { email: 'Server' },
-      fieldErrors: { name: 'Field' },
       submitError: 'Down',
-      validatingFields: { name: true },
       isSubmitting: true,
-      isFormValidating: true,
       submitCount: 3,
       isStale: true,
       generation: 2,

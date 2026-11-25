@@ -39,11 +39,8 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   touched: EMPTY,
   clientErrors: EMPTY,
   serverErrors: EMPTY,
-  fieldErrors: EMPTY,
   checks: NO_CHECKS,
-  validatingFields: EMPTY,
   isSubmitting: false,
-  isFormValidating: false,
   isSubmitValidating: false,
   submitCount: 0,
   lastVersion: initialValues,
@@ -271,42 +268,8 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'INCREMENT_SUBMIT_COUNT':
       return { ...state, submitCount: state.submitCount + 1 };
 
-    case 'SET_FORM_VALIDATING':
-      return {
-        ...state,
-        isFormValidating: action.isFormValidating,
-      };
-
     case 'SET_SUBMIT_VALIDATING':
       return { ...state, isSubmitValidating: action.isSubmitValidating };
-
-    case 'SET_FIELD_VALIDATING': {
-      const key = normalizePath(action.field);
-      const newValidatingFields = { ...state.validatingFields };
-      if (action.isValidating) {
-        newValidatingFields[key] = true;
-      } else {
-        delete newValidatingFields[key];
-      }
-      return {
-        ...state,
-        validatingFields: newValidatingFields,
-      };
-    }
-
-    case 'SET_FIELD_ERROR': {
-      const key = normalizePath(action.field);
-      const newFieldErrors = { ...state.fieldErrors };
-      if (action.error) {
-        newFieldErrors[key] = action.error;
-      } else {
-        delete newFieldErrors[key];
-      }
-      return {
-        ...state,
-        fieldErrors: newFieldErrors,
-      };
-    }
 
     case 'SYNC_FIELD_VALIDATORS': {
       const checks = syncValidators(state.checks, action.fields);

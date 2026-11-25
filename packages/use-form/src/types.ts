@@ -117,19 +117,14 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
-  /** Whether a form-level async validation that the form or `validateForm` started, outside a submission, is in progress. */
-  isFormValidating: boolean;
-
   /** Whether a submission's validation is in progress. Kept apart, so a check that typing started can't end it. */
   isSubmitValidating: boolean;
 
-  /** Per-field async validation tracking. True when that field's async validator is running. */
-  validatingFields: Record<FieldPath, boolean>;
-
-  /** Errors from per-field validators (stored separately so schema SET_CLIENT_ERRORS doesn't overwrite them). */
-  fieldErrors: Record<FieldPath, string>;
-
-  /** Every check the form runs, and which field validators are on. */
+  /**
+   * Every check the form runs: the schema check whose result lands, each field's latest check, and which field
+   * validators are on. The reducer alone decides which result lands, and `fieldErrors`, `validatingFields` and
+   * `isValidating` are computed from it.
+   */
   checks: ChecksState;
 
   /**
@@ -170,8 +165,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
   generation: number;
 
   /**
-   * Increments on each follow, `RESET_FORM` and `resetKey` reset. Async validation results and
-   * `SUBMIT_SUCCEEDED` land only in the epoch they started in.
+   * Increments on each follow, `RESET_FORM` and `resetKey` reset. `SUBMIT_SUCCEEDED` lands only in the epoch its
+   * submission started in, and a submission registers its field checks only while the values it submitted are still
+   * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
    */
   baselineEpoch: number;
 }
@@ -1277,32 +1273,10 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'INCREMENT_SUBMIT_COUNT';
     }
   | {
-      /** Sets the form-level async validation state */
-      type: 'SET_FORM_VALIDATING';
-      /** Whether form-level async validation is currently in progress */
-      isFormValidating: boolean;
-    }
-  | {
       /** Sets whether a submission's validation is in progress */
       type: 'SET_SUBMIT_VALIDATING';
       /** Whether the submission's validation is in progress */
       isSubmitValidating: boolean;
-    }
-  | {
-      /** Sets per-field async validation state */
-      type: 'SET_FIELD_VALIDATING';
-      /** The field path being validated */
-      field: FieldPath;
-      /** Whether the field's async validator is running */
-      isValidating: boolean;
-    }
-  | {
-      /** Sets or clears a per-field validator error */
-      type: 'SET_FIELD_ERROR';
-      /** The field path */
-      field: FieldPath;
-      /** The error message, or undefined to clear */
-      error: string | undefined;
     }
   | {
       /** Resets the form to initial values and clears all errors and touched state */

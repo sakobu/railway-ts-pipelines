@@ -4,9 +4,9 @@ import type { FieldPath } from './types';
  * Canonical (dot) form for a field path. Numeric bracket segments are
  * rewritten as dot segments: "users[0].name" → "users.0.name".
  *
- * Path-keyed maps stored in form state (touched, clientErrors, fieldErrors,
- * serverErrors) are keyed by this canonical form, so lookups using either
- * "r1.0" or "r1[0]" resolve to the same entry once normalized.
+ * Path-keyed maps stored in form state (touched, clientErrors, serverErrors,
+ * and the field checks and validators) are keyed by this canonical form, so
+ * lookups using either "r1.0" or "r1[0]" resolve to the same entry once normalized.
  */
 export const normalizePath = (path: FieldPath): FieldPath => path.replace(/\[(\d+)\]/g, '.$1');
 
