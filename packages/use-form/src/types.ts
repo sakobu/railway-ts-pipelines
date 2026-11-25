@@ -373,7 +373,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
 
   /**
    * Per-field validator functions for field-level async validation.
-   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, all of them.
+   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, once the schema passes, every one that is on.
    * A field validator only runs when the schema produces no error for that field.
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.

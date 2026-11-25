@@ -1143,8 +1143,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       try {
         const { clientErrors, serverErrors, baselineEpoch, lastVersion, otherVersions } = store.getState();
 
-        // Whether the submitted values are still the baseline: a follow of new initialValues or a resetForm() replaces
-        // them
+        // Whether the submitted values are still the baseline: a follow of new initialValues or a resetForm()
+        // replaces them
         const isBaseline = (): boolean => store.getState().baselineEpoch === baselineEpoch;
 
         // Whether the save would overwrite a newer version of the record. After a resetKey switch, the previous
