@@ -249,7 +249,7 @@ describe('union async validator', () => {
       expect(await validator(true)).toEqual(ok(true));
     });
 
-    test('reports only the first validator errors', async () => {
+    test("reports only the first validator's errors", async () => {
       expect(await validator({})).toEqual(err([{ path: [], message: firstMessage }]));
     });
   });
