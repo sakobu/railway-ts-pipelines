@@ -100,6 +100,7 @@ describe('createAutoSave', () => {
   test('restart starts a new version with its own delay', () => {
     const auto = due();
     auto.restart();
+    expect(auto.decide(view())).toBe('wait');
     expect(auto.track(A)).toBe(true);
     expect(auto.decide(view())).toBe('wait');
     auto.delayEnded();

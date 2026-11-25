@@ -74,6 +74,7 @@ export type AutoSave<TValues> = {
  * @returns An auto-save with nothing tracked
  */
 export const createAutoSave = <TValues>(): AutoSave<TValues> => {
+  // Boxed because TValues is unconstrained: `undefined` alone can't mean "nothing tracked".
   let tracked: { values: TValues } | undefined;
   let delayPassed = false;
   let checkStarted = false;
@@ -93,6 +94,8 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
 
   const restart = (): void => {
     tracked = undefined;
+    delayPassed = false;
+    checkStarted = false;
   };
 
   const decide = (view: AutoSaveView<TValues>): AutoSaveStep => {
