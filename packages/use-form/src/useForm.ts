@@ -647,8 +647,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const end = (result: Result<TValues, ValidationError[]> | undefined): void => {
         const action: FormAction<TValues> =
           result === undefined
-            ? { type: 'END_SCHEMA_CHECK', id }
-            : { type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) };
+            ? { type: 'END_SCHEMA_CHECK', id, values }
+            : { type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result), values };
         const current = store.getState().checks.schema === id;
         write(action);
         if (current && store.getState().checks.schema === undefined) onLanded(id, { values, result }, held);

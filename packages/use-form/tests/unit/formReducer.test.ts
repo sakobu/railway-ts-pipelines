@@ -1035,9 +1035,9 @@ describe('checks', () => {
   test('END_SCHEMA_CHECK sets clientErrors only for the current check', () => {
     const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
 
-    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: { name: 'Bad' } })).toBe(started);
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: { name: 'Bad' }, values: v1 })).toBe(started);
 
-    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, errors: { name: 'Bad' } });
+    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, errors: { name: 'Bad' }, values: v1 });
     expect(ended.clientErrors).toEqual({ name: 'Bad' });
     expect(ended.checks.schema).toBeUndefined();
   });
@@ -1046,7 +1046,7 @@ describe('checks', () => {
     const ended = apply(
       start,
       { type: 'START_SCHEMA_CHECK', id: 1 },
-      { type: 'END_SCHEMA_CHECK', id: 1, errors: { 'r1[0]': 'Bad' } },
+      { type: 'END_SCHEMA_CHECK', id: 1, errors: { 'r1[0]': 'Bad' }, values: v1 },
     );
 
     expect(ended.clientErrors).toEqual({ 'r1.0': 'Bad' });
@@ -1055,10 +1055,46 @@ describe('checks', () => {
   test('END_SCHEMA_CHECK without errors ends the check and keeps clientErrors', () => {
     const withErrors: FormState<typeof v1> = { ...start, clientErrors: { name: 'Bad' } };
 
-    const ended = apply(withErrors, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'END_SCHEMA_CHECK', id: 1 });
+    const ended = apply(
+      withErrors,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, values: v1 },
+    );
 
     expect(ended.checks.schema).toBeUndefined();
     expect(ended.clientErrors).toBe(withErrors.clientErrors);
+  });
+
+  test('END_SCHEMA_CHECK that lands records the values it checked', () => {
+    const ended = apply(
+      start,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: edited },
+    );
+
+    expect(ended.checkedValues).toBe(edited);
+  });
+
+  test('END_SCHEMA_CHECK of a replaced check records nothing', () => {
+    const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
+
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: edited })).toBe(started);
+  });
+
+  test('END_SCHEMA_CHECK without errors keeps checkedValues', () => {
+    const landed = apply(
+      start,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: v1 },
+    );
+
+    const ended = apply(
+      landed,
+      { type: 'START_SCHEMA_CHECK', id: 2 },
+      { type: 'END_SCHEMA_CHECK', id: 2, values: edited },
+    );
+
+    expect(ended.checkedValues).toBe(v1);
   });
 
   test('field check actions normalize a bracket path', () => {
@@ -1115,5 +1151,42 @@ describe('checks', () => {
     expect(result.checks.schema).toBeUndefined();
     expect(result.checks.fields).toEqual({});
     expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
+  });
+});
+
+describe('wentOut', () => {
+  const dirty: FormState<typeof v1> = { ...createInitialFormState(v1, 'a'), values: edited };
+  const recorded = formReducer(dirty, { type: 'SUBMISSION_WENT_OUT', values: edited }, v1);
+
+  test('SUBMISSION_WENT_OUT records the values', () => {
+    expect(recorded.wentOut).toBe(edited);
+  });
+
+  test('SUBMISSION_WENT_OUT of the values already recorded returns the same state', () => {
+    expect(formReducer(recorded, { type: 'SUBMISSION_WENT_OUT', values: edited }, v1)).toBe(recorded);
+  });
+
+  test('an edit back to the initial values drops it', () => {
+    const back = formReducer(recorded, { type: 'SET_FIELD_VALUE', field: 'name', value: 'John' }, v1);
+
+    expect(back.wentOut).toBeUndefined();
+  });
+
+  test('an edit to other values keeps it', () => {
+    const other = formReducer(recorded, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Janet' }, v1);
+
+    expect(other.wentOut).toBe(edited);
+  });
+
+  test('an answer equal to the values drops it', () => {
+    expect(formReducer(recorded, sync(edited), edited).wentOut).toBeUndefined();
+  });
+
+  test('RESET_FORM drops it', () => {
+    expect(formReducer(recorded, { type: 'RESET_FORM' }, v1).wentOut).toBeUndefined();
+  });
+
+  test('an action that changes nothing returns the same state', () => {
+    expect(formReducer(recorded, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, v1)).toBe(recorded);
   });
 });

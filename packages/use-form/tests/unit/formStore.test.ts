@@ -121,4 +121,14 @@ describe('createFormStore', () => {
 
     expect(ids).toEqual([1, 2, 3]);
   });
+
+  test('getInitialValues returns the values set most recently', () => {
+    const store = createFormStore(initialState, initialState.values);
+    expect(store.getInitialValues()).toBe(initialState.values);
+
+    const saved = { name: 'Ada' };
+    store.setInitialValues(saved);
+
+    expect(store.getInitialValues()).toBe(saved);
+  });
 });

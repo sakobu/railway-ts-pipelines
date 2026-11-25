@@ -194,7 +194,7 @@ const withChecks = <TValues extends Record<string, unknown>>(
  *   fields: ["name", "email", "password"]
  * });
  */
-export const formReducer = <TValues extends Record<string, unknown>>(
+const reduce = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   action: FormAction<TValues>,
   initialValues: TValues,
@@ -285,8 +285,12 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'END_SCHEMA_CHECK': {
       // endSchemaCheck changes the checks only when the check is current, so a new state means its errors land
       const ended = withChecks(state, endSchemaCheck(state.checks, action.id));
-      return ended !== state && action.errors !== undefined ? withClientErrors(ended, action.errors) : ended;
+      if (ended === state || action.errors === undefined) return ended;
+      return { ...withClientErrors(ended, action.errors), checkedValues: action.values };
     }
+
+    case 'SUBMISSION_WENT_OUT':
+      return state.wentOut === action.values ? state : { ...state, wentOut: action.values };
 
     case 'START_FIELD_CHECK':
       return withChecks(
@@ -396,4 +400,19 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     default:
       return state;
   }
+};
+
+/**
+ * Applies `action` to `state`. Values equal to the initial values leave nothing that went out to remember, so
+ * `wentOut` is dropped from the result of every action.
+ */
+export const formReducer = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  action: FormAction<TValues>,
+  initialValues: TValues,
+): FormState<TValues> => {
+  const next = reduce(state, action, initialValues);
+  if (next.wentOut === undefined || !deepEqual(next.values, initialValues)) return next;
+  const { wentOut: _wentOut, ...rest } = next;
+  return rest;
 };

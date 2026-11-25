@@ -30,6 +30,8 @@ export type FormStore<TValues extends Record<string, unknown>> = {
    * @param initialValues - The values a reset starts over from
    */
   setInitialValues: (initialValues: TValues) => void;
+  /** Returns the initial values set most recently: what `RESET_FORM` resets to, and what `isDirty` compares against. */
+  getInitialValues: () => TValues;
   /**
    * Hands out the id of the next check: 1, 2, 3 and so on. The count never restarts, not even on `RESET_FORM`,
    * so an id is never taken twice and a later check always has the larger one.
@@ -97,6 +99,7 @@ export const createFormStore = <TValues extends Record<string, unknown>>(
     setInitialValues: (values) => {
       latestInitialValues = values;
     },
+    getInitialValues: () => latestInitialValues,
     takeCheckId: () => ++lastCheckId,
     subscribe: (listener) => {
       listeners.add(listener);

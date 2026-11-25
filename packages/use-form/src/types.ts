@@ -170,6 +170,15 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
    */
   baselineEpoch: number;
+
+  /** The values the latest landed schema check checked: one that ended with a result while current. Unset until one lands, and after a reset. */
+  checkedValues?: TValues;
+
+  /**
+   * The values of the latest submission that went out since the form was last clean: it called `onSubmit`, reached it
+   * with none set, or threw. Dropped whenever the values equal the initial values. Auto-save doesn't send them again.
+   */
+  wentOut?: TValues;
 }
 
 /** A check's id. The store hands them out in increasing order for its lifetime. */
@@ -1171,6 +1180,14 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
       /** The schema's errors, as `SET_CLIENT_ERRORS` takes them. None ends the check and keeps the errors. */
       errors?: Record<FieldPath, string>;
+      /** The values the check checked */
+      values: TValues;
+    }
+  | {
+      /** Records the values of a submission that went out */
+      type: 'SUBMISSION_WENT_OUT';
+      /** The values that went out */
+      values: TValues;
     }
   | {
       /** Registers a field check, while the field's validator is on and `id` is newer than its current check */

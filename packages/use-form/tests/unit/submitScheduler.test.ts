@@ -149,4 +149,43 @@ describe('createSubmitScheduler', () => {
     expect(await followUp).toBe('second');
     expect(run.mock.calls[1]?.[0]).toEqual({ n: 2 });
   });
+
+  test('isBusy is true while a submission runs or a follow-up waits', async () => {
+    const scheduler = createSubmitScheduler<Values, string>();
+    const { run, pending } = createDeferredRun();
+    expect(scheduler.isBusy()).toBe(false);
+
+    const first = scheduler.submit(() => ({ name: 'a' }), run);
+    expect(scheduler.isBusy()).toBe(true);
+
+    const second = scheduler.submit(() => ({ name: 'b' }), run);
+    pending[0]!.resolve('one');
+    await first;
+    await Promise.resolve();
+    expect(scheduler.isBusy()).toBe(true);
+
+    pending[1]!.resolve('two');
+    await second;
+    await Promise.resolve();
+    expect(scheduler.isBusy()).toBe(false);
+  });
+
+  test('onIdle is called when the scheduler goes idle, not when a follow-up starts', async () => {
+    const onIdle = mock(() => {});
+    const scheduler = createSubmitScheduler<Values, string>(onIdle);
+    const { run, pending } = createDeferredRun();
+
+    const first = scheduler.submit(() => ({ name: 'a' }), run);
+    const second = scheduler.submit(() => ({ name: 'b' }), run);
+
+    pending[0]!.resolve('one');
+    await first;
+    await Promise.resolve();
+    expect(onIdle).toHaveBeenCalledTimes(0);
+
+    pending[1]!.resolve('two');
+    await second;
+    await Promise.resolve();
+    expect(onIdle).toHaveBeenCalledTimes(1);
+  });
 });
