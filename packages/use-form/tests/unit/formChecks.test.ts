@@ -37,6 +37,16 @@ test('switching a validator off ends its check with no error and bumps its perio
   expect(validatorPeriod(back, 'name')).toBe(1);
   expect(fieldErrorsOf(back.fields)).toEqual({});
 });
+test('switching off a validator with no check bumps its period and leaves the field checks', () => {
+  const off = syncValidators(withName, on());
+  expect(off.validators).toEqual({ name: { on: false, period: 1 } });
+  expect(off.fields).toBe(withName.fields);
+});
+test('a validator already off, or never on, stays as it is', () => {
+  const off = syncValidators(withName, on());
+  expect(syncValidators(off, on())).toBe(off);
+  expect(syncValidators(NO_CHECKS, on())).toBe(NO_CHECKS);
+});
 test('startFieldCheck registers only a newer check', () => {
   const started = startFieldCheck(withName, 'name', 2, 'running', 'x');
   expect(startFieldCheck(started, 'name', 1, 'running', 'x')).toBe(started);
@@ -50,6 +60,11 @@ test('a check of the same value keeps the last error, and one of a new value sho
   expect(validatingFieldsOf(same.fields)).toEqual({ name: true });
   expect(fieldErrorsOf(startFieldCheck(failed, 'name', 2, 'waiting', 'y').fields)).toEqual({});
 });
+test('a check waiting on the schema shows the last error while the value is unchanged', () => {
+  const waiting = startFieldCheck(failed, 'name', 2, 'waiting', 'x');
+  expect(fieldErrorsOf(waiting.fields)).toEqual({ name: 'Taken' });
+  expect(validatingFieldsOf(waiting.fields)).toEqual({});
+});
 test('the same value compares by content', () => {
   const tagged = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', ['a']), 'name', 1, { error: 'Bad' });
   expect(fieldErrorsOf(startFieldCheck(tagged, 'name', 2, 'running', ['a']).fields)).toEqual({ name: 'Bad' });
@@ -59,6 +74,11 @@ test('markFieldCheckRunning moves the current waiting check to running, and igno
   expect(markFieldCheckRunning(waiting, 'name', 1).fields.name?.status).toBe('running');
   const replaced = startFieldCheck(waiting, 'name', 2, 'waiting', 'y');
   expect(markFieldCheckRunning(replaced, 'name', 1)).toBe(replaced);
+});
+test('markFieldCheckRunning returns its input for a check already running or done', () => {
+  const running = startFieldCheck(withName, 'name', 1, 'running', 'x');
+  expect(markFieldCheckRunning(running, 'name', 1)).toBe(running);
+  expect(markFieldCheckRunning(failed, 'name', 1)).toBe(failed);
 });
 test('endFieldCheck lands only the current check', () => {
   const replaced = startFieldCheck(startFieldCheck(withName, 'name', 1, 'running', 'x'), 'name', 2, 'running', 'y');
@@ -96,19 +116,14 @@ test('startOver clears every check and keeps the validators', () => {
   expect(over.validators).toBe(failed.validators);
 });
 test('fieldsToRecheck takes pending checks and errors, not a check done without one', () => {
-  const three = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
-  const checks = endFieldCheck(
-    startFieldCheck(
-      startFieldCheck(startFieldCheck(three, 'a', 1, 'waiting', 1), 'b', 2, 'running', 1),
-      'c',
-      3,
-      'running',
-      1,
-    ),
-    'c',
-    3,
-    { error: undefined },
-  );
+  let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
+  // a waits on the schema
+  checks = startFieldCheck(checks, 'a', 1, 'waiting', 1);
+  // b runs
+  checks = startFieldCheck(checks, 'b', 2, 'running', 1);
+  // c is done, with no error
+  checks = startFieldCheck(checks, 'c', 3, 'running', 1);
+  checks = endFieldCheck(checks, 'c', 3, { error: undefined });
   expect(fieldsToRecheck(checks.fields).sort()).toEqual(['a', 'b']);
   expect(fieldsToRecheck(failed.fields)).toEqual(['name']);
 });

@@ -12,25 +12,50 @@ import { alwaysValidValidator, publishValidator, userValidator, type PublishForm
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const user = { name: 'John', email: 'john@test.com', age: 25 };
 
-describe('switching a field validator off', () => {
-  /** A form whose `name` validator returns an error while `on`, and is switched off as `off` gives. */
-  const renderSwitchable = (off: { name?: undefined } = {}, options: { onSubmit?: () => void } = {}) =>
-    renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(userValidator, {
-          initialValues: user,
-          validationMode: 'live',
-          fieldValidators: on ? { name: () => 'Name is taken' } : off,
-          ...options,
-        }),
-      { initialProps: { on: true } },
-    );
+/**
+ * A form whose `name` validator returns an error while `on`, and is switched off as `off` gives. `wrapper` renders
+ * around it, as StrictMode does.
+ */
+const renderSwitchable = (
+  off: { name?: undefined } = {},
+  options: { onSubmit?: () => void } = {},
+  wrapper?: typeof StrictMode,
+) =>
+  renderHook(
+    ({ on }: { on: boolean }) =>
+      useForm(userValidator, {
+        initialValues: user,
+        validationMode: 'live',
+        fieldValidators: on ? { name: () => 'Name is taken' } : off,
+        ...options,
+      }),
+    { initialProps: { on: true }, wrapper },
+  );
 
+/** A draft form whose `title` validator is `check` while `on`, and is switched off by leaving its key out. */
+const renderTitleSwitch = (
+  schema: S.MaybeAsyncValidator<unknown, PublishForm>,
+  check: (value: string, values: PublishForm) => string | undefined | Promise<string | undefined>,
+  { on: startsOn = true, ...options }: { on?: boolean; onSubmit?: () => void } = {},
+) =>
+  renderHook(
+    ({ on }: { on: boolean }) =>
+      useForm(schema, {
+        initialValues: draft,
+        validationMode: 'live',
+        fieldValidators: on ? { title: check } : {},
+        ...options,
+      }),
+    { initialProps: { on: startsOn } },
+  );
+
+describe('switching a field validator off', () => {
   test.each([
-    ['leaving its key out', {}],
-    ['setting it to undefined', { name: undefined }],
-  ])('by %s drops the error it set', (_, off) => {
-    const { result, rerender } = renderSwitchable(off);
+    ['leaving its key out', {}, undefined],
+    ['setting it to undefined', { name: undefined }, undefined],
+    ['leaving its key out, under StrictMode,', {}, StrictMode],
+  ])('by %s drops the error it set', (_, off, wrapper) => {
+    const { result, rerender } = renderSwitchable(off, {}, wrapper);
     act(() => result.current.setFieldValue('name', 'Jane'));
     expect(result.current.errors.name).toBe('Name is taken');
 
@@ -103,15 +128,7 @@ describe('switching a field validator off', () => {
 
   test('drops its check still running, even once switched back on', async () => {
     const { calls, gate } = createGatedFieldValidator();
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(publishValidator, {
-          initialValues: draft,
-          validationMode: 'live',
-          fieldValidators: on ? { title: () => gate() } : {},
-        }),
-      { initialProps: { on: true } },
-    );
+    const { result, rerender } = renderTitleSwitch(publishValidator, () => gate());
     act(() => result.current.setFieldValue('title', 'x'));
     expect(result.current.validatingFields).toEqual({ title: true });
 
@@ -132,15 +149,7 @@ describe('switching a field validator off', () => {
   test("doesn't run it for a check still waiting on the schema", async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const checkTitle = mock(() => 'Taken');
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(gated, {
-          initialValues: draft,
-          validationMode: 'live',
-          fieldValidators: on ? { title: checkTitle } : {},
-        }),
-      { initialProps: { on: true } },
-    );
+    const { result, rerender } = renderTitleSwitch(gated, checkTitle);
     act(() => result.current.setFieldValue('title', 'x'));
 
     rerender({ on: false });
@@ -156,15 +165,7 @@ describe('switching a field validator off', () => {
   test('a submit counts a check switched off while it ran as never run', async () => {
     const { calls, gate } = createGatedFieldValidator();
     const onSubmit = mock(() => {});
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(publishValidator, {
-          initialValues: draft,
-          fieldValidators: on ? { title: () => gate() } : {},
-          onSubmit,
-        }),
-      { initialProps: { on: true } },
-    );
+    const { result, rerender } = renderTitleSwitch(publishValidator, () => gate(), { onSubmit });
 
     let submitting!: ReturnType<typeof result.current.handleSubmit>;
     await act(async () => {
@@ -214,26 +215,6 @@ describe('switching a field validator off', () => {
     });
 
     expect(outcome).toEqual(ok(draft));
-  });
-
-  test('switching off works under StrictMode', () => {
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(userValidator, {
-          initialValues: user,
-          validationMode: 'live',
-          fieldValidators: on ? { name: () => 'Name is taken' } : {},
-        }),
-      { initialProps: { on: true }, wrapper: StrictMode },
-    );
-    act(() => result.current.setFieldValue('name', 'Jane'));
-    expect(result.current.errors.name).toBe('Name is taken');
-
-    rerender({ on: false });
-
-    expect(result.current.errors.name).toBeUndefined();
-    expect(result.current.fieldErrors).toEqual({});
-    expect(result.current.isValid).toBe(true);
   });
 
   test("a follow in the commit that switches it off doesn't re-check its field", () => {
@@ -329,11 +310,7 @@ describe('a submit and its field checks', () => {
   test('runs a validator switched on during its schema step', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const checkTitle = mock(() => 'Taken');
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(gated, { initialValues: draft, fieldValidators: on ? { title: checkTitle } : {} }),
-      { initialProps: { on: false } },
-    );
+    const { result, rerender } = renderTitleSwitch(gated, checkTitle, { on: false });
 
     let submitting!: ReturnType<typeof result.current.handleSubmit>;
     act(() => {
@@ -354,11 +331,7 @@ describe('a submit and its field checks', () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const checkTitle = mock(() => 'Taken');
     const onSubmit = mock(() => {});
-    const { result, rerender } = renderHook(
-      ({ on }: { on: boolean }) =>
-        useForm(gated, { initialValues: draft, fieldValidators: on ? { title: checkTitle } : {}, onSubmit }),
-      { initialProps: { on: true } },
-    );
+    const { result, rerender } = renderTitleSwitch(gated, checkTitle, { onSubmit });
 
     let submitting!: ReturnType<typeof result.current.handleSubmit>;
     act(() => {

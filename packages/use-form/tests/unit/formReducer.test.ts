@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import { createInitialFormState, formReducer } from '../../src/formReducer';
 
-import type { FormState, ResetKey } from '../../src/types';
+import type { FormAction, FormState, ResetKey } from '../../src/types';
 
 const v1 = { name: 'John', email: 'john@example.com' };
 const v2 = { name: 'John', email: 'new@example.com' };
@@ -1078,19 +1078,22 @@ describe('checks', () => {
     expect(done.checks.fields['r1.0']).toEqual({ id: 1, status: 'done', value: 'x', error: 'Bad' });
   });
 
-  test('a follow ends pending field checks and keeps their errors', () => {
+  test('a follow ends pending checks, keeps their errors and clears the schema check', () => {
     const running = apply(
       start,
       on('name'),
       { type: 'START_FIELD_CHECK', field: 'name', id: 1, status: 'running', value: 'John' },
       { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: { error: 'Bad' } },
       { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
+      { type: 'START_SCHEMA_CHECK', id: 3 },
     );
     expect(running.checks.fields.name?.status).toBe('running');
+    expect(running.checks.schema).toBe(3);
 
     const followed = formReducer(running, sync(v2), v1);
 
     expect(followed.checks.fields.name).toEqual({ id: 2, status: 'done', value: 'John', error: 'Bad' });
+    expect(followed.checks.schema).toBeUndefined();
   });
 
   const busy = apply(
@@ -1100,16 +1103,14 @@ describe('checks', () => {
     { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
   );
 
-  test('RESET_FORM starts checks over and keeps validators', () => {
-    const result = formReducer(busy, { type: 'RESET_FORM' }, v1);
+  test.each<[string, FormAction<typeof v1>]>([
+    ['RESET_FORM', { type: 'RESET_FORM' }],
+    ['a resetKey change', sync(v1, 'b')],
+  ])('%s starts checks over and keeps validators', (_, action) => {
+    expect(busy.checks.schema).toBe(1);
+    expect(Object.keys(busy.checks.fields)).toEqual(['name']);
 
-    expect(result.checks.schema).toBeUndefined();
-    expect(result.checks.fields).toEqual({});
-    expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
-  });
-
-  test('a resetKey change starts checks over and keeps validators', () => {
-    const result = formReducer(busy, sync(v1, 'b'), v1);
+    const result = formReducer(busy, action, v1);
 
     expect(result.checks.schema).toBeUndefined();
     expect(result.checks.fields).toEqual({});
