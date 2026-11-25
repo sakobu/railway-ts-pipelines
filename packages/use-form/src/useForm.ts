@@ -33,9 +33,10 @@ import {
   fieldErrorsOf,
   fieldsToRecheck,
   hasPendingFieldCheck,
-  isCurrentFieldCheck,
+  isWaitingFieldCheck,
   validatingFieldsOf,
   validatorPeriod,
+  waitingFieldChecksOf,
 } from './formChecks';
 import { createInitialFormState, formReducer } from './formReducer';
 import { createFormStore, type FormStore } from './formStore';
@@ -95,6 +96,9 @@ type SchemaCheck<TValues> =
   | Result<TValues, ValidationError[]>
   | Promise<Result<TValues, ValidationError[]> | undefined>
   | undefined;
+
+/** How a schema check ended: the values it checked and its result, or undefined once its validator threw or rejected. */
+type SchemaOutcome<TValues> = { values: TValues; result: Result<TValues, ValidationError[]> } | undefined;
 
 /** A `fieldValidators` entry as the hook calls it, by a path the form only knows as a string. */
 type FieldValidatorFn<TValues> = (value: unknown, values: TValues) => string | undefined | Promise<string | undefined>;
@@ -609,7 +613,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
   // Derived: true while a schema check runs, a submission validates, or a field check is pending. A field check counts
-  // while it waits too: the schema check it waits on may be one a newer check replaced, which no longer counts.
+  // while it waits too: the schema check it waits on may be one a newer check replaced, which no longer counts. It
+  // waits no longer than the newest schema check, whose landing moves it on.
   const isValidating = useMemo(
     () =>
       formState.checks.schema !== undefined ||
@@ -625,21 +630,103 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Runs the schema check under `id`: starts it, then ends it with the errors of a result, or with none on a throw or
    * rejection, which leaves the errors as they were. The throw or rejection still reaches the caller.
+   *
+   * When its end lands, `onLanded` gets its outcome. It lands when the check was still current as its end was written,
+   * and `write` applied that end: not once a newer schema check, a follow or a reset replaced it, nor once `write`
+   * dropped the end after a `resetKey` switch.
    */
   const checkSchema = useCallback(
     (
       write: (action: FormAction<TValues>) => void,
       id: CheckId,
       values: TValues,
+      onLanded: (outcome: SchemaOutcome<TValues>) => void,
     ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
+      const end = (result: Result<TValues, ValidationError[]> | undefined): void => {
+        const action: FormAction<TValues> =
+          result === undefined
+            ? { type: 'END_SCHEMA_CHECK', id }
+            : { type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) };
+        const current = store.getState().checks.schema === id;
+        write(action);
+        if (current && store.getState().checks.schema === undefined) onLanded(result && { values, result });
+      };
       write({ type: 'START_SCHEMA_CHECK', id });
       return settling(
         () => validate(values, validator),
-        (result) => write({ type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) }),
-        () => write({ type: 'END_SCHEMA_CHECK', id }),
+        end,
+        () => end(undefined),
       );
     },
-    [validator],
+    [store, validator],
+  );
+
+  /**
+   * Moves the field's check `id` on with a schema check's outcome, while the check still waits. The outcome is the
+   * schema check's of the check's own values, or the newest schema check's when that one lands first
+   * ({@link moveOnWaitingChecks}). Whichever comes first moves the check on, and a later one finds it no longer waiting.
+   *
+   * - No outcome, since the schema validator threw or rejected: the check ends with no error.
+   * - Checked values that hold another value at the field: it ends keeping the error it shows, since the outcome says
+   *   nothing about its value.
+   * - A schema error at the field: it ends with no error, so the schema's error shows.
+   * - Otherwise it runs the field's validator from the latest commit, on its value and the checked values, and ends
+   *   with its answer.
+   *
+   * A validator that throws ends the check, keeping the error shown, and the throw reaches the caller. One that rejects
+   * does too, and the rejection is logged, since nothing awaits it.
+   *
+   * @param key - The field's normalized path
+   * @param id - The check's id
+   * @param value - The field's value the check checks
+   * @param outcome - The schema check's outcome
+   */
+  const moveOnWithSchema = useCallback(
+    (key: FieldPath, id: CheckId, value: unknown, outcome: SchemaOutcome<TValues>): void => {
+      if (!isWaitingFieldCheck(store.getState().checks, key, id)) return;
+      const end = (result: FieldCheckResult) => dispatch({ type: 'END_FIELD_CHECK', field: key, id, result });
+
+      if (outcome && !deepEqual(getValueByPath(outcome.values, key), value)) {
+        end('none');
+        return;
+      }
+      if (!outcome || own(normalizePathKeys(schemaErrorsOf(outcome.result)), key) !== undefined) {
+        end({ error: undefined });
+        return;
+      }
+
+      dispatch({ type: 'RUN_FIELD_CHECK', field: key, id });
+      const answer = settling(
+        () => validatorFor(key)?.(value, outcome.values),
+        (error) => end({ error }),
+        () => end('none'),
+      );
+      // Nothing awaits an async answer, so a rejection is logged
+      if (isPromiseLike(answer)) void answer.catch(logValidationError);
+    },
+    [store, dispatch, validatorFor],
+  );
+
+  /**
+   * Moves every field check still waiting on with the outcome of the schema check that just landed, as if each had
+   * waited on it ({@link moveOnWithSchema}). That check is the newest, so no field check is left waiting on a result
+   * that may never come, such as that of a call a debouncer replaced and never resolves.
+   *
+   * A throw from a validator is logged: the check belongs to a call that has returned.
+   *
+   * @param outcome - The landed schema check's outcome
+   */
+  const moveOnWaitingChecks = useCallback(
+    (outcome: SchemaOutcome<TValues>): void => {
+      for (const [key, { id, value }] of Object.entries(waitingFieldChecksOf(store.getState().checks.fields))) {
+        try {
+          moveOnWithSchema(key, id, value, outcome);
+        } catch (error) {
+          logValidationError(error);
+        }
+      }
+    },
+    [store, moveOnWithSchema],
   );
 
   /**
@@ -651,7 +738,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * Each call starts a schema check in the form state, which replaces the schema checks before it, even when it
    * finishes at once. Its errors land only while it is still the current check: a newer schema check, a follow of new
-   * `initialValues` or a reset ends it first, and drops its result.
+   * `initialValues` or a reset ends it first, and drops its result. When they land, every field check still waiting
+   * on a schema result moves on with this one's.
    *
    * A validator that throws or rejects leaves the errors as they were, ends the check as a result would, and the
    * throw or rejection reaches the caller.
@@ -661,8 +749,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const validateForm = useCallback(
     (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> =>
-      checkSchema(dispatch, store.takeCheckId(), values),
-    [store, dispatch, checkSchema],
+      checkSchema(dispatch, store.takeCheckId(), values, moveOnWaitingChecks),
+    [store, dispatch, checkSchema, moveOnWaitingChecks],
   );
 
   /**
@@ -681,18 +769,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   /**
-   * Starts a check of a field on `values`, which waits on the schema's check of them. Once the schema result is in,
-   * while the check is still the field's current one: a schema error for the field ends it with no error, so the
-   * schema's error shows, and so does a schema check with no result, because its validator threw or rejected.
-   * Otherwise it runs the field's validator from the latest commit, and ends with its answer.
+   * Starts a check of a field on `values`, which waits on a schema result: the schema's check of `values`, or the
+   * newest schema check's when that one lands first ({@link moveOnWaitingChecks}). The first to come moves it on
+   * ({@link moveOnWithSchema}): a schema error for the field, or no result, ends it with no error, and otherwise it
+   * runs the field's validator from the latest commit and ends with its answer.
    *
    * The check replaces the field's checks before it as soon as it starts. A newer check of the field, a follow, a
    * reset or switching the validator off ends it in the form state, and its result no longer lands. While it runs,
    * the field keeps the error it showed only if the check's value is unchanged.
    *
-   * A validator that throws ends the check, keeping the error shown, and the throw reaches the caller. One that rejects
-   * does too, and the rejection is logged, since nothing awaits it. After an async schema check, the validator runs
-   * once the caller has returned, so a throw from it is logged too.
+   * After a sync schema result, a validator that throws ends the check, keeping the error shown, and the throw reaches
+   * the caller. After an async one, the validator runs once the caller has returned, so a throw from it is logged.
+   * A rejection is logged too, since nothing awaits it.
    *
    * @param field - The field to check
    * @param values - The values the schema checks
@@ -702,27 +790,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     (field: FieldPath, values: TValues, schemaResult: SchemaCheck<TValues>): void => {
       const key = normalizePath(field);
       const id = store.takeCheckId();
-      const value = getValueByPath(values, field);
+      const value = getValueByPath(values, key);
       dispatch({ type: 'START_FIELD_CHECK', field: key, id, status: 'waiting', value });
-      const end = (result: FieldCheckResult) => dispatch({ type: 'END_FIELD_CHECK', field: key, id, result });
 
-      const afterSchema = (result: Result<TValues, ValidationError[]> | undefined): void => {
-        if (!isCurrentFieldCheck(store.getState().checks, key, id)) return;
-
-        if (!result || own(normalizePathKeys(schemaErrorsOf(result)), key) !== undefined) {
-          end({ error: undefined });
-          return;
-        }
-
-        dispatch({ type: 'RUN_FIELD_CHECK', field: key, id });
-        const answer = settling(
-          () => validatorFor(field)?.(value, values),
-          (error) => end({ error }),
-          () => end('none'),
-        );
-        // Nothing awaits an async answer, so a rejection is logged
-        if (isPromiseLike(answer)) void answer.catch(logValidationError);
-      };
+      const afterSchema = (result: Result<TValues, ValidationError[]> | undefined): void =>
+        moveOnWithSchema(key, id, value, result && { values, result });
 
       if (isPromiseLike(schemaResult)) {
         // The field validator then runs after the caller returned: a throw from it is logged
@@ -731,12 +803,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         afterSchema(schemaResult);
       }
     },
-    [store, dispatch, validatorFor],
+    [store, dispatch, moveOnWithSchema],
   );
 
   /**
    * Validates the values with the schema, as typing or a blur does, and checks the field with its validator when it
-   * has one on. The field check waits on the schema's: a schema error for the field skips the validator.
+   * has one on. The field check waits on a schema result: a schema error for the field skips the validator.
    */
   const runValidationPipeline = useCallback(
     (field: FieldPath, values: TValues): void => {
@@ -1235,8 +1307,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
         let validationResult: Result<TValues, ValidationError[]>;
         try {
-          // Starts and ends the schema check (await handles both sync and async validators)
-          validationResult = await checkSchema(send, checkId, values);
+          // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
+          // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
+          // Otherwise its field step's checks replace them, so no validator runs twice.
+          validationResult = await checkSchema(send, checkId, values, (outcome) => {
+            if (!outcome || isErr(outcome.result)) moveOnWaitingChecks(outcome);
+          });
         } finally {
           send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
         }
@@ -1354,6 +1430,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     [
       store,
       checkSchema,
+      moveOnWaitingChecks,
       onSubmit,
       savedValues,
       runFollowEffects,

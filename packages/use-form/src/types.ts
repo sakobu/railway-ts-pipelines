@@ -175,7 +175,10 @@ export interface FormState<TValues extends Record<string, unknown>> {
 /** A check's id. The store hands them out in increasing order for its lifetime. */
 export type CheckId = number;
 
-/** A field check's status before it ends. waiting: on the schema check of its values. running: its validator runs. */
+/**
+ * A field check's status before it ends. waiting: on a schema result, that of the schema check of its values or of the
+ * newest schema check, whichever comes first. running: its validator runs.
+ */
 export type PendingStatus = 'waiting' | 'running';
 
 /** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
@@ -1348,7 +1351,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is
-   * currently in progress. A field check counts from when it starts, while it waits for the schema's result too.
+   * currently in progress. A field check counts from when it starts, while it waits for the schema's result too. It
+   * waits no longer than the newest schema check: when that one ends, the field check moves on with its result, so a
+   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true.
    */
   isValidating: boolean;
 

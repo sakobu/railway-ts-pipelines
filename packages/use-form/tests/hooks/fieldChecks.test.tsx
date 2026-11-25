@@ -557,7 +557,7 @@ test('a follow re-checks a field whose check was waiting on the schema', async (
   expect(checkTitle).toHaveBeenCalledWith('Updated', { ...draft, title: 'Updated' });
 });
 
-test('isValidating stays true while a field check waits on a schema check that a newer one replaced', async () => {
+test('isValidating ends once the newest schema check moves on a field check that waited on a replaced one', async () => {
   const { pending, gated } = createGatedValidator<PublishForm>();
   const { result } = renderHook(() =>
     useForm(gated, { initialValues: draft, validationMode: 'live', fieldValidators: { title: () => undefined } }),
@@ -570,7 +570,8 @@ test('isValidating stays true while a field check waits on a schema check that a
     pending[1]!.resolve(ok({ ...draft, title: 'x', status: 'published' }));
     await nextTask();
   });
-  expect(result.current.isValidating).toBe(true);
+  // Rule 8: the newest schema check's end moved title's waiting check on, so it no longer waits on the first
+  expect(result.current.isValidating).toBe(false);
   expect(result.current.validatingFields).toEqual({});
 
   await act(async () => {
@@ -578,6 +579,203 @@ test('isValidating stays true while a field check waits on a schema check that a
     await nextTask();
   });
   expect(result.current.isValidating).toBe(false);
+});
+
+describe('a waiting field check follows the newest schema check', () => {
+  /** A live draft form on a schema gated per call, whose `title` validator is a mock answering `answer`. */
+  const renderLiveTitle = (answer: string | undefined, onSubmit?: () => void) => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock((_value: string, _values: PublishForm): string | undefined => answer);
+    const { result } = renderHook(() =>
+      useForm(gated, {
+        initialValues: draft,
+        validationMode: 'live',
+        fieldValidators: { title: checkTitle },
+        ...(onSubmit && { onSubmit }),
+      }),
+    );
+    return { pending, checkTitle, result };
+  };
+
+  /** A blur-mode draft form on a schema gated per call, whose `title` validator is a mock answering `Taken`. */
+  const renderBlurTitle = () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock((_value: string, _values: PublishForm): string | undefined => 'Taken');
+    const { result } = renderHook(() =>
+      useForm(gated, { initialValues: draft, validationMode: 'blur', fieldValidators: { title: checkTitle } }),
+    );
+    return { pending, checkTitle, result };
+  };
+
+  const typed = { ...draft, title: 'x', status: 'published' };
+
+  test("moves on with the newest schema check's result when its own never comes", async () => {
+    const { pending, checkTitle, result } = renderLiveTitle('Taken');
+
+    // title's check waits on the first schema check, which never settles, as a debouncer's replaced call doesn't
+    act(() => result.current.setFieldValue('title', 'x'));
+    act(() => result.current.setFieldValue('status', 'published'));
+    await act(async () => {
+      pending[1]!.resolve(ok(typed));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('x', typed);
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('ends without running the validator when the newest check holds another value', async () => {
+    const { pending, checkTitle, result } = renderBlurTitle();
+
+    act(() => result.current.setFieldTouched('title'));
+    // blur mode: the change starts no check
+    act(() => result.current.setFieldValue('title', 'new'));
+    act(() => result.current.setFieldTouched('status'));
+    await act(async () => {
+      pending[1]!.resolve(ok({ ...draft, title: 'new' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('keeps the error it shows when the newest check holds another value', async () => {
+    const { pending, checkTitle, result } = renderBlurTitle();
+    act(() => result.current.setFieldTouched('title'));
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      await nextTask();
+    });
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+
+    // A re-check of the unchanged value keeps the error while it waits, on a schema check that never settles
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldValue('title', 'new'));
+    act(() => result.current.setFieldTouched('status'));
+    await act(async () => {
+      pending[2]!.resolve(ok({ ...draft, title: 'new' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('ends with no error when the newest schema check rejects', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { pending, checkTitle, result } = renderLiveTitle('Taken');
+
+      act(() => result.current.setFieldValue('title', 'x'));
+      act(() => result.current.setFieldValue('status', 'published'));
+      await act(async () => {
+        pending[1]!.reject(new Error('down'));
+        await nextTask();
+      });
+
+      expect(checkTitle).not.toHaveBeenCalled();
+      expect(result.current.isValidating).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test("doesn't run the validator again when its own schema result arrives later", async () => {
+    const { pending, checkTitle, result } = renderLiveTitle('Taken');
+
+    act(() => result.current.setFieldValue('title', 'x'));
+    act(() => result.current.setFieldValue('status', 'published'));
+    await act(async () => {
+      pending[1]!.resolve(ok(typed));
+      await nextTask();
+    });
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...draft, title: 'x' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+  });
+
+  test('logs a throw from a validator it moves on, and moves the other waiting checks on', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const down = new Error('down');
+      const checkStatus = mock((_value: string, _values: PublishForm): string | undefined => undefined);
+      const { result } = renderHook(() =>
+        useForm(gated, {
+          initialValues: draft,
+          validationMode: 'live',
+          fieldValidators: {
+            title: () => {
+              throw down;
+            },
+            status: checkStatus,
+          },
+        }),
+      );
+
+      // title's and status's checks each wait on a schema check that never settles. Typing in tags starts the newest.
+      act(() => result.current.setFieldValue('title', 'x'));
+      act(() => result.current.setFieldValue('status', 'published'));
+      act(() => result.current.setFieldValue('tags', ['a']));
+      const tagged = { ...typed, tags: ['a'] };
+      await act(async () => {
+        pending[2]!.resolve(ok(tagged));
+        await nextTask();
+      });
+
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', down);
+      expect(checkStatus).toHaveBeenCalledWith('published', tagged);
+      expect(result.current.isValidating).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('a submit that stops at its schema step moves it on', async () => {
+    const onSubmit = mock(() => {});
+    const { pending, checkTitle, result } = renderLiveTitle('Taken', onSubmit);
+    act(() => result.current.setFieldValue('title', 'x'));
+
+    const statusWrong = err([{ path: ['status'], message: 'Status is wrong' }]);
+    let outcome: Awaited<ReturnType<typeof result.current.handleSubmit>> | undefined;
+    await act(async () => {
+      const submitting = result.current.handleSubmit();
+      pending[1]!.resolve(statusWrong);
+      outcome = await submitting;
+    });
+
+    expect(outcome).toEqual(statusWrong);
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('x', { ...draft, title: 'x' });
+    expect(result.current.isValidating).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test("a submit whose field step follows doesn't run it twice", async () => {
+    const onSubmit = mock(() => {});
+    const { pending, checkTitle, result } = renderLiveTitle(undefined, onSubmit);
+    act(() => result.current.setFieldValue('title', 'x'));
+
+    await act(async () => {
+      const submitting = result.current.handleSubmit();
+      pending[1]!.resolve(ok({ ...draft, title: 'x' }));
+      await submitting;
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(result.current.isValidating).toBe(false);
+  });
 });
 
 test('a submit whose schema validator rejects leaves isValidating false', async () => {

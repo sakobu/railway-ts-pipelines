@@ -104,14 +104,23 @@ const currentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): Fi
   return check?.id === id && check.status !== 'done' ? check : undefined;
 };
 
-/** Whether `id` is the field's latest check and it has not ended. */
-export const isCurrentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean =>
-  currentFieldCheck(checks, key, id) !== undefined;
+/** The field's check `id`, while it is the field's latest check and still waits on a schema result. */
+const waitingFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
+  const check = own(checks.fields, key);
+  return check?.id === id && check.status === 'waiting' ? check : undefined;
+};
+
+/**
+ * Whether `id` is the field's latest check and still waits on a schema result. Only a waiting check moves on with
+ * one: once the first result moved it on, a later one finds it running or done.
+ */
+export const isWaitingFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean =>
+  waitingFieldCheck(checks, key, id) !== undefined;
 
 /** Moves the field's current check from waiting to running. */
 export const markFieldCheckRunning = (checks: ChecksState, key: FieldPath, id: CheckId): ChecksState => {
-  const check = own(checks.fields, key);
-  if (check?.status !== 'waiting' || check.id !== id) return checks;
+  const check = waitingFieldCheck(checks, key, id);
+  if (!check) return checks;
   return { ...checks, fields: { ...checks.fields, [key]: { ...check, status: 'running' } } };
 };
 
@@ -164,7 +173,16 @@ export const validatingFieldsOf = (
   return withEntries(EMPTY, validating);
 };
 
-/** Whether a field check is pending: waiting on the schema check of its values, or running. */
+/** The checks still waiting on a schema result, by field: those the newest schema check moves on when it lands. */
+export const waitingFieldChecksOf = (
+  fields: Readonly<Record<FieldPath, FieldCheck>>,
+): Readonly<Record<FieldPath, FieldCheck>> =>
+  withEntries(
+    EMPTY,
+    Object.entries(fields).filter(([, check]) => check.status === 'waiting'),
+  );
+
+/** Whether a field check is pending: waiting on a schema result, or running. */
 export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
   Object.values(fields).some((check) => check.status !== 'done');
 
