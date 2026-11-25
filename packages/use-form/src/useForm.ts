@@ -212,8 +212,8 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
  * @param register - Whether the checks show while they run. Not once a follow or reset replaced the submitted values:
  *   they still run and count then, but describe values the form no longer shows.
  * @returns The errors of the checks that count, in the validators' order
- * @throws What a check that counts threw or rejected with: it fails the submission, as a throw anywhere does. One
- *   that doesn't count is logged instead.
+ * @throws What the first check that counts threw or rejected with: it fails the submission, as a throw anywhere does.
+ *   Every one that doesn't count is logged instead, before the throw.
  */
 const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   store: FormStore<TValues>,
@@ -252,16 +252,20 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   // Which checks count, decided once, against the validators as they are now that every result is in
   const { checks } = store.getState();
   const errors: ValidationError[] = [];
+  let failed: PromiseRejectedResult | undefined;
   for (const [index, { key, period }] of runs.entries()) {
     const outcome = settled[index]!;
     if (validatorPeriod(checks, key) !== period) {
       // It counts as never run, so nothing else sees its throw or rejection: logged, as a live check's is
       if (outcome.status === 'rejected') logValidationError(outcome.reason);
-      continue;
+    } else if (outcome.status === 'rejected') {
+      failed ??= outcome;
+    } else if (outcome.value !== undefined) {
+      errors.push({ path: [key], message: outcome.value });
     }
-    if (outcome.status === 'rejected') throw outcome.reason;
-    if (outcome.value !== undefined) errors.push({ path: [key], message: outcome.value });
   }
+  // Thrown once the pass is over, so every check that doesn't count has been logged
+  if (failed) throw failed.reason;
   return errors;
 };
 

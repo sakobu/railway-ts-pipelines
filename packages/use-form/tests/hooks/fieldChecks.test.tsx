@@ -214,6 +214,48 @@ describe('switching a field validator off', () => {
     }
   });
 
+  test('a submit that a rejection fails still logs a later rejection whose validator was switched off', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const title = createGatedFieldValidator();
+      const status = createGatedFieldValidator();
+      const onSubmit = mock(() => {});
+      const { result, rerender } = renderHook(
+        ({ statusOn }: { statusOn: boolean }) =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            fieldValidators: statusOn
+              ? { title: () => title.gate(), status: () => status.gate() }
+              : { title: () => title.gate() },
+            onSubmit,
+          }),
+        { initialProps: { statusOn: true } },
+      );
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      rerender({ statusOn: false });
+      const titleDown = new Error('title down');
+      const statusDown = new Error('status down');
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        title.calls[0]!.reject(titleDown);
+        status.calls[0]!.reject(statusDown);
+        outcome = await submitting;
+      });
+
+      expect(outcome).toEqual(err([{ path: [], message: 'Something went wrong. Please try again.' }]));
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith('Form submission error:', titleDown);
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', statusDown);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test("a submit doesn't count an error whose validator was switched off while another check ran", async () => {
     const { calls, gate } = createGatedFieldValidator();
     const { result, rerender } = renderHook(
