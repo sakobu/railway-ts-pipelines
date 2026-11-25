@@ -7,7 +7,7 @@ Switching a field validator off now drops the error it set. Leaving its key out 
 Every validation check now lives in the form state, and only the newest check of the schema or of a field lands its result. Other changes you can see:
 
 - While a submit runs its field checks, `validatingFields` and `isValidating` show them.
-- A field check waiting on a schema check that a newer one replaced moves on with the newer check's result, so it never waits on a result that may not come, such as from a debouncer that resolves only the last call. `isValidating` stays true until it ends.
+- A field check waiting on a schema check that a newer one replaced moves on with the newer check's result when the newer check checked the values the form holds, so it doesn't wait on a result that may not come, such as from a debouncer that resolves only the last call. `isValidating` stays true until it ends.
 - A field's error stays while a check of the same value runs, so resubmitting or blurring an unchanged value, or following a version that leaves it unchanged, no longer blinks it off and on. In `live` mode, typing a new value hides the old error at once, even while an async schema check runs.
 - A submit's field check replaces a check of that field still running from typing, so only one result lands.
 - A submit whose field validator throws or rejects waits for its other field checks to settle before it fails, where it used to fail at once.

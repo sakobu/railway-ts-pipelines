@@ -414,7 +414,7 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run. A field check waits no longer than the newest schema check: when that one ends, the field check moves on with its result, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
+Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run. A newer schema check of the values the form holds moves a waiting field check on with its result when it ends, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
 
 ```typescript
 <button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
