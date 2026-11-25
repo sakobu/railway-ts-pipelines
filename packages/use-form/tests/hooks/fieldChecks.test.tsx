@@ -768,6 +768,24 @@ describe('a waiting field check follows the newest schema check', () => {
     expect(result.current.isValidating).toBe(false);
   });
 
+  test('a landing check of the values the form held when it started moves it on, though an edit came since', async () => {
+    const { pending, checkTitle, result } = renderBlurTitle();
+
+    // The first blur's schema call never settles, as a debouncer's replaced call doesn't
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldTouched('status'));
+    // blur mode: the edit starts no check, while the second blur's is in flight
+    act(() => result.current.setFieldValue('tags', ['a']));
+    await act(async () => {
+      pending[1]!.resolve(ok(draft));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('Hello', draft);
+    expect(result.current.isValidating).toBe(false);
+  });
+
   test('a landing check of values the form no longer holds gives no validator those values', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const checkTitle = mock((_value: string, values: PublishForm): string | undefined =>

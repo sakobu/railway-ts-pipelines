@@ -614,7 +614,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   // Derived: true while a schema check runs, a submission validates, or a field check is pending. A field check counts
   // while it waits too: the schema check it waits on may be one a newer check replaced, which no longer counts. It
-  // waits no longer than its own schema check or a newer one of the form's values, whose landing moves it on.
+  // waits no longer than its own schema check or a newer one of the form's values as they were when it started, whose
+  // landing moves it on.
   const isValidating = useMemo(
     () =>
       formState.checks.schema !== undefined ||
@@ -631,17 +632,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Runs the schema check under `id`: starts it, then ends it with the errors of a result, or with none on a throw or
    * rejection, which leaves the errors as they were. The throw or rejection still reaches the caller.
    *
-   * When its end lands, `onLanded` gets its id and outcome. It lands when the check was still current as its end was
-   * written, and `write` applied that end: not once a newer schema check, a follow or a reset replaced it, nor once
-   * `write` dropped the end after a `resetKey` switch.
+   * When its end lands, `onLanded` gets its id, its outcome and the values the form held when it started. It lands
+   * when the check was still current as its end was written, and `write` applied that end: not once a newer schema
+   * check, a follow or a reset replaced it, nor once `write` dropped the end after a `resetKey` switch.
    */
   const checkSchema = useCallback(
     (
       write: (action: FormAction<TValues>) => void,
       id: CheckId,
       values: TValues,
-      onLanded: (id: CheckId, outcome: SchemaOutcome<TValues>) => void,
+      onLanded: (id: CheckId, outcome: SchemaOutcome<TValues>, held: TValues) => void,
     ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
+      const held = store.getState().values;
       const end = (result: Result<TValues, ValidationError[]> | undefined): void => {
         const action: FormAction<TValues> =
           result === undefined
@@ -649,7 +651,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             : { type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result) };
         const current = store.getState().checks.schema === id;
         write(action);
-        if (current && store.getState().checks.schema === undefined) onLanded(id, { values, result });
+        if (current && store.getState().checks.schema === undefined) onLanded(id, { values, result }, held);
       };
       write({ type: 'START_SCHEMA_CHECK', id });
       return settling(
@@ -663,9 +665,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   /**
    * Moves the field's check `id` on with a schema check's outcome, while the check still waits. The outcome is the
-   * schema check's of the check's own values, or that of a newer schema check of the form's values when that one lands
-   * first ({@link moveOnWaitingChecks}). Whichever comes first moves the check on, and a later one finds it no longer
-   * waiting.
+   * schema check's of the check's own values, or that of a newer schema check of the form's values, as they were when
+   * it started, when that one lands first ({@link moveOnWaitingChecks}). Whichever comes first moves the check on, and
+   * a later one finds it no longer waiting.
    *
    * - No result, since the schema validator threw or rejected: the check ends with no error.
    * - Checked values that hold another value at the field: it ends keeping the error it shows, since the outcome says
@@ -714,20 +716,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * left waiting on a result that may never come, such as that of a call a debouncer replaced and never resolves. A
    * check that started after it waits on it as its own schema check, whose continuation moves the check on.
    *
-   * Only when it checked the values the form holds: a check of other values, such as a `validateForm` of a render's
-   * stale copy, says nothing about them, and the checks keep waiting on their own results.
+   * Only when it checked the values the form held when it started: a check of other values, such as a `validateForm`
+   * of a render's stale copy, says nothing about them, and the checks keep waiting on their own results. An edit made
+   * since, as in `blur` mode with no check, doesn't stop it: it still checked the form's values, and is the newest.
    *
    * A throw from a validator is logged: the check belongs to a call that has returned.
    *
    * @param id - The landed schema check's id
    * @param outcome - Its outcome
+   * @param held - The values the form held when it started
    */
   const moveOnWaitingChecks = useCallback(
-    (id: CheckId, outcome: SchemaOutcome<TValues>): void => {
-      const { checks, values } = store.getState();
-      const waiting = Object.entries(waitingFieldChecksOf(checks.fields, id));
+    (id: CheckId, outcome: SchemaOutcome<TValues>, held: TValues): void => {
+      const waiting = Object.entries(waitingFieldChecksOf(store.getState().checks.fields, id));
       if (waiting.length === 0) return;
-      if (values !== outcome.values && !deepEqual(values, outcome.values)) return;
+      if (held !== outcome.values && !deepEqual(held, outcome.values)) return;
       for (const [key, check] of waiting) {
         try {
           moveOnWithSchema(key, check.id, check.value, outcome);
@@ -749,7 +752,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Each call starts a schema check in the form state, which replaces the schema checks before it, even when it
    * finishes at once. Its errors land only while it is still the current check: a newer schema check, a follow of new
    * `initialValues` or a reset ends it first, and drops its result. When they land and it checked the values the form
-   * holds, every field check that started before it and still waits on a schema result moves on with this one's.
+   * held when it started, every field check that started before it and still waits on a schema result moves on with
+   * this one's.
    *
    * A validator that throws or rejects leaves the errors as they were, ends the check as a result would, and the
    * throw or rejection reaches the caller.
@@ -783,9 +787,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Starts a check of a field on `values`, waiting on a schema result, and returns its continuation, which takes the
    * schema's check of `values`. The caller starts it after taking that schema check's id and before running it, so the
    * check has the greater id and the schema check's landing leaves it to the continuation. A newer schema check of the
-   * form's values that lands first moves it on instead ({@link moveOnWaitingChecks}). Whichever comes first moves it
-   * on ({@link moveOnWithSchema}): a schema error for the field, or no result, ends it with no error, and otherwise it
-   * runs the field's validator from the latest commit and ends with its answer.
+   * form's values, as they were when it started, that lands first moves it on instead ({@link moveOnWaitingChecks}).
+   * Whichever comes first moves it on ({@link moveOnWithSchema}): a schema error for the field, or no result, ends it
+   * with no error, and otherwise it runs the field's validator from the latest commit and ends with its answer.
    *
    * The check replaces the field's checks before it as soon as it starts. A newer check of the field, a follow, a
    * reset or switching the validator off ends it in the form state, and its result no longer lands. While it runs,
@@ -1339,8 +1343,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
           // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
           // Otherwise its field step's checks replace them, so no validator runs twice.
-          validationResult = await checkSchema(send, checkId, values, (id, outcome) => {
-            if (!outcome.result || isErr(outcome.result)) moveOnWaitingChecks(id, outcome);
+          validationResult = await checkSchema(send, checkId, values, (id, outcome, held) => {
+            if (!outcome.result || isErr(outcome.result)) moveOnWaitingChecks(id, outcome, held);
           });
         } finally {
           send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: false });
