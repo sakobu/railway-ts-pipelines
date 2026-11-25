@@ -1170,3 +1170,101 @@ describe('isStale and edits', () => {
     expect(result.baselineEpoch).toBe(0);
   });
 });
+
+describe('checks', () => {
+  const start = createInitialFormState(v1, 'a');
+  const on = (...fields: string[]) => ({ type: 'SYNC_FIELD_VALIDATORS', fields: new Set(fields) }) as const;
+  const apply = (state: FormState<typeof v1>, ...actions: Parameters<typeof formReducer<typeof v1>>[1][]) =>
+    actions.reduce((current, action) => formReducer(current, action, v1), state);
+
+  test('SYNC_FIELD_VALIDATORS returns the same state when nothing changes', () => {
+    const once = apply(start, on('name'));
+
+    expect(once).not.toBe(start);
+    expect(apply(once, on('name'))).toBe(once);
+  });
+
+  test('END_SCHEMA_CHECK sets clientErrors only for the current check', () => {
+    const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
+
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: { name: 'Bad' } })).toBe(started);
+
+    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, errors: { name: 'Bad' } });
+    expect(ended.clientErrors).toEqual({ name: 'Bad' });
+    expect(ended.checks.schema).toBeUndefined();
+  });
+
+  test('END_SCHEMA_CHECK normalizes bracket keys', () => {
+    const ended = apply(
+      start,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, errors: { 'r1[0]': 'Bad' } },
+    );
+
+    expect(ended.clientErrors).toEqual({ 'r1.0': 'Bad' });
+  });
+
+  test('END_SCHEMA_CHECK without errors ends the check and keeps clientErrors', () => {
+    const withErrors: FormState<typeof v1> = { ...start, clientErrors: { name: 'Bad' } };
+
+    const ended = apply(withErrors, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'END_SCHEMA_CHECK', id: 1 });
+
+    expect(ended.checks.schema).toBeUndefined();
+    expect(ended.clientErrors).toBe(withErrors.clientErrors);
+  });
+
+  test('field check actions normalize a bracket path', () => {
+    const waiting = apply(start, on('r1.0'), {
+      type: 'START_FIELD_CHECK',
+      field: 'r1[0]',
+      id: 1,
+      status: 'waiting',
+      value: 'x',
+    });
+    expect(waiting.checks.fields['r1.0']?.status).toBe('waiting');
+
+    const running = apply(waiting, { type: 'RUN_FIELD_CHECK', field: 'r1[0]', id: 1 });
+    expect(running.checks.fields['r1.0']?.status).toBe('running');
+
+    const done = apply(running, { type: 'END_FIELD_CHECK', field: 'r1[0]', id: 1, result: { error: 'Bad' } });
+    expect(done.checks.fields['r1.0']).toEqual({ id: 1, status: 'done', value: 'x', error: 'Bad' });
+  });
+
+  test('a follow ends pending field checks and keeps their errors', () => {
+    const running = apply(
+      start,
+      on('name'),
+      { type: 'START_FIELD_CHECK', field: 'name', id: 1, status: 'running', value: 'John' },
+      { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: { error: 'Bad' } },
+      { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
+    );
+    expect(running.checks.fields.name?.status).toBe('running');
+
+    const followed = formReducer(running, sync(v2), v1);
+
+    expect(followed.checks.fields.name).toEqual({ id: 2, status: 'done', value: 'John', error: 'Bad' });
+  });
+
+  const busy = apply(
+    start,
+    on('name'),
+    { type: 'START_SCHEMA_CHECK', id: 1 },
+    { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
+  );
+
+  test('RESET_FORM starts checks over and keeps validators', () => {
+    const result = formReducer(busy, { type: 'RESET_FORM' }, v1);
+
+    expect(result.checks.schema).toBeUndefined();
+    expect(result.checks.fields).toEqual({});
+    expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
+  });
+
+  test('a resetKey change starts checks over and keeps validators', () => {
+    const result = formReducer(busy, sync(v1, 'b'), v1);
+
+    expect(result.checks.schema).toBeUndefined();
+    expect(result.checks.fields).toEqual({});
+    expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
+  });
+});

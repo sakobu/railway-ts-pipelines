@@ -1,6 +1,6 @@
 import { formReducer } from './formReducer';
 
-import type { FormAction, FormState } from './types';
+import type { CheckId, FormAction, FormState } from './types';
 
 /**
  * Holds a form's state outside React, so every method reads the state left by the calls before it.
@@ -30,6 +30,11 @@ export type FormStore<TValues extends Record<string, unknown>> = {
    * @param initialValues - The values a reset starts over from
    */
   setInitialValues: (initialValues: TValues) => void;
+  /**
+   * Hands out the id of the next check: 1, 2, 3 and so on. The count never restarts, not even on `RESET_FORM`,
+   * so an id is never taken twice and a later check always has the larger one.
+   */
+  takeCheckId: () => CheckId;
   /**
    * Calls `listener` after every change.
    *
@@ -62,6 +67,7 @@ export const createFormStore = <TValues extends Record<string, unknown>>(
   let latestInitialValues = initialValues;
   // A change dispatchQuietly made that no subscriber has heard of yet
   let unheard = false;
+  let lastCheckId: CheckId = 0;
   const listeners = new Set<() => void>();
 
   /** Applies `action`, and tells whether the state changed. */
@@ -91,6 +97,7 @@ export const createFormStore = <TValues extends Record<string, unknown>>(
     setInitialValues: (values) => {
       latestInitialValues = values;
     },
+    takeCheckId: () => ++lastCheckId,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

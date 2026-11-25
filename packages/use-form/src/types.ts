@@ -129,6 +129,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
   /** Errors from per-field validators (stored separately so schema SET_CLIENT_ERRORS doesn't overwrite them). */
   fieldErrors: Record<FieldPath, string>;
 
+  /** Every check the form runs, and which field validators are on. */
+  checks: ChecksState;
+
   /**
    * Number of times the form has been submitted (via handleSubmit).
    * Incremented at the start of each submission attempt, regardless of validation outcome.
@@ -1139,6 +1142,56 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  * });
  */
 export type FormAction<TValues extends Record<string, unknown>> =
+  | {
+      /** Brings the field validators in line with the fields that have one on now */
+      type: 'SYNC_FIELD_VALIDATORS';
+      /** The fields whose validator is on, by normalized path */
+      fields: ReadonlySet<FieldPath>;
+    }
+  | {
+      /** Registers a schema check, unless a newer one is registered */
+      type: 'START_SCHEMA_CHECK';
+      /** The check's id */
+      id: CheckId;
+    }
+  | {
+      /** Ends a schema check. Its errors land only while it is the current one. */
+      type: 'END_SCHEMA_CHECK';
+      /** The check's id */
+      id: CheckId;
+      /** The schema's errors, as `SET_CLIENT_ERRORS` takes them. None ends the check and keeps the errors. */
+      errors?: Record<FieldPath, string>;
+    }
+  | {
+      /** Registers a field check, while the field's validator is on and `id` is newer than its current check */
+      type: 'START_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+      /** waiting: on the schema check of its values. running: its validator runs. */
+      status: 'waiting' | 'running';
+      /** The field's value the check checks */
+      value: unknown;
+    }
+  | {
+      /** Moves a field's waiting check to running */
+      type: 'RUN_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+    }
+  | {
+      /** Ends a field's current check */
+      type: 'END_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+      /** How the check ended */
+      result: FieldCheckResult;
+    }
   | {
       /** Syncs a new `initialValues` version and `resetKey` into the form state */
       type: 'SYNC_INITIAL_VALUES';

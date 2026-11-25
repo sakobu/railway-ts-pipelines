@@ -111,4 +111,14 @@ describe('createFormStore', () => {
 
     expect(store.getState().values).toEqual({ name: 'B' });
   });
+
+  test('takeCheckId counts up from 1 and never restarts', () => {
+    const store = createFormStore(initialState, initialState.values);
+
+    const ids = [store.takeCheckId(), store.takeCheckId()];
+    store.dispatch({ type: 'RESET_FORM' });
+    ids.push(store.takeCheckId());
+
+    expect(ids).toEqual([1, 2, 3]);
+  });
 });
