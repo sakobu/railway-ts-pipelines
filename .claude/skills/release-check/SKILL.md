@@ -22,7 +22,7 @@ From `gh pr diff <number>`, list each package's version (from → to) and its ch
 
 ## 3. Wait for its CI
 
-Find the CI run for the PR's head commit: `gh run list --workflow ci.yml --commit <headRefOid> --json databaseId,status,conclusion`. If there is none, the release run that last updated the PR may still be running: wait for it as in step 1 and look again. If that run has finished and there is still no CI run, report it with the log of the release run's `start-ci` job, and stop.
+Find the CI run for the PR's head commit: `gh run list --workflow ci.yml --commit <headRefOid> --json databaseId,status,conclusion`. If there is none, the release run that last updated the PR may still be running: wait for it as in step 1 and look again. If that run has finished and there is still no CI run, show me the log of its `start-ci` job and offer to start CI with `gh workflow run ci.yml --ref changeset-release/main`, which runs it as me. Only on a yes, run it and look again.
 
 Wait for the CI run. Its `release-plan` job checks the PR's peer ranges against npm, the rule CONTRIBUTING.md (Changesets) gives for a pipelines minor.
 
