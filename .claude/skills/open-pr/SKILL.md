@@ -44,7 +44,7 @@ git rev-parse HEAD > "$(git rev-parse --git-dir)/open-pr-reviewed"
 
 ## 7. Push and open the PR
 
-Run `git push -u origin HEAD`. If the branch already has an open PR (`gh pr view` succeeds), stop here and report its URL.
+Run `git push -u origin HEAD`, or `git push -u --force-with-lease origin HEAD` when step 1 rebased a branch that was already pushed. If the branch already has an open PR, stop here and report its URL. `gh pr view --json state,url --jq 'select(.state == "OPEN") | .url'` prints it; plain `gh pr view` also finds a closed or merged PR from an earlier use of the branch name.
 
 Otherwise open it with `gh pr create --base main`:
 
