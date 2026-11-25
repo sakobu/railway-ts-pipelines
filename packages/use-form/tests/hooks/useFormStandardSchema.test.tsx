@@ -1,11 +1,12 @@
 import { describe, test, expect, mock } from 'bun:test';
 
-import { isOk, isErr } from '@railway-ts/pipelines/result';
+import { isOk, isErr, err } from '@railway-ts/pipelines/result';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { type } from 'arktype';
 
 import { isStandardSchema, fromStandardSchema } from '../../src/standardSchema';
 import { useForm } from '../../src/useForm';
+import { thenableOf } from '../fixtures/gates';
 import {
   standardSchemaUserValidator,
   asyncStandardSchemaUserValidator,
@@ -13,6 +14,8 @@ import {
   type UserForm,
   type UserWithAddressForm,
 } from '../fixtures/validators';
+
+import type { StandardSchemaV1 } from '@railway-ts/pipelines/schema';
 
 // =============================================================================
 // Type Guard: isStandardSchema
@@ -117,6 +120,20 @@ describe('fromStandardSchema', () => {
       expect(isErr(result)).toBe(true);
       const errors = (result as any).error;
       expect(errors.length).toBeGreaterThan(0);
+    });
+
+    test("converts the result a thenable that isn't a native Promise settles to", async () => {
+      const schema: StandardSchemaV1<unknown, UserForm> = {
+        '~standard': {
+          version: 1,
+          vendor: 'test',
+          validate: () => thenableOf({ issues: [{ message: 'Name is taken', path: ['name'] }] }),
+        },
+      };
+
+      const result = await fromStandardSchema(schema)({});
+
+      expect(result).toEqual(err([{ path: ['name'], message: 'Name is taken' }]));
     });
   });
 });

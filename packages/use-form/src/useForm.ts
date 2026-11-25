@@ -29,7 +29,14 @@ import {
   createNativeFileFieldProps,
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
-import { fieldErrorsOf, fieldsToRecheck, isCurrentFieldCheck, validatingFieldsOf, validatorPeriod } from './formChecks';
+import {
+  fieldErrorsOf,
+  fieldsToRecheck,
+  hasPendingFieldCheck,
+  isCurrentFieldCheck,
+  validatingFieldsOf,
+  validatorPeriod,
+} from './formChecks';
 import { createInitialFormState, formReducer } from './formReducer';
 import { createFormStore, type FormStore } from './formStore';
 import { createStabilityCheck } from './stabilityCheck';
@@ -40,6 +47,7 @@ import {
   getValueByPath,
   collectFieldPaths,
   isPathAffected,
+  isPromiseLike,
   normalizePath,
   normalizePathKeys,
   own,
@@ -119,7 +127,7 @@ const errorOf = (answer: string | undefined): string | undefined => answer || un
 
 /**
  * A field validator whose answer is the error it shows, read by {@link errorOf}. A throw still reaches the caller,
- * and a rejection still rejects.
+ * and a rejection still rejects. An answer that settles later becomes a native promise, whatever thenable it was.
  *
  * @param validatorFn - A `fieldValidators` entry
  * @returns The same validator, answering with the error it shows
@@ -128,7 +136,7 @@ const answeringWithError =
   <TValues>(validatorFn: FieldValidatorFn<TValues>): FieldCheckFn<TValues> =>
   (value, values) => {
     const answer = validatorFn(value, values);
-    return answer instanceof Promise ? answer.then(errorOf) : errorOf(answer);
+    return isPromiseLike(answer) ? Promise.resolve(answer).then(errorOf) : errorOf(answer);
   };
 
 /**
@@ -159,7 +167,7 @@ const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Re
 /**
  * Runs a step that answers at once or later, and tells how it settled: `onAnswer` gets its answer, and `onFail` hears
  * of a throw or rejection. Either way the caller still gets what the step gave, sync or async: its answer, its throw
- * or its rejection.
+ * or its rejection. An answer that settles later, whatever thenable it is, reaches the caller as a native promise.
  *
  * @param run - The step
  * @param onAnswer - Called with the answer, before the caller gets it
@@ -174,11 +182,11 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
     onFail();
     throw error;
   }
-  if (!(answer instanceof Promise)) {
+  if (!isPromiseLike(answer)) {
     onAnswer(answer);
     return answer;
   }
-  return answer.then(
+  return Promise.resolve(answer).then(
     (settled: T) => {
       onAnswer(settled);
       return settled;
@@ -204,7 +212,8 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
  * @param register - Whether the checks show while they run. Not once a follow or reset replaced the submitted values:
  *   they still run and count then, but describe values the form no longer shows.
  * @returns The errors of the checks that count, in the validators' order
- * @throws What a check that counts threw or rejected with: it fails the submission, as a throw anywhere does
+ * @throws What a check that counts threw or rejected with: it fails the submission, as a throw anywhere does. One
+ *   that doesn't count is logged instead.
  */
 const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   store: FormStore<TValues>,
@@ -244,8 +253,12 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   const { checks } = store.getState();
   const errors: ValidationError[] = [];
   for (const [index, { key, period }] of runs.entries()) {
-    if (validatorPeriod(checks, key) !== period) continue;
     const outcome = settled[index]!;
+    if (validatorPeriod(checks, key) !== period) {
+      // It counts as never run, so nothing else sees its throw or rejection: logged, as a live check's is
+      if (outcome.status === 'rejected') logValidationError(outcome.reason);
+      continue;
+    }
     if (outcome.status === 'rejected') throw outcome.reason;
     if (outcome.value !== undefined) errors.push({ path: [key], message: outcome.value });
   }
@@ -586,11 +599,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
   const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
-  // Derived: true while a schema check runs, a submission validates, or a field validator runs
+  // Derived: true while a schema check runs, a submission validates, or a field check is pending. A field check counts
+  // while it waits too: the schema check it waits on may be one a newer check replaced, which no longer counts.
   const isValidating = useMemo(
     () =>
-      formState.checks.schema !== undefined || formState.isSubmitValidating || Object.keys(validatingFields).length > 0,
-    [formState.checks.schema, formState.isSubmitValidating, validatingFields],
+      formState.checks.schema !== undefined ||
+      formState.isSubmitValidating ||
+      hasPendingFieldCheck(formState.checks.fields),
+    [formState.checks.schema, formState.isSubmitValidating, formState.checks.fields],
   );
 
   // ===========================================================================
@@ -639,7 +655,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const startValidation = useCallback(
     (values: TValues): SchemaCheck<TValues> => {
       const result = validateForm(values);
-      return result instanceof Promise ? result.catch(logValidationError) : result;
+      return isPromiseLike(result) ? result.catch(logValidationError) : result;
     },
     [validateForm],
   );
@@ -685,10 +701,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           () => end('none'),
         );
         // Nothing awaits an async answer, so a rejection is logged
-        if (answer instanceof Promise) void answer.catch(logValidationError);
+        if (isPromiseLike(answer)) void answer.catch(logValidationError);
       };
 
-      if (schemaResult instanceof Promise) {
+      if (isPromiseLike(schemaResult)) {
         // The field validator then runs after the caller returned: a throw from it is logged
         void schemaResult.then(afterSchema).catch(logValidationError);
       } else {
@@ -790,7 +806,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         } catch (error) {
           schemaResult = logValidationError(error);
         }
-        if (schemaResult === undefined || schemaResult instanceof Promise) {
+        if (schemaResult === undefined || isPromiseLike(schemaResult)) {
           // As when typing: the old values' errors don't show on the new ones while the check runs, or once it threw
           if (Object.keys(store.getState().clientErrors).length > 0)
             dispatch({ type: 'SET_CLIENT_ERRORS', errors: {} });
@@ -1118,7 +1134,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * `handleSubmit` decides when it runs, through the submit scheduler.
    *
    * It runs the field validators that are on when it reaches them. A check whose validator is switched off before
-   * they all end counts as never run, as the form shows it.
+   * they all end is still waited for, then counts as never run, as the form shows it.
    *
    * The submission belongs to the form state of `generation`. After a `resetKey` reset it still runs
    * and resolves, but none of its writes land.

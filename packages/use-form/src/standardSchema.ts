@@ -1,5 +1,7 @@
 import { ok, err } from '@railway-ts/pipelines/result';
 
+import { isPromiseLike } from './utils';
+
 import type { Result } from '@railway-ts/pipelines/result';
 import type { StandardSchemaV1, MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
 
@@ -60,14 +62,16 @@ function convertResult<T>(result: StandardSchemaV1.Result<T>): Result<T, Validat
  * Wraps a Standard Schema v1 object into a `MaybeAsyncValidator` compatible
  * with the railway-ts validation pipeline. This allows `useForm` to accept
  * any Standard Schema v1 compliant validator (Valibot, ArkType, etc.).
+ * A result that settles later becomes a native promise, whatever thenable
+ * the schema returned.
  */
 export function fromStandardSchema<T extends Record<string, unknown>>(
   schema: StandardSchemaV1<unknown, T>,
 ): MaybeAsyncValidator<unknown, T> {
   return (value: unknown): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> => {
     const result = schema['~standard'].validate(value);
-    if (result instanceof Promise) {
-      return result.then((r) => convertResult<T>(r));
+    if (isPromiseLike(result)) {
+      return Promise.resolve(result).then((r) => convertResult<T>(r));
     }
     return convertResult<T>(result);
   };

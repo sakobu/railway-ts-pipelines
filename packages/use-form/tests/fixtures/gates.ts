@@ -22,6 +22,13 @@ export const createGatedValidator = <TValues>() => {
   return { pending, gated };
 };
 
+/**
+ * A thenable that settles to `value` and isn't a native Promise, as a library's promise or one from another realm
+ * isn't. Its `then` returns nothing, the least a thenable does. Typed as the Promise it stands for.
+ */
+export const thenableOf = <T>(value: T): Promise<T> =>
+  ({ then: (resolve: (settled: T) => void) => resolve(value) }) as unknown as Promise<T>;
+
 /** A field validator whose calls stay pending until the test settles them, in call order. */
 export const createGatedFieldValidator = () => {
   const calls: PromiseWithResolvers<string | undefined>[] = [];

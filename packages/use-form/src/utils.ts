@@ -31,6 +31,13 @@ export const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): 
   Object.hasOwn(record, key) ? record[key] : undefined;
 
 /**
+ * Whether a validator's answer settles later: a promise, or any other thenable. `instanceof Promise` misses a
+ * library's promise and one from another realm, such as an iframe's. `Promise.resolve` turns one into a native promise.
+ */
+export const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  typeof (value as { then?: unknown } | null | undefined)?.then === 'function';
+
+/**
  * Retrieves a value from a nested object using a path string.
  * Supports both dot notation for object properties and bracket notation for array indices.
  * Returns undefined if any part of the path doesn't exist.

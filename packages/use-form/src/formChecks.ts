@@ -15,6 +15,15 @@ const EMPTY_VALIDATORS: ChecksState['validators'] = Object.freeze({});
 const NO_ERRORS: Readonly<Record<FieldPath, string>> = Object.freeze({});
 const NOT_VALIDATING: Readonly<Record<FieldPath, boolean>> = Object.freeze({});
 
+/**
+ * The record with the entries set, or the record itself when there are none. Each becomes an own entry, even one keyed
+ * `__proto__`, which an assignment would take for the prototype.
+ */
+const withEntries = <T>(
+  record: Readonly<Record<FieldPath, T>>,
+  entries: readonly [FieldPath, T][],
+): Readonly<Record<FieldPath, T>> => (entries.length === 0 ? record : { ...record, ...Object.fromEntries(entries) });
+
 /** The checks of a form that has run none, with no field validators. */
 export const NO_CHECKS: ChecksState = Object.freeze({
   schema: undefined,
@@ -33,32 +42,29 @@ export const startOver = (checks: ChecksState): ChecksState =>
  * ends its check with no error, and its period goes up. One that comes back keeps its period.
  */
 export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>): ChecksState => {
-  let validators: Record<FieldPath, ValidatorState> | undefined;
-  let fields: Record<FieldPath, FieldCheck> | undefined;
+  const validators: [FieldPath, ValidatorState][] = [];
+  const fields: [FieldPath, FieldCheck][] = [];
 
   for (const [key, validator] of Object.entries(checks.validators)) {
     if (validator.on && !on.has(key)) {
-      validators ??= { ...checks.validators };
-      validators[key] = { on: false, period: validator.period + 1 };
+      validators.push([key, { on: false, period: validator.period + 1 }]);
       const check = own(checks.fields, key);
-      if (check) {
-        fields ??= { ...checks.fields };
-        fields[key] = { id: check.id, status: 'done', value: check.value };
-      }
+      if (check) fields.push([key, { id: check.id, status: 'done', value: check.value }]);
     } else if (!validator.on && on.has(key)) {
-      validators ??= { ...checks.validators };
-      validators[key] = { on: true, period: validator.period };
+      validators.push([key, { on: true, period: validator.period }]);
     }
   }
   for (const key of on) {
-    if (!Object.hasOwn(checks.validators, key)) {
-      validators ??= { ...checks.validators };
-      validators[key] = { on: true, period: 0 };
-    }
+    if (!Object.hasOwn(checks.validators, key)) validators.push([key, { on: true, period: 0 }]);
   }
 
-  if (!validators) return checks;
-  return { ...checks, validators, fields: fields ?? checks.fields };
+  // A field check changes only along with its validator
+  if (validators.length === 0) return checks;
+  return {
+    ...checks,
+    validators: withEntries(checks.validators, validators),
+    fields: withEntries(checks.fields, fields),
+  };
 };
 
 /** The period of a field's validator, or `undefined` while it is off. */
@@ -132,36 +138,37 @@ export const endFieldCheck = (
 
 /** Ends every check that is still pending, keeping the errors shown, and clears the schema check. */
 export const endPendingChecks = (checks: ChecksState): ChecksState => {
-  let fields: Record<FieldPath, FieldCheck> | undefined;
+  const ended: [FieldPath, FieldCheck][] = [];
   for (const [key, check] of Object.entries(checks.fields)) {
-    if (check.status !== 'done') {
-      fields ??= { ...checks.fields };
-      fields[key] = { ...check, status: 'done' };
-    }
+    if (check.status !== 'done') ended.push([key, { ...check, status: 'done' }]);
   }
-  if (!fields && checks.schema === undefined) return checks;
-  return { ...checks, schema: undefined, fields: fields ?? checks.fields };
+  if (ended.length === 0 && checks.schema === undefined) return checks;
+  return { ...checks, schema: undefined, fields: withEntries(checks.fields, ended) };
 };
 
 /** The errors to show, by field. */
 export const fieldErrorsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): Readonly<Record<FieldPath, string>> => {
-  let errors: Record<FieldPath, string> | undefined;
+  const errors: [FieldPath, string][] = [];
   for (const [key, check] of Object.entries(fields)) {
-    if (check.error !== undefined) (errors ??= {})[key] = check.error;
+    if (check.error !== undefined) errors.push([key, check.error]);
   }
-  return errors ?? NO_ERRORS;
+  return withEntries(NO_ERRORS, errors);
 };
 
 /** The fields whose validator is running now. */
 export const validatingFieldsOf = (
   fields: Readonly<Record<FieldPath, FieldCheck>>,
 ): Readonly<Record<FieldPath, boolean>> => {
-  let validating: Record<FieldPath, boolean> | undefined;
+  const validating: [FieldPath, boolean][] = [];
   for (const [key, check] of Object.entries(fields)) {
-    if (check.status === 'running') (validating ??= {})[key] = true;
+    if (check.status === 'running') validating.push([key, true]);
   }
-  return validating ?? NOT_VALIDATING;
+  return withEntries(NOT_VALIDATING, validating);
 };
+
+/** Whether a field check is pending: waiting on the schema check of its values, or running. */
+export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
+  Object.values(fields).some((check) => check.status !== 'done');
 
 /** The fields with a pending check or an error shown. */
 export const fieldsToRecheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): FieldPath[] =>

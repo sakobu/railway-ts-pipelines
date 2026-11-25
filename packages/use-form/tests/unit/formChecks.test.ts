@@ -7,6 +7,7 @@ import {
   endSchemaCheck,
   fieldErrorsOf,
   fieldsToRecheck,
+  hasPendingFieldCheck,
   isCurrentFieldCheck,
   markFieldCheckRunning,
   startFieldCheck,
@@ -138,4 +139,29 @@ test('a field named after an Object.prototype member syncs on, starts, ends and 
   expect(isCurrentFieldCheck(started, 'constructor', 1)).toBe(true);
   const ended = endFieldCheck(started, 'constructor', 1, { error: 'Bad' });
   expect(fieldErrorsOf(ended.fields)).toEqual({ constructor: 'Bad' });
+});
+test('hasPendingFieldCheck takes a check waiting or running, not one done', () => {
+  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', 'x');
+  expect(hasPendingFieldCheck(waiting.fields)).toBe(true);
+  expect(hasPendingFieldCheck(markFieldCheckRunning(waiting, 'name', 1).fields)).toBe(true);
+  expect(hasPendingFieldCheck(failed.fields)).toBe(false);
+  expect(hasPendingFieldCheck({})).toBe(false);
+});
+test('a __proto__ key syncs on as its own entry, so syncing the same set again returns its input', () => {
+  const synced = syncValidators(NO_CHECKS, on('__proto__'));
+  expect(validatorPeriod(synced, '__proto__')).toBe(0);
+  expect(syncValidators(synced, on('__proto__'))).toBe(synced);
+});
+test('a __proto__ field keeps its own entry in every record its checks write', () => {
+  const synced = syncValidators(NO_CHECKS, on('__proto__'));
+  const running = startFieldCheck(synced, '__proto__', 1, 'running', 'x');
+  expect(Object.entries(validatingFieldsOf(running.fields))).toEqual([['__proto__', true]]);
+  expect(Object.entries(endPendingChecks(running).fields)).toEqual([
+    ['__proto__', { id: 1, status: 'done', value: 'x' }],
+  ]);
+  const shown = endFieldCheck(running, '__proto__', 1, { error: 'Bad' });
+  expect(Object.entries(fieldErrorsOf(shown.fields))).toEqual([['__proto__', 'Bad']]);
+  const off = syncValidators(shown, on());
+  expect(Object.entries(off.validators)).toEqual([['__proto__', { on: false, period: 1 }]]);
+  expect(Object.entries(off.fields)).toEqual([['__proto__', { id: 1, status: 'done', value: 'x' }]]);
 });

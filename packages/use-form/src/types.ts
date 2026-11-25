@@ -378,7 +378,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
    * Switching one off, by leaving its key out or setting it to undefined, drops its error at once, and a check of it still running never lands.
-   * A submit counts a check whose validator was switched off as never run.
+   * A submit still waits for a check whose validator was switched off, then counts it as never run.
    * A field's error stays while a check of the same value runs.
    * Keys are dot paths, and bracket callers find them.
    */
@@ -1346,7 +1346,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 
-  /** Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is currently in progress. */
+  /**
+   * Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is
+   * currently in progress. A field check counts from when it starts, while it waits for the schema's result too.
+   */
   isValidating: boolean;
 
   /** Per-field async validation tracking. `true` when that field's async validator is running, including a submit's check of it. */

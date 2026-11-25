@@ -9,6 +9,7 @@ import {
   collectFieldPaths,
   deepMerge,
   deepEqual,
+  isPromiseLike,
   own,
 } from '../../src/utils';
 
@@ -651,5 +652,21 @@ describe('own', () => {
     expect(own(record, 'name')).toBe('a');
     expect(own(record, 'constructor')).toBeUndefined();
     expect(own({ constructor: 'b' }, 'constructor')).toBe('b');
+  });
+});
+
+describe('isPromiseLike', () => {
+  test('takes a native promise, a promise from another realm and any other thenable', () => {
+    expect(isPromiseLike(Promise.resolve('a'))).toBe(true);
+    expect(isPromiseLike(runInNewContext('Promise.resolve("a")'))).toBe(true);
+    expect(isPromiseLike({ then: () => {} })).toBe(true);
+  });
+
+  test('takes no other value', () => {
+    expect(isPromiseLike('a')).toBe(false);
+    expect(isPromiseLike(undefined)).toBe(false);
+    expect(isPromiseLike(null)).toBe(false);
+    expect(isPromiseLike({ ok: true, value: 'a' })).toBe(false);
+    expect(isPromiseLike({ then: 'a' })).toBe(false);
   });
 });

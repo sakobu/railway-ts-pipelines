@@ -6,7 +6,7 @@ import { renderHook, act } from '@testing-library/react';
 import { StrictMode } from 'react';
 
 import { useForm } from '../../src/useForm';
-import { createGatedFieldValidator, createGatedValidator, nextTask } from '../fixtures/gates';
+import { createGatedFieldValidator, createGatedValidator, nextTask, thenableOf } from '../fixtures/gates';
 import { alwaysValidValidator, publishValidator, userValidator, type PublishForm } from '../fixtures/validators';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
@@ -184,6 +184,34 @@ describe('switching a field validator off', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(result.current.fieldErrors).toEqual({});
     expect(result.current.isValid).toBe(true);
+  });
+
+  test('a submit logs the rejection of a check switched off while it ran', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { calls, gate } = createGatedFieldValidator();
+      const onSubmit = mock(() => {});
+      const { result, rerender } = renderTitleSwitch(publishValidator, () => gate(), { onSubmit });
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      rerender({ on: false });
+      const down = new Error('down');
+      let outcome: Awaited<typeof submitting> | undefined;
+      await act(async () => {
+        calls[0]!.reject(down);
+        outcome = await submitting;
+      });
+
+      expect(outcome).toEqual(ok(draft));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', down);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test("a submit doesn't count an error whose validator was switched off while another check ran", async () => {
@@ -487,6 +515,29 @@ test('a follow re-checks a field whose check was waiting on the schema', async (
   expect(checkTitle).toHaveBeenCalledWith('Updated', { ...draft, title: 'Updated' });
 });
 
+test('isValidating stays true while a field check waits on a schema check that a newer one replaced', async () => {
+  const { pending, gated } = createGatedValidator<PublishForm>();
+  const { result } = renderHook(() =>
+    useForm(gated, { initialValues: draft, validationMode: 'live', fieldValidators: { title: () => undefined } }),
+  );
+
+  // title's check waits on the first schema check. Typing in status starts the second, which ends first.
+  act(() => result.current.setFieldValue('title', 'x'));
+  act(() => result.current.setFieldValue('status', 'published'));
+  await act(async () => {
+    pending[1]!.resolve(ok({ ...draft, title: 'x', status: 'published' }));
+    await nextTask();
+  });
+  expect(result.current.isValidating).toBe(true);
+  expect(result.current.validatingFields).toEqual({});
+
+  await act(async () => {
+    pending[0]!.resolve(ok({ ...draft, title: 'x' }));
+    await nextTask();
+  });
+  expect(result.current.isValidating).toBe(false);
+});
+
 test('a submit whose schema validator rejects leaves isValidating false', async () => {
   const consoleError = spyOn(console, 'error').mockImplementation(() => {});
   try {
@@ -615,3 +666,67 @@ test.each(['constructor', 'toString', 'hasOwnProperty'])(
     expect(result.current.errors).toEqual({ [name]: 'Bad', other: 'Other is wrong' });
   },
 );
+
+test('a fieldValidators with its own __proto__ key mounts and rerenders', () => {
+  // Built from entries, an own key, as JSON.parse makes too. Not a field name the form supports, but it mustn't loop.
+  const { result, rerender } = renderHook(() =>
+    useForm(userValidator, {
+      initialValues: user,
+      fieldValidators: Object.fromEntries([['__proto__', () => undefined]]),
+    }),
+  );
+
+  rerender();
+
+  expect(result.current.isValid).toBe(true);
+});
+
+describe("a validator that answers with a thenable that isn't a native Promise", () => {
+  test('a field validator shows the error it settles to, on a live check', async () => {
+    const { result } = renderHook(() =>
+      useForm(userValidator, {
+        initialValues: user,
+        validationMode: 'live',
+        fieldValidators: { name: () => thenableOf('Taken') },
+      }),
+    );
+
+    await act(async () => {
+      result.current.setFieldValue('name', 'Jane');
+      await nextTask();
+    });
+
+    expect(result.current.fieldErrors).toEqual({ name: 'Taken' });
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('a field validator shows the error it settles to, and fails a submit with it', async () => {
+    const onSubmit = mock(() => {});
+    const { result } = renderHook(() =>
+      useForm(userValidator, { initialValues: user, fieldValidators: { name: () => thenableOf('Taken') }, onSubmit }),
+    );
+
+    let outcome!: Awaited<ReturnType<typeof result.current.handleSubmit>>;
+    await act(async () => {
+      outcome = await result.current.handleSubmit();
+    });
+
+    expect(outcome).toEqual(err([{ path: ['name'], message: 'Taken' }]));
+    expect(result.current.fieldErrors).toEqual({ name: 'Taken' });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('a schema validator shows the errors it settles to', async () => {
+    const schema: S.MaybeAsyncValidator<unknown, PublishForm> = () =>
+      thenableOf(err([{ path: ['title'], message: 'Title is taken' }]));
+    const { result } = renderHook(() => useForm(schema, { initialValues: draft, validationMode: 'live' }));
+
+    await act(async () => {
+      result.current.setFieldValue('title', 'x');
+      await nextTask();
+    });
+
+    expect(result.current.clientErrors).toEqual({ title: 'Title is taken' });
+    expect(result.current.isValidating).toBe(false);
+  });
+});
