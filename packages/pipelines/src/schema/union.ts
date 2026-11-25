@@ -12,7 +12,8 @@ export type UnionOptions = {
 
 /**
  * Create a validator that checks if a value matches any of the provided validators.
- * Returns the result of the first successful validator, or all errors if none match.
+ * Returns the result of the first validator that accepts the value. If none does, returns every
+ * validator's errors, or only the first validator's with `collectAllErrors: false`.
  *
  * @example
  * const validate = union([string(), number()]);
@@ -91,17 +92,16 @@ export function union<I, O>(
 ): MaybeAsyncValidator<I, O> {
   const { collectAllErrors = true, errorPrefix } = options || {};
 
-  const buildError = (allErrors: ValidationError[][]) =>
-    err(
-      allErrors.flat().map((error) => ({
-        path: error.path,
-        message: errorPrefix ? `${errorPrefix}: ${error.message}` : error.message,
-      })),
+  const buildError = (allErrors: ValidationError[][]) => {
+    const reported = (collectAllErrors ? allErrors : allErrors.slice(0, 1)).flat();
+    return err(
+      errorPrefix ? reported.map((error) => ({ ...error, message: `${errorPrefix}: ${error.message}` })) : reported,
     );
+  };
 
   return (value, parentPath = []) => {
     if (validators.length === 0) {
-      return err([{ path: parentPath, message: 'No validators provided to union' }]);
+      return buildError([[{ path: parentPath, message: 'No validators provided to union' }]]);
     }
 
     const allErrors: ValidationError[][] = [];
@@ -114,18 +114,11 @@ export function union<I, O>(
       if (result instanceof Promise) {
         // Switch to async path: await this result, then continue sequentially
         return (async () => {
-          const asyncResult = await result;
-          if (isOk(asyncResult)) return asyncResult;
-          allErrors.push(asyncResult.error);
-          if (!collectAllErrors) return buildError(allErrors);
-
-          // Continue with remaining validators sequentially
-          for (let j = i + 1; j < validators.length; j++) {
+          for (let j = i; j < validators.length; j++) {
             // eslint-disable-next-line security/detect-object-injection -- numeric index over own array
-            const r = await validators[j]!(value, parentPath);
+            const r = await (j === i ? result : validators[j]!(value, parentPath));
             if (isOk(r)) return r;
             allErrors.push(r.error);
-            if (!collectAllErrors) break;
           }
           return buildError(allErrors);
         })();
@@ -138,14 +131,9 @@ export function union<I, O>(
 
       // Collect errors for error reporting
       allErrors.push(result.error);
-
-      // If we don't need to collect all errors, we can stop at the first failure
-      if (!collectAllErrors) {
-        break;
-      }
     }
 
-    // If all validators failed, combine all errors
+    // Every validator failed
     return buildError(allErrors);
   };
 }

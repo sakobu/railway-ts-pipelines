@@ -75,14 +75,54 @@ describe('union validator', () => {
     }
   });
 
-  test('should only collect first error when collectAllErrors is false', () => {
-    const validator = union([stringValidator, numberValidator], { collectAllErrors: false });
-    const result = validator({});
+  test('collectAllErrors: false reports every error of the first validator and none of the rest', () => {
+    const twoErrors: Validator<unknown, string> = () =>
+      err([
+        { path: ['a'], message: 'First' },
+        { path: ['b'], message: 'Second' },
+      ]);
+    const validator = union([twoErrors, numberValidator], { collectAllErrors: false });
 
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      expect(result.error.length).toBe(1);
-    }
+    expect(validator({})).toEqual(
+      err([
+        { path: ['a'], message: 'First' },
+        { path: ['b'], message: 'Second' },
+      ]),
+    );
+  });
+
+  test('collectAllErrors: false still accepts a value a later validator accepts', () => {
+    const validator = union([stringValidator, numberValidator, booleanValidator], { collectAllErrors: false });
+
+    expect(validator(42)).toEqual(ok(42));
+    expect(validator(true)).toEqual(ok(true));
+  });
+
+  describe('an error with a cause', () => {
+    const explained: Validator<unknown, string> = (_value, path = []) =>
+      err([{ path, message: 'Not a known code', cause: [{ path: ['code'], message: 'Unknown prefix' }] }]);
+
+    test('keeps its cause when the union fails', () => {
+      const validator = union([explained, numberValidator]);
+
+      expect(validator(true)).toEqual(
+        err([
+          { path: [], message: 'Not a known code', cause: [{ path: ['code'], message: 'Unknown prefix' }] },
+          { path: [], message: 'Expected a number' },
+        ]),
+      );
+    });
+
+    test('keeps its cause when errorPrefix changes its message', () => {
+      const validator = union([explained, numberValidator], { errorPrefix: 'Code' });
+
+      expect(validator(true)).toEqual(
+        err([
+          { path: [], message: 'Code: Not a known code', cause: [{ path: ['code'], message: 'Unknown prefix' }] },
+          { path: [], message: 'Code: Expected a number' },
+        ]),
+      );
+    });
   });
 
   test('should add error prefix when provided', () => {
@@ -103,6 +143,12 @@ describe('union validator', () => {
     if (isErr(result)) {
       expect(result.error[0]?.message || '').toContain('No validators provided');
     }
+  });
+
+  test('errorPrefix goes before the error of a union with no validators', () => {
+    const validator = union([], { errorPrefix: 'Code' });
+
+    expect(validator('anything')).toEqual(err([{ path: [], message: 'Code: No validators provided to union' }]));
   });
 
   test('should maintain path information', () => {
@@ -192,15 +238,20 @@ describe('union async validator', () => {
     }
   });
 
-  test('collectAllErrors: false with async — stops after first failure', async () => {
-    const validator = union([asyncStringValidator, asyncNumberValidator], { collectAllErrors: false });
-    const result = await validator({});
+  describe.each<[string, Array<MaybeAsyncValidator<unknown, unknown>>, string]>([
+    ['async first', [asyncStringValidator, asyncNumberValidator, booleanValidator], 'Expected a string (async)'],
+    ['sync then async', [stringValidator, asyncNumberValidator, booleanValidator], 'Expected a string'],
+  ])('collectAllErrors: false, %s', (_chain, validators, firstMessage) => {
+    const validator = union(validators, { collectAllErrors: false });
 
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) {
-      expect(result.error.length).toBe(1);
-      expect(result.error[0]!.message).toBe('Expected a string (async)');
-    }
+    test('still accepts a value a later validator accepts', async () => {
+      expect(await validator(42)).toEqual(ok(42));
+      expect(await validator(true)).toEqual(ok(true));
+    });
+
+    test("reports only the first validator's errors", async () => {
+      expect(await validator({})).toEqual(err([{ path: [], message: firstMessage }]));
+    });
   });
 
   test('errorPrefix with async errors', async () => {
