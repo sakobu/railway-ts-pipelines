@@ -309,6 +309,40 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Jane' });
     });
 
+    test("a check that a reset dropped doesn't hold the same values set again", async () => {
+      const { pending, gated } = createGatedValidator<UserForm>();
+      const onSubmit = saving();
+      const { result } = renderHook(() =>
+        useForm(gated, { initialValues: initial, onSubmit, validationMode: 'blur', autoSave: { delay: 10 } }),
+      );
+      const edited: UserForm = { ...initial, name: 'Jane' };
+      const passAll = () =>
+        act(async () => {
+          for (const check of pending) check.resolve(ok(edited));
+          await nextTask();
+        });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await sleep(100);
+      // Auto-save's own check started, and waits
+      expect(pending).toHaveLength(1);
+
+      // The reset drops the check, and the same values come back in the same commit
+      act(() => {
+        result.current.resetForm();
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The dropped check, then the new check and the save's
+      await passAll();
+      await passAll();
+      await sleep(100);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith(edited);
+    });
+
     test("a failed check in submit mode doesn't touch fields or count a submit", async () => {
       const onSubmit = saving();
       const { result } = renderAutoSaveForm(onSubmit, delay, { validationMode: 'submit' });

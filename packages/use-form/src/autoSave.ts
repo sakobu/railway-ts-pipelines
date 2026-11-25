@@ -2,8 +2,8 @@ import { deepEqual } from './utils';
 
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
 // out already, the form has checked it and shows it valid, the form isn't stale, and no submission is running.
-// Values the form hasn't checked get one schema check per version first. This module only decides, and holds whether
-// auto-save is on; the caller acts.
+// Values the form hasn't checked get one schema check per version first, and another once a follow or reset ends that
+// check. This module only decides, and holds whether auto-save is on; the caller acts.
 
 /**
  * What auto-save reads from the form when it decides.
@@ -29,6 +29,8 @@ export type AutoSaveView<TValues> = {
   isSubmitting: boolean;
   /** FormState.wentOut */
   wentOut: TValues | undefined;
+  /** FormState.baselineEpoch: a follow or reset increments it, and ends the running checks */
+  baselineEpoch: number;
 };
 
 /** What auto-save asks the caller to do: nothing yet, run a schema check, or submit. */
@@ -64,8 +66,9 @@ export type AutoSave<TValues> = {
   delayEnded: () => void;
 
   /**
-   * Decides for the tracked version. It returns `'check'` at most once per version and records it. It returns
-   * `'submit'` only while its own save isn't running, and records that save as running.
+   * Decides for the tracked version. It returns `'check'` at most once per version in each baseline epoch, and records
+   * it: a follow or reset ends the check. It returns `'submit'` only while its own save isn't running, and records that
+   * save as running.
    *
    * @param readView - Reads what the form shows now. `decide` calls it once, only after the delay has ended, so a
    *   caller pays for the view only then.
@@ -88,7 +91,8 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
   // Boxed because TValues is unconstrained: `undefined` alone can't mean "nothing tracked".
   let tracked: { values: TValues } | undefined;
   let delayPassed = false;
-  let checkStarted = false;
+  // The baseline epoch the tracked version's check started in
+  let checkedIn: number | undefined;
   let ownSaveRunning = false;
   let on = false;
 
@@ -100,7 +104,7 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     on = false;
     tracked = undefined;
     delayPassed = false;
-    checkStarted = false;
+    checkedIn = undefined;
   };
 
   const isOn = (): boolean => on;
@@ -109,7 +113,7 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     if (tracked && deepEqual(tracked.values, values)) return false;
     tracked = { values };
     delayPassed = false;
-    checkStarted = false;
+    checkedIn = undefined;
     return true;
   };
 
@@ -123,8 +127,8 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     if (!view.isDirty) return 'wait';
     if (view.wentOut !== undefined && deepEqual(view.values, view.wentOut)) return 'wait';
     if (!deepEqual(view.values, view.checkedValues)) {
-      if (view.isChecking || checkStarted) return 'wait';
-      checkStarted = true;
+      if (view.isChecking || checkedIn === view.baselineEpoch) return 'wait';
+      checkedIn = view.baselineEpoch;
       return 'check';
     }
     if (view.isValidating || !view.isValid || view.isStale || view.isSubmitting || ownSaveRunning) return 'wait';

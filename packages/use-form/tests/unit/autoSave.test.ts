@@ -19,6 +19,7 @@ const view = (over: Partial<AutoSaveView<V>> = {}): AutoSaveView<V> => ({
   isStale: false,
   isSubmitting: false,
   wentOut: undefined,
+  baselineEpoch: 0,
   ...over,
 });
 
@@ -80,6 +81,18 @@ describe('createAutoSave', () => {
     auto.track(B2);
     auto.delayEnded();
     expect(auto.decide(() => view({ values: B2, checkedValues: B }))).toBe('check');
+  });
+
+  test('a check started before a follow or reset holds no check after it', () => {
+    const auto = due();
+    expect(auto.decide(() => view({ checkedValues: B }))).toBe('check');
+    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('check');
+  });
+
+  test('a check started since the latest follow or reset still holds one', () => {
+    const auto = due();
+    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('check');
+    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('wait');
   });
 
   test('waits for a running schema check instead of starting one', () => {
