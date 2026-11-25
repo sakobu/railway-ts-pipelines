@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useDebounce } from './useDebounce';
-import { deepEqual } from './utils';
+import { deepEqual, isPromiseLike } from './utils';
 
 /**
  * Represents the subset of form methods needed for auto-submission
@@ -164,8 +164,8 @@ export const useFormAutoSubmission = <T>(form: FormWithAutoSubmit<T>, delay = 20
       logError(error);
       return;
     }
-    if (result instanceof Promise) {
-      result.then((r) => {
+    if (isPromiseLike(result)) {
+      Promise.resolve(result).then((r) => {
         if (r.ok) passed();
       }, logError);
     } else if (result.ok) {

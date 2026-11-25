@@ -117,17 +117,15 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   isSubmitting: boolean;
 
-  /** Whether a form-level async validation that the form or `validateForm` started, outside a submission, is in progress. */
-  isFormValidating: boolean;
-
   /** Whether a submission's validation is in progress. Kept apart, so a check that typing started can't end it. */
   isSubmitValidating: boolean;
 
-  /** Per-field async validation tracking. True when that field's async validator is running. */
-  validatingFields: Record<FieldPath, boolean>;
-
-  /** Errors from per-field validators (stored separately so schema SET_CLIENT_ERRORS doesn't overwrite them). */
-  fieldErrors: Record<FieldPath, string>;
+  /**
+   * Every check the form runs: the schema check whose result lands, each field's latest check, and which field
+   * validators are on. The reducer alone decides which result lands, and `fieldErrors`, `validatingFields` and
+   * `isValidating` are computed from it.
+   */
+  checks: ChecksState;
 
   /**
    * Number of times the form has been submitted (via handleSubmit).
@@ -167,11 +165,49 @@ export interface FormState<TValues extends Record<string, unknown>> {
   generation: number;
 
   /**
-   * Increments on each follow, `RESET_FORM` and `resetKey` reset. Async validation results and
-   * `SUBMIT_SUCCEEDED` land only in the epoch they started in.
+   * Increments on each follow, `RESET_FORM` and `resetKey` reset. `SUBMIT_SUCCEEDED` lands only in the epoch its
+   * submission started in, and a submission registers its field checks only while the values it submitted are still
+   * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
    */
   baselineEpoch: number;
 }
+
+/** A check's id. The store hands them out in increasing order for its lifetime. */
+export type CheckId = number;
+
+/**
+ * A field check's status before it ends. waiting: on a schema result, that of the schema check of its values or of a
+ * newer schema check of the form's values as they were when it started, whichever comes first. running: its validator
+ * runs.
+ */
+export type PendingStatus = 'waiting' | 'running';
+
+/** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
+export type FieldCheck = {
+  id: CheckId;
+  /** Pending, or done: it ended */
+  status: PendingStatus | 'done';
+  /** The field's value the check checks */
+  value: unknown;
+  /** The error shown: once done, the validator's; while pending, the last one, while the value is unchanged */
+  error?: string;
+};
+
+/** How a field check ended: with the validator's answer, or with none (it threw or rejected). */
+export type FieldCheckResult = { error: string | undefined } | 'none';
+
+/** A field validator as the checks know it: whether it's on, and its period, which goes up at each switch-off. */
+export type ValidatorState = { on: boolean; period: number };
+
+/** Every check the form runs, and which field validators are on. */
+export type ChecksState = {
+  /** The running schema check whose result lands when it ends */
+  schema: CheckId | undefined;
+  /** Each field's latest check, by normalized path */
+  fields: Readonly<Record<FieldPath, FieldCheck>>;
+  /** Each field that has had a validator */
+  validators: Readonly<Record<FieldPath, ValidatorState>>;
+};
 
 /**
  * The submit handler: it returns nothing on every path, or a `Result` on every path.
@@ -341,10 +377,14 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
 
   /**
    * Per-field validator functions for field-level async validation.
-   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, all of them.
+   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, once the schema passes, every one that is on.
    * A field validator only runs when the schema produces no error for that field.
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
+   * Switching one off, by leaving its key out or setting it to undefined, drops its error at once, and a check of it still running never lands.
+   * A submit still waits for a check whose validator was switched off, then counts it as never run.
+   * A field's error stays while a check of the same value runs.
+   * Keys are dot paths, and bracket callers find them.
    */
   fieldValidators?:
     | {
@@ -1113,6 +1153,56 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  */
 export type FormAction<TValues extends Record<string, unknown>> =
   | {
+      /** Brings the field validators in line with the fields that have one on now */
+      type: 'SYNC_FIELD_VALIDATORS';
+      /** The fields whose validator is on, by normalized path */
+      fields: ReadonlySet<FieldPath>;
+    }
+  | {
+      /** Registers a schema check, unless a newer one is registered */
+      type: 'START_SCHEMA_CHECK';
+      /** The check's id */
+      id: CheckId;
+    }
+  | {
+      /** Ends a schema check. Its errors land only while it is the current one. */
+      type: 'END_SCHEMA_CHECK';
+      /** The check's id */
+      id: CheckId;
+      /** The schema's errors, as `SET_CLIENT_ERRORS` takes them. None ends the check and keeps the errors. */
+      errors?: Record<FieldPath, string>;
+    }
+  | {
+      /** Registers a field check, while the field's validator is on and `id` is newer than its current check */
+      type: 'START_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+      /** The status it starts in */
+      status: PendingStatus;
+      /** The field's value the check checks */
+      value: unknown;
+    }
+  | {
+      /** Moves a field's waiting check to running */
+      type: 'RUN_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+    }
+  | {
+      /** Ends a field's current check */
+      type: 'END_FIELD_CHECK';
+      /** The field path */
+      field: FieldPath;
+      /** The check's id */
+      id: CheckId;
+      /** How the check ended */
+      result: FieldCheckResult;
+    }
+  | {
       /** Syncs a new `initialValues` version and `resetKey` into the form state */
       type: 'SYNC_INITIAL_VALUES';
       /** The `initialValues` of the latest render */
@@ -1197,32 +1287,10 @@ export type FormAction<TValues extends Record<string, unknown>> =
       type: 'INCREMENT_SUBMIT_COUNT';
     }
   | {
-      /** Sets the form-level async validation state */
-      type: 'SET_FORM_VALIDATING';
-      /** Whether form-level async validation is currently in progress */
-      isFormValidating: boolean;
-    }
-  | {
       /** Sets whether a submission's validation is in progress */
       type: 'SET_SUBMIT_VALIDATING';
       /** Whether the submission's validation is in progress */
       isSubmitValidating: boolean;
-    }
-  | {
-      /** Sets per-field async validation state */
-      type: 'SET_FIELD_VALIDATING';
-      /** The field path being validated */
-      field: FieldPath;
-      /** Whether the field's async validator is running */
-      isValidating: boolean;
-    }
-  | {
-      /** Sets or clears a per-field validator error */
-      type: 'SET_FIELD_ERROR';
-      /** The field path */
-      field: FieldPath;
-      /** The error message, or undefined to clear */
-      error: string | undefined;
     }
   | {
       /** Resets the form to initial values and clears all errors and touched state */
@@ -1272,16 +1340,25 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    */
   serverErrors: Readonly<Record<FieldPath, string>>;
 
-  /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
+  /**
+   * Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors.
+   * Cleared at once when a check of a changed value starts, when the field's validator is switched off, and on reset.
+   * A check of an unchanged value keeps the error until it answers.
+   */
   fieldErrors: Readonly<Record<FieldPath, string>>;
 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 
-  /** Whether any async validation (form-level, a submission's, or field-level) is currently in progress. */
+  /**
+   * Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is
+   * currently in progress. A field check counts from when it starts, while it waits for the schema's result too. A
+   * newer schema check of the values the form held when it started moves it on with its result when it ends, so a
+   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true.
+   */
   isValidating: boolean;
 
-  /** Per-field async validation tracking. `true` when that field's async validator is running. */
+  /** Per-field async validation tracking. `true` when that field's async validator is running, including a submit's check of it. */
   validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**

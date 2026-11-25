@@ -6,7 +6,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { useForm } from '../../src/useForm';
 import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
-import { createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
+import { createGatedOnSubmit, createGatedValidator, nextTask, thenableOf } from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -1319,6 +1319,17 @@ describe('useFormAutoSubmission', () => {
       expect(validateForm).toHaveBeenCalledTimes(1);
       expect(handleSubmit).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test("submits values whose validateForm answers with a thenable that isn't a native Promise", async () => {
+    const handleSubmit = mock(() => {});
+    const validateForm = () => thenableOf({ ok: true });
+    renderHook(() =>
+      useFormAutoSubmission({ values: { name: 'a' }, isDirty: true, isValid: true, validateForm, handleSubmit }, 20),
+    );
+
+    await sleep(80);
+    expect(handleSubmit).toHaveBeenCalledTimes(1);
   });
 
   describe('a validateForm that throws or rejects', () => {

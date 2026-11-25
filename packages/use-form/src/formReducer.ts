@@ -1,4 +1,15 @@
 import {
+  NO_CHECKS,
+  endFieldCheck,
+  endPendingChecks,
+  endSchemaCheck,
+  markFieldCheckRunning,
+  startFieldCheck,
+  startOver,
+  startSchemaCheck,
+  syncValidators,
+} from './formChecks';
+import {
   deepEqual,
   deepMerge,
   getValueByPath,
@@ -8,7 +19,7 @@ import {
   setValueByPath,
 } from './utils';
 
-import type { FieldPath, FormAction, FormState, ResetKey } from './types';
+import type { ChecksState, FieldPath, FormAction, FormState, ResetKey } from './types';
 
 /**
  * The one empty map shared by a fresh state's maps, a follow's server errors, cleared server errors and a valid
@@ -27,10 +38,8 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   touched: EMPTY,
   clientErrors: EMPTY,
   serverErrors: EMPTY,
-  fieldErrors: EMPTY,
-  validatingFields: EMPTY,
+  checks: NO_CHECKS,
   isSubmitting: false,
-  isFormValidating: false,
   isSubmitValidating: false,
   submitCount: 0,
   lastVersion: initialValues,
@@ -71,6 +80,7 @@ const followVersion = <TValues extends Record<string, unknown>>(
     cleanValues: version,
     baseVersion: version,
     isStale: false,
+    checks: endPendingChecks(state.checks),
     baselineEpoch: state.baselineEpoch + 1,
   };
 };
@@ -113,6 +123,22 @@ const withEdit = <TValues extends Record<string, unknown>>(
   return next;
 };
 
+/** Sets the client errors, as `SET_CLIENT_ERRORS` and a current schema check's end do. */
+const withClientErrors = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  errors: Record<FieldPath, string>,
+): FormState<TValues> => {
+  const clientErrors = normalizePathKeys(errors);
+  // A valid result keeps the shared empty map, so values derived from it, like `errors`, keep their identity
+  return { ...state, clientErrors: Object.keys(clientErrors).length === 0 ? EMPTY : clientErrors };
+};
+
+/** Sets the checks. Checks a rule left unchanged keep the state itself, so the store skips notifying. */
+const withChecks = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  checks: ChecksState,
+): FormState<TValues> => (checks === state.checks ? state : { ...state, checks });
+
 /**
  * Reducer function for form state management using the Redux-style reducer pattern.
  * Handles all form state transitions in an immutable, predictable way.
@@ -126,11 +152,13 @@ const withEdit = <TValues extends Record<string, unknown>>(
  * - Form reset to initial values
  * - Syncing new initialValues: follow them, keep the edits and track isStale, or start over on a resetKey change
  * - Settling a successful submit
+ * - Tracking checks: the schema check, each field's validator and its checks
  *
  * All state updates are performed immutably, never mutating the existing state. Some actions
  * return the same state object when they change nothing, so the store can skip notifying:
  * SET_FIELD_VALUE with the field's current value, SYNC_INITIAL_VALUES with the version already
- * synced, and a SUBMIT_SUCCEEDED from before a follow or reset. Server errors are automatically cleared when
+ * synced, a SUBMIT_SUCCEEDED from before a follow or reset, and a check action that changes no checks,
+ * such as one for a check that is no longer current. Server errors are automatically cleared when
  * related fields are modified to provide a smooth user experience.
  *
  * @template TValues - The type of form values being managed
@@ -210,11 +238,8 @@ export const formReducer = <TValues extends Record<string, unknown>>(
         },
       };
 
-    case 'SET_CLIENT_ERRORS': {
-      const clientErrors = normalizePathKeys(action.errors);
-      // A valid result keeps the shared empty map, so values derived from it, like `errors`, keep their identity
-      return { ...state, clientErrors: Object.keys(clientErrors).length === 0 ? EMPTY : clientErrors };
-    }
+    case 'SET_CLIENT_ERRORS':
+      return withClientErrors(state, action.errors);
 
     case 'SET_SERVER_ERRORS': {
       const { submitError: _submitError, ...rest } = state;
@@ -248,42 +273,32 @@ export const formReducer = <TValues extends Record<string, unknown>>(
     case 'INCREMENT_SUBMIT_COUNT':
       return { ...state, submitCount: state.submitCount + 1 };
 
-    case 'SET_FORM_VALIDATING':
-      return {
-        ...state,
-        isFormValidating: action.isFormValidating,
-      };
-
     case 'SET_SUBMIT_VALIDATING':
       return { ...state, isSubmitValidating: action.isSubmitValidating };
 
-    case 'SET_FIELD_VALIDATING': {
-      const key = normalizePath(action.field);
-      const newValidatingFields = { ...state.validatingFields };
-      if (action.isValidating) {
-        newValidatingFields[key] = true;
-      } else {
-        delete newValidatingFields[key];
-      }
-      return {
-        ...state,
-        validatingFields: newValidatingFields,
-      };
+    case 'SYNC_FIELD_VALIDATORS':
+      return withChecks(state, syncValidators(state.checks, action.fields));
+
+    case 'START_SCHEMA_CHECK':
+      return withChecks(state, startSchemaCheck(state.checks, action.id));
+
+    case 'END_SCHEMA_CHECK': {
+      // endSchemaCheck changes the checks only when the check is current, so a new state means its errors land
+      const ended = withChecks(state, endSchemaCheck(state.checks, action.id));
+      return ended !== state && action.errors !== undefined ? withClientErrors(ended, action.errors) : ended;
     }
 
-    case 'SET_FIELD_ERROR': {
-      const key = normalizePath(action.field);
-      const newFieldErrors = { ...state.fieldErrors };
-      if (action.error) {
-        newFieldErrors[key] = action.error;
-      } else {
-        delete newFieldErrors[key];
-      }
-      return {
-        ...state,
-        fieldErrors: newFieldErrors,
-      };
-    }
+    case 'START_FIELD_CHECK':
+      return withChecks(
+        state,
+        startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.value),
+      );
+
+    case 'RUN_FIELD_CHECK':
+      return withChecks(state, markFieldCheckRunning(state.checks, normalizePath(action.field), action.id));
+
+    case 'END_FIELD_CHECK':
+      return withChecks(state, endFieldCheck(state.checks, normalizePath(action.field), action.id, action.result));
 
     case 'RESET_FORM': {
       // initialValues built inline is a new object on every render. One equal to the latest version by content is
@@ -291,6 +306,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       const version = deepEqual(initialValues, state.lastVersion) ? state.lastVersion : initialValues;
       return {
         ...createInitialFormState(version, state.resetKey),
+        checks: startOver(state.checks),
         otherVersions: state.otherVersions,
         generation: state.generation,
         baselineEpoch: state.baselineEpoch + 1,
@@ -302,6 +318,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
       if (!Object.is(resetKey, state.resetKey)) {
         return {
           ...createInitialFormState(version, resetKey),
+          checks: startOver(state.checks),
           generation: state.generation + 1,
           baselineEpoch: state.baselineEpoch + 1,
         };

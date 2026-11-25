@@ -4,9 +4,9 @@ import type { FieldPath } from './types';
  * Canonical (dot) form for a field path. Numeric bracket segments are
  * rewritten as dot segments: "users[0].name" → "users.0.name".
  *
- * Path-keyed maps stored in form state (touched, clientErrors, fieldErrors,
- * serverErrors) are keyed by this canonical form, so lookups using either
- * "r1.0" or "r1[0]" resolve to the same entry once normalized.
+ * Path-keyed maps stored in form state (touched, clientErrors, serverErrors,
+ * and the field checks and validators) are keyed by this canonical form, so
+ * lookups using either "r1.0" or "r1[0]" resolve to the same entry once normalized.
  */
 export const normalizePath = (path: FieldPath): FieldPath => path.replace(/\[(\d+)\]/g, '.$1');
 
@@ -22,6 +22,20 @@ export const normalizePathKeys = <T>(map: Record<FieldPath, T>): Record<FieldPat
   }
   return out;
 };
+
+/**
+ * The record's own entry at `key`, for a record keyed by field path. A field may be named after an `Object.prototype`
+ * member, such as `constructor`, so a plain read would find the inherited member where the field has no entry.
+ */
+export const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): T | undefined =>
+  Object.hasOwn(record, key) ? record[key] : undefined;
+
+/**
+ * Whether a validator's answer settles later: a promise, or any other thenable. `instanceof Promise` misses a
+ * library's promise and one from another realm, such as an iframe's. `Promise.resolve` turns one into a native promise.
+ */
+export const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  typeof (value as { then?: unknown } | null | undefined)?.then === 'function';
 
 /**
  * Retrieves a value from a nested object using a path string.

@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 
 import { createInitialFormState, formReducer } from '../../src/formReducer';
 
-import type { FormState, ResetKey } from '../../src/types';
+import type { FormAction, FormState, ResetKey } from '../../src/types';
 
 const v1 = { name: 'John', email: 'john@example.com' };
 const v2 = { name: 'John', email: 'new@example.com' };
@@ -480,10 +480,7 @@ describe('formReducer', () => {
         touched: { name: true, email: true },
         clientErrors: { name: 'Name error' },
         serverErrors: { email: 'Email error' },
-        fieldErrors: { name: 'Field error' },
-        validatingFields: { name: true },
         isSubmitting: true,
-        isFormValidating: true,
         submitCount: 3,
       };
 
@@ -499,10 +496,7 @@ describe('formReducer', () => {
       expect(result.touched).toEqual({});
       expect(result.clientErrors).toEqual({});
       expect(result.serverErrors).toEqual({});
-      expect(result.fieldErrors).toEqual({});
-      expect(result.validatingFields).toEqual({});
       expect(result.isSubmitting).toBe(false);
-      expect(result.isFormValidating).toBe(false);
       expect(result.submitCount).toBe(0);
     });
 
@@ -565,149 +559,6 @@ describe('formReducer', () => {
 
       expect(result.touched.name).toBe(true);
       expect(result.touched.email).toBe(true);
-    });
-  });
-
-  describe('SET_FIELD_VALIDATING', () => {
-    test('sets per-field validating state to true', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: true,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBe(true);
-    });
-
-    test('sets per-field validating state to false and removes key', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        validatingFields: { name: true },
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBeUndefined();
-    });
-
-    test('preserves other validating fields when one completes', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        validatingFields: { name: true, email: true },
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FIELD_VALIDATING',
-          field: 'name',
-          isValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.validatingFields.name).toBeUndefined();
-      expect(result.validatingFields.email).toBe(true);
-    });
-  });
-
-  describe('SET_FORM_VALIDATING', () => {
-    test('sets form-level validating state to true', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FORM_VALIDATING',
-          isFormValidating: true,
-        },
-        initialValues,
-      );
-
-      expect(result.isFormValidating).toBe(true);
-    });
-
-    test('sets form-level validating state to false', () => {
-      const validatingState: FormState<typeof initialValues> = {
-        ...initialState,
-        isFormValidating: true,
-      };
-
-      const result = formReducer(
-        validatingState,
-        {
-          type: 'SET_FORM_VALIDATING',
-          isFormValidating: false,
-        },
-        initialValues,
-      );
-
-      expect(result.isFormValidating).toBe(false);
-    });
-  });
-
-  describe('SET_FIELD_ERROR', () => {
-    test('sets a per-field error', () => {
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: 'Name is taken',
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBe('Name is taken');
-    });
-
-    test('clears a per-field error when undefined', () => {
-      const stateWithFieldError: FormState<typeof initialValues> = {
-        ...initialState,
-        fieldErrors: { name: 'Name is taken' },
-      };
-
-      const result = formReducer(
-        stateWithFieldError,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: undefined,
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBeUndefined();
-    });
-
-    test('preserves other field errors', () => {
-      const stateWithFieldErrors: FormState<typeof initialValues> = {
-        ...initialState,
-        fieldErrors: { name: 'Name is taken', email: 'Email is taken' },
-      };
-
-      const result = formReducer(
-        stateWithFieldErrors,
-        {
-          type: 'SET_FIELD_ERROR',
-          field: 'name',
-          error: undefined,
-        },
-        initialValues,
-      );
-
-      expect(result.fieldErrors.name).toBeUndefined();
-      expect(result.fieldErrors.email).toBe('Email is taken');
     });
   });
 
@@ -888,11 +739,8 @@ describe('SYNC_INITIAL_VALUES', () => {
       touched: { name: true },
       clientErrors: { name: 'Client' },
       serverErrors: { email: 'Server' },
-      fieldErrors: { name: 'Field' },
       submitError: 'Down',
-      validatingFields: { name: true },
       isSubmitting: true,
-      isFormValidating: true,
       submitCount: 3,
       isStale: true,
       generation: 2,
@@ -1168,5 +1016,104 @@ describe('isStale and edits', () => {
     expect(result.values).toEqual(edited);
     expect(result.lastVersion).toBe(v1);
     expect(result.baselineEpoch).toBe(0);
+  });
+});
+
+describe('checks', () => {
+  const start = createInitialFormState(v1, 'a');
+  const on = (...fields: string[]) => ({ type: 'SYNC_FIELD_VALIDATORS', fields: new Set(fields) }) as const;
+  const apply = (state: FormState<typeof v1>, ...actions: Parameters<typeof formReducer<typeof v1>>[1][]) =>
+    actions.reduce((current, action) => formReducer(current, action, v1), state);
+
+  test('SYNC_FIELD_VALIDATORS returns the same state when nothing changes', () => {
+    const once = apply(start, on('name'));
+
+    expect(once).not.toBe(start);
+    expect(apply(once, on('name'))).toBe(once);
+  });
+
+  test('END_SCHEMA_CHECK sets clientErrors only for the current check', () => {
+    const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
+
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: { name: 'Bad' } })).toBe(started);
+
+    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, errors: { name: 'Bad' } });
+    expect(ended.clientErrors).toEqual({ name: 'Bad' });
+    expect(ended.checks.schema).toBeUndefined();
+  });
+
+  test('END_SCHEMA_CHECK normalizes bracket keys', () => {
+    const ended = apply(
+      start,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, errors: { 'r1[0]': 'Bad' } },
+    );
+
+    expect(ended.clientErrors).toEqual({ 'r1.0': 'Bad' });
+  });
+
+  test('END_SCHEMA_CHECK without errors ends the check and keeps clientErrors', () => {
+    const withErrors: FormState<typeof v1> = { ...start, clientErrors: { name: 'Bad' } };
+
+    const ended = apply(withErrors, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'END_SCHEMA_CHECK', id: 1 });
+
+    expect(ended.checks.schema).toBeUndefined();
+    expect(ended.clientErrors).toBe(withErrors.clientErrors);
+  });
+
+  test('field check actions normalize a bracket path', () => {
+    const waiting = apply(start, on('r1.0'), {
+      type: 'START_FIELD_CHECK',
+      field: 'r1[0]',
+      id: 1,
+      status: 'waiting',
+      value: 'x',
+    });
+    expect(waiting.checks.fields['r1.0']?.status).toBe('waiting');
+
+    const running = apply(waiting, { type: 'RUN_FIELD_CHECK', field: 'r1[0]', id: 1 });
+    expect(running.checks.fields['r1.0']?.status).toBe('running');
+
+    const done = apply(running, { type: 'END_FIELD_CHECK', field: 'r1[0]', id: 1, result: { error: 'Bad' } });
+    expect(done.checks.fields['r1.0']).toEqual({ id: 1, status: 'done', value: 'x', error: 'Bad' });
+  });
+
+  test('a follow ends pending checks, keeps their errors and clears the schema check', () => {
+    const running = apply(
+      start,
+      on('name'),
+      { type: 'START_FIELD_CHECK', field: 'name', id: 1, status: 'running', value: 'John' },
+      { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: { error: 'Bad' } },
+      { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
+      { type: 'START_SCHEMA_CHECK', id: 3 },
+    );
+    expect(running.checks.fields.name?.status).toBe('running');
+    expect(running.checks.schema).toBe(3);
+
+    const followed = formReducer(running, sync(v2), v1);
+
+    expect(followed.checks.fields.name).toEqual({ id: 2, status: 'done', value: 'John', error: 'Bad' });
+    expect(followed.checks.schema).toBeUndefined();
+  });
+
+  const busy = apply(
+    start,
+    on('name'),
+    { type: 'START_SCHEMA_CHECK', id: 1 },
+    { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', value: 'John' },
+  );
+
+  test.each<[string, FormAction<typeof v1>]>([
+    ['RESET_FORM', { type: 'RESET_FORM' }],
+    ['a resetKey change', sync(v1, 'b')],
+  ])('%s starts checks over and keeps validators', (_, action) => {
+    expect(busy.checks.schema).toBe(1);
+    expect(Object.keys(busy.checks.fields)).toEqual(['name']);
+
+    const result = formReducer(busy, action, v1);
+
+    expect(result.checks.schema).toBeUndefined();
+    expect(result.checks.fields).toEqual({});
+    expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
   });
 });
