@@ -527,6 +527,18 @@ describe('autoSave', () => {
       await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 250 });
     });
 
+    test('autoSave: null, which untyped code can pass, is off', async () => {
+      const onSubmit = saving();
+      const { result } = renderAutoSaveForm(onSubmit, delay, { autoSave: null as unknown as false });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await sleep(3 * delay);
+
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
     test('switching autoSave on saves the edits already made, after the delay', async () => {
       const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, delay, { autoSave: false });

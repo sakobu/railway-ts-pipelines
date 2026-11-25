@@ -464,9 +464,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const validateOnMount = mode === 'mount';
   const touchOnChange = mode === 'live';
 
-  // Read out as primitives, so an inline `autoSave` object reruns no effect (Auto-save, below)
+  // Read out as primitives, so an inline `autoSave` object reruns no effect (Auto-save, below). A `null` from untyped
+  // code is off.
   const autoSaveOn = Boolean(autoSave);
-  const autoSaveDelay = (typeof autoSave === 'object' ? autoSave.delay : undefined) ?? AUTO_SAVE_DELAY;
+  const autoSaveDelay = (autoSaveOn && typeof autoSave === 'object' ? autoSave.delay : undefined) ?? AUTO_SAVE_DELAY;
 
   // The field validators that are on in this render, by normalized path, and their fields
   const byPath = useMemo(() => validatorsByPath<TValues>(fieldValidators), [fieldValidators]);
