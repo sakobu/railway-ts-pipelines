@@ -12,7 +12,8 @@ export type UnionOptions = {
 
 /**
  * Create a validator that checks if a value matches any of the provided validators.
- * Returns the result of the first successful validator, or all errors if none match.
+ * Returns the result of the first validator that accepts the value. If none does, returns every
+ * validator's errors, or only the first validator's with `collectAllErrors: false`.
  *
  * @example
  * const validate = union([string(), number()]);
@@ -132,7 +133,7 @@ export function union<I, O>(
       allErrors.push(result.error);
     }
 
-    // If all validators failed, combine all errors
+    // Every validator failed
     return buildError(allErrors);
   };
 }

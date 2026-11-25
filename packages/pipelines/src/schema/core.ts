@@ -7,7 +7,7 @@ import { err, isOk, ok, type Result } from '../result';
 export type ValidationError = {
   path: string[];
   message: string;
-  /** The errors that explain this one, like `Error.cause`. Set by `decodeResult`; the rest of the library ignores it. */
+  /** The errors that explain this one, like `Error.cause`. Set by `decodeResult` or your own validators; validators that combine others, such as `union`, keep it unchanged. */
   cause?: ValidationError[] | undefined;
 };
 

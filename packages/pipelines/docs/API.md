@@ -585,7 +585,7 @@ A schema where all validators are synchronous. Preserves sync return types.
 type ValidationError = { path: string[]; message: string; cause?: ValidationError[] | undefined };
 ```
 
-A validation error with path information and a message. `cause` holds the errors that explain this one, like `Error.cause`. [`decodeResult`](#decoderesult) sets it, and the rest of the library ignores it.
+A validation error with path information and a message. `cause` holds the errors that explain this one, like `Error.cause`. [`decodeResult`](#decoderesult) sets it, and so can your own validators. Validators that combine others, such as `union`, keep it unchanged.
 
 #### `ValidationResult<T>`
 
@@ -1192,7 +1192,7 @@ function union<I, O1, O2>(
 ): Validator<I, O1 | O2>;
 ```
 
-Try validators in order. Returns the first success, or all errors if none match. Supports up to 5 typed variants, plus a generic fallback. Async-aware. Its options are a [`UnionOptions`](#unionoptions).
+Try validators in order. Returns the first success. If none match, returns every validator's errors, or only the first validator's with `collectAllErrors: false`. Supports up to 5 typed variants, plus a generic fallback. Async-aware. Its options are a [`UnionOptions`](#unionoptions).
 
 ```typescript
 const validate = union([string(), number()]);
