@@ -378,7 +378,7 @@ const reduce = <TValues extends Record<string, unknown>>(
  * @param state - The current form state before the action is applied
  * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
  * @param initialValues - Initial form values used when resetting the form
- * @returns A new state object, or the same one for the no-op cases above
+ * @returns A new state object, or the same one for the no-op cases above, unless the clean rule drops `wentOut`
  *
  * @example
  * // Used internally by useForm's store, which applies each action as soon as it is dispatched
