@@ -34,7 +34,7 @@ Run these from the repo root. Each one builds what it needs first.
 | `bun run format`        | Format with [oxfmt](https://oxc.rs/docs/guide/usage/formatter) and sort imports                           |
 | `bun run format:check`  | Check formatting                                                                                          |
 | `bun run size`          | Check bundle sizes with [size-limit](https://github.com/ai/size-limit) (build first)                      |
-| `bun run check`         | Everything CI checks: build, typecheck, lint, format, tests at 100% coverage, package checks, size        |
+| `bun run check`         | What CI's `checks` job runs: build, typecheck, lint, format, tests at 100% coverage, package checks, size |
 | `bun run changeset`     | Record a release note and version bump with [Changesets](https://changesets.dev)                          |
 
 use-form imports pipelines through its built output, exactly as npm users do. To run a command inside one package (for example `cd packages/use-form && bun test`), build pipelines first with `bun run build`, or keep `bun run dev` running.
@@ -81,17 +81,20 @@ Longer description if needed
 Fixes #123
 ```
 
-**Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
+**Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `chore`
+
+**Scope:** the package, `pipelines` or `use-form`. Leave it out for a change to the repo as a whole. Add `!` after the scope when the change can break existing code.
+
+**Subject:** what is now true, rather than what you did.
 
 **Examples:**
 
 ```
-feat(result): add mapErr function
-fix(schema): correct type inference for nested optional fields
-feat(form): add fieldValidators option for per-field async validation
-fix(reducer): correct server error auto-clear for nested paths
-docs(recipes): add Standard Schema examples
-test(option): add tests for combine() with mixed Some/None
+feat(use-form): a savedValues option tells the form what a save stored
+feat(pipelines)!: options accept an explicit undefined, and union's options are UnionOptions
+fix(pipelines): object() leaves out an optional key the input doesn't have
+docs(use-form): field validators all run at submit, and an undefined entry is skipped
+docs: CONTRIBUTING states that options accept undefined, and where the checks for it live
 ```
 
 ## Questions

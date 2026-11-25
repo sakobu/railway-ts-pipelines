@@ -9,40 +9,34 @@ disable-model-invocation: true
 
 Take the current branch from "the work is done" to an open pull request. Work through the steps in order. Stop and tell me when a step fails in a way you can't fix, or needs my decision.
 
+Every commit follows CONTRIBUTING.md (Commit Format).
+
 ## 1. Check the branch
 
 - If the current branch is `main`, stop.
-- Commit any uncommitted work, in the style of step 6. The reviews below look only at commits.
+- Commit any uncommitted work. The reviews below look only at commits.
 - Run `git fetch origin`. If `origin/main` has commits this branch doesn't (`git merge-base --is-ancestor origin/main HEAD` fails), ask whether to rebase onto it first.
-- If `git diff origin/main...HEAD` is empty, there is nothing to open a PR for: stop.
-
-Both reviews get `origin/main...HEAD` as their target, which is the whole branch as the PR shows it. Without a target, they compare against the branch's pushed copy, so a branch that was already pushed would show them nothing.
+- If `git diff --quiet origin/main...HEAD` succeeds, the branch changes nothing: stop.
 
 ## 2. Simplify
 
-Run the built-in `simplify` skill with the argument `origin/main...HEAD`. Commit what it changed as `refactor(<scope>): …`, one commit per logical change.
+Run the built-in `simplify` skill with the argument `origin/main...HEAD`, the whole branch as the PR shows it. Without a target it compares against the branch's pushed copy, which shows nothing once the branch is pushed. Commit what it changed as `refactor(<scope>): …`, one commit per logical change.
 
 ## 3. Review
 
-Run the `code-review` skill with the arguments `<level> --fix origin/main...HEAD`, where `<level>` is `$ARGUMENTS`, or `xhigh` if that is empty. Fix every real finding, minor ones included. Note each finding you skip, and why, for the report. Commit the fixes as `fix(<scope>): …`, `test(<scope>): …` or `docs(<scope>): …`.
+Run the `code-review` skill with the arguments `<level> --fix origin/main...HEAD` (the same target, for the same reason), where `<level>` is `$ARGUMENTS`, or `xhigh` if that is empty. Fix every real finding, minor ones included. Note each finding you skip, and why, for the report. Commit the fixes as `fix(<scope>): …`, `test(<scope>): …` or `docs(<scope>): …`.
 
 ## 4. Changesets and docs
 
-Follow CONTRIBUTING.md:
-
-- A change to a published package (anything under `packages/*/` that ships) needs a changeset in `.changeset/` naming each changed package and its bump: patch for fixes, minor for features and, while 0.x, for breaking changes.
-- A pipelines minor also needs a use-form minor, with use-form's `@railway-ts/pipelines` peer range moved to the new minor.
-- A behavior change updates that package's docs: `docs/`, the README and the JSDoc.
-
-Add whatever is missing.
+Follow CONTRIBUTING.md (Changesets, and the Pull Requests list). A behavior change also updates the package's `docs/`, its README and the JSDoc. Add whatever is missing.
 
 ## 5. Run the checks
 
-Run `bun run format`, then `bun run check`, which runs everything CI checks. Fix failures and rerun until it passes.
+Run `bun run format`, then `bun run check`. When a step fails, fix it and rerun just that script (`bun run lint`, `bun run test`, …) until it passes, then run `bun run check` once more.
 
 ## 6. Commit and mark the reviewed commit
 
-Commit anything left, matching `git log`: conventional commits, scope `pipelines` or `use-form` (none for repo-wide changes), `!` when breaking, and a subject that says what is now true. Then record the reviewed commit, which the `gh pr create` hook in `.claude/settings.json` checks:
+Commit anything left. Then record the reviewed commit, which the `gh pr create` hook in `.claude/settings.json` checks:
 
 ```sh
 git rev-parse HEAD > "$(git rev-parse --git-dir)/open-pr-reviewed"
