@@ -371,6 +371,10 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * A field validator only runs when the schema produces no error for that field.
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
+   * Switching one off, by leaving its key out or setting it to undefined, drops its error at once, and a check of it still running never lands.
+   * A submit counts a check whose validator was switched off as never run.
+   * A field's error stays while a check of the same value runs.
+   * Keys are dot paths, and bracket callers find them.
    */
   fieldValidators?:
     | {
@@ -1326,16 +1330,20 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    */
   serverErrors: Readonly<Record<FieldPath, string>>;
 
-  /** Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors. */
+  /**
+   * Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors.
+   * Cleared at once when a check of a changed value starts, when the field's validator is switched off, and on reset.
+   * A check of an unchanged value keeps the error until it answers.
+   */
   fieldErrors: Readonly<Record<FieldPath, string>>;
 
   /** Whether the form is currently being submitted. Useful for showing loading states on submit buttons. */
   isSubmitting: boolean;
 
-  /** Whether any async validation (form-level, a submission's, or field-level) is currently in progress. */
+  /** Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is currently in progress. */
   isValidating: boolean;
 
-  /** Per-field async validation tracking. `true` when that field's async validator is running. */
+  /** Per-field async validation tracking. `true` when that field's async validator is running, including a submit's check of it. */
   validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**

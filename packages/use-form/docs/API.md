@@ -213,6 +213,8 @@ Per-field validator functions for field-level async validation. The `value` para
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
+Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit counts a check whose validator was switched off as never run. A field's error stays while a check of the same value runs. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
+
 ```typescript
 const form = useForm(userSchema, {
   initialValues: { username: '', email: '' },
@@ -412,7 +414,7 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). Use this to disable the submit button during any async check.
+Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A submit's field checks count while they run. Use this to disable the submit button during any async check.
 
 ```typescript
 <button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
@@ -424,7 +426,7 @@ Derived property. True when **any** async validation is in progress -- form-leve
 
 Type: `Readonly<Record<FieldPath, boolean>>`
 
-Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running. Use this to show inline loading indicators next to individual fields.
+Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running, including a submit's field checks. Use this to show inline loading indicators next to individual fields.
 
 ```typescript
 {form.validatingFields.username && <span>Checking username...</span>}
@@ -468,7 +470,7 @@ const errors = {
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
-- `fieldErrors` -- cleared per-field when the field validator re-runs or the field's schema error reappears
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
@@ -657,7 +659,7 @@ Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], m
 2. Marks all fields as touched
 3. Clears existing server errors
 4. Runs schema validation (awaits if async). Its errors show, or a pass clears those of an earlier attempt, unless a check of newer values started meanwhile, as typing starts one
-5. If schema passes and `fieldValidators` are configured, runs all field validators in parallel. Each result shows unless a check of that field started meanwhile
+5. If schema passes, runs the field validators that are on when it gets there, in parallel. Their checks show in `validatingFields` and `isValidating`. Each result shows unless a check of that field started after the submit did. A check whose validator is switched off before it ends counts as never run.
 6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 
