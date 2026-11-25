@@ -330,12 +330,9 @@ A new `delay` applies from the next change. A delay already running keeps its le
 
 `AutoSaveOptions` has one property:
 
-#### autoSave.delay
-
-Type: `number`
-Optional, Default: `200`
-
-Milliseconds to wait after the values last change.
+| Key     | Type     | Meaning                                           | Default |
+| ------- | -------- | ------------------------------------------------- | ------- |
+| `delay` | `number` | Milliseconds to wait after the values last change | `200`   |
 
 ```typescript
 // The query last searched, passed back so clearing the box searches again
