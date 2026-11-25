@@ -173,6 +173,33 @@ export interface FormState<TValues extends Record<string, unknown>> {
   baselineEpoch: number;
 }
 
+/** A check's id. The store hands them out in increasing order for its lifetime. */
+export type CheckId = number;
+
+/** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
+export type FieldCheck = {
+  id: CheckId;
+  /** waiting: on the schema check of its values. running: its validator runs. done: it ended. */
+  status: 'waiting' | 'running' | 'done';
+  /** The field's value the check checks */
+  value: unknown;
+  /** The error shown: once done, the validator's; while pending, the last one, while the value is unchanged */
+  error?: string;
+};
+
+/** How a field check ended: with the validator's answer, or with none (it threw or rejected). */
+export type FieldCheckResult = { error: string | undefined } | 'none';
+
+/** Every check the form runs, and which field validators are on. */
+export type ChecksState = {
+  /** The running schema check whose result lands when it ends */
+  schema: CheckId | undefined;
+  /** Each field's latest check, by normalized path */
+  fields: Readonly<Record<FieldPath, FieldCheck>>;
+  /** Each field that has had a validator: whether it's on, and its period, which goes up at each switch-off */
+  validators: Readonly<Record<FieldPath, { on: boolean; period: number }>>;
+};
+
 /**
  * The submit handler: it returns nothing on every path, or a `Result` on every path.
  * Returning nothing is allowed only when `TResult` is the form values, since `handleSubmit`
