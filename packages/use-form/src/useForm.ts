@@ -12,6 +12,7 @@ import {
   useEffect,
   useInsertionEffect,
   useLayoutEffect,
+  useReducer,
   useRef,
   useState,
   useSyncExternalStore,
@@ -19,6 +20,7 @@ import {
 } from 'react';
 
 import { createArrayHelpers } from './arrayHelpersFactory';
+import { createAutoSave } from './autoSave';
 import {
   createNativeCheckboxProps,
   createNativeSelectFieldProps,
@@ -32,13 +34,12 @@ import {
 import {
   fieldErrorsOf,
   fieldsToRecheck,
-  hasPendingFieldCheck,
   isWaitingFieldCheck,
   validatingFieldsOf,
   validatorPeriod,
   waitingFieldChecksOf,
 } from './formChecks';
-import { createInitialFormState, formReducer } from './formReducer';
+import { createInitialFormState, formReducer, isValidState, isValidatingState } from './formReducer';
 import { createFormStore, type FormStore } from './formStore';
 import { createStabilityCheck } from './stabilityCheck';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
@@ -81,6 +82,9 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 /** The default submit error for a save cancelled before `onSubmit`, because it would overwrite a newer version. */
 const CHANGED_WHILE_SAVING_MESSAGE =
   'The record changed while saving, so nothing was saved. Review the latest version and save again.';
+
+/** How long auto-save waits after the values last change, when `autoSave` sets no `delay`. */
+const AUTO_SAVE_DELAY = 200;
 
 /** Logged once per form when initialValues keeps changing along with the form's own state. */
 const UNSTABLE_INITIAL_VALUES_MESSAGE =
@@ -438,6 +442,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     onValuesChange,
     onFieldChange,
     messages,
+    autoSave,
   } = options;
 
   // The submit errors useForm writes itself. Read out as strings, so an inline `messages` object keeps the methods
@@ -458,6 +463,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const validateOnBlur = mode === 'live' || mode === 'blur';
   const validateOnMount = mode === 'mount';
   const touchOnChange = mode === 'live';
+
+  // Read out as primitives, so an inline `autoSave` object reruns no effect (Auto-save, below)
+  const autoSaveOn = Boolean(autoSave);
+  const autoSaveDelay = (typeof autoSave === 'object' ? autoSave.delay : undefined) ?? AUTO_SAVE_DELAY;
 
   // The field validators that are on in this render, by normalized path, and their fields
   const byPath = useMemo(() => validatorsByPath<TValues>(fieldValidators), [fieldValidators]);
@@ -550,9 +559,24 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     onFieldChangeRef.current = onFieldChange;
   });
 
+  // Auto-save's view of the submissions (Auto-save, below), set up before the first submit scheduler. Every
+  // scheduler, the one a resetKey reset makes included, reports each settle here, so auto-save decides again once no
+  // submission runs.
+
+  // Auto-save's version, and whether it is on and mounted, which effect A switches
+  const [autoSaver] = useState(createAutoSave<TValues>);
+  // The settles auto-save decides again after. Effect B depends on it.
+  const [settleCount, countSettle] = useReducer((count: number) => count + 1, 0);
+  // Counts a settle only while auto-save is on, so a form without it renders nothing extra
+  const noteSettle = useCallback(() => {
+    if (autoSaver.isOn()) countSettle();
+  }, [autoSaver]);
+
   // Decides what an overlapping handleSubmit does: share the running submission, or follow it.
   // A resetKey reset replaces it, so the new record's submits don't join or wait behind the old record's.
-  const [firstSubmitScheduler] = useState(createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>);
+  const [firstSubmitScheduler] = useState(() =>
+    createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>(noteSettle),
+  );
   const submitSchedulerRef = useRef(firstSubmitScheduler);
 
   // ===========================================================================
@@ -601,28 +625,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   // Valid when no client, field-validator, or per-path server errors exist. The submit error never counts.
-  const isValid = useMemo(
-    () =>
-      Object.keys(formState.clientErrors).length === 0 &&
-      Object.keys(fieldErrors).length === 0 &&
-      Object.keys(formState.serverErrors).length === 0,
-    [formState.clientErrors, fieldErrors, formState.serverErrors],
-  );
+  const isValid = isValidState(formState);
 
   // Derived, not stored, so it also follows new initialValues, such as a saved record passed back in
   const isDirty = useMemo(() => !deepEqual(formState.values, initialValues), [formState.values, initialValues]);
 
-  // Derived: true while a schema check runs, a submission validates, or a field check is pending. A field check counts
-  // while it waits too: the schema check it waits on may be one a newer check replaced, which no longer counts. It
-  // waits no longer than its own schema check or a newer one of the form's values as they were when it started, whose
-  // landing moves it on.
-  const isValidating = useMemo(
-    () =>
-      formState.checks.schema !== undefined ||
-      formState.isSubmitValidating ||
-      hasPendingFieldCheck(formState.checks.fields),
-    [formState.checks.schema, formState.isSubmitValidating, formState.checks.fields],
-  );
+  // Derived: true while a schema check runs, a submission validates, or a field check is pending
+  const isValidating = isValidatingState(formState);
 
   // ===========================================================================
   // Validation Functions
@@ -976,7 +985,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // Started over. The old record's running submission and waiting follow-up still run as the old record's,
       // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
       submitSchedulerRef.current.retire(prev.values);
-      submitSchedulerRef.current = createSubmitScheduler();
+      submitSchedulerRef.current = createSubmitScheduler(noteSettle);
     }
   });
 
@@ -1409,6 +1418,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             return err([{ path: [], message: changedWhileSavingMessage }]);
           }
 
+          // The save goes out: onSubmit is called, or with none set, the submission ends here. Whatever it answers,
+          // auto-save doesn't send these values again.
+          send({ type: 'SUBMISSION_WENT_OUT', values });
+
           if (!onSubmit) {
             // Nothing was saved, so the values stay edits: a newer version arriving later doesn't replace them.
             // Cast: without an onSubmit TResult defaults to TValues, so the validated values are the success value.
@@ -1453,6 +1466,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           });
         }
       } catch (error) {
+        // A throw went out too, with no verdict on the values, so auto-save doesn't resubmit them in a loop. When
+        // onSubmit threw, this reports the values a second time, which changes nothing.
+        send({ type: 'SUBMISSION_WENT_OUT', values });
         console.error('Form submission error:', error);
 
         // Sets only the submit error: field errors placed during the submission stay
@@ -1585,6 +1601,91 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     // As on mount: validate, and mark every field touched so the errors show
     if (validateOnMount) validateAsOnMount(store.getState().values);
   }, [store, dispatch, validateAsOnMount, validateOnMount]);
+
+  // ===========================================================================
+  // Auto-save
+  // ===========================================================================
+
+  // Auto-save decides only in effect B and in its timer's callback, never inside a dispatch or a method's cascade, and
+  // reads the store, never a render's state. A submission's settle doesn't decide: it counts (noteSettle, above), and
+  // the commit that follows decides. The auto-saver sits above too, since noteSettle reads whether it is on.
+
+  // The timer of the tracked version's delay
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The latest commit's delay, which a version takes when it starts: a timer already running keeps its length
+  const autoSaveDelayRef = useRef(autoSaveDelay);
+  // The latest commit's runAutoSave, so a timer an earlier render set saves through the latest onSubmit. Set before
+  // any effect runs (below).
+  const runAutoSaveRef = useRef<() => void>(() => {});
+
+  /**
+   * Decides auto-save's next step for the values the store holds now, and takes it. Values that changed start a new
+   * version and its delay. Values the form hasn't checked get one schema check per version, and a throw or rejection
+   * from the schema validator is logged. Otherwise, once nothing holds them, they're submitted through `handleSubmit`.
+   * Does nothing while auto-save is off or unmounted.
+   */
+  const runAutoSave = useCallback((): void => {
+    if (!autoSaver.isOn()) return;
+    const state = store.getState();
+
+    if (autoSaver.track(state.values)) {
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        autoSaver.delayEnded();
+        runAutoSaveRef.current();
+      }, autoSaveDelayRef.current);
+    }
+
+    const step = autoSaver.decide({
+      values: state.values,
+      isDirty: !deepEqual(state.values, store.getInitialValues()),
+      checkedValues: state.checkedValues,
+      isChecking: state.checks.schema !== undefined,
+      isValidating: isValidatingState(state),
+      isValid: isValidState(state),
+      isStale: state.isStale,
+      isSubmitting: submitSchedulerRef.current.isBusy(),
+      wentOut: state.wentOut,
+    });
+
+    if (step === 'check') {
+      // startValidation logs a rejection itself
+      try {
+        void startValidation(state.values);
+      } catch (error) {
+        logValidationError(error);
+      }
+    } else if (step === 'submit') {
+      // handleSubmit never rejects. The scheduler's onIdle may count before saveSettled runs, so this count comes
+      // after it, whatever order React renders in.
+      void handleSubmit().then(() => {
+        autoSaver.saveSettled();
+        noteSettle();
+      });
+    }
+  }, [store, autoSaver, startValidation, handleSubmit, noteSettle]);
+
+  // Before any effect of the commit runs, a child's included. No ref is written during render.
+  useInsertionEffect(() => {
+    runAutoSaveRef.current = runAutoSave;
+    autoSaveDelayRef.current = autoSaveDelay;
+  });
+
+  // Effect A. Switching auto-save off drops a version waiting out its delay, switching it on starts a fresh delay, and
+  // unmounting stops the timer. A save already running finishes.
+  useEffect(() => {
+    if (autoSaveOn) autoSaver.start();
+    return () => {
+      clearTimeout(timerRef.current);
+      autoSaver.stop();
+    };
+  }, [autoSaveOn, autoSaver]);
+
+  // Effect B. Decides after each commit that may have changed what auto-save reads: the form's state, the initial
+  // values, the switch, or a settle. After effect A, so A's setup has run when both run in one commit.
+  useEffect(() => {
+    runAutoSaveRef.current();
+  }, [storedState, initialValues, autoSaveOn, settleCount]);
 
   // ===========================================================================
   // Error Helper

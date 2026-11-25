@@ -365,6 +365,39 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   savedValues?: ((result: TResult) => NoInfer<TValues>) | undefined;
 
   /**
+   * Saves the form on its own as the user edits, through `handleSubmit`, as a Save click does. Off by default.
+   * `true` waits 200 ms after the values last change, as `{}` does, and `{ delay }` sets the wait.
+   *
+   * 1. It saves the current values as soon as the last of these holds: they have unsaved edits, they haven't gone out
+   *    already, `delay` ms have passed since they last changed, the form has checked them and shows them valid, the
+   *    form isn't stale, and no submission is running, so switching off a field validator, or `clearServerErrors()`,
+   *    is enough to send values their errors held.
+   * 2. Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change or the form
+   *    goes clean, whatever the server answered, so to retry, call `clearServerErrors()` then `handleSubmit()`.
+   * 3. It pauses while `isStale`, and sends the edits made meanwhile once that clears.
+   * 4. A Save click that is running holds it, and once that Save settles it decides again, skipping the values the
+   *    Save just sent.
+   * 5. In `blur`, `submit` and `mount` modes it checks the schema once the delay ends, and field validators run in the
+   *    save itself.
+   * 6. It saves only values that differ from `initialValues` (`isDirty`), so pass what was saved back in as
+   *    `initialValues`: with `initialValues` that never change, an edit back to them after an earlier save counts as
+   *    clean and isn't saved, though the server still holds the earlier save.
+   * 7. After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then
+   *    goes out as soon as it settles, while an edit not sent yet when the record switches or the form unmounts is
+   *    dropped, like the form's other unsaved edits, though a Save the user clicked still goes out.
+   * 8. A new `delay` applies from the next change, and a delay already running keeps its length.
+   *
+   * @example
+   * // Saves half a second after the user stops typing. The saved record comes back as initialValues.
+   * const form = useForm(settingsSchema, {
+   *   initialValues: savedSettings,
+   *   onSubmit: saveSettings,
+   *   autoSave: { delay: 500 },
+   * });
+   */
+  autoSave?: boolean | AutoSaveOptions | undefined;
+
+  /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
    *
    * - **"live"** (default): Validate on both change and blur events. Mark fields as touched on first change.
@@ -470,6 +503,12 @@ export interface FormMessages {
    * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
    */
   changedWhileSaving?: string | undefined;
+}
+
+/** How auto-save waits. */
+export interface AutoSaveOptions {
+  /** How long after the values last change auto-save waits, in milliseconds. Default: 200. A new value applies from the next change. */
+  delay?: number | undefined;
 }
 
 // =============================================================================

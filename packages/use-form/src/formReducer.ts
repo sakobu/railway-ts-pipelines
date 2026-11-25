@@ -3,6 +3,8 @@ import {
   endFieldCheck,
   endPendingChecks,
   endSchemaCheck,
+  fieldErrorsOf,
+  hasPendingFieldCheck,
   markFieldCheckRunning,
   startFieldCheck,
   startOver,
@@ -51,6 +53,29 @@ export const createInitialFormState = <TValues extends Record<string, unknown>>(
   generation: 0,
   baselineEpoch: 0,
 });
+
+/**
+ * Whether the form is valid: no client, field-validator or per-path server errors. The submit error never counts.
+ *
+ * @param state - The form state
+ * @returns The form's `isValid`
+ */
+export const isValidState = <TValues extends Record<string, unknown>>(state: FormState<TValues>): boolean =>
+  Object.keys(state.clientErrors).length === 0 &&
+  Object.keys(fieldErrorsOf(state.checks.fields)).length === 0 &&
+  Object.keys(state.serverErrors).length === 0;
+
+/**
+ * Whether the form is validating: a schema check runs, a submission validates, or a field check is pending. A field
+ * check counts while it waits too: the schema check it waits on may be one a newer check replaced, which no longer
+ * counts. It waits no longer than its own schema check or a newer one of the form's values as they were when it
+ * started, whose landing moves it on.
+ *
+ * @param state - The form state
+ * @returns The form's `isValidating`
+ */
+export const isValidatingState = <TValues extends Record<string, unknown>>(state: FormState<TValues>): boolean =>
+  state.checks.schema !== undefined || state.isSubmitValidating || hasPendingFieldCheck(state.checks.fields);
 
 /**
  * Whether values equal to the latest version may count as clean. Not while a submission runs: the latest version

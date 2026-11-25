@@ -8,6 +8,23 @@ import type { MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines
 export const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
+ * Runs `run` as the app runs, outside `act`. `act` defers every commit to the end of its scope, which hides any order
+ * between a promise's settle and the next commit.
+ *
+ * @param run - The steps to run, `waitFor`s included
+ */
+export const withoutAct = async (run: () => Promise<void>): Promise<void> => {
+  const scope = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined };
+  const previous = scope.IS_REACT_ACT_ENVIRONMENT;
+  scope.IS_REACT_ACT_ENVIRONMENT = false;
+  try {
+    await run();
+  } finally {
+    scope.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+};
+
+/**
  * A schema validator whose checks stay pending until the test settles them, in call order.
  *
  * @template TValues - The values a check resolves to

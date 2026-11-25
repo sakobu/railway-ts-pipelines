@@ -3,4 +3,11 @@ export * from './useFormAutoSubmission';
 export * from './useDebounce';
 export { fromStandardSchema, isStandardSchema } from './standardSchema';
 export type { FormValidator } from './standardSchema';
-export type { UseFormReturn, ExtractFieldPaths, GetArrayItemType, FormMessages, ResetKey } from './types';
+export type {
+  UseFormReturn,
+  ExtractFieldPaths,
+  GetArrayItemType,
+  FormMessages,
+  AutoSaveOptions,
+  ResetKey,
+} from './types';

@@ -2,7 +2,8 @@ import { deepEqual } from './utils';
 
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
 // out already, the form has checked it and shows it valid, the form isn't stale, and no submission is running.
-// Values the form hasn't checked get one schema check per version first. This module only decides; the caller acts.
+// Values the form hasn't checked get one schema check per version first. This module only decides, and holds whether
+// auto-save is on; the caller acts.
 
 /**
  * What auto-save reads from the form when it decides.
@@ -34,13 +35,25 @@ export type AutoSaveView<TValues> = {
 export type AutoSaveStep = 'wait' | 'check' | 'submit';
 
 /**
- * Tracks the current version of the values and decides its next step.
+ * Holds whether auto-save is on, tracks the current version of the values, and decides its next step.
  *
  * @template TValues - The shape of the form values
  */
 export type AutoSave<TValues> = {
+  /** Switches auto-save on. */
+  start: () => void;
+
   /**
-   * Starts a new version when the values differ by content from the tracked version, or after `restart`.
+   * Switches auto-save off, and forgets the tracked version, so the next `track` starts a new one. Its own running
+   * save still holds the next version until `saveSettled`.
+   */
+  stop: () => void;
+
+  /** Whether auto-save is on: started, and not stopped since. */
+  isOn: () => boolean;
+
+  /**
+   * Starts a new version when the values differ by content from the tracked version, or after `stop`.
    *
    * @param values - The current values
    * @returns Whether it started a version: the caller then starts the delay
@@ -49,9 +62,6 @@ export type AutoSave<TValues> = {
 
   /** The tracked version's delay has passed. */
   delayEnded: () => void;
-
-  /** Forgets the tracked version, so the next `track` starts a new one. */
-  restart: () => void;
 
   /**
    * Decides for the tracked version. It returns `'check'` at most once per version and records it. It returns
@@ -67,11 +77,11 @@ export type AutoSave<TValues> = {
 };
 
 /**
- * Creates an {@link AutoSave} that tracks no version yet. A `restart` doesn't clear its own running save: a save
- * started before it still holds the next version until `saveSettled`.
+ * Creates an {@link AutoSave} that is off and tracks no version yet. A `stop` doesn't clear its own running save: a
+ * save started before it still holds the next version until `saveSettled`.
  *
  * @template TValues - The shape of the form values
- * @returns An auto-save with nothing tracked
+ * @returns An auto-save, off, with nothing tracked
  */
 export const createAutoSave = <TValues>(): AutoSave<TValues> => {
   // Boxed because TValues is unconstrained: `undefined` alone can't mean "nothing tracked".
@@ -79,6 +89,20 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
   let delayPassed = false;
   let checkStarted = false;
   let ownSaveRunning = false;
+  let on = false;
+
+  const start = (): void => {
+    on = true;
+  };
+
+  const stop = (): void => {
+    on = false;
+    tracked = undefined;
+    delayPassed = false;
+    checkStarted = false;
+  };
+
+  const isOn = (): boolean => on;
 
   const track = (values: TValues): boolean => {
     if (tracked && deepEqual(tracked.values, values)) return false;
@@ -90,12 +114,6 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
 
   const delayEnded = (): void => {
     delayPassed = true;
-  };
-
-  const restart = (): void => {
-    tracked = undefined;
-    delayPassed = false;
-    checkStarted = false;
   };
 
   const decide = (view: AutoSaveView<TValues>): AutoSaveStep => {
@@ -115,5 +133,5 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     ownSaveRunning = false;
   };
 
-  return { track, delayEnded, restart, decide, saveSettled };
+  return { start, stop, isOn, track, delayEnded, decide, saveSettled };
 };

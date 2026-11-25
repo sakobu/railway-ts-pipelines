@@ -97,9 +97,19 @@ describe('createAutoSave', () => {
     expect(auto.decide(view({ values: B, checkedValues: A }))).toBe('check');
   });
 
-  test('restart starts a new version with its own delay', () => {
+  test('isOn is off at creation, on after start, and off after stop', () => {
+    const auto = createAutoSave<V>();
+    expect(auto.isOn()).toBe(false);
+    auto.start();
+    expect(auto.isOn()).toBe(true);
+    auto.stop();
+    expect(auto.isOn()).toBe(false);
+  });
+
+  test('stop, then start, starts a new version with its own delay', () => {
     const auto = due();
-    auto.restart();
+    auto.stop();
+    auto.start();
     expect(auto.decide(view())).toBe('wait');
     expect(auto.track(A)).toBe(true);
     expect(auto.decide(view())).toBe('wait');
@@ -107,11 +117,12 @@ describe('createAutoSave', () => {
     expect(auto.decide(view())).toBe('submit');
   });
 
-  test('restart keeps its own running save', () => {
+  test('stop keeps its own running save', () => {
     const auto = due();
     expect(auto.decide(view())).toBe('submit');
 
-    auto.restart();
+    auto.stop();
+    auto.start();
     auto.track(A);
     auto.delayEnded();
     expect(auto.decide(view())).toBe('wait');
