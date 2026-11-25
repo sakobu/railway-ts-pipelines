@@ -676,23 +676,22 @@ describe('a validator that answers an empty message', () => {
   });
 });
 
-test.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s gets its field validator', (name) => {
-  const { result } = renderHook(() =>
-    useForm(alwaysValidValidator, {
-      initialValues: { [name]: 'a' },
-      validationMode: 'live',
-      fieldValidators: { [name]: () => 'Bad' },
-    }),
-  );
+describe.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s', (name) => {
+  test('gets its field validator', () => {
+    const { result } = renderHook(() =>
+      useForm(alwaysValidValidator, {
+        initialValues: { [name]: 'a' },
+        validationMode: 'live',
+        fieldValidators: { [name]: () => 'Bad' },
+      }),
+    );
 
-  act(() => result.current.setFieldValue(name, 'x'));
+    act(() => result.current.setFieldValue(name, 'x'));
 
-  expect(result.current.fieldErrors).toEqual({ [name]: 'Bad' });
-});
+    expect(result.current.fieldErrors).toEqual({ [name]: 'Bad' });
+  });
 
-test.each(['constructor', 'toString', 'hasOwnProperty'])(
-  'a field named %s gets its field validator while the schema has an error on another field',
-  (name) => {
+  test('gets its field validator while the schema has an error on another field', () => {
     const otherFails: S.Validator<unknown, Record<string, unknown>> = () =>
       err([{ path: ['other'], message: 'Other is wrong' }]);
     const { result } = renderHook(() =>
@@ -706,8 +705,8 @@ test.each(['constructor', 'toString', 'hasOwnProperty'])(
     act(() => result.current.setFieldValue(name, 'x'));
 
     expect(result.current.errors).toEqual({ [name]: 'Bad', other: 'Other is wrong' });
-  },
-);
+  });
+});
 
 test('a fieldValidators with its own __proto__ key mounts and rerenders', () => {
   // Built from entries, an own key, as JSON.parse makes too. Not a field name the form supports, but it mustn't loop.
