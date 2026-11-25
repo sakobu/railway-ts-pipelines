@@ -24,7 +24,7 @@
     },
     "packages/pipelines": {
       "name": "@railway-ts/pipelines",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "peerDependencies": {
         "typescript": ">=6.0",
       },
