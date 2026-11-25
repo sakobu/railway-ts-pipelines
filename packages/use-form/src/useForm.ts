@@ -1360,6 +1360,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         if (isErr(validationResult)) {
+          // A rejection that left the form valid went out, with no verdict on the values, so auto-save doesn't
+          // resubmit them in a loop. One whose errors landed holds them until the form turns valid.
+          if (isValidState(store.getState())) send({ type: 'SUBMISSION_WENT_OUT', values });
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
           return validationResult;
         }
