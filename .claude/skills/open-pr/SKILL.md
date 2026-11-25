@@ -58,7 +58,6 @@ Otherwise open it with `gh pr create --base main`:
 - **Body:** shaped like #43 and #46 (`gh pr view 46` to compare):
   - `## Summary`, opening with `Fixes #N` when an issue covers this change. Look for one in the commits, the branch name and `gh issue list`.
   - Paragraphs led in bold: **The problem.**, **The fix.** (or **The rule.**), **Tests.**, **Docs.** and **Release.** (each package's bump, from → to). Leave out the ones that don't apply.
-  - With a changeset, end the summary with: After this merges, the release workflow opens a "Version Packages" PR. GitHub runs no CI on that PR, so check it out and run `bun install --frozen-lockfile && bun run check` before merging it.
   - `## Related, not fixed here` for known problems next to this change, with their issue numbers.
 
 ## 8. Report

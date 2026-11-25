@@ -57,7 +57,7 @@ Every pull request that changes a published package needs a changeset. Run `bun 
 
 Commit the generated file in `.changeset/` with your change. Changes that publish nothing (docs outside the packages, CI, repo tooling) don't need one.
 
-After a merge to `main`, the release workflow collects pending changesets into a "Version Packages" pull request. Merging that pull request publishes the new versions to npm, tags them `@railway-ts/<name>@<version>` and creates the GitHub Releases.
+After a merge to `main`, the release workflow collects pending changesets into a "Version Packages" pull request and starts CI on it (GitHub runs none on its own for a pull request the workflow opens). Merging that pull request publishes the new versions to npm, tags them `@railway-ts/<name>@<version>` and creates the GitHub Releases.
 
 ## Pull Requests
 
