@@ -1164,9 +1164,10 @@ describe('checks', () => {
     field: string,
     inputs: Record<string, unknown>,
     error = 'Taken',
+    id = 1,
   ): readonly [FormAction<typeof v1>, FormAction<typeof v1>] => [
-    { type: 'START_FIELD_CHECK', field, id: 1, status: 'running', inputs },
-    { type: 'END_FIELD_CHECK', field, id: 1, result: { error } },
+    { type: 'START_FIELD_CHECK', field, id, status: 'running', inputs },
+    { type: 'END_FIELD_CHECK', field, id, result: { error } },
   ];
 
   test("an edit of a check's own input drops its error", () => {
@@ -1199,11 +1200,7 @@ describe('checks', () => {
   test('a follow drops the errors of the inputs the new version changed', () => {
     const checked = apply(start, on('name', 'email'), ...check('email', { email: 'john@example.com' }));
     expect(checked.checks.fields.email?.error).toBe('Taken');
-    const named = apply(
-      checked,
-      { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', inputs: { name: 'John' } },
-      { type: 'END_FIELD_CHECK', field: 'name', id: 2, result: { error: 'Bad' } },
-    );
+    const named = apply(checked, ...check('name', { name: 'John' }, 'Bad', 2));
 
     const followed = formReducer(named, sync(v2), v1);
 

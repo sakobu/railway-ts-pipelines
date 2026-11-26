@@ -1269,6 +1269,21 @@ describe('one call, one check pass (#57)', () => {
   /** The publish schema, as a mock that counts its calls. */
   const countingSchema = () => mock(publishValidator);
 
+  /** The publish schema, and a switch that makes it throw from then on. */
+  const failingSchema = () => {
+    let failing = false;
+    const schema: S.Validator<unknown, PublishForm> = (input, path) => {
+      if (failing) throw new Error('boom');
+      return publishValidator(input, path);
+    };
+    return {
+      schema,
+      fail: () => {
+        failing = true;
+      },
+    };
+  };
+
   test('#57: an onFieldChange cascade runs a waiting field check once', async () => {
     // Sync when status is 'bad', async otherwise, as in the issue
     const halfAsync: S.MaybeAsyncValidator<unknown, PublishForm> = (input, path) =>
@@ -1473,32 +1488,24 @@ describe('one call, one check pass (#57)', () => {
   });
 
   test('resetForm in mount mode throws a sync schema throw to its caller', () => {
-    let failing = false;
-    const flagged: S.Validator<unknown, PublishForm> = (input, path) => {
-      if (failing) throw new Error('boom');
-      return publishValidator(input, path);
-    };
-    const { result } = renderHook(() => useForm(flagged, { initialValues: draft, validationMode: 'mount' }));
+    const { schema, fail } = failingSchema();
+    const { result } = renderHook(() => useForm(schema, { initialValues: draft, validationMode: 'mount' }));
 
-    failing = true;
+    fail();
     expect(() => act(() => result.current.resetForm())).toThrow('boom');
   });
 
   test('an edit that makes the form follow throws a sync schema throw to its caller', () => {
-    let failing = false;
-    const flagged: S.Validator<unknown, PublishForm> = (input, path) => {
-      if (failing) throw new Error('boom');
-      return publishValidator(input, path);
-    };
+    const { schema, fail } = failingSchema();
     const { result, rerender } = renderHook(
-      ({ initial }: { initial: PublishForm }) => useForm(flagged, { initialValues: initial, validationMode: 'live' }),
+      ({ initial }: { initial: PublishForm }) => useForm(schema, { initialValues: initial, validationMode: 'live' }),
       { initialProps: { initial: draft } },
     );
     act(() => result.current.setFieldValue('title', 'Edited'));
     rerender({ initial: { ...draft, status: 'published' } });
     expect(result.current.isStale).toBe(true);
 
-    failing = true;
+    fail();
     // Setting the title back leaves no edits, so the form follows the newer version
     expect(() => act(() => result.current.setFieldValue('title', draft.title))).toThrow('boom');
   });

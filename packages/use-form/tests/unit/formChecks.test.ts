@@ -191,27 +191,24 @@ test('a __proto__ key syncs on as its own entry, so syncing the same set again r
   expect(syncValidators(synced, on('__proto__'))).toBe(synced);
 });
 test('a __proto__ field keeps its own entry in every record its checks write', () => {
+  const protoInputs = Object.fromEntries([['__proto__', 'x']]);
   const synced = syncValidators(NO_CHECKS, on('__proto__'));
-  const waiting = startFieldCheck(synced, '__proto__', 1, 'waiting', Object.fromEntries([['__proto__', 'x']]));
+  const waiting = startFieldCheck(synced, '__proto__', 1, 'waiting', protoInputs);
   expect(Object.entries(waitingFieldChecksOf(waiting.fields, 2))).toEqual([
-    ['__proto__', { id: 1, status: 'waiting', inputs: Object.fromEntries([['__proto__', 'x']]) }],
+    ['__proto__', { id: 1, status: 'waiting', inputs: protoInputs }],
   ]);
   const running = markFieldCheckRunning(waiting, '__proto__', 1);
   expect(Object.entries(validatingFieldsOf(running.fields))).toEqual([['__proto__', true]]);
   expect(Object.entries(endPendingChecks(running).fields)).toEqual([
-    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
+    ['__proto__', { id: 1, status: 'done', inputs: protoInputs }],
   ]);
   const shown = endFieldCheck(running, '__proto__', 1, { error: 'Bad' });
   expect(Object.entries(fieldErrorsOf(shown.fields))).toEqual([['__proto__', 'Bad']]);
   const off = syncValidators(shown, on());
   expect(Object.entries(off.validators)).toEqual([['__proto__', { on: false, period: 1 }]]);
-  expect(Object.entries(off.fields)).toEqual([
-    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
-  ]);
+  expect(Object.entries(off.fields)).toEqual([['__proto__', { id: 1, status: 'done', inputs: protoInputs }]]);
   const outdated = endOutdatedChecks(shown, Object.fromEntries([['__proto__', 'y']]));
-  expect(Object.entries(outdated.fields)).toEqual([
-    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
-  ]);
+  expect(Object.entries(outdated.fields)).toEqual([['__proto__', { id: 1, status: 'done', inputs: protoInputs }]]);
 });
 test('inputsHeld compares each input path by value', () => {
   expect(inputsHeld({ name: 'x' }, { name: 'x', email: 'a' })).toBe(true);

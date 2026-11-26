@@ -151,7 +151,7 @@ export function useUntupled() {
   });
 }
 
-// Review Focus 2: options typed FormOptions<V> and spread into useForm, as autoSave.test.tsx does
+// Options typed FormOptions<V> and spread into useForm, as autoSave.test.tsx does
 const options: Partial<FormOptions<V>> = {
   fieldValidators: {
     slug: withDeps(['workspaceId'], (_v, { workspaceId }) => {
