@@ -11,4 +11,5 @@ Auto-save is now a `useForm` option, and it saves a dirty form as soon as nothin
 - In `live` mode auto-save reuses the form's own checks, so an edit runs the schema once less. In the other modes it checks the schema once the delay ends instead of on every edit.
 - Edits made while `isStale` go out as soon as it clears, without another delay.
 - A Save click that is running holds auto-save instead of queueing it. Once the Save settles, auto-save sends any newer edits.
+- After a `resetKey` switch, the new record's auto-save waits for every submission the previous record still runs, Save clicks included, not only its auto-save.
 - `autoSave` can be switched at runtime. Switching it off drops an edit waiting out its delay.
