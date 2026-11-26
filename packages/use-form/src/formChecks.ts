@@ -22,6 +22,12 @@ const withEntries = <T>(
   entries: readonly [FieldPath, T][],
 ): Readonly<Record<FieldPath, T>> => (entries.length === 0 ? record : { ...record, ...Object.fromEntries(entries) });
 
+/** Whether a check is pending, or shows an error: the checks an edit can outdate and a follow re-checks. */
+const isPendingOrErroring = (check: FieldCheck): boolean => check.status !== 'done' || check.error !== undefined;
+
+/** The check ended with no error, keeping its id and inputs. */
+const endedWithoutError = (check: FieldCheck): FieldCheck => ({ id: check.id, status: 'done', inputs: check.inputs });
+
 /** The checks of a form that has run none, with no field validators. */
 export const NO_CHECKS: ChecksState = Object.freeze({
   schema: undefined,
@@ -47,7 +53,7 @@ export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>):
     if (validator.on && !on.has(key)) {
       validators.push([key, { on: false, period: validator.period + 1 }]);
       const check = own(checks.fields, key);
-      if (check) fields.push([key, { id: check.id, status: 'done', inputs: check.inputs }]);
+      if (check) fields.push([key, endedWithoutError(check)]);
     } else if (!validator.on && on.has(key)) {
       validators.push([key, { on: true, period: validator.period }]);
     }
@@ -109,9 +115,7 @@ export const inputsHeld = (inputs: Readonly<Record<FieldPath, unknown>>, values:
 export const endOutdatedChecks = (checks: ChecksState, values: Record<string, unknown>): ChecksState => {
   const ended: [FieldPath, FieldCheck][] = [];
   for (const [key, check] of Object.entries(checks.fields)) {
-    if ((check.status !== 'done' || check.error !== undefined) && !inputsHeld(check.inputs, values)) {
-      ended.push([key, { id: check.id, status: 'done', inputs: check.inputs }]);
-    }
+    if (isPendingOrErroring(check) && !inputsHeld(check.inputs, values)) ended.push([key, endedWithoutError(check)]);
   }
   return ended.length === 0 ? checks : { ...checks, fields: withEntries(checks.fields, ended) };
 };
@@ -215,5 +219,5 @@ export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): 
 /** The fields with a pending check or an error shown. */
 export const fieldsToRecheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): FieldPath[] =>
   Object.entries(fields)
-    .filter(([, check]) => check.status !== 'done' || check.error !== undefined)
+    .filter(([, check]) => isPendingOrErroring(check))
     .map(([key]) => key);

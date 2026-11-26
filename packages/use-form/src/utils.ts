@@ -95,6 +95,17 @@ export const getValueByPath = <TObj extends Record<string, unknown>, TValue = un
 };
 
 /**
+ * The value at each path, read by {@link getValueByPath} and keyed by the path as given. Built with
+ * `Object.fromEntries`, so a path named `__proto__` stays an own key.
+ *
+ * @param values - The values to read
+ * @param paths - The paths to read them at
+ * @returns Each path's value, by path
+ */
+export const valuesAt = (values: Record<string, unknown>, paths: readonly FieldPath[]): Record<FieldPath, unknown> =>
+  Object.fromEntries(paths.map((path) => [path, getValueByPath(values, path)]));
+
+/**
  * Sets a value in a nested object using a path string, returning a new object.
  * Creates intermediate objects and arrays as needed without mutating the original.
  * All updates are performed immutably using spreading.
@@ -457,6 +468,7 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
  *
  * @param target - The values before the merge
  * @param source - The values merged in
+ * @param prefix - The path of the objects merged, when descending into one
  * @returns Each path whose value the merge changes, in dot form
  *
  * @example
@@ -465,17 +477,17 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
  * @example
  * changedPaths({ tags: ["a"] }, { tags: ["a", "b"] }); // ["tags"]: an array is replaced whole
  */
-export const changedPaths = (target: Record<string, unknown>, source: Record<string, unknown>): FieldPath[] =>
-  changedWithin(target, source, '');
-
-/** {@link changedPaths}, for the objects merged at `prefix`. */
-const changedWithin = (target: Record<string, unknown>, source: Record<string, unknown>, prefix: string): FieldPath[] =>
+export const changedPaths = (
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+  prefix = '',
+): FieldPath[] =>
   Object.keys(source).flatMap((key) => {
     if (key === '__proto__') return [];
     const srcVal = source[key];
     const tgtVal = target[key];
     const path = prefix ? `${prefix}.${key}` : key;
-    if (isPlainObject(srcVal) && isMergeTarget(tgtVal)) return changedWithin(tgtVal, srcVal, path);
+    if (isPlainObject(srcVal) && isMergeTarget(tgtVal)) return changedPaths(tgtVal, srcVal, path);
     return deepEqual(tgtVal, srcVal) ? [] : [path];
   });
 

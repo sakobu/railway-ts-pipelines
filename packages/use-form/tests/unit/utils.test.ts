@@ -12,6 +12,7 @@ import {
   deepEqual,
   isPromiseLike,
   own,
+  valuesAt,
 } from '../../src/utils';
 
 // Shaped like a dayjs value: a date picker creates a new one on every pick
@@ -75,6 +76,17 @@ describe('getValueByPath', () => {
     const obj = { name: 'John' };
     expect(getValueByPath<typeof obj, typeof obj>(obj, '')).toEqual(obj);
   });
+});
+
+test('valuesAt reads each path, keyed by the path as given, and keeps a __proto__ path an own key', () => {
+  expect(valuesAt({ address: { city: 'Oslo' }, name: 'x' }, ['address.city', 'name', 'age'])).toEqual({
+    'address.city': 'Oslo',
+    name: 'x',
+    age: undefined,
+  });
+  const read = valuesAt(Object.fromEntries([['__proto__', 'x']]), ['__proto__']);
+  expect(Object.entries(read)).toEqual([['__proto__', 'x']]);
+  expect(Object.getPrototypeOf(read)).toBe(Object.prototype);
 });
 
 describe('setValueByPath', () => {
