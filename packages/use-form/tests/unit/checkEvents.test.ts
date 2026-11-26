@@ -79,11 +79,14 @@ test('every request asks for a schema check: a check of paths, and a follow that
   const pass = mock((_record: EventRecord) => {});
 
   events.run((requests) => requests.check(['a']), pass);
-  expect(pass.mock.calls[0]![0]).toMatchObject({ schema: true, clearAll: false });
+  expect(pass.mock.calls[0]![0].clearAll).toBe(false);
   expect([...pass.mock.calls[0]![0].fields]).toEqual([]);
 
+  events.run((requests) => requests.recheckAfterFollow([]), pass);
+  expect(pass).toHaveBeenCalledTimes(2);
+
   events.run((requests) => requests.recheckAfterFollow(['x', 'y']), pass);
-  expect(pass.mock.calls[1]![0]).toMatchObject({ schema: true, clearAll: true });
-  expect([...pass.mock.calls[1]![0].paths]).toEqual([]);
-  expect([...pass.mock.calls[1]![0].fields]).toEqual(['x', 'y']);
+  expect(pass.mock.calls[2]![0].clearAll).toBe(true);
+  expect([...pass.mock.calls[2]![0].paths]).toEqual([]);
+  expect([...pass.mock.calls[2]![0].fields]).toEqual(['x', 'y']);
 });

@@ -21,10 +21,11 @@ export type EventRequests = {
   recheckAfterFollow: (fields: Iterable<FieldPath>) => void;
 };
 
-/** What one event asked to have checked, as its pass reads it once the outermost call returns. */
+/**
+ * What one event asked to have checked, as its pass reads it once the outermost call returns. Every request asks for a
+ * schema check, so a pass always runs one.
+ */
 export type EventRecord = {
-  /** A schema check. Every request sets it. */
-  readonly schema: boolean;
   /** Edited or blurred paths, normalized. Each reaches every validator with an input path overlapping it. */
   readonly paths: ReadonlySet<FieldPath>;
   /** Validator keys a follow re-checks */
@@ -59,14 +60,16 @@ export const createCheckEvents = (): CheckEvents => {
         body(running);
         return;
       }
-      const record = { schema: false, paths: new Set<FieldPath>(), fields: new Set<FieldPath>(), clearAll: false };
+      const record = { paths: new Set<FieldPath>(), fields: new Set<FieldPath>(), clearAll: false };
+      // Whether any request was made, so the pass runs
+      let requested = false;
       const requests: EventRequests = {
         check: (paths = []) => {
-          record.schema = true;
+          requested = true;
           for (const path of paths) record.paths.add(path);
         },
         recheckAfterFollow: (fields) => {
-          record.schema = true;
+          requested = true;
           record.clearAll = true;
           for (const field of fields) record.fields.add(field);
         },
@@ -78,7 +81,7 @@ export const createCheckEvents = (): CheckEvents => {
         // A throw ends the event too, so the next call starts its own
         running = undefined;
       }
-      if (record.schema) pass(record);
+      if (requested) pass(record);
     },
   };
 };
