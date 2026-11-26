@@ -634,6 +634,30 @@ describe('a follow re-checks as an edit does', () => {
     expect(checkTitle).toHaveBeenCalledTimes(1);
     expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
   });
+
+  test('shouldValidate: true on an edit that makes the form follow checks the field too', () => {
+    const checkTitle = mock((_value: string) => 'Taken');
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'submit',
+          fieldValidators: { title: checkTitle },
+        }),
+      { initialProps: { initial: draft } },
+    );
+    const latest: PublishForm = { ...draft, title: 'Latest' };
+    act(() => result.current.setFieldValue('title', 'Mine'));
+    rerender({ initial: latest });
+    expect(result.current.isStale).toBe(true);
+
+    // Undoing the edit leaves none, so the form follows the latest version
+    act(() => result.current.setFieldValue('title', draft.title, true));
+
+    expect(result.current.values).toEqual(latest);
+    expect(checkTitle).toHaveBeenCalledWith('Latest');
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+  });
 });
 
 test('isValidating ends once the newest schema check moves on a field check that waited on a replaced one', async () => {

@@ -1157,10 +1157,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
-   * Applies an edit and records its checks in the event. One that undoes the last unsaved edit makes the form follow
-   * the latest version: it then records a follow's checks, which replace the edit's own. Otherwise it records the
-   * edit's own check, when it asks for one. The pass reads the event's record only once the outermost call returns, so
-   * a check recorded now still validates the values as any later call in the event leaves them.
+   * Applies an edit and records its checks in the event: its own check, when it asks for one, and when it undoes the
+   * last unsaved edit, so the form follows the latest version, the follow's checks too. The pass reads the event's
+   * record only once the outermost call returns, so a check recorded now still validates the values as any later call
+   * in the event leaves them, and a validator both reach runs once.
    *
    * @param action - The edit
    * @param requests - The event's requests
@@ -1172,7 +1172,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const prev = store.getState();
       dispatch(action);
       if (store.getState().baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev);
-      else if (checkPaths) requests.check(checkPaths);
+      if (checkPaths) requests.check(checkPaths);
     },
     [store, dispatch, recordFollow],
   );
