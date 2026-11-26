@@ -53,10 +53,12 @@ import {
   collectFieldPaths,
   isPathAffected,
   isPromiseLike,
+  mapAnswer,
   normalizePath,
+  overlapsAny,
   own,
-  pathsOverlap,
   valuesAt,
+  withoutPaths,
 } from './utils';
 import { listsFields } from './withDeps';
 
@@ -142,7 +144,7 @@ type RunnableValidator<TValues> = {
   /** The validator's field, then each path it lists, normalized and without repeats. */
   inputs: readonly FieldPath[];
   /** Runs the validator on the values checked. Its answer is the error the field shows. */
-  check: (values: TValues) => string | undefined | Promise<string | undefined>;
+  check: (values: TValues) => FieldValidatorAnswer;
 };
 
 /**
@@ -166,20 +168,10 @@ const logValidationError = (error: unknown): undefined => {
 const errorOf = (answer: string | undefined): string | undefined => answer || undefined;
 
 /**
- * The error a validator's answer shows, read by {@link errorOf}. A throw still reaches the caller, and a rejection
- * still rejects. An answer that settles later becomes a native promise, whatever thenable it was.
- *
- * @param answer - What the validator returned: its answer, or a thenable of it
- * @returns The error, or a native promise of it
- */
-const shownError = (
-  answer: string | undefined | PromiseLike<string | undefined>,
-): string | undefined | Promise<string | undefined> =>
-  isPromiseLike(answer) ? Promise.resolve(answer).then(errorOf) : errorOf(answer);
-
-/**
  * A `fieldValidators` entry as a check runs it, or undefined while it's off. A plain function gets its field's value
- * only. A `withDeps` validator also gets the value at each listed path, keyed by the path as written.
+ * only. A `withDeps` validator also gets the value at each listed path, keyed by the path as written. Either answers
+ * with the error it shows, read by {@link errorOf}: a throw still reaches the caller, a rejection still rejects, and
+ * an answer that settles later becomes a native promise, whatever thenable it was.
  *
  * @param key - The entry's field, normalized
  * @param entry - The entry. It's off when it's neither a function nor made by `withDeps`: undefined, or a
@@ -191,12 +183,12 @@ const fieldCheckOf = <TValues extends Record<string, unknown>>(
   entry: unknown,
 ): RunnableValidator<TValues> | undefined => {
   if (isFieldValidatorFn(entry)) {
-    return { inputs: [key], check: (values) => shownError(entry(getValueByPath(values, key))) };
+    return { inputs: [key], check: (values) => mapAnswer(entry(getValueByPath(values, key)), errorOf) };
   }
   if (!isDepsEntry(entry)) return undefined;
   return {
     inputs: [...new Set([key, ...entry.deps.map(normalizePath)])],
-    check: (values) => shownError(entry.validate(getValueByPath(values, key), valuesAt(values, entry.deps))),
+    check: (values) => mapAnswer(entry.validate(getValueByPath(values, key), valuesAt(values, entry.deps)), errorOf),
   };
 };
 
@@ -263,7 +255,7 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
   } catch (error) {
     return fail(error);
   }
-  return isPromiseLike(answer) ? Promise.resolve(answer).then(answered, fail) : answered(answer);
+  return mapAnswer(answer, answered, fail);
 };
 
 /**
@@ -747,10 +739,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       });
       write({ type: 'START_SCHEMA_CHECK', id });
       return settling(
-        () => {
-          const result = validate(values, validator);
-          return isPromiseLike(result) ? Promise.resolve(result).then(answered) : answered(result);
-        },
+        () => mapAnswer(validate(values, validator), answered),
         end,
         () => end({ values, result: undefined, errors: undefined }),
       );
@@ -791,7 +780,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const validator = fieldValidatorsRef.current.get(key);
       if (
         !schemaErrors ||
-        Object.keys(schemaErrors).some((errorPath) => inputPaths.some((path) => pathsOverlap(errorPath, path))) ||
+        Object.keys(schemaErrors).some((errorPath) => overlapsAny(errorPath, inputPaths)) ||
         !validator ||
         !sameInputs(validator.inputs, check.inputs)
       ) {
@@ -866,10 +855,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * @returns Railway Result or Promise<Result> depending on the validator
    */
   const validateForm = useCallback(
-    (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
-      const answer = checkSchema(dispatch, store.takeCheckId(), values, moveOnWaitingChecks);
-      return isPromiseLike(answer) ? answer.then((settled) => settled.result) : answer.result;
-    },
+    (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> =>
+      mapAnswer(checkSchema(dispatch, store.takeCheckId(), values, moveOnWaitingChecks), (answer) => answer.result),
     [store, dispatch, checkSchema, moveOnWaitingChecks],
   );
 
@@ -914,7 +901,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const afterSchema = (schemaErrors: SchemaErrors): void => moveOnWithSchema(key, id, values, schemaErrors);
 
       return (schemaErrors) => {
-        if (schemaErrors instanceof Promise) {
+        if (isPromiseLike(schemaErrors)) {
           // The field validator then runs after the caller returned: a throw from it is logged
           void schemaErrors.then(afterSchema).catch(logValidationError);
         } else {
@@ -947,21 +934,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const { values } = store.getState();
       const paths = [...record.paths];
       const validators = Array.from(fieldValidatorsRef.current).filter(
-        ([key, validator]) =>
-          record.fields.has(key) || validator.inputs.some((input) => paths.some((path) => pathsOverlap(input, path))),
+        ([key, validator]) => record.fields.has(key) || validator.inputs.some((input) => overlapsAny(input, paths)),
       );
 
       // Step 3: hides the old client errors in the event's scope, if any show
       const hideOld = (): void => {
         const { clientErrors } = store.getState();
-        const isOld = (errorPath: FieldPath): boolean =>
-          record.clearAll || paths.some((path) => isPathAffected(errorPath, path));
-        if (Object.keys(clientErrors).some(isOld)) {
-          dispatch({
-            type: 'SET_CLIENT_ERRORS',
-            errors: Object.fromEntries(Object.entries(clientErrors).filter(([errorPath]) => !isOld(errorPath))),
-          });
-        }
+        const kept = withoutPaths(
+          clientErrors,
+          (errorPath) => record.clearAll || paths.some((path) => isPathAffected(errorPath, path)),
+        );
+        if (kept !== clientErrors) dispatch({ type: 'SET_CLIENT_ERRORS', errors: kept });
       };
 
       const schemaId = store.takeCheckId();
@@ -969,18 +952,19 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
       let schemaErrors: SchemaErrors | Promise<SchemaErrors>;
       try {
-        const answer = checkSchema(dispatch, schemaId, values, moveOnWaitingChecks);
         // Nothing awaits the schema check, so a rejection is logged, and leaves it with no result
-        schemaErrors = isPromiseLike(answer)
-          ? answer.then((settled) => settled.errors, logValidationError)
-          : answer.errors;
+        schemaErrors = mapAnswer(
+          checkSchema(dispatch, schemaId, values, moveOnWaitingChecks),
+          (answer): SchemaErrors => answer.errors,
+          logValidationError,
+        );
       } catch (error) {
         // The schema validator threw: the field checks end with no result, and the throw reaches the caller
         hideOld();
         moveOns.forEach((moveOn) => moveOn(undefined));
         throw error;
       }
-      if (schemaErrors instanceof Promise) hideOld();
+      if (isPromiseLike(schemaErrors)) hideOld();
 
       // Every field check moves on, whatever the others throw. The first throw then reaches the caller, and each later
       // one is logged, since only one can.

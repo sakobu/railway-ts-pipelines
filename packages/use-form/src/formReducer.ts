@@ -18,8 +18,10 @@ import {
   getValueByPath,
   normalizePath,
   normalizePathKeys,
+  overlapsAny,
   pathsOverlap,
   setValueByPath,
+  withoutPaths,
 } from './utils';
 
 import type { ChecksState, FieldPath, FormAction, FormState, ResetKey } from './types';
@@ -175,30 +177,20 @@ const reduce = <TValues extends Record<string, unknown>>(
     case 'SET_FIELD_VALUE': {
       if (getValueByPath(state.values, action.field) === action.value) return state;
 
-      const newValues = setValueByPath(state.values, action.field, action.value);
-
-      const newServerErrors = { ...state.serverErrors };
-      Object.keys(newServerErrors).forEach((errorPath) => {
-        if (pathsOverlap(errorPath, action.field)) {
-          delete newServerErrors[errorPath];
-        }
-      });
-
-      return withEdit(state, newValues, newServerErrors);
+      return withEdit(
+        state,
+        setValueByPath(state.values, action.field, action.value),
+        withoutPaths(state.serverErrors, (errorPath) => pathsOverlap(errorPath, action.field)),
+      );
     }
 
     case 'SET_VALUES': {
-      const newValues = deepMerge(state.values, action.values);
-      const newServerErrors = { ...state.serverErrors };
-      Object.keys(action.values).forEach((field) => {
-        Object.keys(newServerErrors).forEach((errorPath) => {
-          if (pathsOverlap(errorPath, field)) {
-            delete newServerErrors[errorPath];
-          }
-        });
-      });
-
-      return withEdit(state, newValues, newServerErrors);
+      const fields = Object.keys(action.values);
+      return withEdit(
+        state,
+        deepMerge(state.values, action.values),
+        withoutPaths(state.serverErrors, (errorPath) => overlapsAny(errorPath, fields)),
+      );
     }
 
     case 'SET_FIELD_TOUCHED':

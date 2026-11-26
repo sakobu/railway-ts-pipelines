@@ -38,6 +38,22 @@ export const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof (value as { then?: unknown } | null | undefined)?.then === 'function';
 
 /**
+ * Applies `onAnswer` to an answer now, or once it settles. An answer that settles later, whatever thenable it is,
+ * becomes a native promise, and `onFail`, when given, handles its rejection. A sync throw from `onAnswer` reaches the
+ * caller.
+ *
+ * @param answer - The answer, or a thenable of it
+ * @param onAnswer - Maps the settled answer
+ * @param onFail - Handles a rejection. Without it, the promise rejects.
+ * @returns What `onAnswer` returned, or a native promise of it
+ */
+export const mapAnswer = <T, U>(
+  answer: T | PromiseLike<T>,
+  onAnswer: (settled: T) => U,
+  onFail?: (error: unknown) => U,
+): U | Promise<U> => (isPromiseLike(answer) ? Promise.resolve(answer).then(onAnswer, onFail) : onAnswer(answer));
+
+/**
  * Retrieves a value from a nested object using a path string.
  * Supports both dot notation for object properties and bracket notation for array indices.
  * Returns undefined if any part of the path doesn't exist.
@@ -286,6 +302,33 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
  * pathsOverlap("address.city", "address.zip"); // false
  */
 export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffected(a, b) || isPathAffected(b, a);
+
+/**
+ * Whether a path overlaps any of `paths` ({@link pathsOverlap}).
+ *
+ * @example
+ * overlapsAny("address.city", ["name", "address"]); // true
+ * overlapsAny("address.city", ["address.zip"]); // false
+ */
+export const overlapsAny = (path: FieldPath, paths: readonly FieldPath[]): boolean =>
+  paths.some((other) => pathsOverlap(path, other));
+
+/**
+ * A path-keyed record without the entries whose path `drops` matches, or the record itself when it matches none, so
+ * an unchanged record keeps its identity. Built with `Object.fromEntries`, so a path named `__proto__` stays an own key.
+ *
+ * @example
+ * withoutPaths({ "address.city": "Required", name: "Too short" }, (path) => isPathAffected(path, "address"));
+ * // { name: "Too short" }
+ */
+export const withoutPaths = <T>(
+  record: Readonly<Record<FieldPath, T>>,
+  drops: (path: FieldPath) => boolean,
+): Readonly<Record<FieldPath, T>> => {
+  const entries = Object.entries(record);
+  const kept = entries.filter(([path]) => !drops(path));
+  return kept.length === entries.length ? record : Object.fromEntries(kept);
+};
 
 /**
  * Whether a value is a plain object: an object literal, or one with a `null` prototype.
