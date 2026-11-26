@@ -797,7 +797,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * 1. No result, since the schema validator threw or rejected: the check ends with no error.
    * 2. A schema error that overlaps any of the input paths the check recorded, the field or a listed one, at, inside
    *    or above it, a root error included ({@link gateRejects}): the gate holds the check back. It ends with no error,
-   *    so the schema's error shows, and runs once a schema check accepts its inputs.
+   *    so the schema's error shows, and runs once a schema check of the values the form holds accepts its inputs.
    * 3. The field's validator in the latest commit reads other paths than the check recorded, since its list changed:
    *    it ends with no error, without calling the validator. The next check uses the new list.
    * 4. Otherwise it runs that validator on the checked values, and ends with its answer.
@@ -851,12 +851,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *   ({@link moveOnWithSchema}). So none is left waiting on a result that may never come, such as that of a call a
    *   debouncer replaced and never resolves. A check that started after it waits on it as its own schema check, whose
    *   continuation moves the check on.
-   * - It runs each check the schema gate held back whose inputs it accepts, as a new check of them, whichever field
-   *   the fix was in: a cross-field rule's other field, or the field under a root error.
+   * - It runs each check the schema gate held back, as a new check of what its validator reads now, when it accepts
+   *   those inputs, whichever field the fix was in: a cross-field rule's other field, or the field under a root error.
+   *   Only while the form still holds the values it checked: after an edit made since, as in `blur` mode with no
+   *   check, it says nothing of what the schema makes of the form's values now, so the checks stay held back until a
+   *   schema check of them lands.
    *
    * Only when it checked the values the form held when it started: a check of other values, such as a `validateForm`
    * of a render's stale copy, says nothing about them, and the checks keep waiting on their own results. An edit made
-   * since, as in `blur` mode with no check, doesn't stop it: it still checked the form's values, and is the newest.
+   * since doesn't stop it moving on the waiting checks: it still checked the form's values, and is the newest.
    *
    * A throw from a validator is logged: the check belongs to a call that has returned.
    *
@@ -866,15 +869,21 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const afterSchemaLands = useCallback(
     (id: CheckId, outcome: SchemaOutcome<TValues>, held: TValues): void => {
-      const { fields } = store.getState().checks;
-      const waiting = Object.entries(waitingFieldChecksOf(fields, id));
+      const { checks, values } = store.getState();
+      const waiting = Object.entries(waitingFieldChecksOf(checks.fields, id));
       const { errors } = outcome;
-      const gated = errors
-        ? Object.entries(gatedFieldChecksOf(fields)).filter(
-            ([, check]) => inputsHeld(check.inputs, outcome.values) && !gateRejects(errors, check.inputs),
-          )
-        : [];
-      if (waiting.length === 0 && gated.length === 0) return;
+      // The held-back checks it runs, by field, each with what its validator reads now, so a list changed since counts
+      const released: [FieldPath, Readonly<Record<FieldPath, unknown>>][] = [];
+      const gated = Object.keys(gatedFieldChecksOf(checks.fields));
+      if (errors && gated.length > 0 && deepEqual(values, outcome.values)) {
+        for (const key of gated) {
+          const validator = fieldValidatorsRef.current.get(key);
+          if (!validator) continue;
+          const inputs = valuesAt(outcome.values, validator.inputs);
+          if (!gateRejects(errors, inputs)) released.push([key, inputs]);
+        }
+      }
+      if (waiting.length === 0 && released.length === 0) return;
       if (held !== outcome.values && !deepEqual(held, outcome.values)) return;
 
       const moveOn = (key: FieldPath, checkId: CheckId): void => {
@@ -885,9 +894,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
       };
       for (const [key, check] of waiting) moveOn(key, check.id);
-      for (const [key, check] of gated) {
+      for (const [key, inputs] of released) {
         const checkId = store.takeCheckId();
-        dispatch({ type: 'START_FIELD_CHECK', field: key, id: checkId, status: 'waiting', inputs: check.inputs });
+        dispatch({ type: 'START_FIELD_CHECK', field: key, id: checkId, status: 'waiting', inputs });
         moveOn(key, checkId);
       }
     },

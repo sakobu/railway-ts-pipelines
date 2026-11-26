@@ -221,7 +221,8 @@ export type FieldCheck = {
   error?: string;
   /**
    * The schema gate held it back: it ended without calling the validator, with no error, since the schema rejected an
-   * input. It runs once a schema check of the form's values accepts its inputs, while they hold.
+   * input. While its inputs hold, it runs once a schema check of the values the form still holds accepts what its
+   * validator reads.
    */
   gated?: true;
 };
@@ -479,7 +480,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * The schema gate holds a validator back, with no error, while a schema error overlaps its field or any field it
    * lists: one at, inside or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on
    * `address`. A root error (path `[]`) sits above every field, so it holds back every validator. A held-back check
-   * runs once a schema check accepts its inputs, whichever field the fix was in.
+   * runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in.
    * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
    */

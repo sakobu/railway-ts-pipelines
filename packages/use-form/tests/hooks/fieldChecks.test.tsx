@@ -1911,7 +1911,7 @@ describe('withDeps', () => {
       expect(validate).not.toHaveBeenCalled();
     });
 
-    test('a root schema error sits above every field, so it skips every validator', () => {
+    test('a root schema error sits above every field, so it holds back every validator', () => {
       const rootSchema = S.chain(
         S.object({ name: S.required(S.string()), title: S.required(S.string()) }),
         S.refine((form) => form.name !== form.title, 'Name and title must differ'),
@@ -2241,5 +2241,97 @@ describe('the schema gate holds a check back until the schema accepts its inputs
 
     expect(checkUsername).not.toHaveBeenCalled();
     expect(result.current.isValidating).toBe(false);
+
+    // Still held back: the fix that clears the root error runs it
+    act(() => result.current.setFieldValue('contact', 'still@different.com'));
+    expect(checkUsername).toHaveBeenCalledTimes(1);
+    expect(checkUsername).toHaveBeenCalledWith('bob');
+  });
+
+  test('a schema check of values edited since it started leaves the check held back, until one of them lands', async () => {
+    // The cross-field schema, answering each check once the test settles it
+    const settles: (() => void)[] = [];
+    const deferred: S.MaybeAsyncValidator<unknown, Signup> = (input, path) =>
+      new Promise((resolve) => settles.push(() => resolve(crossFieldSchema(input, path))));
+    const settle = async (index: number) => {
+      await act(async () => {
+        settles[index]!();
+        await nextTask();
+      });
+    };
+    const checkUsername = mock((_username: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(deferred, {
+        initialValues: { ...signup, contact: 'other' },
+        validationMode: 'blur',
+        fieldValidators: { username: checkUsername },
+      }),
+    );
+    act(() => result.current.setFieldTouched('username'));
+    await settle(0);
+    expect(checkUsername).not.toHaveBeenCalled();
+
+    // The blur's schema check runs on the fixed contact, which an edit breaks again before it lands
+    act(() => result.current.setFieldValue('contact', signup.email));
+    act(() => result.current.setFieldTouched('contact'));
+    act(() => result.current.setFieldValue('contact', 'broken'));
+    await settle(1);
+    expect(checkUsername).not.toHaveBeenCalled();
+
+    // A schema check of the values the form holds that accepts the inputs runs it
+    act(() => result.current.setFieldValue('contact', signup.email));
+    act(() => result.current.setFieldTouched('contact'));
+    await settle(2);
+    expect(checkUsername).toHaveBeenCalledTimes(1);
+    expect(checkUsername).toHaveBeenCalledWith('ann');
+  });
+
+  test('a check held back runs with the list its validator has when the schema accepts it', () => {
+    const before = mock((_username: string, _deps: { readonly email: string }) => undefined);
+    const after = mock((_username: string) => undefined);
+    const { result, rerender } = renderHook(
+      ({ listsEmail }: { listsEmail: boolean }) =>
+        useForm(crossFieldSchema, {
+          initialValues: signup,
+          validationMode: 'live',
+          fieldValidators: { username: listsEmail ? withDeps(['email'], before) : after },
+        }),
+      { initialProps: { listsEmail: true } },
+    );
+    act(() => result.current.setFieldValue('contact', 'other'));
+    act(() => result.current.setFieldValue('username', 'bob'));
+    rerender({ listsEmail: false });
+
+    act(() => result.current.setFieldValue('contact', signup.email));
+
+    expect(before).not.toHaveBeenCalled();
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(after).toHaveBeenCalledWith('bob');
+  });
+
+  test('a submit whose schema fails on another field runs a check held back whose inputs it accepts', async () => {
+    const checkUsername = mock((_username: string) => 'Taken');
+    const onSubmit = mock(() => {});
+    const { result } = renderHook(() =>
+      useForm(crossFieldSchema, {
+        initialValues: { ...signup, contact: 'other' },
+        validationMode: 'submit',
+        fieldValidators: { username: checkUsername },
+        onSubmit,
+      }),
+    );
+    act(() => result.current.setFieldTouched('username', true, true));
+    expect(checkUsername).not.toHaveBeenCalled();
+
+    // The fix lands with a submit whose schema fails on email only, so it accepts the username
+    act(() => result.current.setFieldValue('contact', signup.email));
+    act(() => result.current.setFieldValue('email', null));
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(checkUsername).toHaveBeenCalledWith('ann');
+    expect(result.current.fieldErrors).toEqual({ username: 'Taken' });
   });
 });
