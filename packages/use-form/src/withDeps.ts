@@ -4,7 +4,7 @@ import type { ExtractFieldPaths, FieldTypeAtPath, FieldValidatorAnswer } from '.
 export const listsFields: unique symbol = Symbol('listsFields');
 
 /** One own property per listed path, typed. Distributes over a union of lists; a non-tuple list gives optional ones. */
-export type DepValues<TValues, D extends readonly ExtractFieldPaths<TValues>[]> = D extends unknown
+type DepValues<TValues, D extends readonly ExtractFieldPaths<TValues>[]> = D extends unknown
   ? number extends D['length']
     ? { readonly [R in D[number]]?: FieldTypeAtPath<TValues, R> }
     : { readonly [R in D[number]]: FieldTypeAtPath<TValues, R> }
