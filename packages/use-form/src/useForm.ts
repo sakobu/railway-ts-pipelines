@@ -1644,7 +1644,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     }
 
     const step = autoSaver.decide(() => ({
-      values: state.values,
       isDirty: !deepEqual(state.values, store.getInitialValues()),
       verdict: state.verdict,
       isChecking: state.checks.schema !== undefined,

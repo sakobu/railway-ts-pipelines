@@ -13,9 +13,8 @@ const B2: V = { name: 'b2' };
 /** The verdict of a check that passed `values`. */
 const passed = (values: V): SchemaVerdict<V> => ({ values, passed: true });
 
-/** A view that allows a submit of `A`; each test overrides what it needs. */
+/** A view that allows a submit of `A`, the values `due` tracks; each test overrides what it needs. */
 const view = (over: Partial<AutoSaveView<V>> = {}): AutoSaveView<V> => ({
-  values: A,
   isDirty: true,
   verdict: passed(A),
   isChecking: false,
@@ -86,7 +85,7 @@ describe('createAutoSave', () => {
 
     auto.track(B2);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B2, verdict: passed(B) }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
   });
 
   test('a check started before a follow or reset holds no check after it', () => {
@@ -112,7 +111,7 @@ describe('createAutoSave', () => {
 
     auto.track(B);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B, verdict: passed(A), isSubmitting: true }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(A), isSubmitting: true }))).toBe('check');
   });
 
   test('isOn is off at creation, on after start, and off after stop', () => {

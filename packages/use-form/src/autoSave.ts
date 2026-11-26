@@ -4,18 +4,15 @@ import type { SchemaVerdict } from './types';
 
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
 // out already, the form's latest schema check passed it and the form shows it valid, the form isn't stale, and no
-// submission is running.
-// Values the form hasn't checked get one schema check per version first, and another once a follow or reset ends that
-// check. This module only decides, and holds whether auto-save is on; the caller acts.
+// submission is running. Values the form hasn't checked get one schema check per version first, and another once a
+// follow or reset ends that check. This module only decides, and holds whether auto-save is on; the caller acts.
 
 /**
  * What auto-save reads from the form when it decides.
  *
  * @template TValues - The shape of the form values
  */
-export type AutoSaveView<TValues> = {
-  /** The current values, which `decide` compares with the other fields' values */
-  values: TValues;
+export type AutoSaveView<TValues extends Record<string, unknown>> = {
   /** The values differ from the store's initial values, by content */
   isDirty: boolean;
   /** FormState.verdict */
@@ -44,7 +41,7 @@ export type AutoSaveStep = 'wait' | 'check' | 'submit';
  *
  * @template TValues - The shape of the form values
  */
-export type AutoSave<TValues> = {
+export type AutoSave<TValues extends Record<string, unknown>> = {
   /** Switches auto-save on. */
   start: () => void;
 
@@ -69,8 +66,8 @@ export type AutoSave<TValues> = {
    * Decides for the tracked version. It returns `'check'` at most once per version in each baseline epoch, and records
    * it: a follow or reset ends the check.
    *
-   * @param readView - Reads what the form shows now. `decide` calls it once, only after the delay has ended, so a
-   *   caller pays for the view only then.
+   * @param readView - Reads what the form shows now, for the values the caller tracked last. `decide` calls it once,
+   *   only after the delay has ended, so a caller pays for the view only then.
    * @returns What the caller does next
    */
   decide: (readView: () => AutoSaveView<TValues>) => AutoSaveStep;
@@ -82,12 +79,9 @@ export type AutoSave<TValues> = {
  * @template TValues - The shape of the form values
  * @returns An auto-save, off, with nothing tracked
  */
-export const createAutoSave = <TValues>(): AutoSave<TValues> => {
-  // Boxed because TValues is unconstrained: `undefined` alone can't mean "nothing tracked".
-  let tracked: { values: TValues } | undefined;
-  let delayPassed = false;
-  // The baseline epoch the tracked version's check started in
-  let checkedIn: number | undefined;
+export const createAutoSave = <TValues extends Record<string, unknown>>(): AutoSave<TValues> => {
+  // The tracked version: its values, whether its delay has ended, and the baseline epoch its check started in
+  let tracked: { values: TValues; due: boolean; checkedIn?: number } | undefined;
   let on = false;
 
   const start = (): void => {
@@ -97,33 +91,29 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
   const stop = (): void => {
     on = false;
     tracked = undefined;
-    delayPassed = false;
-    checkedIn = undefined;
   };
 
   const isOn = (): boolean => on;
 
   const track = (values: TValues): boolean => {
     if (tracked && deepEqual(tracked.values, values)) return false;
-    tracked = { values };
-    delayPassed = false;
-    checkedIn = undefined;
+    tracked = { values, due: false };
     return true;
   };
 
   const delayEnded = (): void => {
-    delayPassed = true;
+    if (tracked) tracked.due = true;
   };
 
   const decide = (readView: () => AutoSaveView<TValues>): AutoSaveStep => {
-    if (!delayPassed) return 'wait';
+    if (!tracked?.due) return 'wait';
+    const { values } = tracked;
     const view = readView();
-    if (!view.isDirty) return 'wait';
-    if (view.wentOut !== undefined && deepEqual(view.values, view.wentOut)) return 'wait';
+    if (!view.isDirty || deepEqual(values, view.wentOut)) return 'wait';
     const { verdict } = view;
-    if (verdict === undefined || !deepEqual(view.values, verdict.values)) {
-      if (view.isChecking || checkedIn === view.baselineEpoch) return 'wait';
-      checkedIn = view.baselineEpoch;
+    if (verdict === undefined || !deepEqual(values, verdict.values)) {
+      if (view.isChecking || tracked.checkedIn === view.baselineEpoch) return 'wait';
+      tracked.checkedIn = view.baselineEpoch;
       return 'check';
     }
     if (!verdict.passed || view.isValidating || !view.isValid || view.isStale || view.isSubmitting) return 'wait';
