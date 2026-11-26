@@ -69,7 +69,7 @@ const renderAutoSaveForm = (
  * subscribers then does.
  */
 const renderOptimisticForm = (rollBack: 'while the save runs' | 'after the save ended') => {
-  const onSubmit = mock((_values: UserForm) => {});
+  const onSubmit = saving();
   const rendered = renderHook(() => {
     const [record, setRecord] = useState(initial);
     return useForm(userValidator, {
@@ -268,48 +268,6 @@ describe('autoSave', () => {
       });
 
       expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Janet' }]);
-    });
-  });
-
-  describe('a stale form', () => {
-    test('an auto-save cancelled as overtaken goes out once the other user undoes their change', async () => {
-      const { pending, gated } = createGatedValidator<UserForm>();
-      const onSubmit = saving();
-      const { result, rerender } = renderHook(
-        ({ values }: { values: UserForm }) => useForm(gated, { initialValues: values, onSubmit, autoSave: { delay } }),
-        { initialProps: { values: initial } },
-      );
-      const edited: UserForm = { ...initial, name: 'Jane' };
-      const passAll = () =>
-        act(async () => {
-          for (const check of pending) check.resolve(ok(edited));
-          await nextTask();
-        });
-
-      act(() => {
-        result.current.setFieldValue('name', 'Jane');
-      });
-      // The edit's own check
-      await passAll();
-      await sleep(2 * delay);
-      // The save started, and its schema check waits
-      expect(pending).toHaveLength(2);
-
-      // Another user changes the record while the save validates
-      rerender({ values: { ...initial, email: 'new@example.com' } });
-      await passAll();
-      expect(onSubmit).not.toHaveBeenCalled();
-      expect(result.current.isStale).toBe(true);
-
-      // They undo their change
-      rerender({ values: initial });
-      await sleep(2 * delay);
-      // The new save's check waits too
-      expect(pending).toHaveLength(3);
-      await passAll();
-
-      expect(onSubmit).toHaveBeenCalledTimes(1);
-      expect(onSubmit).toHaveBeenCalledWith(edited);
     });
   });
 
@@ -813,14 +771,8 @@ describe('autoSave', () => {
 
   describe('basic auto-submission', () => {
     test('auto-submits valid dirty form after debounce delay', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
-      const { result } = renderHook(() => useForm(userValidator, { initialValues, onSubmit, autoSave: true }));
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }));
 
       // Make form dirty by changing a value
       act(() => {
@@ -843,62 +795,36 @@ describe('autoSave', () => {
     });
 
     test('does not submit invalid form', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
-      const { result } = renderHook(() => useForm(userValidator, { initialValues, onSubmit, autoSave: true }));
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }));
 
       // Make form invalid
       act(() => {
         result.current.setFieldValue('name', '');
       });
 
-      // Wait for potential submission attempt
-      await waitFor(
-        () => {
-          expect(onSubmit).not.toHaveBeenCalled();
-          expect(result.current.errors.name).toBe('Name is required');
-        },
-        { timeout: 300 },
-      );
+      // Past the delay, so a save would have gone out
+      await sleep(300);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.errors.name).toBe('Name is required');
     });
 
     test('does not submit clean (not dirty) form', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }));
 
-      const { result } = renderHook(() => useForm(userValidator, { initialValues, onSubmit, autoSave: true }));
-
-      // Wait for potential submission attempt
-      await waitFor(
-        () => {
-          expect(onSubmit).not.toHaveBeenCalled();
-          expect(result.current.isDirty).toBe(false);
-        },
-        { timeout: 300 },
-      );
+      // Past the delay, so a save would have gone out
+      await sleep(300);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.isDirty).toBe(false);
     });
   });
 
   describe('debounce behavior', () => {
     test('debounces rapid value changes', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
+      const onSubmit = saving();
       const { result } = renderHook(() =>
-        useForm(userValidator, { initialValues, onSubmit, autoSave: { delay: 200 } }),
+        useForm(userValidator, { initialValues: initial, onSubmit, autoSave: { delay: 200 } }),
       );
 
       // Make multiple rapid changes
@@ -906,13 +832,13 @@ describe('autoSave', () => {
         result.current.setFieldValue('name', 'Jane');
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await pause(50);
 
       act(() => {
         result.current.setFieldValue('name', 'Janet');
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await pause(50);
 
       act(() => {
         result.current.setFieldValue('name', 'Jenny');
@@ -935,16 +861,10 @@ describe('autoSave', () => {
     });
 
     test('respects custom delay parameter', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
+      const onSubmit = saving();
       const { result } = renderHook(() =>
         useForm(userValidator, {
-          initialValues,
+          initialValues: initial,
           onSubmit,
           autoSave: { delay: 500 }, // Custom 500ms delay
         }),
@@ -955,7 +875,7 @@ describe('autoSave', () => {
       });
 
       // Check it hasn't submitted too early (wait exactly 250ms)
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await pause(250);
       expect(onSubmit).not.toHaveBeenCalled();
 
       // Wait for submission after full delay
@@ -1040,14 +960,10 @@ describe('autoSave', () => {
         result.current.setFieldValue('name', 'Jane');
       });
 
-      // Wait for potential submission
-      await waitFor(
-        () => {
-          expect(onSubmit).not.toHaveBeenCalled();
-          expect(result.current.isValid).toBe(false);
-        },
-        { timeout: 300 },
-      );
+      // Past the delay, so a save would have gone out
+      await sleep(300);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.isValid).toBe(false);
     });
   });
 
@@ -1071,18 +987,12 @@ describe('autoSave', () => {
     });
   });
 
-  describe('form reset behavior', () => {
+  describe('a form that goes clean', () => {
     test('stops auto-submit when form is reset immediately', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
+      const onSubmit = saving();
       const { result } = renderHook(() =>
         useForm(userValidator, {
-          initialValues,
+          initialValues: initial,
           onSubmit,
           autoSave: { delay: 500 }, // Longer delay to allow reset
         }),
@@ -1094,27 +1004,17 @@ describe('autoSave', () => {
         result.current.resetForm();
       });
 
-      // Wait for potential submission
-      await waitFor(
-        () => {
-          // Should not have submitted because form was reset before debounce completed
-          expect(onSubmit).not.toHaveBeenCalled();
-          expect(result.current.isDirty).toBe(false);
-        },
-        { timeout: 600 },
-      );
+      // Past the delay, so a save would have gone out
+      await sleep(600);
+      // Should not have submitted because form was reset before debounce completed
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.isDirty).toBe(false);
     });
 
     test('form becomes clean after reset and does not auto-submit on subsequent renders', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
+      const onSubmit = saving();
       const { result, rerender } = renderHook(() =>
-        useForm(userValidator, { initialValues, onSubmit, autoSave: true }),
+        useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }),
       );
 
       // Make form dirty and wait for submission
@@ -1146,11 +1046,9 @@ describe('autoSave', () => {
         { timeout: 300 },
       );
     });
-  });
 
-  describe('a form that goes clean', () => {
     test("a save waiting out its delay doesn't go out once the form follows a refetch", async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, 50);
 
       // An edit undone within the delay, then a refetch
@@ -1168,7 +1066,7 @@ describe('autoSave', () => {
     });
 
     test("a save waiting out its delay doesn't go out once resetForm() makes the form clean", async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result } = renderAutoSaveForm(onSubmit, 50);
 
       act(() => {
@@ -1183,7 +1081,7 @@ describe('autoSave', () => {
     });
 
     test('saves an edit back to values it saved before a follow', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, 20);
 
       act(() => {
@@ -1204,7 +1102,7 @@ describe('autoSave', () => {
     });
 
     test('saves a new record edited to the values the previous record was saved with', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const A: UserForm = { name: 'Ann', email: 'a@example.com', age: 30 };
       const B: UserForm = { name: 'Bob', email: 'a@example.com', age: 30 };
       const { result, rerender } = renderHook(
@@ -1229,14 +1127,8 @@ describe('autoSave', () => {
 
   describe('multiple field changes', () => {
     test('auto-submits after multiple field changes', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
-      const { result } = renderHook(() => useForm(userValidator, { initialValues, onSubmit, autoSave: true }));
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }));
 
       // Change multiple fields
       act(() => {
@@ -1263,14 +1155,8 @@ describe('autoSave', () => {
 
   describe('stale isValid bug', () => {
     test('submits after transitioning from invalid to valid values', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const initialValues = {
-        name: 'John',
-        email: 'john@example.com',
-        age: 25,
-      };
-
-      const { result } = renderHook(() => useForm(userValidator, { initialValues, onSubmit, autoSave: true }));
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(userValidator, { initialValues: initial, onSubmit, autoSave: true }));
 
       // Make form invalid first
       act(() => {
@@ -1309,7 +1195,7 @@ describe('autoSave', () => {
   describe('overlapping saves', () => {
     test('an edit made during an in-flight auto-save is saved after it', async () => {
       const onSubmit = mock(async (_values: Record<string, unknown>) => {
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await pause(300);
       });
       const initialValues = { name: '' };
 
@@ -1746,7 +1632,7 @@ describe('autoSave', () => {
   describe('values still validating', () => {
     /** The user schema, checked after a delay, as a server round trip would be. */
     const slowUserValidator: MaybeAsyncValidator<unknown, UserForm> = async (values) => {
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await pause(40);
       return validate(values, userValidator);
     };
 
@@ -1796,7 +1682,7 @@ describe('autoSave', () => {
 
     test('a delay that ends while the latest values are still being validated waits for their result', async () => {
       const { pending, gated } = createGatedValidator<UserForm>();
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result } = renderHook(() =>
         useForm(gated, { initialValues: initial, onSubmit, autoSave: { delay: 50 } }),
       );
@@ -1875,7 +1761,7 @@ describe('autoSave', () => {
     const wait = () => sleep(150);
 
     test('does not submit while the form is stale, including a save already waiting out its delay', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, 50);
 
       act(() => {
@@ -1893,7 +1779,7 @@ describe('autoSave', () => {
     });
 
     test('submits the edits made while stale once the form is no longer stale', async () => {
-      const onSubmit = mock((_values: UserForm) => {});
+      const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, 50);
 
       act(() => {
@@ -2003,6 +1889,46 @@ describe('autoSave', () => {
 
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(result.current.submitCount).toBe(1);
+    });
+
+    test('an auto-save cancelled as overtaken goes out once the other user undoes their change', async () => {
+      const { pending, gated } = createGatedValidator<UserForm>();
+      const onSubmit = saving();
+      const { result, rerender } = renderHook(
+        ({ values }: { values: UserForm }) => useForm(gated, { initialValues: values, onSubmit, autoSave: { delay } }),
+        { initialProps: { values: initial } },
+      );
+      const edited: UserForm = { ...initial, name: 'Jane' };
+      const passAll = () =>
+        act(async () => {
+          for (const check of pending) check.resolve(ok(edited));
+          await nextTask();
+        });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The edit's own check
+      await passAll();
+      await sleep(2 * delay);
+      // The save started, and its schema check waits
+      expect(pending).toHaveLength(2);
+
+      // Another user changes the record while the save validates
+      rerender({ values: { ...initial, email: 'new@example.com' } });
+      await passAll();
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(result.current.isStale).toBe(true);
+
+      // They undo their change
+      rerender({ values: initial });
+      await sleep(2 * delay);
+      // The new save's check waits too
+      expect(pending).toHaveLength(3);
+      await passAll();
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith(edited);
     });
   });
 });
