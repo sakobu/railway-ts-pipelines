@@ -1349,11 +1349,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
         let validationResult: Result<TValues, ValidationError[]>;
+        // Whether its schema check landed: a newer check, a follow or a reset can replace it first
+        let landed = false;
         try {
           // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
           // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
           // Otherwise its field step's checks replace them, so no validator runs twice.
           validationResult = await checkSchema(send, checkId, values, (id, outcome, held) => {
+            landed = true;
             if (!outcome.result || isErr(outcome.result)) moveOnWaitingChecks(id, outcome, held);
           });
         } finally {
@@ -1361,9 +1364,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         if (isErr(validationResult)) {
-          // A rejection that left the form valid went out, with no verdict on the values, so auto-save doesn't
-          // resubmit them in a loop. One whose errors landed holds them until the form turns valid.
-          if (isValidState(store.getState())) send({ type: 'SUBMISSION_WENT_OUT', values });
+          // A rejection that landed and left the form valid went out, with no verdict on the values, so auto-save
+          // doesn't resubmit them in a loop. One whose errors landed holds them until the form turns valid, and one a
+          // newer check replaced waits on that check's verdict.
+          if (landed && isValidState(store.getState())) send({ type: 'SUBMISSION_WENT_OUT', values });
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
           return validationResult;
         }

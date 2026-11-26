@@ -176,9 +176,10 @@ export interface FormState<TValues extends Record<string, unknown>> {
 
   /**
    * The values of the latest submission that went out: it called `onSubmit`, reached it with none set, threw, or its
-   * own validation rejected the values but left the form valid. Dropped when an action changes the values to ones
-   * equal to the initial values: an edit back, a follow or a reset. Kept when the initial values catch up to unchanged
-   * values, since that may be an optimistic write that a failed save rolls back. Auto-save doesn't send them again.
+   * schema check rejected the values, landed, and left the form valid. Dropped when an action changes the values to
+   * ones equal to the initial values: an edit back, a follow or a reset. Kept when the initial values catch up to
+   * unchanged values, since that may be an optimistic write that a failed save rolls back. Auto-save doesn't send them
+   * again.
    */
   wentOut?: TValues;
 }

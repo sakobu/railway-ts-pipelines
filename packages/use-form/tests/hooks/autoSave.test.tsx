@@ -468,6 +468,83 @@ describe('autoSave', () => {
       expect(result.current.submitCount).toBe(1);
       expect(onSubmit).not.toHaveBeenCalled();
     });
+
+    test("sends values a Save click's schema rejected, once a check finds them valid", async () => {
+      let allowBad = false;
+      const schema = (input: unknown): Result<UserForm, ValidationError[]> =>
+        (input as UserForm).name === 'Bad' && !allowBad
+          ? err([{ path: ['name'], message: 'No' }])
+          : validate(input, userValidator);
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(schema, { initialValues: initial, onSubmit, autoSave: { delay } }));
+
+      act(() => {
+        result.current.setFieldValue('name', 'Bad');
+      });
+      await act(() => result.current.handleSubmit());
+      expect(result.current.errors.name).toBe('No');
+      await sleep(3 * delay);
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      allowBad = true;
+      act(() => {
+        void result.current.validateForm(result.current.values);
+      });
+      await sleep(3 * delay);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Bad' });
+    });
+
+    test("a Save click's schema rejection that a newer check replaced waits on that check's verdict", async () => {
+      const { pending, gated } = createGatedValidator<UserForm>();
+      const onSubmit = saving();
+      const { result } = renderHook(() => useForm(gated, { initialValues: initial, onSubmit, autoSave: { delay } }));
+      const bad: UserForm = { ...initial, name: 'Bad' };
+      const rejected = err([{ path: ['name'], message: 'No' }]);
+      const settle = (index: number, outcome: Result<UserForm, ValidationError[]>) =>
+        act(async () => {
+          pending[index]!.resolve(outcome);
+          await nextTask();
+        });
+
+      // The edit's live check, the Save's, then a newer check of the same values
+      act(() => {
+        result.current.setFieldValue('name', 'Bad');
+      });
+      let save!: Promise<unknown>;
+      act(() => {
+        save = result.current.handleSubmit();
+      });
+      act(() => {
+        void result.current.validateForm(result.current.values);
+      });
+      expect(pending).toHaveLength(3);
+
+      // The Save's rejection doesn't land, and the form still reads valid
+      await act(async () => {
+        pending[1]!.resolve(rejected);
+        await save;
+      });
+      expect(result.current.isValid).toBe(true);
+      // The newer check rejects them too, then a later one passes them
+      await settle(2, rejected);
+      expect(result.current.isValid).toBe(false);
+      act(() => {
+        void result.current.validateForm(result.current.values);
+      });
+      await settle(3, ok(bad));
+      await sleep(2 * delay);
+      // The save's own check
+      await act(async () => {
+        for (const check of pending) check.resolve(ok(bad));
+        await nextTask();
+      });
+      await sleep(delay);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith(bad);
+    });
   });
 
   describe('validator calls', () => {
