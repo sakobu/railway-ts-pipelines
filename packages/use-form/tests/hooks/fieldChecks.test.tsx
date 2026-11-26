@@ -1792,51 +1792,31 @@ describe('withDeps', () => {
     expect(checkName.mock.calls[0]).toHaveLength(1);
   });
 
-  test('a check running when its list changes ends without calling the validator', async () => {
+  /** The slug's entry: a plain function, or a withDeps validator listing one field. */
+  type SlugEntry = 'plain' | 'workspaceId' | 'name';
+
+  test.each<[string, SlugEntry, SlugEntry]>([
+    ['its list changes', 'workspaceId', 'name'],
+    ['a plain function becomes a withDeps validator', 'plain', 'workspaceId'],
+    ['a withDeps validator becomes a plain function', 'workspaceId', 'plain'],
+  ])('a check running when %s ends without calling the validator', async (_, before, after) => {
     const { pending, gated } = createGatedValidator<SlugForm>();
     const validate = eitherDeps();
-    const { result, rerender } = renderHook(
-      ({ byName }: { byName: boolean }) =>
-        useForm(gated, {
-          initialValues: record,
-          fieldValidators: { slug: withDeps(byName ? ['name'] : ['workspaceId'], validate) },
-        }),
-      { initialProps: { byName: false } },
-    );
-    // The check waits on the first schema check
-    act(() => result.current.setFieldValue('slug', 'x'));
-
-    rerender({ byName: true });
-    await act(async () => {
-      pending[0]!.resolve(ok({ ...record, slug: 'x' }));
-      await nextTask();
-    });
-
-    expect(validate).not.toHaveBeenCalled();
-    expect(result.current.fieldErrors).toEqual({});
-    expect(result.current.validatingFields).toEqual({});
-    expect(result.current.isValidating).toBe(false);
-  });
-
-  test.each([
-    ['a plain function becomes a withDeps validator', false],
-    ['a withDeps validator becomes a plain function', true],
-  ])('a check running when %s ends without calling either', async (_, startsListed) => {
-    const { pending, gated } = createGatedValidator<SlugForm>();
-    const validate = slugCheck();
     const checkSlug = mock((_slug: string): string | undefined => 'Slug taken');
     const { result, rerender } = renderHook(
-      ({ listed }: { listed: boolean }) =>
+      ({ entry }: { entry: SlugEntry }) =>
         useForm(gated, {
           initialValues: record,
-          fieldValidators: { slug: listed ? withDeps(['workspaceId'], validate) : checkSlug },
+          fieldValidators: {
+            slug: entry === 'plain' ? checkSlug : withDeps(entry === 'name' ? ['name'] : ['workspaceId'], validate),
+          },
         }),
-      { initialProps: { listed: startsListed } },
+      { initialProps: { entry: before } },
     );
     // The check waits on the first schema check
     act(() => result.current.setFieldValue('slug', 'x'));
 
-    rerender({ listed: !startsListed });
+    rerender({ entry: after });
     await act(async () => {
       pending[0]!.resolve(ok({ ...record, slug: 'x' }));
       await nextTask();
