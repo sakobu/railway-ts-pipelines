@@ -1347,8 +1347,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         if (shouldValidate === undefined && validateOnChange) {
           // Live mode's default: typing already checked the field, so only its first touch checks, and only the schema
           if (!wasTouched) check();
-        } else if (shouldValidate ?? validateOnBlur) {
-          // The schema, and the field validators the field reaches
+        } else if (shouldValidate === undefined ? validateOnBlur : shouldValidate) {
+          // The schema, and the field validators the field reaches. A `null` from untyped code is off, as it is for
+          // setFieldValue and setValues.
           check([key]);
         }
       }),

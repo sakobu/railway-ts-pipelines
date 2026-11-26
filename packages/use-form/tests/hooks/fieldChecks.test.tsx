@@ -1303,11 +1303,12 @@ describe("a validator that answers with a thenable that isn't a native Promise",
 
 describe('setFieldTouched with shouldValidate', () => {
   const renderTouchForm = (validationMode: 'live' | 'blur' | 'submit') => {
+    const schema = mock(publishValidator);
     const checkTitle = mock((_value: string) => 'Taken');
     const rendered = renderHook(() =>
-      useForm(publishValidator, { initialValues: draft, validationMode, fieldValidators: { title: checkTitle } }),
+      useForm(schema, { initialValues: draft, validationMode, fieldValidators: { title: checkTitle } }),
     );
-    return { ...rendered, checkTitle };
+    return { ...rendered, schema, checkTitle };
   };
 
   test.each(['live', 'blur', 'submit'] as const)(
@@ -1324,21 +1325,33 @@ describe('setFieldTouched with shouldValidate', () => {
   );
 
   test('left out, live mode checks only the first touch, and only the schema', () => {
-    const { result, checkTitle } = renderTouchForm('live');
+    const { result, schema, checkTitle } = renderTouchForm('live');
 
     act(() => result.current.setFieldTouched('title'));
     act(() => result.current.setFieldTouched('title'));
 
+    expect(schema).toHaveBeenCalledTimes(1);
     expect(checkTitle).not.toHaveBeenCalled();
   });
 
   test('false never checks, even in blur mode', () => {
-    const { result, checkTitle } = renderTouchForm('blur');
+    const { result, schema, checkTitle } = renderTouchForm('blur');
 
     act(() => result.current.setFieldTouched('title', true, false));
 
+    expect(schema).not.toHaveBeenCalled();
     expect(checkTitle).not.toHaveBeenCalled();
     expect(result.current.touched.title).toBe(true);
+  });
+
+  test('a null from untyped code never checks, as for setFieldValue', () => {
+    const { result, schema, checkTitle } = renderTouchForm('live');
+
+    // @ts-expect-error -- untyped code: a null shouldValidate
+    act(() => result.current.setFieldTouched('title', true, null));
+
+    expect(schema).not.toHaveBeenCalled();
+    expect(checkTitle).not.toHaveBeenCalled();
   });
 });
 
