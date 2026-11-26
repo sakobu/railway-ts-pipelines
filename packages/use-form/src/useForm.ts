@@ -21,7 +21,7 @@ import {
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import { createAutoSave } from './autoSave';
-import { createCheckEvents, type EventRecord } from './checkEvents';
+import { createCheckEvents, type EventRecord, type EventRequests } from './checkEvents';
 import {
   createNativeCheckboxProps,
   createNativeSelectFieldProps,
@@ -944,14 +944,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * 1. The validators it checks are every one a recorded path reaches, through an input path overlapping it, and the
    *    fields a follow recorded whose validator is still on. Each is checked once.
-   * 2. It clears the client errors at the recorded paths. A sync schema check sets them again at once, so the cleared
-   *    state is never rendered, and while an async one runs, the old errors don't show.
-   * 3. It takes the schema check's id, starts a waiting check per validator, runs the schema once, then continues each
+   * 2. It takes the schema check's id, starts a waiting check per validator, runs the schema once, then continues each
    *    one. So each start replaces its field's older waiting check before the landing could move that one on, and the
    *    landing, even at once, leaves the new checks to their continuations.
-   *
-   * A follow's record also clears every client error while an async schema check runs, or once it threw: the old
-   * values' errors don't show on the new ones.
+   * 3. While the schema check has no sync answer, since it's async or it threw, the old client errors in the event's
+   *    scope don't show: every one after a follow, so the old values' errors don't show on the new ones, and otherwise
+   *    those at the recorded paths. A sync answer sets the client errors itself.
    *
    * @param record - What the event recorded
    * @throws A sync throw from the schema validator, once the field checks ended with no result. Otherwise the first
@@ -959,40 +957,39 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const checkRecorded = useCallback(
     (record: EventRecord): void => {
-      const { values, clientErrors } = store.getState();
+      const { values } = store.getState();
       const paths = [...record.paths];
       const validators = Array.from(fieldValidatorsRef.current).filter(
         ([key, validator]) =>
           record.fields.has(key) || validator.inputs.some((input) => paths.some((path) => pathsOverlap(input, path))),
       );
 
-      const isCleared = (errorPath: FieldPath): boolean => paths.some((path) => isPathAffected(errorPath, path));
-      if (Object.keys(clientErrors).some(isCleared)) {
-        dispatch({
-          type: 'SET_CLIENT_ERRORS',
-          errors: Object.fromEntries(Object.entries(clientErrors).filter(([errorPath]) => !isCleared(errorPath))),
-        });
-      }
+      // Step 3: hides the old client errors in the event's scope, if any show
+      const hideOld = (): void => {
+        const { clientErrors } = store.getState();
+        const isOld = (errorPath: FieldPath): boolean =>
+          record.clearAll || paths.some((path) => isPathAffected(errorPath, path));
+        if (Object.keys(clientErrors).some(isOld)) {
+          dispatch({
+            type: 'SET_CLIENT_ERRORS',
+            errors: Object.fromEntries(Object.entries(clientErrors).filter(([errorPath]) => !isOld(errorPath))),
+          });
+        }
+      };
 
       const schemaId = store.takeCheckId();
       const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
-
-      const clearForFollow = (): void => {
-        if (record.clearAll && Object.keys(store.getState().clientErrors).length > 0) {
-          dispatch({ type: 'SET_CLIENT_ERRORS', errors: {} });
-        }
-      };
 
       let schemaResult: SchemaCheck<TValues>;
       try {
         schemaResult = startValidation(values, schemaId);
       } catch (error) {
         // The schema validator threw: the field checks end with no result, and the throw reaches the caller
-        clearForFollow();
+        hideOld();
         moveOns.forEach((moveOn) => moveOn(undefined));
         throw error;
       }
-      if (isPromiseLike(schemaResult)) clearForFollow();
+      if (isPromiseLike(schemaResult)) hideOld();
 
       // Every field check moves on, whatever the others throw. The first throw then reaches the caller, and each later
       // one is logged, since only one can.
@@ -1011,32 +1008,43 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   /**
+   * Runs `body` as an event, or as part of the event already running, and once the outermost call returns, checks what
+   * the event asked for ({@link checkRecorded}). A sync throw from the check reaches the outermost call.
+   *
+   * @param body - What the event asks to check, through its requests
+   */
+  const runEvent = useCallback(
+    (body: (requests: EventRequests) => void): void => events.run(body, checkRecorded),
+    [events, checkRecorded],
+  );
+
+  /**
    * Runs `body` as an event with no caller to throw to, as an effect, a timer or a save's settle does: the mount check,
    * the layout effect's check after a `resetKey` reset and its follow of new `initialValues`, the follow after a save,
    * and auto-save's check. A sync throw is logged, since nothing could catch it.
    *
-   * @param body - What the event records
+   * @param body - What the event asks to check, through its requests
    */
   const runUncalled = useCallback(
-    (body: (record: EventRecord) => void): void => {
+    (body: (requests: EventRequests) => void): void => {
       try {
-        events.run(body, checkRecorded);
+        runEvent(body);
       } catch (error) {
         logValidationError(error);
       }
     },
-    [events, checkRecorded],
+    [runEvent],
   );
 
   /**
    * What `mount` mode does on mount and on a reset: asks its event for a schema check, and marks every field touched at
    * once, nested and array items included, so the errors show.
    *
-   * @param record - The event's record
+   * @param requests - The event's requests
    */
   const recordMountCheck = useCallback(
-    (record: EventRecord): void => {
-      record.schema = true;
+    (requests: EventRequests): void => {
+      requests.check();
       dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(store.getState().values) });
     },
     [store, dispatch],
@@ -1060,16 +1068,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Records the checks of a follow, so the errors describe the values shown. It asks for a check when the mode calls
    * for it, when the form has validated before (a blurred field in `blur` mode, a submit attempt in any mode), or when
    * errors are shown or still being checked. That check re-checks every field whose check was pending or showed an
-   * error before the follow, and clears the old values' schema errors while an async schema check runs, as when typing.
+   * error before the follow, and hides the old values' schema errors while an async schema check runs or once it threw.
    * A field keeps its error while it's re-checked only if the follow left the values it checked unchanged. A mode that
-   * wouldn't have validated yet still doesn't. In `mount` mode it marks the new version's fields touched at once.
+   * wouldn't have validated yet still doesn't. In `mount` mode it does what the mount does ({@link recordMountCheck}),
+   * so the new version's fields are marked touched at once.
    *
-   * @param record - The event's record
+   * Called right after the follow, so the store holds the state after it.
+   *
+   * @param requests - The event's requests
    * @param prev - The state before the follow
-   * @param next - The state after it
    */
   const recordFollow = useCallback(
-    (record: EventRecord, prev: FormState<TValues>, next: FormState<TValues>): void => {
+    (requests: EventRequests, prev: FormState<TValues>): void => {
       const fields = fieldsToRecheck(prev.checks.fields);
       const blurred = validateOnBlur && Object.values(prev.touched).some(Boolean);
 
@@ -1082,16 +1092,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         prev.checks.schema !== undefined ||
         fields.length > 0
       ) {
-        record.schema = true;
-        record.clearAll = true;
-        fields.forEach((key) => record.fields.add(key));
+        requests.recheckAfterFollow(fields);
       }
 
-      if (validateOnMount) {
-        dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(next.values) });
-      }
+      if (validateOnMount) recordMountCheck(requests);
     },
-    [dispatch, validateOnChange, validateOnBlur, validateOnMount],
+    [recordMountCheck, validateOnChange, validateOnBlur, validateOnMount],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
@@ -1136,7 +1142,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       if (now.generation !== prev.generation) {
         if (validateOnMount) runUncalled(recordMountCheck);
       } else if (now.baselineEpoch !== prev.baselineEpoch) {
-        runUncalled((record) => recordFollow(record, prev, now));
+        runUncalled((requests) => recordFollow(requests, prev));
       }
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
@@ -1167,16 +1173,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * follow's checks in the event, which replace the edit's own validation.
    *
    * @param action - The edit
-   * @param record - The event's record
+   * @param requests - The event's requests
    * @returns Whether the edit made the form follow the latest version
    */
   const applyEdit = useCallback(
-    (action: FormAction<TValues>, record: EventRecord): boolean => {
+    (action: FormAction<TValues>, requests: EventRequests): boolean => {
       const prev = store.getState();
       dispatch(action);
-      const next = store.getState();
-      if (next.baselineEpoch === prev.baselineEpoch) return false;
-      recordFollow(record, prev, next);
+      if (store.getState().baselineEpoch === prev.baselineEpoch) return false;
+      recordFollow(requests, prev);
       return true;
     },
     [store, dispatch, recordFollow],
@@ -1216,9 +1221,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void =>
-      events.run((record) => {
+      runEvent((requests) => {
         // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
-        const followed = applyEdit({ type: 'SET_FIELD_VALUE', field, value }, record);
+        const followed = applyEdit({ type: 'SET_FIELD_VALUE', field, value }, requests);
 
         onFieldChangeRef.current?.(field, value, store.getState().values);
 
@@ -1228,12 +1233,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         // The pass validates the values as they are after any onFieldChange cascade. A follow recorded its own checks.
-        if (shouldValidate && !followed) {
-          record.schema = true;
-          record.paths.add(normalizePath(field));
-        }
-      }, checkRecorded),
-    [store, dispatch, events, applyEdit, validateOnChange, touchOnChange, checkRecorded],
+        if (shouldValidate && !followed) requests.check([normalizePath(field)]);
+      }),
+    [store, dispatch, runEvent, applyEdit, validateOnChange, touchOnChange],
   );
 
   /**
@@ -1273,17 +1275,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void =>
-      events.run((record) => {
+      runEvent((requests) => {
         const before = store.getState().values;
-        const followed = applyEdit({ type: 'SET_VALUES', values: newValues }, record);
+        const followed = applyEdit({ type: 'SET_VALUES', values: newValues }, requests);
 
-        // A follow recorded its own checks
-        if (shouldValidate && !followed) {
-          record.schema = true;
-          changedPaths(before, newValues).forEach((path) => record.paths.add(path));
-        }
-      }, checkRecorded),
-    [store, events, applyEdit, validateOnChange, checkRecorded],
+        // A follow recorded its own checks. With nothing changed, it's a schema check only.
+        if (shouldValidate && !followed) requests.check(changedPaths(before, newValues));
+      }),
+    [store, runEvent, applyEdit, validateOnChange],
   );
 
   /**
@@ -1315,7 +1314,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldTouched = useCallback(
     (field: FieldPath, isTouched = true, shouldValidate = validateOnBlur): void =>
-      events.run((record) => {
+      runEvent(({ check }) => {
         const key = normalizePath(field);
         const wasTouched = own(store.getState().touched, key);
         dispatch({
@@ -1324,19 +1323,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           isTouched,
         });
 
-        if (shouldValidate) {
-          if (!validateOnChange) {
-            // In non-live modes, run field validators on blur
-            record.schema = true;
-            record.paths.add(key);
-          } else if (!wasTouched) {
-            // Live mode: only validate on first touch (focus→blur without typing).
-            // After onChange has run (which sets touched), blur is redundant.
-            record.schema = true;
-          }
-        }
-      }, checkRecorded),
-    [store, dispatch, events, validateOnBlur, validateOnChange, checkRecorded],
+        if (!shouldValidate || (validateOnChange && wasTouched)) return;
+        // Live mode: typing already checked the field, so only its first touch checks, and only the schema
+        if (validateOnChange) check();
+        // Other modes: the schema, and the field validators the field reaches
+        else check([key]);
+      }),
+    [store, dispatch, runEvent, validateOnBlur, validateOnChange],
   );
 
   // ===========================================================================
@@ -1565,9 +1558,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               lastVersion,
               ...(saved !== undefined && { saved }),
             });
-            const after = store.getState();
-            if (after.baselineEpoch !== before.baselineEpoch) {
-              runUncalled((record) => recordFollow(record, before, after));
+            if (store.getState().baselineEpoch !== before.baselineEpoch) {
+              runUncalled((requests) => recordFollow(requests, before));
             }
           };
 
@@ -1756,15 +1748,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const resetForm = useCallback(
     (): void =>
-      events.run((record) => {
+      runEvent((requests) => {
         dispatch({
           type: 'RESET_FORM',
         });
 
         // As on mount: validate, and mark every field touched so the errors show
-        if (validateOnMount) recordMountCheck(record);
-      }, checkRecorded),
-    [dispatch, events, recordMountCheck, validateOnMount, checkRecorded],
+        if (validateOnMount) recordMountCheck(requests);
+      }),
+    [dispatch, runEvent, recordMountCheck, validateOnMount],
   );
 
   // ===========================================================================
@@ -1812,9 +1804,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     }));
 
     if (step === 'check') {
-      runUncalled((record) => {
-        record.schema = true;
-      });
+      runUncalled((requests) => requests.check());
     } else if (step === 'submit') {
       // handleSubmit never rejects, and the scheduler's onIdle reports the settle
       void handleSubmit();
