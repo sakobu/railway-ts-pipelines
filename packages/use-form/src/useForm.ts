@@ -241,8 +241,7 @@ const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Re
  * Runs a step that answers at once or later, and tells how it settled: `onAnswer` gets its answer, and `onFail` hears
  * of a throw or rejection. Either way the caller still gets what the step gave, sync or async: its answer, its throw
  * or its rejection. An answer that settles later, whatever thenable it is, reaches the caller as a native promise.
- * An answer `onAnswer` throws on, as on a validator's malformed result, fails the step: `onFail` hears of it, and the
- * throw reaches the caller.
+ * A throw from `onAnswer` reaches the caller as it is: `onFail` doesn't hear of it.
  *
  * @param run - The step
  * @param onAnswer - Called with the answer, before the caller gets it
@@ -255,11 +254,7 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
     throw error;
   };
   const answered = (settled: T): T => {
-    try {
-      onAnswer(settled);
-    } catch (error) {
-      fail(error);
-    }
+    onAnswer(settled);
     return settled;
   };
   let answer: T | Promise<T>;
