@@ -33,6 +33,7 @@ import {
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
 import {
+  errorShownOrPending,
   fieldErrorsOf,
   fieldsCutShort,
   inputsHeld,
@@ -339,7 +340,7 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   const errors: ValidationError[] = [];
   let shown = true;
   let failed: PromiseRejectedResult | undefined;
-  for (const [index, { key, period }] of runs.entries()) {
+  for (const [index, { key, validator, period }] of runs.entries()) {
     const outcome = settled[index]!;
     if (now === generation && validatorPeriod(checks, key) !== period) {
       // It counts as never run, so nothing else sees its throw or rejection: logged, as a live check's is
@@ -348,10 +349,10 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
       failed ??= outcome;
     } else if (outcome.value !== undefined) {
       errors.push({ path: [key], message: outcome.value });
-      // Its error shows while its check is still the field's: not once an edit of the values it checked ended it, a
-      // newer check of the field replaced it, or when it never showed
-      const check = own(checks.fields, key);
-      shown &&= check?.id === id && check.error !== undefined;
+      // The form shows an error on the values it checked: its own, until an edit of them ended its check, or that of
+      // another check of the same values, such as a blur's, which shows one or answers soon. Not once an edit, a follow
+      // or a reset changed those values, nor when its check never showed.
+      shown &&= errorShownOrPending(checks.fields, key, valuesAt(values, validator.inputs));
     }
   }
   // Thrown once the pass is over, so every check that doesn't count has been logged
@@ -1516,7 +1517,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         };
 
         let validationResult: Result<TValues, ValidationError[]>;
-        // Whether the schema check landed, so its errors show: not once a newer check, a follow or a reset replaced it
+        // Whether the schema check landed, so its errors show. A newer check, a follow or a reset can replace it first.
         let landed = false;
         try {
           // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
@@ -1532,8 +1533,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         if (isErr(validationResult)) {
-          // No SET_SUBMITTING dispatch — isSubmitting was never set to true
-          return failedCheck({ errors: validationResult.error, shown: landed });
+          // No SET_SUBMITTING dispatch — isSubmitting was never set to true. Its errors show once it landed, and also
+          // once a newer check of the same values, such as a blur's, replaced it: that check shows the same errors. Not
+          // once an edit changed the values, or a follow or reset replaced them.
+          const sameValues = isBaseline() && deepEqual(store.getState().values, values);
+          return failedCheck({ errors: validationResult.error, shown: landed || sameValues });
         }
 
         const validData = validationResult.value;

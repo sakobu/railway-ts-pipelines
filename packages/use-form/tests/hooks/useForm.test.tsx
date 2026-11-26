@@ -1674,6 +1674,61 @@ describe('useForm', () => {
       expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
     });
 
+    test("a blur during a submission's schema check of unchanged values sets no submit error", async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'blur' }));
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      act(() => {
+        submitting = result.current.handleSubmit();
+      });
+      // The blur's check replaces the submission's, of the same values
+      act(() => result.current.setFieldTouched('title'));
+      let outcome!: Awaited<typeof submitting>;
+      await act(async () => {
+        pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        pending[1]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+        outcome = await submitting;
+      });
+
+      expect(result.current.clientErrors).toEqual({ title: 'Title is required' });
+      expect(result.current.errors._root).toBeUndefined();
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Title is required' }]));
+    });
+
+    test("a blur during a submission's field check of unchanged values sets no submit error", async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'blur',
+          fieldValidators: { title: () => gate() },
+        }),
+      );
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      // The blur's check of the same title replaces the submission's, and is still running when the submission counts
+      act(() => result.current.setFieldTouched('title'));
+      let outcome!: Awaited<typeof submitting>;
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        outcome = await submitting;
+      });
+      await act(async () => {
+        calls[1]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+      expect(result.current.errors._root).toBeUndefined();
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+    });
+
     test('an inline messages object keeps handleSubmit the same', () => {
       const { result, rerender } = renderHook(() =>
         useForm(userValidator, { initialValues: validValues, messages: { submitFailed: 'Algo salió mal.' } }),
