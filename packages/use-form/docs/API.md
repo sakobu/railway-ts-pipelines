@@ -50,7 +50,7 @@ const validator = v.object({
 });
 ```
 
-**A validator that throws.** A sync throw from the schema or a field validator reaches the outermost call of the event that asked for the check: `setFieldValue`, `setValues`, `setFieldTouched` or `resetForm`, and the array helpers through `setFieldValue`. Calls made inside `onFieldChange` join that event, so a throw from their check reaches the outermost call too. When one event's pass reaches several field validators and more than one throws, the first throw reaches the outermost call and each later one is logged. A check with no caller, which is the mount check, the check after a `resetKey` change or a follow of new `initialValues`, the follow after a save, and auto-save's check, logs every throw, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering. An async check that rejects is logged too, whatever started it, and its validating state ends. `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+**A validator that throws.** A sync throw from the schema reaches the outermost call of the event that asked for the check, and so does one from a field validator after a sync schema check (after an async one, a validator's throw is logged): `setFieldValue`, `setValues`, `setFieldTouched` or `resetForm`, and the array helpers through `setFieldValue`. Calls made inside `onFieldChange` join that event, so a throw from their check reaches the outermost call too. When one event's pass reaches several field validators and more than one throws, the first throw reaches the outermost call and each later one is logged. A check with no caller, which is the mount check, the check after a `resetKey` change or the layout effect's follow of new `initialValues`, the follow after a save, and auto-save's check, logs every throw, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering. A follow that an edit causes belongs to that edit's call, so its throw reaches the caller. An async check that rejects is logged too, whatever started it, and its validating state ends. `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
 
 #### options
 
@@ -231,7 +231,7 @@ A validator's own field matches by overlap: editing `address.city` re-checks a v
 
 **The schema gate.** A validator runs only when the schema produces **no error** at its own field or at any field it lists. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
 
-Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A `deps` list that changes between renders applies from the validator's next check. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
+Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A check of values the form no longer holds ends with no error (`handleSubmit`'s `err` still includes it), and a re-check of unchanged values keeps the error until it answers. A `deps` list that changes between renders applies from the validator's next check. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
 ```typescript
 const form = useForm(userSchema, {
@@ -1440,7 +1440,11 @@ getFieldId<TField extends ExtractFieldPaths<TItem>>(
 Makes a field validator that lists the other fields it reads. It is the second form of a [`fieldValidators`](#fieldvalidators) entry.
 
 ```typescript
-function withDeps<TValues, TValue, const D extends readonly ExtractFieldPaths<TValues>[]>(
+function withDeps<
+  TValues extends Record<string, unknown>,
+  TValue,
+  const D extends readonly ExtractFieldPaths<TValues>[],
+>(
   deps: D,
   validate: (value: TValue, deps: DepValues<TValues, D>) => string | undefined | Promise<string | undefined>,
 ): FieldValidatorWithDeps<TValues, TValue>;

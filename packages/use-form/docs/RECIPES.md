@@ -1154,7 +1154,7 @@ const form = useForm(schema, {
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run
-- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode), when the field's schema error, or one at a listed field, reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
 - the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
 
@@ -1338,14 +1338,14 @@ function ProjectForm() {
 
 ### fieldValidators vs schema-level async
 
-|                     | `fieldValidators`                   | `chainAsync` / `refineAtAsync` |
-| ------------------- | ----------------------------------- | ------------------------------ |
-| **Scope**           | Single field                        | Entire form                    |
-| **Runs when**       | After schema passes for that field  | During schema validation       |
-| **Re-runs when**    | Its field or a listed field changes | Any field changes              |
-| **Loading state**   | `validatingFields.fieldName`        | `isValidating` (form-wide)     |
-| **Race conditions** | Handled per-field (latest wins)     | Handled per-form (latest wins) |
-| **Best for**        | Server lookups (username, email)    | Cross-field async checks       |
+|                     | `fieldValidators`                                                  | `chainAsync` / `refineAtAsync`    |
+| ------------------- | ------------------------------------------------------------------ | --------------------------------- |
+| **Scope**           | Single field                                                       | Entire form                       |
+| **Runs when**       | After schema passes for that field and every field it lists        | During schema validation          |
+| **Re-runs when**    | Its field or a listed field changes                                | Any field changes                 |
+| **Loading state**   | `validatingFields.fieldName`                                       | `isValidating` (form-wide)        |
+| **Race conditions** | Handled per-field (latest wins)                                    | Handled per-form (latest wins)    |
+| **Best for**        | Server lookups, including ones that read other fields (`withDeps`) | Async rules over the whole object |
 
 Field validators return `undefined` for valid, or an error message string for invalid. A function gets its typed field value only: `(value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>` — no cast needed. `withDeps(deps, validate)` gives `validate` its value and the listed fields, typed, and nothing else.
 
