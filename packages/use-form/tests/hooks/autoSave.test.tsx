@@ -6,6 +6,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode, useState } from 'react';
 
 import { useForm } from '../../src/useForm';
+import { withDeps } from '../../src/withDeps';
 import { createGatedOnSubmit, createGatedValidator, nextTask, withoutAct } from '../fixtures/gates';
 import {
   userValidator,
@@ -669,6 +670,29 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Jane' });
       expect(schema).toHaveBeenCalledTimes(2);
       expect(checkName).toHaveBeenCalledTimes(1);
+    });
+
+    test('live auto-save saves once a listed field clears a cross-field error', async () => {
+      const onSubmit = saving();
+      const { result } = renderAutoSaveForm(onSubmit, delay, {
+        fieldValidators: {
+          name: withDeps(['email'], (name, { email }) => (name === email ? 'Must differ' : undefined)),
+        },
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', initial.email);
+      });
+      await sleep(delay * 2);
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      act(() => {
+        result.current.setFieldValue('email', 'other@example.com');
+      });
+      await sleep(delay * 2);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: initial.email, email: 'other@example.com' });
     });
   });
 

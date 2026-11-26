@@ -1,5 +1,6 @@
 export * from './useForm';
 export * from './useDebounce';
+export { withDeps } from './withDeps';
 export { fromStandardSchema, isStandardSchema } from './standardSchema';
 export type { FormValidator } from './standardSchema';
 export type {

@@ -1,3 +1,4 @@
+import type { FieldValidatorWithDeps } from './withDeps';
 import type { Result } from '@railway-ts/pipelines/result';
 import type { ValidationError } from '@railway-ts/pipelines/schema';
 import type { ChangeEvent, SyntheticEvent } from 'react';
@@ -236,6 +237,9 @@ export type ChecksState = {
   validators: Readonly<Record<FieldPath, ValidatorState>>;
 };
 
+/** What a field validator answers: an error message, or `undefined` when the value passes. */
+export type FieldValidatorAnswer = string | undefined | Promise<string | undefined>;
+
 /**
  * The submit handler: it returns nothing on every path, or a `Result` on every path.
  * Returning nothing is allowed only when `TResult` is the form values, since `handleSubmit`
@@ -453,7 +457,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   fieldValidators?:
     | {
         [K in ExtractFieldPaths<TValues>]?:
-          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | ((value: FieldTypeAtPath<TValues, K>) => FieldValidatorAnswer)
+          | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>>
           | undefined;
       }
     | undefined;
