@@ -219,10 +219,18 @@ export type FieldCheck = {
   inputs: Readonly<Record<FieldPath, unknown>>;
   /** The error shown: once done, the validator's; while pending, the last one, while the inputs are unchanged */
   error?: string;
+  /**
+   * The schema gate held it back: it ended without calling the validator, with no error, since the schema rejected an
+   * input. It runs once a schema check of the form's values accepts its inputs, while they hold.
+   */
+  gated?: true;
 };
 
-/** How a field check ended: with the validator's answer, or with none (it threw or rejected). */
-export type FieldCheckResult = { error: string | undefined } | 'none';
+/**
+ * How a field check ended: with the validator's answer, with none (it threw or rejected), or held back by the schema
+ * gate, which runs it once the schema accepts its inputs.
+ */
+export type FieldCheckResult = { error: string | undefined } | 'none' | 'gated';
 
 /** A field validator as the checks know it: whether it's on, and its period, which goes up at each switch-off. */
 export type ValidatorState = { on: boolean; period: number };
@@ -468,9 +476,10 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * while its values hold. So a refetch can send lookups: a check like "username taken" that should accept the
    * record's own value lists the record's id with `withDeps`.
    *
-   * A validator is skipped, with no error, when a schema error overlaps its field or any field it lists: one at, inside
-   * or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on `address`. A root
-   * error (path `[]`) sits above every field, so it skips every validator.
+   * The schema gate holds a validator back, with no error, while a schema error overlaps its field or any field it
+   * lists: one at, inside or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on
+   * `address`. A root error (path `[]`) sits above every field, so it holds back every validator. A held-back check
+   * runs once a schema check accepts its inputs, whichever field the fix was in.
    * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
    */

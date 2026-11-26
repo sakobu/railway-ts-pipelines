@@ -1156,7 +1156,7 @@ const form = useForm(schema, {
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run
-- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate skips the validator and ends its check with no error. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate holds the check back, with no error, until the schema accepts them. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
 - the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
 
@@ -1261,7 +1261,7 @@ function ValibotForm() {
 
 **Problem:** You need to check a value against the server (username availability, coupon codes) without blocking the entire form. Schema-level async validation (`chainAsync`) validates the whole form -- you want per-field control with per-field loading indicators.
 
-**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it skips every validator: put a cross-field rule on its field with `refineAt` to keep the lookups running.
+**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking. A validator the gate holds back runs once a schema check accepts its inputs, whichever field the fix was in. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it holds back every validator until it clears: put a cross-field rule on its field with `refineAt` to keep the other lookups running.
 
 ```tsx
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {

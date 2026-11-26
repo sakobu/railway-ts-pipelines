@@ -8,6 +8,7 @@ import {
   endSchemaCheck,
   fieldErrorsOf,
   fieldsCutShort,
+  gatedFieldChecksOf,
   hasFieldError,
   hasPendingFieldCheck,
   inputsHeld,
@@ -113,6 +114,25 @@ test('waitingFieldCheck gives the check while it waits, not once it runs, ends o
   expect(waitingFieldCheck(endFieldCheck(waiting, 'name', 1, 'none'), 'name', 1)).toBeUndefined();
   expect(waitingFieldCheck(startFieldCheck(waiting, 'name', 2, 'waiting', { name: 'y' }), 'name', 1)).toBeUndefined();
   expect(waitingFieldCheck(NO_CHECKS, 'name', 1)).toBeUndefined();
+});
+test("'gated' ends a check held back, with no error, and gatedFieldChecksOf takes it", () => {
+  const rechecking = startFieldCheck(failed, 'name', 2, 'waiting', { name: 'x' });
+  const gated = endFieldCheck(rechecking, 'name', 2, 'gated');
+  expect(gated.fields.name).toEqual({ id: 2, status: 'done', inputs: { name: 'x' }, gated: true });
+  expect(fieldErrorsOf(gated.fields)).toEqual({});
+  expect(hasPendingFieldCheck(gated.fields)).toBe(false);
+  expect(Object.keys(gatedFieldChecksOf(gated.fields))).toEqual(['name']);
+  expect(gatedFieldChecksOf(failed.fields)).toEqual({});
+});
+test('an edit of the inputs of a check held back ends it no longer held back, and a newer check replaces it', () => {
+  const gated = endFieldCheck(startFieldCheck(withName, 'name', 1, 'waiting', { name: 'x' }), 'name', 1, 'gated');
+  expect(endOutdatedChecks(gated, { name: 'x' })).toBe(gated);
+  expect(endOutdatedChecks(gated, { name: 'y' }).fields.name).toEqual({ id: 1, status: 'done', inputs: { name: 'x' } });
+  expect(startFieldCheck(gated, 'name', 2, 'waiting', { name: 'x' }).fields.name).toEqual({
+    id: 2,
+    status: 'waiting',
+    inputs: { name: 'x' },
+  });
 });
 test('waitingFieldChecksOf takes the checks that wait, not those running or done', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));

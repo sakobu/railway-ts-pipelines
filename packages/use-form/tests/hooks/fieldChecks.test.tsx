@@ -2144,3 +2144,102 @@ describe('withDeps', () => {
     expect(outcome).toEqual(ok({ ...record, slug: 'taken' }));
   });
 });
+
+describe('the schema gate holds a check back until the schema accepts its inputs', () => {
+  type Signup = { username: string; email: string; contact: string };
+  const signup: Signup = { username: 'ann', email: 'ann@example.com', contact: 'ann@example.com' };
+  // A cross-field rule on username that reads contact: the error sits on username, the cause in contact
+  const crossFieldSchema = S.chain(
+    S.object({
+      username: S.required(S.string()),
+      email: S.required(S.string()),
+      contact: S.required(S.string()),
+    }),
+    S.refineAt<Signup>('username', (form) => form.contact === form.email, 'Contact must match the email'),
+  );
+  // A root rule: its error sits above every field
+  const rootSchema = S.chain(
+    S.object({
+      username: S.required(S.string()),
+      email: S.required(S.string()),
+      contact: S.required(S.string()),
+    }),
+    S.refine((form: Signup) => form.contact === form.email, 'Contact must match the email'),
+  );
+
+  test.each([
+    ['a cross-field error on its field', crossFieldSchema],
+    ['a root error', rootSchema],
+  ])('in live mode, a fix in another field that clears %s runs the check it held back', (_, schema) => {
+    const checkUsername = mock((_username: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(schema, { initialValues: signup, validationMode: 'live', fieldValidators: { username: checkUsername } }),
+    );
+    act(() => result.current.setFieldValue('contact', 'other'));
+    act(() => result.current.setFieldValue('username', 'bob'));
+    expect(checkUsername).not.toHaveBeenCalled();
+    expect(result.current.validatingFields).toEqual({});
+
+    act(() => result.current.setFieldValue('contact', signup.email));
+
+    expect(checkUsername).toHaveBeenCalledTimes(1);
+    expect(checkUsername).toHaveBeenCalledWith('bob');
+  });
+
+  test('in blur mode, the check held back runs once a blur lands a schema check that accepts its inputs', () => {
+    const checkUsername = mock((_username: string) => 'Taken');
+    const { result } = renderHook(() =>
+      useForm(crossFieldSchema, {
+        initialValues: { ...signup, contact: 'other' },
+        validationMode: 'blur',
+        fieldValidators: { username: checkUsername },
+      }),
+    );
+    act(() => result.current.setFieldTouched('username'));
+    expect(checkUsername).not.toHaveBeenCalled();
+
+    act(() => result.current.setFieldValue('contact', signup.email));
+    expect(checkUsername).not.toHaveBeenCalled();
+    act(() => result.current.setFieldTouched('contact'));
+
+    expect(checkUsername).toHaveBeenCalledWith('ann');
+    expect(result.current.fieldErrors).toEqual({ username: 'Taken' });
+  });
+
+  test('an edit of the inputs of a check held back drops it, so the fix elsewhere runs nothing', () => {
+    const checkUsername = mock((_username: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(crossFieldSchema, {
+        initialValues: { ...signup, contact: 'other' },
+        validationMode: 'blur',
+        fieldValidators: { username: checkUsername },
+      }),
+    );
+    act(() => result.current.setFieldTouched('username'));
+    // In blur mode the edit only drops what the check was held back for: its blur checks it again
+    act(() => result.current.setFieldValue('username', 'bob'));
+
+    act(() => result.current.setFieldValue('contact', signup.email));
+    act(() => result.current.setFieldTouched('contact'));
+
+    expect(checkUsername).not.toHaveBeenCalled();
+  });
+
+  test('a schema check that still rejects the inputs leaves the check held back, without calling the validator', () => {
+    const checkUsername = mock((_username: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(rootSchema, {
+        initialValues: signup,
+        validationMode: 'live',
+        fieldValidators: { username: checkUsername },
+      }),
+    );
+    act(() => result.current.setFieldValue('contact', 'other'));
+    act(() => result.current.setFieldValue('username', 'bob'));
+
+    act(() => result.current.setFieldValue('email', 'still@different.com'));
+
+    expect(checkUsername).not.toHaveBeenCalled();
+    expect(result.current.isValidating).toBe(false);
+  });
+});
