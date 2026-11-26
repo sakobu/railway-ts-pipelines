@@ -507,8 +507,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * reaches that outermost call. So a cascade runs each validator and the schema once. validateForm
    * and handleSubmit still check at once. A throw from this callback that reaches the outermost call
    * ends it without validating, the re-check of a follow the edit caused included: the errors the edit outdated are
-   * already gone, but schema errors from before it stay shown until the next check. A resetForm() or setValues() made here can override the field that
-   * just changed. To reset the other fields when one changes, call
+   * already gone, but schema errors from before it stay shown until the next check. A resetForm() or setValues() made
+   * here can override the field that just changed. To reset the other fields when one changes, call
    * setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
