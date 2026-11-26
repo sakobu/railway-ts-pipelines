@@ -427,6 +427,30 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
 const isMergeTarget = (value: unknown): value is Record<string, unknown> => isBranch(value) && !Array.isArray(value);
 
 /**
+ * What a `setValues` merge does at one key of `source`: merge a plain object into the object there,
+ * or write the value, replacing the one `target` holds.
+ */
+type MergeStep =
+  | { key: string; merges: true; target: Record<string, unknown>; source: Record<string, unknown> }
+  | { key: string; merges: false; before: unknown; value: unknown };
+
+/**
+ * The merge rule, one step per key of `source`, shared by {@link deepMerge} and {@link changedPaths}.
+ * A plain object merges into a {@link isMergeTarget} value, and every other value is written. It skips
+ * `__proto__`: `JSON.parse` makes it an own key, and assigning it would replace the values' prototype.
+ */
+const mergeSteps = (target: Record<string, unknown>, source: Record<string, unknown>): MergeStep[] =>
+  Object.keys(source)
+    .filter((key) => key !== '__proto__')
+    .map((key): MergeStep => {
+      const value = source[key];
+      const before = target[key];
+      return isPlainObject(value) && isMergeTarget(before)
+        ? { key, merges: true, target: before, source: value }
+        : { key, merges: false, before, value };
+    });
+
+/**
  * Merges `source` into `target` for `setValues`, returning a new object.
  *
  * A plain object in `source` is a partial update. It merges into the object there, as
@@ -448,13 +472,8 @@ const isMergeTarget = (value: unknown): value is Record<string, unknown> => isBr
 export const deepMerge = <T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T => {
   const result: Record<string, unknown> = { ...target };
 
-  for (const key of Object.keys(source)) {
-    // JSON.parse makes "__proto__" an own key. Assigning it would replace the values' prototype.
-    if (key === '__proto__') continue;
-    const srcVal = source[key];
-    const tgtVal = target[key];
-    const merges = isPlainObject(srcVal) && isMergeTarget(tgtVal);
-    result[key] = merges ? deepMerge(tgtVal, srcVal) : srcVal;
+  for (const step of mergeSteps(target, source)) {
+    result[step.key] = step.merges ? deepMerge(step.target, step.source) : step.value;
   }
 
   return result as T;
@@ -462,9 +481,9 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
 
 /**
  * The leaf paths whose value `deepMerge(target, source)` changes, so `setValues` checks only what it
- * changed. It descends where {@link deepMerge} merges, and skips `__proto__` as it does. Every other
- * value `source` holds is a leaf it writes, compared with what `target` holds there by
- * {@link deepEqual}. An object merged into isn't a path it writes.
+ * changed. It follows the same steps as {@link deepMerge}: it descends where a step merges, and
+ * compares each value a step writes with what `target` holds there by {@link deepEqual}. An object
+ * merged into isn't a path it writes.
  *
  * @param target - The values before the merge
  * @param source - The values merged in
@@ -482,13 +501,10 @@ export const changedPaths = (
   source: Record<string, unknown>,
   prefix = '',
 ): FieldPath[] =>
-  Object.keys(source).flatMap((key) => {
-    if (key === '__proto__') return [];
-    const srcVal = source[key];
-    const tgtVal = target[key];
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (isPlainObject(srcVal) && isMergeTarget(tgtVal)) return changedPaths(tgtVal, srcVal, path);
-    return deepEqual(tgtVal, srcVal) ? [] : [path];
+  mergeSteps(target, source).flatMap((step) => {
+    const path = prefix ? `${prefix}.${step.key}` : step.key;
+    if (step.merges) return changedPaths(step.target, step.source, path);
+    return deepEqual(step.before, step.value) ? [] : [path];
   });
 
 /**
