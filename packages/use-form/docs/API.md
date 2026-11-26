@@ -324,7 +324,7 @@ In `blur`, `submit` and `mount` modes it checks the schema once the delay ends. 
 
 It saves only values that differ from `initialValues` (`isDirty`). So pass what was saved back in as `initialValues`, as an edit form does with the saved record: `isDirty` then compares against what the server holds. With `initialValues` that never change, an edit back to them after an earlier save counts as clean and isn't saved, though the server still holds the earlier save.
 
-After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, and a Save queued behind it, then goes out as soon as they settle. An edit not sent yet when the record switches or the form unmounts is dropped, like the form's other unsaved edits, though a Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
+After a `resetKey` switch, the new record's auto-save waits for the previous record's submissions still running, auto-saves and Save clicks alike, and goes out as soon as they settle. An edit not sent yet when the record switches or the form unmounts is dropped, like the form's other unsaved edits, though a Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
 
 A new `delay` applies from the next change. A delay already running keeps its length.
 

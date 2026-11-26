@@ -402,10 +402,11 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * 6. It saves only values that differ from `initialValues` (`isDirty`), so pass what was saved back in as
    *    `initialValues`: with `initialValues` that never change, an edit back to them after an earlier save counts as
    *    clean and isn't saved, though the server still holds the earlier save.
-   * 7. After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, and a
-   *    Save queued behind it, then goes out as soon as they settle, while an edit not sent yet when the record switches
-   *    or the form unmounts is dropped, like the form's other unsaved edits, though a Save the user clicked still goes
-   *    out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
+   * 7. After a `resetKey` switch, the new record's auto-save waits for the previous record's submissions still
+   *    running, auto-saves and Save clicks alike, and goes out as soon as they settle, while an edit not sent yet when
+   *    the record switches or the form unmounts is dropped, like the form's other unsaved edits, though a Save the
+   *    user clicked still goes out. To keep the last edits, disable switching records while
+   *    `form.isDirty || form.isSubmitting`.
    * 8. A new `delay` applies from the next change, and a delay already running keeps its length.
    *
    * @example

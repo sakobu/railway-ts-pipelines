@@ -580,6 +580,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     createSubmitScheduler<TValues, Result<TResult, ValidationError[]>>(noteSettle),
   );
   const submitSchedulerRef = useRef(firstSubmitScheduler);
+  // The scheduler the latest resetKey reset retired: the previous record's. Its submissions, auto-save's and Save
+  // clicks alike, hold the new record's auto-save until its onIdle reports them settled.
+  const retiredSchedulerRef = useRef<SubmitScheduler<TValues, Result<TResult, ValidationError[]>> | undefined>(
+    undefined,
+  );
 
   // ===========================================================================
   // Computed State
@@ -1001,6 +1006,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // Started over. The old record's running submission and waiting follow-up still run as the old record's,
       // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
       submitSchedulerRef.current.retire(prev.values);
+      retiredSchedulerRef.current = submitSchedulerRef.current;
       submitSchedulerRef.current = createSubmitScheduler(noteSettle);
     }
   });
@@ -1626,11 +1632,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // reads the store, never a render's state. A submission's settle doesn't decide: it counts (noteSettle, above), and
   // the commit that follows decides. The auto-saver sits above too, since noteSettle reads whether it is on.
 
-  // The scheduler auto-save last submitted on. After a resetKey reset it is the previous record's, whose running
-  // submissions hold the new record's auto-save until its onIdle reports them settled.
-  const autoSaveSchedulerRef = useRef<SubmitScheduler<TValues, Result<TResult, ValidationError[]>> | undefined>(
-    undefined,
-  );
   // The latest commit's runAutoSave, so a delay an earlier render started saves through the latest onSubmit. Set
   // before any effect runs (below).
   const runAutoSaveRef = useRef<() => void>(() => {});
@@ -1662,7 +1663,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       isValidating: isValidatingState(state),
       isValid: isValidState(state),
       isStale: state.isStale,
-      isSubmitting: submitSchedulerRef.current.isBusy() || autoSaveSchedulerRef.current?.isBusy() === true,
+      isSubmitting: submitSchedulerRef.current.isBusy() || retiredSchedulerRef.current?.isBusy() === true,
       wentOut: state.wentOut,
       baselineEpoch: state.baselineEpoch,
     }));
@@ -1670,7 +1671,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     if (step === 'check') {
       startUnawaitedCheck(state.values);
     } else if (step === 'submit') {
-      autoSaveSchedulerRef.current = submitSchedulerRef.current;
       // handleSubmit never rejects, and the scheduler's onIdle reports the settle
       void handleSubmit();
     }

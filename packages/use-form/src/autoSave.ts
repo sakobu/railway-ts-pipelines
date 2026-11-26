@@ -26,7 +26,7 @@ export type AutoSaveView<TValues extends Record<string, unknown>> = {
   isValid: boolean;
   /** FormState.isStale: the store's, which a running submission doesn't hide */
   isStale: boolean;
-  /** A submission runs on the current submit scheduler, or on the one auto-save last submitted on */
+  /** A submission runs on the current submit scheduler, or on the one the latest resetKey reset retired */
   isSubmitting: boolean;
   /** FormState.wentOut */
   wentOut: TValues | undefined;

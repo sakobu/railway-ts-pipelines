@@ -1480,6 +1480,37 @@ describe('autoSave', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
     });
 
+    test("after a resetKey switch, the new record's save waits for a Save click still running on the previous record", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
+      const { result, rerender } = renderHook(
+        ({ values, id }: { values: UserForm; id: string }) =>
+          useForm(userValidator, { initialValues: values, resetKey: id, onSubmit, autoSave: { delay: 50 } }),
+        { initialProps: { values: initial, id: 'a' } },
+      );
+
+      // A Save click before auto-save's delay ends, so auto-save never submits on this record
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+        void result.current.handleSubmit();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+
+      rerender({ values: other, id: 'b' });
+      act(() => {
+        result.current.setFieldValue('name', 'Bobby');
+      });
+      await sleep(300);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2), { timeout: 1000 });
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
+    });
+
     test("after a resetKey switch, the new record's save also waits for a Save queued behind the previous record's save", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
