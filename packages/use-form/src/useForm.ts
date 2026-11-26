@@ -1162,20 +1162,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
-   * Applies an edit. One that undoes the last unsaved edit makes the form follow the latest version: it then records a
-   * follow's checks in the event, which replace the edit's own validation.
+   * Applies an edit and records its checks in the event. One that undoes the last unsaved edit makes the form follow
+   * the latest version: it then records a follow's checks, which replace the edit's own. Otherwise it records the
+   * edit's own check, when it asks for one. The pass reads the event's record only once the outermost call returns, so
+   * a check recorded now still validates the values as any later call in the event leaves them.
    *
    * @param action - The edit
    * @param requests - The event's requests
-   * @returns Whether the edit made the form follow the latest version
+   * @param checkPaths - The paths the edit's own check reaches, normalized: none for a schema check only, or undefined
+   *   when the edit asks for no check
    */
   const applyEdit = useCallback(
-    (action: FormAction<TValues>, requests: EventRequests): boolean => {
+    (action: FormAction<TValues>, requests: EventRequests, checkPaths: readonly FieldPath[] | undefined): void => {
       const prev = store.getState();
       dispatch(action);
-      if (store.getState().baselineEpoch === prev.baselineEpoch) return false;
-      recordFollow(requests, prev);
-      return true;
+      if (store.getState().baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev);
+      else if (checkPaths) requests.check(checkPaths);
     },
     [store, dispatch, recordFollow],
   );
@@ -1215,18 +1217,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void =>
       runEvent((requests) => {
-        // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it
-        const followed = applyEdit({ type: 'SET_FIELD_VALUE', field, value }, requests);
+        const key = normalizePath(field);
+        // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it. The pass validates
+        // the values as they are after any onFieldChange cascade.
+        applyEdit({ type: 'SET_FIELD_VALUE', field, value }, requests, shouldValidate ? [key] : undefined);
 
         onFieldChangeRef.current?.(field, value, store.getState().values);
 
         // Mark touched on first change for immediate error visibility
-        if (touchOnChange && !own(store.getState().touched, normalizePath(field))) {
+        if (touchOnChange && !own(store.getState().touched, key)) {
           dispatch({ type: 'SET_FIELD_TOUCHED', field, isTouched: true });
         }
-
-        // The pass validates the values as they are after any onFieldChange cascade. A follow recorded its own checks.
-        if (shouldValidate && !followed) requests.check([normalizePath(field)]);
       }),
     [store, dispatch, runEvent, applyEdit, validateOnChange, touchOnChange],
   );
@@ -1269,11 +1270,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void =>
       runEvent((requests) => {
-        const before = store.getState().values;
-        const followed = applyEdit({ type: 'SET_VALUES', values: newValues }, requests);
-
-        // A follow recorded its own checks. With nothing changed, it's a schema check only.
-        if (shouldValidate && !followed) requests.check(changedPaths(before, newValues));
+        // With nothing changed, its check is a schema check only
+        const checkPaths = shouldValidate ? changedPaths(store.getState().values, newValues) : undefined;
+        applyEdit({ type: 'SET_VALUES', values: newValues }, requests, checkPaths);
       }),
     [store, runEvent, applyEdit, validateOnChange],
   );
