@@ -674,10 +674,12 @@ describe('autoSave', () => {
 
     test('live auto-save saves once a listed field clears a cross-field error', async () => {
       const onSubmit = saving();
+      // Typed as the list gives it: email reads as string
+      const differsFromEmail = mock((name: string, { email }: { readonly email: string }) =>
+        name === email ? 'Must differ' : undefined,
+      );
       const { result } = renderAutoSaveForm(onSubmit, delay, {
-        fieldValidators: {
-          name: withDeps(['email'], (name, { email }) => (name === email ? 'Must differ' : undefined)),
-        },
+        fieldValidators: { name: withDeps(['email'], differsFromEmail) },
       });
 
       act(() => {
@@ -689,6 +691,8 @@ describe('autoSave', () => {
       act(() => {
         result.current.setFieldValue('email', 'other@example.com');
       });
+      // The edit's own pass re-ran it, before the save's field step could
+      expect(differsFromEmail).toHaveBeenLastCalledWith(initial.email, { email: 'other@example.com' });
       await sleep(delay * 2);
 
       expect(onSubmit).toHaveBeenCalledTimes(1);

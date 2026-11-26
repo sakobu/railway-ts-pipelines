@@ -1746,6 +1746,37 @@ describe('withDeps', () => {
     expect(result.current.isValidating).toBe(false);
   });
 
+  test.each([
+    ['a plain function becomes a withDeps validator', false],
+    ['a withDeps validator becomes a plain function', true],
+  ])('a check running when %s ends without calling either', async (_, startsListed) => {
+    const { pending, gated } = createGatedValidator<SlugForm>();
+    const validate = slugCheck();
+    const checkSlug = mock((_slug: string): string | undefined => 'Slug taken');
+    const { result, rerender } = renderHook(
+      ({ listed }: { listed: boolean }) =>
+        useForm(gated, {
+          initialValues: record,
+          fieldValidators: { slug: listed ? withDeps(['workspaceId'], validate) : checkSlug },
+        }),
+      { initialProps: { listed: startsListed } },
+    );
+    // The check waits on the first schema check
+    act(() => result.current.setFieldValue('slug', 'x'));
+
+    rerender({ listed: !startsListed });
+    await act(async () => {
+      pending[0]!.resolve(ok({ ...record, slug: 'x' }));
+      await nextTask();
+    });
+
+    expect(validate).not.toHaveBeenCalled();
+    expect(checkSlug).not.toHaveBeenCalled();
+    expect(result.current.fieldErrors).toEqual({});
+    expect(result.current.validatingFields).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
   test('an inline withDeps adds no render', () => {
     const validate = slugCheck();
     let renders = 0;
