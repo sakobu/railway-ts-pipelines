@@ -4,7 +4,7 @@
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 
-**~8.3 kB** minified + brotli (under 15 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
+**~8.5 kB** minified + brotli (under 15 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
 
 ## Why?
 
