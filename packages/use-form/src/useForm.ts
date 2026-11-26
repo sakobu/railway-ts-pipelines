@@ -962,14 +962,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const schemaId = store.takeCheckId();
       const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
 
-      // The schema's errors, read once for every field check it moves on
+      // The schema's errors, read once for every field check it moves on, and not at all with none to move on
+      const errorsOf = moveOns.length > 0 ? schemaErrorsByPath : () => undefined;
       let schemaErrors: SchemaErrors | Promise<SchemaErrors>;
       try {
         const result = checkSchema(dispatch, schemaId, values, moveOnWaitingChecks);
         // Nothing awaits the schema check, so a rejection is logged, and leaves it with no result
-        schemaErrors = isPromiseLike(result)
-          ? result.then(schemaErrorsByPath, logValidationError)
-          : schemaErrorsByPath(result);
+        schemaErrors = isPromiseLike(result) ? result.then(errorsOf, logValidationError) : errorsOf(result);
       } catch (error) {
         // The schema validator threw: the field checks end with no result, and the throw reaches the caller
         hideOld();
