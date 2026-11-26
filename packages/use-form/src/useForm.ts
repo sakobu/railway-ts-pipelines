@@ -1629,8 +1629,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Decides auto-save's next step for the values the store holds now, and takes it. Values that changed start a new
    * version and its delay. Values the form hasn't checked get one schema check per version, and another once a follow
-   * or reset ends that check. A throw or rejection from the schema validator is logged. Otherwise, once nothing holds them, they're submitted through `handleSubmit`.
-   * Does nothing while auto-save is off or unmounted.
+   * or reset ends that check. A throw or rejection from the schema validator is logged. Otherwise, once nothing holds
+   * them, they're submitted through `handleSubmit`. Does nothing while auto-save is off or unmounted.
    */
   const runAutoSave = useCallback((): void => {
     if (!autoSaver.isOn()) return;
