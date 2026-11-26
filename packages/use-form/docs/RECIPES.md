@@ -1342,7 +1342,7 @@ function ProjectForm() {
 | ------------------- | ------------------------------------------------------------------ | --------------------------------- |
 | **Scope**           | Single field                                                       | Entire form                       |
 | **Runs when**       | After no schema error overlaps that field or a field it lists      | During schema validation          |
-| **Re-runs when**    | Its field or a listed field changes                                | Any field changes                 |
+| **Re-runs when**    | Its field or a listed field changes (`live`), or blurs (`blur`)    | Any field changes                 |
 | **Loading state**   | `validatingFields.fieldName`                                       | `isValidating` (form-wide)        |
 | **Race conditions** | Handled per-field (latest wins)                                    | Handled per-form (latest wins)    |
 | **Best for**        | Server lookups, including ones that read other fields (`withDeps`) | Async rules over the whole object |

@@ -1169,8 +1169,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Automatically marks the field as touched (in "live" mode) and clears related server errors.
    *
    * Validation runs once, after the outermost call returns: a call made inside `onFieldChange` joins this one. The
-   * schema then runs once, and so does each field validator on this field, on a field inside it or on one containing
-   * it, on the values as they are then. A sync throw from either reaches the outermost call.
+   * schema then runs once, and so does each field validator whose field, or a field it lists with `withDeps`, is this
+   * field, inside it or contains it, on the values as they are then. A sync throw from either reaches the outermost
+   * call.
    *
    * @template TValue - The type of the value being set
    * @param field - The field path (supports dot notation and bracket notation)
@@ -1263,9 +1264,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Marks a field as touched or untouched and optionally triggers validation.
    * Touched fields typically display their validation errors to the user.
    *
-   * Validation runs once, after the outermost call returns, as for `setFieldValue`. Outside `live` mode it checks the
-   * schema and the field validators the field reaches. In `live` mode, typing has checked the field already, so only
-   * its first touch checks, and only the schema.
+   * When it validates, by default in `live` and `blur` modes or with `shouldValidate: true`, validation runs once,
+   * after the outermost call returns, as for `setFieldValue`. Outside `live` mode it checks the schema and the field
+   * validators the field reaches. In `live` mode, typing has checked the field already, so only its first touch checks,
+   * and only the schema.
    *
    * @param field - The field path to mark
    * @param isTouched - Whether the field should be marked as touched (default: true)
