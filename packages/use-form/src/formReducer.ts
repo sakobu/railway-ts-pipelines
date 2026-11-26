@@ -388,9 +388,10 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Settling a successful submit
  * - Tracking checks: the schema check, each field's validator and its checks
  *
- * Values equal to the initial values leave nothing that went out to remember, so `wentOut` is dropped from the
- * result of every action, the ones that change nothing included. Not while a submission runs: the initial values may
- * then be an optimistic write that a failed save rolls back. The action that ends the submission drops it then.
+ * An action that changes the values to ones equal to the initial values, such as an edit back, a follow or a reset,
+ * leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged values
+ * don't: they may be a save's answer, or an optimistic write that a failed save rolls back, while it runs or after it
+ * ended.
  *
  * All state updates are performed immutably, never mutating the existing state. Some actions
  * return the same state object when they change nothing, so the store can skip notifying:
@@ -404,7 +405,7 @@ const reduce = <TValues extends Record<string, unknown>>(
  * @param state - The current form state before the action is applied
  * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
  * @param initialValues - Initial form values used when resetting the form
- * @returns A new state object, or the same one for the no-op cases above, unless the clean rule drops `wentOut`
+ * @returns A new state object, or the same one for the no-op cases above
  *
  * @example
  * // Used internally by useForm's store, which applies each action as soon as it is dispatched
@@ -438,7 +439,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
 ): FormState<TValues> => {
   const next = reduce(state, action, initialValues);
-  if (next.wentOut === undefined || next.isSubmitting || !deepEqual(next.values, initialValues)) return next;
+  if (next.wentOut === undefined || next.values === state.values || !deepEqual(next.values, initialValues)) return next;
   const { wentOut: _wentOut, ...rest } = next;
   return rest;
 };

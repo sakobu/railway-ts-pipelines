@@ -63,6 +63,35 @@ const renderAutoSaveForm = (
     { initialProps: { values: initial, options: options ?? {} } },
   );
 
+/**
+ * A form whose `onSubmit` writes the values to the record before the server answers, then fails with a submit error
+ * and rolls the write back: while the save runs, or in a later task once it has ended, as a store that notifies its
+ * subscribers then does.
+ */
+const renderOptimisticForm = (rollBack: 'while the save runs' | 'after the save ended') => {
+  const onSubmit = mock((_values: UserForm) => {});
+  const rendered = renderHook(() => {
+    const [record, setRecord] = useState(initial);
+    return useForm(userValidator, {
+      initialValues: record,
+      onSubmit: async (values): Promise<Result<UserForm, ValidationError[]>> => {
+        onSubmit(values);
+        setRecord(values);
+        await pause(10);
+        if (rollBack === 'while the save runs') {
+          setRecord(initial);
+          await pause(10);
+        } else {
+          setTimeout(() => setRecord(initial), 0);
+        }
+        return err([{ path: [], message: 'Network down' }]);
+      },
+      autoSave: { delay },
+    });
+  });
+  return { onSubmit, ...rendered };
+};
+
 describe('autoSave', () => {
   describe('a version an invalid form held', () => {
     test('#54: saves once a switched-off field validator drops the error that blocked it', async () => {
@@ -165,34 +194,23 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
-    test("doesn't resend values an optimistic write and its rollback hid", async () => {
-      const onSubmit = mock((_values: UserForm) => {});
-      const { result } = renderHook(() => {
-        const [record, setRecord] = useState(initial);
-        return useForm(userValidator, {
-          initialValues: record,
-          // Writes the values to the record before the server answers, and rolls back when the save fails
-          onSubmit: async (values): Promise<Result<UserForm, ValidationError[]>> => {
-            onSubmit(values);
-            setRecord(values);
-            await pause(10);
-            setRecord(initial);
-            await pause(10);
-            return err([{ path: [], message: 'Network down' }]);
-          },
-          autoSave: { delay },
+    test.each([['while the save runs'], ['after the save ended']] as const)(
+      "doesn't resend values an optimistic write hid, rolled back %s",
+      async (rollBack) => {
+        const { onSubmit, result } = renderOptimisticForm(rollBack);
+
+        act(() => {
+          result.current.setFieldValue('name', 'Jane');
         });
-      });
+        // Outside act, so the optimistic write and the rollback commit apart, as in the app
+        await withoutAct(() => pause(5 * delay));
 
-      act(() => {
-        result.current.setFieldValue('name', 'Jane');
-      });
-      // Outside act, so the optimistic write commits before the rollback, as in the app
-      await withoutAct(() => pause(5 * delay));
-
-      expect(onSubmit).toHaveBeenCalledTimes(1);
-      expect(result.current.values.name).toBe('Jane');
-    });
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(result.current.values.name).toBe('Jane');
+        // The rollback committed
+        expect(result.current.isDirty).toBe(true);
+      },
+    );
 
     test('a form without onSubmit is submitted once per version', async () => {
       const { result } = renderAutoSaveForm(undefined, delay);

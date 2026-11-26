@@ -314,7 +314,7 @@ Saves the form on its own as the user edits, through [`handleSubmit`](#handlesub
 
 It saves the current values once all of these hold: they have unsaved edits, they haven't gone out already, `delay` ms have passed since they last changed, the form has checked them and shows them valid, the form isn't stale, and no submission is running. Whichever comes true last, it saves then. Switching off a field validator, or `clearServerErrors()`, is enough to send values their errors held.
 
-Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change or the form goes clean, whatever the server answered. To retry, call `clearServerErrors()` then `handleSubmit()`.
+Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's values return to `initialValues`, whatever the server answered. To retry, call `clearServerErrors()` then `handleSubmit()`.
 
 It pauses while `isStale` is true, and sends the edits made meanwhile once that clears.
 

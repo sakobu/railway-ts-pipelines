@@ -1178,23 +1178,30 @@ describe('wentOut', () => {
     expect(other.wentOut).toBe(edited);
   });
 
-  test('an answer equal to the values drops it', () => {
-    expect(formReducer(recorded, sync(edited), edited).wentOut).toBeUndefined();
+  test('initial values that catch up to the unchanged values keep it', () => {
+    expect(formReducer(recorded, sync(edited), edited).wentOut).toBe(edited);
   });
 
-  describe('while a submission runs', () => {
+  test('a follow drops it', () => {
+    const caughtUp = formReducer(recorded, sync(edited), edited);
+
+    expect(formReducer(caughtUp, sync(v2), v2).wentOut).toBeUndefined();
+  });
+
+  describe('an optimistic write and its rollback keep it', () => {
     const submitting = formReducer(recorded, { type: 'SET_SUBMITTING', isSubmitting: true }, v1);
     // A write of the submitted values to the record before the server answers, which a failed save rolls back
     const optimistic = formReducer(submitting, sync(edited), edited);
 
-    test('an optimistic write equal to the values keeps it', () => {
-      expect(optimistic.wentOut).toBe(edited);
+    test('rolled back while the submission runs', () => {
+      expect(formReducer(optimistic, sync(v1), v1).wentOut).toBe(edited);
     });
 
-    test('the action that ends it with the values equal to the initial values drops it', () => {
+    test('rolled back after the submission ended', () => {
       const ended = formReducer(optimistic, { type: 'SET_SUBMITTING', isSubmitting: false }, edited);
 
-      expect(ended.wentOut).toBeUndefined();
+      expect(ended.wentOut).toBe(edited);
+      expect(formReducer(ended, sync(v1), v1).wentOut).toBe(edited);
     });
   });
 

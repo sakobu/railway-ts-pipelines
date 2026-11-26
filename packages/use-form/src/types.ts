@@ -175,10 +175,10 @@ export interface FormState<TValues extends Record<string, unknown>> {
   checkedValues?: TValues;
 
   /**
-   * The values of the latest submission that went out since the form was last clean: it called `onSubmit`, reached it
-   * with none set, threw, or its own validation rejected the values but left the form valid. Dropped whenever the
-   * values equal the initial values and no submission runs: while one runs, the initial values may be an optimistic
-   * write that a failed save rolls back. Auto-save doesn't send them again.
+   * The values of the latest submission that went out: it called `onSubmit`, reached it with none set, threw, or its
+   * own validation rejected the values but left the form valid. Dropped when an action changes the values to ones
+   * equal to the initial values: an edit back, a follow or a reset. Kept when the initial values catch up to unchanged
+   * values, since that may be an optimistic write that a failed save rolls back. Auto-save doesn't send them again.
    */
   wentOut?: TValues;
 }
@@ -374,8 +374,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *    already, `delay` ms have passed since they last changed, the form has checked them and shows them valid, the
    *    form isn't stale, and no submission is running, so switching off a field validator, or `clearServerErrors()`,
    *    is enough to send values their errors held.
-   * 2. Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change or the form
-   *    goes clean, whatever the server answered, so to retry, call `clearServerErrors()` then `handleSubmit()`.
+   * 2. Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's
+   *    values return to `initialValues`, whatever the server answered, so to retry, call `clearServerErrors()` then
+   *    `handleSubmit()`.
    * 3. It pauses while `isStale`, and sends the edits made meanwhile once that clears.
    * 4. A Save click that is running holds it, and once that Save settles it decides again, skipping the values the
    *    Save just sent.
