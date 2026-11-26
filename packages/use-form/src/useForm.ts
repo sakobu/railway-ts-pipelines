@@ -875,6 +875,23 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   );
 
   /**
+   * Starts a schema check of `values` that nothing awaits, as an effect or a timer does, with no caller to throw to:
+   * `startValidation` logs a rejection, and this logs a throw.
+   *
+   * @param values - The values to check
+   */
+  const startUnawaitedCheck = useCallback(
+    (values: TValues): void => {
+      try {
+        void startValidation(values);
+      } catch (error) {
+        logValidationError(error);
+      }
+    },
+    [startValidation],
+  );
+
+  /**
    * What `mount` mode does on mount and on a reset: validates the values and marks every field touched,
    * nested and array items included, so the errors show at once. A validator that throws is logged: on mount
    * and on a `resetKey` reset, an effect runs this, with no caller to throw to.
@@ -883,14 +900,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const validateAsOnMount = useCallback(
     (values: TValues): void => {
-      try {
-        void startValidation(values);
-      } catch (error) {
-        logValidationError(error);
-      }
+      startUnawaitedCheck(values);
       dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(values) });
     },
-    [dispatch, startValidation],
+    [dispatch, startUnawaitedCheck],
   );
 
   // Validate on mount if enabled
@@ -1654,12 +1667,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     }));
 
     if (step === 'check') {
-      // startValidation logs a rejection itself
-      try {
-        void startValidation(state.values);
-      } catch (error) {
-        logValidationError(error);
-      }
+      startUnawaitedCheck(state.values);
     } else if (step === 'submit') {
       autoSaveSchedulerRef.current = submitSchedulerRef.current;
       // handleSubmit never rejects, and the scheduler's onIdle reports the settle
