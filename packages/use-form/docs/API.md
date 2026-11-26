@@ -50,7 +50,12 @@ const validator = v.object({
 });
 ```
 
-**A validator that throws.** A sync throw from the schema reaches the outermost call of the event that asked for the check, and so does one from a field validator after a sync schema check (after an async one, a validator's throw is logged): `setFieldValue`, `setValues`, `setFieldTouched` or `resetForm`, and the array helpers through `setFieldValue`. Calls made inside `onFieldChange` join that event, so a throw from their check reaches the outermost call too. When one event's pass reaches several field validators and more than one throws, the first throw reaches the outermost call and each later one is logged. A check with no caller, which is the mount check, the check after a `resetKey` change or the layout effect's follow of new `initialValues`, the follow after a save, and auto-save's check, logs every throw, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering. A follow that an edit causes belongs to that edit's call, so its throw reaches the caller. An async check that rejects is logged too, whatever started it, and its validating state ends. `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+**A validator that throws.** Where a sync throw from the schema, or from a field validator after a sync schema check, goes depends on what asked for the check:
+
+- **Called:** `setFieldValue`, `setValues`, `setFieldTouched`, `resetForm` and the array helpers (through `setFieldValue`), plus the calls made inside `onFieldChange`, which join the event, and a follow that an edit causes, which belongs to that edit's call. The first sync throw reaches the event's outermost call. When one pass reaches several field validators and more than one throws, each later throw is logged. A field validator's throw after an async schema check is logged.
+- **No caller:** the mount check, the check after a `resetKey` change, the layout effect's follow of new `initialValues`, the follow after a save, and auto-save's check. Every throw is logged, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering.
+- **Async rejection:** logged, whatever started the check, and its validating state ends.
+- **`validateForm` and `handleSubmit`:** `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
 
 #### options
 
@@ -217,7 +222,7 @@ Per-field validator functions for field-level async validation. Run independentl
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
-**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs.
+**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error (`handleSubmit`'s `err` still includes it), and a re-check of unchanged values keeps the error until it answers.
 
 **What checks a validator again**, by mode:
 
@@ -231,7 +236,7 @@ A validator's own field matches by overlap: editing `address.city` re-checks a v
 
 **The schema gate.** A validator runs only when the schema produces **no error** at its own field or at any field it lists. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
 
-Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A check of values the form no longer holds ends with no error (`handleSubmit`'s `err` still includes it), and a re-check of unchanged values keeps the error until it answers. A `deps` list that changes between renders applies from the validator's next check. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
+Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
 ```typescript
 const form = useForm(userSchema, {
@@ -1459,7 +1464,7 @@ When `deps` is a tuple, written inline or `as const`, each listed value has its 
 
 Write `withDeps` inside the `fieldValidators` entry, where it takes the form's types. One stored in a variable outside it has no form to take them from, so it doesn't compile. An entry made any other way, such as a hand-written `{ deps, validate }`, is off.
 
-Editing a listed field re-checks the validator in `live` mode, blurring one does in `blur` mode, and the next submit does in every mode. A schema error at a listed field skips the validator. The error shows only while the field and the listed fields hold the values it checked. See [`fieldValidators`](#fieldvalidators).
+A `deps` list that changes between renders applies from the validator's next check. See [`fieldValidators`](#fieldvalidators) for what checks it again, the schema gate and the error rule.
 
 ```tsx
 import * as S from '@railway-ts/pipelines/schema';
