@@ -361,6 +361,41 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledWith(edited);
     });
 
+    test('saves values whose own check a check of other values replaced, once that one lands', async () => {
+      const { pending, gated } = createGatedValidator<UserForm>();
+      const onSubmit = saving();
+      const { result } = renderHook(() =>
+        useForm(gated, { initialValues: initial, onSubmit, validationMode: 'submit', autoSave: { delay } }),
+      );
+      const edited: UserForm = { ...initial, name: 'Jane' };
+      const settleAll = () =>
+        act(async () => {
+          for (const check of pending) check.resolve(ok(edited));
+          await nextTask();
+        });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await sleep(3 * delay);
+      // Auto-save's own check started, and waits
+      expect(pending).toHaveLength(1);
+
+      // A check of other values replaces it, and lands
+      act(() => {
+        void result.current.validateForm(initial);
+      });
+      await settleAll();
+      await sleep(3 * delay);
+      // The new check, then the save's
+      await settleAll();
+      await settleAll();
+      await sleep(delay);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith(edited);
+    });
+
     test("a failed check in submit mode doesn't touch fields or count a submit", async () => {
       const onSubmit = saving();
       const { result } = renderAutoSaveForm(onSubmit, delay, { validationMode: 'submit' });

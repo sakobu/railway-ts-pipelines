@@ -78,26 +78,39 @@ describe('createAutoSave', () => {
     expect(auto.decide(() => view())).toBe('submit');
   });
 
+  // The form's verdict keeps its identity until a check lands
+  const ofB = passed(B);
+
   test('unchecked values get one check per version', () => {
     const auto = due();
-    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
-    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('wait');
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('wait');
 
     auto.track(B2);
     auto.delayEnded();
-    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('check');
   });
 
   test('a check started before a follow or reset holds no check after it', () => {
     const auto = due();
-    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
-    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB, baselineEpoch: 1 }))).toBe('check');
   });
 
   test('a check started since the latest follow or reset still holds one', () => {
     const auto = due();
-    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('check');
-    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('wait');
+    expect(auto.decide(() => view({ verdict: ofB, baselineEpoch: 1 }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB, baselineEpoch: 1 }))).toBe('wait');
+  });
+
+  test('a check that a check of other values replaced holds no check once that one lands', () => {
+    const auto = due();
+    expect(auto.decide(() => view({ verdict: undefined }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: undefined }))).toBe('wait');
+
+    // The check of other values landed its verdict
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: ofB }))).toBe('wait');
   });
 
   test('waits for a running schema check instead of starting one', () => {

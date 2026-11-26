@@ -5,7 +5,8 @@ import type { SchemaVerdict } from './types';
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
 // out already, the form's latest schema check passed it and the form shows it valid, the form isn't stale, and no
 // submission is running. Values the form hasn't checked get one schema check per version first, and another once a
-// follow or reset ends that check. This module only decides, and holds whether auto-save is on; the caller acts.
+// follow or reset ends that check, or a check of other values lands in its place. This module only decides, and holds
+// whether auto-save is on; the caller acts.
 
 /**
  * What auto-save reads from the form when it decides.
@@ -63,8 +64,9 @@ export type AutoSave<TValues extends Record<string, unknown>> = {
   delayEnded: () => void;
 
   /**
-   * Decides for the tracked version. It returns `'check'` at most once per version in each baseline epoch, and records
-   * it: a follow or reset ends the check.
+   * Decides for the tracked version. It returns `'check'` at most once per version for each baseline epoch and verdict,
+   * and records it: a follow or reset ends the check, and a newer check of other values replaces it, landing a new
+   * verdict. A check that throws or rejects lands none, so it isn't retried.
    *
    * @param readView - Reads what the form shows now, for the values the caller tracked last. `decide` calls it once,
    *   only after the delay has ended, so a caller pays for the view only then.
@@ -80,8 +82,11 @@ export type AutoSave<TValues extends Record<string, unknown>> = {
  * @returns An auto-save, off, with nothing tracked
  */
 export const createAutoSave = <TValues extends Record<string, unknown>>(): AutoSave<TValues> => {
-  // The tracked version: its values, whether its delay has ended, and the baseline epoch its check started in
-  let tracked: { values: TValues; due: boolean; checkedIn?: number } | undefined;
+  // The tracked version: its values, whether its delay has ended, and the baseline epoch and verdict its check started
+  // with
+  let tracked:
+    | { values: TValues; due: boolean; checked?: { epoch: number; verdict: SchemaVerdict<TValues> | undefined } }
+    | undefined;
   let on = false;
 
   const start = (): void => {
@@ -112,8 +117,9 @@ export const createAutoSave = <TValues extends Record<string, unknown>>(): AutoS
     if (!view.isDirty || deepEqual(values, view.wentOut)) return 'wait';
     const { verdict } = view;
     if (verdict === undefined || !deepEqual(values, verdict.values)) {
-      if (view.isChecking || tracked.checkedIn === view.baselineEpoch) return 'wait';
-      tracked.checkedIn = view.baselineEpoch;
+      const { checked } = tracked;
+      if (view.isChecking || (checked?.epoch === view.baselineEpoch && checked.verdict === verdict)) return 'wait';
+      tracked.checked = { epoch: view.baselineEpoch, verdict };
       return 'check';
     }
     if (!verdict.passed || view.isValidating || !view.isValid || view.isStale || view.isSubmitting) return 'wait';
