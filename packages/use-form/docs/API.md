@@ -305,6 +305,51 @@ const form = useForm(contactSchema, {
 });
 ```
 
+#### autoSave
+
+Type: `boolean | AutoSaveOptions`
+Optional, Default: off
+
+Saves the form on its own as the user edits, through [`handleSubmit`](#handlesubmit), as a Save click does. `true` waits 200 ms after the values last change, as `{}` does, and `{ delay }` sets the wait.
+
+It saves the current values once all of these hold: they have unsaved edits, they haven't gone out already, `delay` ms have passed since they last changed, the form's latest schema check passed them and the form shows them valid, the form isn't stale, and no submission is running. Whichever comes true last, it saves then. Switching off a field validator, or `clearServerErrors()`, is enough to send values their errors held. Values the schema rejected aren't sent, even with no error shown, until a later check passes them.
+
+Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's values return to `initialValues`, whatever the server answered. To retry, call `clearServerErrors()` then `handleSubmit()`.
+
+It pauses while `isStale` is true, and sends the edits made meanwhile once that clears.
+
+A Save click that is running holds it. Once that Save settles, auto-save decides again, and skips the values the Save just sent.
+
+In `blur`, `submit` and `mount` modes it checks the schema once the delay ends. Field validators run in the save itself.
+
+It saves only values that differ from `initialValues` (`isDirty`). So pass what was saved back in as `initialValues`, as an edit form does with the saved record: `isDirty` then compares against what the server holds. With `initialValues` that never change, an edit back to them after an earlier save counts as clean and isn't saved, though the server still holds the earlier save.
+
+After a `resetKey` switch, the new record's auto-save waits for the previous record's submissions still running, auto-saves and Save clicks alike, and goes out as soon as they settle. An edit not sent yet when the record switches or the form unmounts is dropped, like the form's other unsaved edits, though a Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
+
+A new `delay` applies from the next change. A delay already running keeps its length.
+
+`AutoSaveOptions` has one property:
+
+| Key     | Type     | Meaning                                           | Default |
+| ------- | -------- | ------------------------------------------------- | ------- |
+| `delay` | `number` | Milliseconds to wait after the values last change | `200`   |
+
+```typescript
+// The query last searched, passed back so clearing the box searches again
+const [searched, setSearched] = useState({ search: '' });
+
+const form = useForm(validator, {
+  initialValues: searched,
+  onSubmit: async (values) => {
+    await fetch(`/api/search?q=${values.search}`);
+    setSearched(values);
+  },
+  validationMode: 'live',
+  // Saves 500ms after the user stops typing
+  autoSave: { delay: 500 },
+});
+```
+
 ## Form State
 
 Properties returned by useForm. The maps (`touched`, `errors` and the rest) are read-only: an empty one is a shared frozen object, so writing into it throws. Copy one before changing it.
@@ -388,7 +433,7 @@ Type: `boolean`
 
 True when a newer `initialValues` arrived that the form didn't follow, because it has unsaved edits. Someone else changed the record while the user was editing. It turns false again once the values equal the latest `initialValues`, as after `resetForm()`, or once the user undoes every edit: the form then shows the latest version. A `resetKey` change, a successful save, and the other person undoing their change clear it too.
 
-It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own answer. While the submission is still validating, before `isSubmitting` turns true, a newer version shows, and the save is then cancelled. A failed save shows it again. A save that was waiting behind it, such as a queued Save or an auto-save, then isn't sent: see [`handleSubmit`](#handlesubmit).
+It reads false while `isSubmitting` is true, since a version that arrives then may be the save's own answer. While the submission is still validating, before `isSubmitting` turns true, a newer version shows, and the save is then cancelled. A failed save shows it again. A Save queued behind it then isn't sent (see [`handleSubmit`](#handlesubmit)), and auto-save holds the edits until `isStale` clears (see [`autoSave`](#autosave)).
 
 ```typescript
 {form.isStale && (
@@ -642,7 +687,7 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 **Overlapping submits:**
 
 - Same values as the running submission: the call shares its promise, so `onSubmit` does not run twice on a double-click during a slow request.
-- Different values: the call waits for the running submission, then submits the latest values. At most one follow-up waits, so auto-save does not miss edits made during a save.
+- Different values: the call waits for the running submission, then submits the latest values. At most one follow-up waits, and it submits the values as they are when it starts, so edits made while it waits are included.
 
 **A save that would overwrite a newer version isn't sent.** Just before `onSubmit`, the submission checks whether a newer `initialValues` arrived that it would overwrite:
 
@@ -1362,60 +1407,6 @@ getFieldId<TField extends ExtractFieldPaths<TItem>>(
 ```tsx
 <label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
 <input {...helpers.getFieldProps(index, "name")} />
-```
-
-## useFormAutoSubmission
-
-Hook for auto-submitting forms after debounced changes.
-Monitors form values and automatically triggers submission when the form
-is dirty, valid, and values have changed since the last validation.
-
-It pauses while `isStale` is true, because a save would overwrite a newer version of the record. The edits made meanwhile are submitted once it clears. An edit made during a save, its own or a manual one, goes out as soon as that save settles, unless the form is then stale or invalid. It only submits values whose latest validation passed: values still being validated wait for their result.
-
-It saves values that differ from `initialValues` (`isDirty`). So pass what was saved back in as `initialValues`, as an edit form does with the saved record: `isDirty` then compares against what the server holds. With `initialValues` that never change, an edit back to them after an earlier save isn't saved, because the form counts it as clean, though the server still holds the earlier save.
-
-After a `resetKey` switch, the new record's auto-save waits for the previous record's running auto-save, then goes out as soon as that save settles.
-
-An edit it hasn't sent when the record switches or the form unmounts is dropped, like the form's other unsaved edits: one still in its delay, being validated, or waiting for a running save. A Save the user clicked still goes out. To keep the last edits, disable switching records while `form.isDirty || form.isSubmitting`.
-
-A `handleSubmit` that throws or rejects is logged with `console.error('Auto-submission error:', …)`, and auto-save carries on. So is a `validateForm` that throws or rejects, and the values it checked aren't saved.
-
-### Signature
-
-```typescript
-function useFormAutoSubmission<T>(form: FormWithAutoSubmit<T>, delay?: number): null;
-```
-
-### Parameters
-
-#### form
-
-A form instance from `useForm` (or any object with `values`, `isDirty`, `isValid`, `validateForm`, and `handleSubmit`, and optionally `isStale`).
-
-#### delay
-
-Type: `number`
-Optional, Default: `200`
-
-Debounce delay in milliseconds before auto-submitting.
-
-### Example
-
-```typescript
-// The query last searched, passed back so clearing the box searches again
-const [searched, setSearched] = useState({ search: '' });
-
-const form = useForm(validator, {
-  initialValues: searched,
-  onSubmit: async (values) => {
-    await fetch(`/api/search?q=${values.search}`);
-    setSearched(values);
-  },
-  validationMode: 'live',
-});
-
-// Auto-submit 500ms after the user stops typing
-useFormAutoSubmission(form, 500);
 ```
 
 ## useDebounce

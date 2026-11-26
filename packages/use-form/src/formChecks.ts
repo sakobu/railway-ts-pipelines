@@ -190,6 +190,10 @@ export const waitingFieldChecksOf = (
 export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
   Object.values(fields).some((check) => check.status !== 'done');
 
+/** Whether any field check holds an error. */
+export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
+  Object.values(fields).some((check) => check.error !== undefined);
+
 /** The fields with a pending check or an error shown. */
 export const fieldsToRecheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): FieldPath[] =>
   Object.entries(fields)

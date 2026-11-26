@@ -15,7 +15,6 @@ import { render, renderHook, act, waitFor, fireEvent } from '@testing-library/re
 import { Component, StrictMode, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
 import { useForm } from '../../src/useForm';
-import { useFormAutoSubmission } from '../../src/useFormAutoSubmission';
 import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import { publishValidator, type PublishForm } from '../fixtures/validators';
 
@@ -127,12 +126,11 @@ describe('following new initialValues', () => {
     expect(onValuesChange).toHaveBeenCalledWith(loaded, draft);
   });
 
-  test('useFormAutoSubmission does not submit after a follow', async () => {
+  test('autoSave does not submit after a follow', async () => {
     const onSubmit = mock((_values: PublishForm) => {});
     const { rerender } = renderHook(
       ({ initial }: { initial: PublishForm }) => {
-        const form = useForm(publishValidator, { initialValues: initial, onSubmit });
-        useFormAutoSubmission(form, 10);
+        useForm(publishValidator, { initialValues: initial, onSubmit, autoSave: { delay: 10 } });
       },
       { initialProps: { initial: draft } },
     );

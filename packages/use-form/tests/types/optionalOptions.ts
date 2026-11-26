@@ -2,7 +2,7 @@
 // undefined, so a conditional option like `validationMode: mode` compiles.
 import * as S from '@railway-ts/pipelines/schema';
 
-import { useForm, useFormAutoSubmission, type FormMessages } from '../../src';
+import { useForm, type AutoSaveOptions, type FormMessages } from '../../src';
 
 import type { FormOptions } from '../../src/types';
 
@@ -23,11 +23,10 @@ type Values = S.InferSchemaType<typeof schema>;
 export const formOptions: AcceptsUndefined<FormOptions<Values>> = {};
 export const fieldValidatorEntries: AcceptsUndefined<NonNullable<FormOptions<Values>['fieldValidators']>> = {};
 export const formMessages: AcceptsUndefined<FormMessages> = {};
-export const autoSubmitForm: AcceptsUndefined<Parameters<typeof useFormAutoSubmission<Values>>[0]> = {};
+export const autoSaveOptions: AcceptsUndefined<AutoSaveOptions> = {};
 
 declare const maybeMode: 'live' | 'blur' | undefined;
 declare const maybeText: string | undefined;
-declare const maybeStale: boolean | undefined;
 declare const checkCity: boolean;
 declare const isKnownCity: (city: string) => string | undefined;
 
@@ -38,7 +37,6 @@ export function useMaybeOptions() {
     fieldValidators: { 'address.city': checkCity ? isKnownCity : undefined },
     messages: { submitFailed: maybeText },
   });
-  useFormAutoSubmission({ ...form, isStale: maybeStale });
 
   // A value type, not an option: setValues stores what it's given, so undefined stays an error for a string field
   // @ts-expect-error -- name is a string

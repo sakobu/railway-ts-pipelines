@@ -7,6 +7,7 @@ import {
   endSchemaCheck,
   fieldErrorsOf,
   fieldsToRecheck,
+  hasFieldError,
   hasPendingFieldCheck,
   isWaitingFieldCheck,
   markFieldCheckRunning,
@@ -166,6 +167,11 @@ test('hasPendingFieldCheck takes a check waiting or running, not one done', () =
   expect(hasPendingFieldCheck(markFieldCheckRunning(waiting, 'name', 1).fields)).toBe(true);
   expect(hasPendingFieldCheck(failed.fields)).toBe(false);
   expect(hasPendingFieldCheck({})).toBe(false);
+});
+test('hasFieldError takes a check holding an error, not one without', () => {
+  expect(hasFieldError(failed.fields)).toBe(true);
+  expect(hasFieldError(withName.fields)).toBe(false);
+  expect(hasFieldError({})).toBe(false);
 });
 test('a __proto__ key syncs on as its own entry, so syncing the same set again returns its input', () => {
   const synced = syncValidators(NO_CHECKS, on('__proto__'));

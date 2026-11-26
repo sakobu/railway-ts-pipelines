@@ -35,6 +35,9 @@ export type SubmitScheduler<TValues, TOutcome> = {
    * @param values - The values the waiting follow-up submits. With nothing waiting, nothing changes.
    */
   retire: (values: TValues) => void;
+
+  /** Whether a submission runs. True also while a follow-up waits behind it. */
+  isBusy: () => boolean;
 };
 
 type Running<TValues, TOutcome> = {
@@ -55,6 +58,8 @@ type FollowUp<TValues, TOutcome> = {
  *
  * @template TValues - The shape of the submitted values
  * @template TOutcome - What a submission resolves to
+ * @param onIdle - Called each time the scheduler goes idle: when a submission settles and no follow-up starts after
+ *   it. Not when a follow-up starts.
  * @returns A scheduler with no submission running
  *
  * @example
@@ -62,7 +67,7 @@ type FollowUp<TValues, TOutcome> = {
  * const first = scheduler.submit(() => form.values, save);
  * const again = scheduler.submit(() => form.values, save); // same values: again === first
  */
-export const createSubmitScheduler = <TValues, TOutcome>(): SubmitScheduler<TValues, TOutcome> => {
+export const createSubmitScheduler = <TValues, TOutcome>(onIdle?: () => void): SubmitScheduler<TValues, TOutcome> => {
   let running: Running<TValues, TOutcome> | undefined;
   let followUp: FollowUp<TValues, TOutcome> | undefined;
 
@@ -78,6 +83,8 @@ export const createSubmitScheduler = <TValues, TOutcome>(): SubmitScheduler<TVal
       if (next) {
         followUp = undefined;
         next.resolve(start(next.getValues(), next.run));
+      } else {
+        onIdle?.();
       }
     };
     void promise.then(settle, settle);
@@ -108,5 +115,7 @@ export const createSubmitScheduler = <TValues, TOutcome>(): SubmitScheduler<TVal
     if (followUp) followUp.getValues = () => values;
   };
 
-  return { submit, retire };
+  const isBusy = (): boolean => running !== undefined;
+
+  return { submit, retire, isBusy };
 };

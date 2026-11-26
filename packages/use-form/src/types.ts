@@ -170,6 +170,33 @@ export interface FormState<TValues extends Record<string, unknown>> {
    * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
    */
   baselineEpoch: number;
+
+  /**
+   * The verdict of the latest schema check that landed: one that ended with an answer while current. Unset until one
+   * lands, and after a reset.
+   */
+  verdict?: SchemaVerdict<TValues>;
+
+  /**
+   * The values of the latest submission that went out: it called `onSubmit`, reached it with none set, or threw.
+   * Dropped when an action changes the values by content to ones equal to the initial values: an edit back, a follow or
+   * a reset. Kept when the initial values catch up to unchanged values, since that may be an optimistic write that a
+   * failed save rolls back, and through an edit that leaves the values equal by content. Auto-save doesn't send them
+   * again.
+   */
+  wentOut?: TValues;
+}
+
+/**
+ * What a schema check that landed found.
+ *
+ * @template TValues - The shape of the form values
+ */
+export interface SchemaVerdict<TValues> {
+  /** The values the check checked */
+  values: TValues;
+  /** Whether the schema passed them. A rejection with no errors fails them too. */
+  passed: boolean;
 }
 
 /** A check's id. The store hands them out in increasing order for its lifetime. */
@@ -356,6 +383,43 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   savedValues?: ((result: TResult) => NoInfer<TValues>) | undefined;
 
   /**
+   * Saves the form on its own as the user edits, through `handleSubmit`, as a Save click does. Off by default.
+   * `true` waits 200 ms after the values last change, as `{}` does, and `{ delay }` sets the wait.
+   *
+   * 1. It saves the current values as soon as the last of these holds: they have unsaved edits, they haven't gone out
+   *    already, `delay` ms have passed since they last changed, the form's latest schema check passed them and the
+   *    form shows them valid, the form isn't stale, and no submission is running, so switching off a field validator,
+   *    or `clearServerErrors()`, is enough to send values their errors held. Values the schema rejected aren't sent,
+   *    even with no error shown, until a later check passes them.
+   * 2. Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's
+   *    values return to `initialValues`, whatever the server answered, so to retry, call `clearServerErrors()` then
+   *    `handleSubmit()`.
+   * 3. It pauses while `isStale`, and sends the edits made meanwhile once that clears.
+   * 4. A Save click that is running holds it, and once that Save settles it decides again, skipping the values the
+   *    Save just sent.
+   * 5. In `blur`, `submit` and `mount` modes it checks the schema once the delay ends, and field validators run in the
+   *    save itself.
+   * 6. It saves only values that differ from `initialValues` (`isDirty`), so pass what was saved back in as
+   *    `initialValues`: with `initialValues` that never change, an edit back to them after an earlier save counts as
+   *    clean and isn't saved, though the server still holds the earlier save.
+   * 7. After a `resetKey` switch, the new record's auto-save waits for the previous record's submissions still
+   *    running, auto-saves and Save clicks alike, and goes out as soon as they settle, while an edit not sent yet when
+   *    the record switches or the form unmounts is dropped, like the form's other unsaved edits, though a Save the
+   *    user clicked still goes out. To keep the last edits, disable switching records while
+   *    `form.isDirty || form.isSubmitting`.
+   * 8. A new `delay` applies from the next change, and a delay already running keeps its length.
+   *
+   * @example
+   * // Saves half a second after the user stops typing. The saved record comes back as initialValues.
+   * const form = useForm(settingsSchema, {
+   *   initialValues: savedSettings,
+   *   onSubmit: saveSettings,
+   *   autoSave: { delay: 500 },
+   * });
+   */
+  autoSave?: boolean | AutoSaveOptions | undefined;
+
+  /**
    * Validation behavior preset that controls when validation occurs and when fields are marked as touched.
    *
    * - **"live"** (default): Validate on both change and blur events. Mark fields as touched on first change.
@@ -461,6 +525,15 @@ export interface FormMessages {
    * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
    */
   changedWhileSaving?: string | undefined;
+}
+
+/** How auto-save waits. */
+export interface AutoSaveOptions {
+  /**
+   * How long after the values last change auto-save waits, in milliseconds. Default: 200. A new value applies from the
+   * next change.
+   */
+  delay?: number | undefined;
 }
 
 // =============================================================================
@@ -1165,12 +1238,21 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
     }
   | {
-      /** Ends a schema check. Its errors land only while it is the current one. */
+      /** Ends a schema check. Its answer lands only while it is the current one. */
       type: 'END_SCHEMA_CHECK';
       /** The check's id */
       id: CheckId;
-      /** The schema's errors, as `SET_CLIENT_ERRORS` takes them. None ends the check and keeps the errors. */
-      errors?: Record<FieldPath, string>;
+      /**
+       * The schema's answer: its verdict, and its errors as `SET_CLIENT_ERRORS` takes them. None, as after a throw or
+       * rejection, ends the check and keeps the errors and the verdict.
+       */
+      answer?: SchemaVerdict<TValues> & { errors: Record<FieldPath, string> };
+    }
+  | {
+      /** Records the values of a submission that went out */
+      type: 'SUBMISSION_WENT_OUT';
+      /** The values that went out */
+      values: TValues;
     }
   | {
       /** Registers a field check, while the field's validator is on and `id` is newer than its current check */

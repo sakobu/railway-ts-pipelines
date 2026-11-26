@@ -254,7 +254,7 @@ Things to get right:
 - **A failed save for a record the user switched away from shows nowhere.** Block switching while `isSubmitting`, as above, or `await form.handleSubmit()` and report the `err` in a toast.
 - **Two checks prevent lost updates together.** `isStale` covers a change the app has fetched. Save is disabled then, because `data.version` is already the newer version and the server would accept it. The server's version check covers a change the app hasn't fetched yet.
 - **Build `initialValues` the same way on every render.** Create generated values, like a new row's id or today's date, once, and don't read storage during render. Otherwise every render looks like a new version, and `useForm` logs an error naming the cause, or the form shows `isStale` after every edit. Have `toFormValues` return arrays and plain objects, which compare by content. A `Set`, `Map` or Temporal value compares by identity, so a new one on every render does the same. If the form needs one, build `initialValues` with `useMemo`, keyed on `data`. A refetch still rebuilds it, and then it counts as a new version even with the same items.
-- **An auto-saved edit form** (`useFormAutoSubmission`) pauses while `isStale` is true, as Save would be disabled. Show the same banner, so the user can Reload. Read the version at save time, from the cache: `queryClient.getQueryData<Contact>(['contact', data.id])?.version ?? data.version`. An edit made during a save goes out as soon as that save settles, which can be before the render that brings the saved record. `data.version` would then still be the old version, and the server would report a conflict that isn't one. Switching records drops an edit auto-save hasn't sent yet, so disable the record buttons while `form.isDirty || form.isSubmitting`.
+- **An auto-saved edit form** (the `autoSave` option) pauses while `isStale` is true, as Save would be disabled. Show the same banner, so the user can Reload. Read the version at save time, from the cache: `queryClient.getQueryData<Contact>(['contact', data.id])?.version ?? data.version`. An edit made during a save goes out as soon as that save settles, which can be before the render that brings the saved record. `data.version` would then still be the old version, and the server would report a conflict that isn't one. Switching records drops an edit auto-save hasn't sent yet, so disable the record buttons while `form.isDirty || form.isSubmitting`.
 
 ---
 
@@ -599,15 +599,15 @@ Error paths are handled automatically: `object()` constructs the field path (e.g
 
 **Problem:** You want the form to submit automatically when values change -- for search boxes or filter panels.
 
-**Solution:** `useFormAutoSubmission` watches form values and triggers `handleSubmit` after a debounce delay. For manual control, `useDebounce` wraps any callback.
+**Solution:** the `autoSave` option submits the form after a debounce delay, once it's valid. For manual control, `useDebounce` wraps any callback.
 
-| Tool                                 | Use case                | How it works                                                                           |
-| ------------------------------------ | ----------------------- | -------------------------------------------------------------------------------------- |
-| `useFormAutoSubmission(form, delay)` | Auto-submit entire form | Watches `values`, waits `delay` ms, calls `handleSubmit` if valid, dirty and not stale |
-| `useDebounce(callback, delay)`       | Debounce any function   | Returns debounced version that resets timer on each call                               |
+| Tool                                         | Use case                | How it works                                                                                   |
+| -------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `autoSave: { delay }` in `useForm`'s options | Auto-submit entire form | Saves dirty, valid, unsent values `delay` ms after they last changed, unless the form is stale |
+| `useDebounce(callback, delay)`               | Debounce any function   | Returns debounced version that resets timer on each call                                       |
 
 ```tsx
-import { useForm, useFormAutoSubmission } from '@railway-ts/use-form';
+import { useForm } from '@railway-ts/use-form';
 import { useState } from 'react';
 
 import type { InferSchemaType } from '@railway-ts/pipelines/schema';
@@ -632,10 +632,9 @@ function ProductFilters() {
       setApplied(values);
     },
     validationMode: 'live',
+    // Auto-submit 500ms after the user stops typing
+    autoSave: { delay: 500 },
   });
-
-  // Auto-submit 500ms after the user stops typing
-  useFormAutoSubmission(form, 500);
 
   return (
     <div>

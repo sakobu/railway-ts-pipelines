@@ -14,7 +14,7 @@ src/
 ├── arrayHelpersFactory.ts  # Array field helpers
 ├── standardSchema.ts       # Standard Schema v1 adapter
 ├── useDebounce.ts          # Debounce hook
-├── useFormAutoSubmission.ts # Auto-submission hook
+├── autoSave.ts             # The auto-save decision
 ├── types.ts                # TypeScript types
 ├── utils.ts                # Internal utilities
 └── index.ts                # Public exports
