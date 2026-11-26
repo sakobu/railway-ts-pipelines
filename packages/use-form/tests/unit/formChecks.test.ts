@@ -208,6 +208,10 @@ test('a __proto__ field keeps its own entry in every record its checks write', (
   expect(Object.entries(off.fields)).toEqual([
     ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
   ]);
+  const outdated = endOutdatedChecks(shown, Object.fromEntries([['__proto__', 'y']]));
+  expect(Object.entries(outdated.fields)).toEqual([
+    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
+  ]);
 });
 test('inputsHeld compares each input path by value', () => {
   expect(inputsHeld({ name: 'x' }, { name: 'x', email: 'a' })).toBe(true);

@@ -1160,39 +1160,45 @@ describe('checks', () => {
     expect(result.checks.validators).toEqual({ name: { on: true, period: 0 } });
   });
 
-  const check = (field: string, inputs: Record<string, unknown>, error = 'Taken') =>
-    [
-      { type: 'START_FIELD_CHECK', field, id: 1, status: 'running', inputs },
-      { type: 'END_FIELD_CHECK', field, id: 1, result: { error } },
-    ] as const;
+  const check = (
+    field: string,
+    inputs: Record<string, unknown>,
+    error = 'Taken',
+  ): readonly [FormAction<typeof v1>, FormAction<typeof v1>] => [
+    { type: 'START_FIELD_CHECK', field, id: 1, status: 'running', inputs },
+    { type: 'END_FIELD_CHECK', field, id: 1, result: { error } },
+  ];
 
   test("an edit of a check's own input drops its error", () => {
     const checked = apply(start, on('name'), ...check('name', { name: 'John' }));
     expect(checked.checks.fields.name?.error).toBe('Taken');
 
-    const edited = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, v1);
+    const after = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, v1);
 
-    expect(edited.checks.fields.name).toEqual({ id: 1, status: 'done', inputs: { name: 'John' } });
+    expect(after.checks.fields.name).toEqual({ id: 1, status: 'done', inputs: { name: 'John' } });
   });
 
   test('an edit of a listed input drops the error', () => {
     const checked = apply(start, on('name'), ...check('name', { name: 'John', email: 'john@example.com' }));
+    expect(checked.checks.fields.name?.error).toBe('Taken');
 
-    const edited = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }, v1);
+    const after = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }, v1);
 
-    expect(edited.checks.fields.name?.error).toBeUndefined();
+    expect(after.checks.fields.name?.error).toBeUndefined();
   });
 
   test('SET_VALUES drops the errors of the inputs it changed', () => {
     const checked = apply(start, on('name'), ...check('name', { name: 'John', email: 'john@example.com' }));
+    expect(checked.checks.fields.name?.error).toBe('Taken');
 
-    const edited = formReducer(checked, { type: 'SET_VALUES', values: { name: 'Jane' } }, v1);
+    const after = formReducer(checked, { type: 'SET_VALUES', values: { name: 'Jane' } }, v1);
 
-    expect(edited.checks.fields.name?.error).toBeUndefined();
+    expect(after.checks.fields.name?.error).toBeUndefined();
   });
 
   test('a follow drops the errors of the inputs the new version changed', () => {
     const checked = apply(start, on('name', 'email'), ...check('email', { email: 'john@example.com' }));
+    expect(checked.checks.fields.email?.error).toBe('Taken');
     const named = apply(
       checked,
       { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', inputs: { name: 'John' } },
@@ -1220,11 +1226,11 @@ describe('checks', () => {
   test('an edit that leaves every input held returns the same checks', () => {
     const checked = apply(start, on('name'), ...check('name', { name: 'John' }));
 
-    const edited = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }, v1);
+    const after = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }, v1);
 
-    expect(edited.values).not.toBe(checked.values);
-    expect(edited.checks).toBe(checked.checks);
-    expect(edited.checks.fields.name?.error).toBe('Taken');
+    expect(after.values).not.toBe(checked.values);
+    expect(after.checks).toBe(checked.checks);
+    expect(after.checks.fields.name?.error).toBe('Taken');
   });
 });
 
