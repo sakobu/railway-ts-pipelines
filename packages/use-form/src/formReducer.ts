@@ -389,10 +389,11 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Settling a successful submit
  * - Tracking checks: the schema check, each field's validator and its checks
  *
- * An action that changes the values to ones equal to the initial values, such as an edit back, a follow or a reset,
- * leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged values
- * don't: they may be a save's answer, or an optimistic write that a failed save rolls back, while it runs or after it
- * ended.
+ * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
+ * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged
+ * values don't: they may be a save's answer, or an optimistic write that a failed save rolls back, while it runs or
+ * after it ended. Nor does an edit that sets values equal by content to those the form held, as a `setValues` of what
+ * it already shows does.
  *
  * All state updates are performed immutably, never mutating the existing state. Some actions
  * return the same state object when they change nothing, so the store can skip notifying:
@@ -440,7 +441,14 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
 ): FormState<TValues> => {
   const next = reduce(state, action, initialValues);
-  if (next.wentOut === undefined || next.values === state.values || !deepEqual(next.values, initialValues)) return next;
+  if (
+    next.wentOut === undefined ||
+    next.values === state.values ||
+    !deepEqual(next.values, initialValues) ||
+    deepEqual(next.values, state.values)
+  ) {
+    return next;
+  }
   const { wentOut: _wentOut, ...rest } = next;
   return rest;
 };

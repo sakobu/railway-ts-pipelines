@@ -212,6 +212,48 @@ describe('autoSave', () => {
       },
     );
 
+    test("doesn't resend values an optimistic write hid, after an edit between the write and the rollback that changed nothing", async () => {
+      const onSubmit = saving();
+      let rollBack!: () => void;
+      const { result } = renderHook(() => {
+        const [record, setRecord] = useState(initial);
+        return useForm(userValidator, {
+          initialValues: record,
+          onSubmit: async (values): Promise<Result<UserForm, ValidationError[]>> => {
+            onSubmit(values);
+            setRecord(values);
+            await new Promise<void>((resolve) => {
+              rollBack = () => {
+                setRecord(initial);
+                resolve();
+              };
+            });
+            return err([{ path: [], message: 'Network down' }]);
+          },
+          autoSave: { delay },
+        });
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      // The optimistic write committed
+      await waitFor(() => expect(result.current.isDirty).toBe(false));
+      // Sets the values the form holds, as a new object
+      act(() => {
+        result.current.setValues({ name: 'Jane' });
+      });
+      await act(async () => {
+        rollBack();
+        await nextTask();
+      });
+      await sleep(3 * delay);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(result.current.isDirty).toBe(true);
+    });
+
     test('a form without onSubmit is submitted once per version', async () => {
       const { result } = renderAutoSaveForm(undefined, delay);
 

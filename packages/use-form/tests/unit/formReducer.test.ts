@@ -1195,6 +1195,14 @@ describe('wentOut', () => {
     expect(formReducer(caughtUp, sync(v2), v2).wentOut).toBeUndefined();
   });
 
+  test('an edit that leaves the values equal by content keeps it, once the initial values caught up', () => {
+    const caughtUp = formReducer(recorded, sync(edited), edited);
+    const same = formReducer(caughtUp, { type: 'SET_VALUES', values: { name: edited.name } }, edited);
+
+    expect(same.values).not.toBe(caughtUp.values);
+    expect(same.wentOut).toBe(edited);
+  });
+
   describe('an optimistic write and its rollback keep it', () => {
     const submitting = formReducer(recorded, { type: 'SET_SUBMITTING', isSubmitting: true }, v1);
     // A write of the submitted values to the record before the server answers, which a failed save rolls back
