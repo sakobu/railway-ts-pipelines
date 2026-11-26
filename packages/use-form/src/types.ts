@@ -529,7 +529,10 @@ export interface FormMessages {
 
 /** How auto-save waits. */
 export interface AutoSaveOptions {
-  /** How long after the values last change auto-save waits, in milliseconds. Default: 200. A new value applies from the next change. */
+  /**
+   * How long after the values last change auto-save waits, in milliseconds. Default: 200. A new value applies from the
+   * next change.
+   */
   delay?: number | undefined;
 }
 

@@ -58,7 +58,8 @@ type FollowUp<TValues, TOutcome> = {
  *
  * @template TValues - The shape of the submitted values
  * @template TOutcome - What a submission resolves to
- * @param onIdle - Called each time the scheduler goes idle: when a submission settles and no follow-up starts after it. Not when a follow-up starts.
+ * @param onIdle - Called each time the scheduler goes idle: when a submission settles and no follow-up starts after
+ *   it. Not when a follow-up starts.
  * @returns A scheduler with no submission running
  *
  * @example
