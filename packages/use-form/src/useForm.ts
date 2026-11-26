@@ -885,7 +885,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * @param record - What the event recorded
    * @throws A sync throw from the schema validator, once the field checks ended with no result. Otherwise the first
-   *   sync throw from a field validator, once every other one ran.
+   *   sync throw from a field validator, once every other one ran. Each later throw is logged.
    */
   const checkRecorded = useCallback(
     (record: EventRecord): void => {
@@ -924,13 +924,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       }
       if (isPromiseLike(schemaResult)) clearForFollow();
 
-      // Every field check moves on, whatever the others throw. The first throw then reaches the caller.
+      // Every field check moves on, whatever the others throw. The first throw then reaches the caller, and each later
+      // one is logged, since only one can.
       let failed: { error: unknown } | undefined;
       for (const moveOn of moveOns) {
         try {
           moveOn(schemaResult);
         } catch (error) {
-          failed ??= { error };
+          if (failed) logValidationError(error);
+          else failed = { error };
         }
       }
       if (failed) throw failed.error;

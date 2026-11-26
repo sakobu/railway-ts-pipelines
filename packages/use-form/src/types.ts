@@ -483,11 +483,13 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * route through setFieldValue, so this catches every user-driven field interaction.
    *
    * It runs after the field's new value is stored, so any form call made inside it applies on top
-   * of this change. The calls made inside it join the setFieldValue call that fired it: their
-   * validation runs with the field's, once, after that call returns, on the values as they are then,
-   * and a sync throw from it reaches that call. So a cascade runs each validator and the schema once.
-   * If this callback throws, nothing is validated. A resetForm() or setValues() made here can
-   * override the field that just changed. To reset the other fields when one changes, call
+   * of this change. A setFieldValue, setValues, setFieldTouched or resetForm call made inside it,
+   * or inside a callback such a call fires in turn, joins the outermost call: validation runs once,
+   * after that outermost call returns, on the values as they are then, and a sync throw from it
+   * reaches that outermost call. So a cascade runs each validator and the schema once. validateForm
+   * and handleSubmit still check at once. A throw from this callback that reaches the outermost call
+   * ends it without validating. A resetForm() or setValues() made here can override the field that
+   * just changed. To reset the other fields when one changes, call
    * setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.

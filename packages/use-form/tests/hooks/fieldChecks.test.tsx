@@ -1267,7 +1267,7 @@ describe('one call, one check pass (#57)', () => {
   test('#57: an onFieldChange cascade runs a waiting field check once', async () => {
     // Sync when status is 'bad', async otherwise, as in the issue
     const halfAsync: S.MaybeAsyncValidator<unknown, PublishForm> = (input, path) =>
-      (input as PublishForm).status === 'bad'
+      typeof input === 'object' && input !== null && 'status' in input && input.status === 'bad'
         ? publishValidator(input, path)
         : Promise.resolve(publishValidator(input, path));
     const checkTitle = mock((_value: string) => undefined);
@@ -1435,6 +1435,36 @@ describe('one call, one check pass (#57)', () => {
     expect(checkStatus).toHaveBeenCalledTimes(1);
     expect(checkStatus.mock.calls[0]![0]).toBe('b');
     expect(result.current.isValidating).toBe(false);
+  });
+
+  test('when two validators throw in the pass, the first throw reaches the caller and the second is logged', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const first = new Error('title boom');
+      const second = new Error('status boom');
+      const { result, rerender } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          fieldValidators: {
+            title: () => {
+              throw first;
+            },
+            status: () => {
+              throw second;
+            },
+          },
+        }),
+      );
+
+      expect(() => act(() => result.current.setValues({ title: 'a', status: 'b' }))).toThrow(first);
+      rerender();
+
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', second);
+      expect(consoleError).not.toHaveBeenCalledWith('Form validation error:', first);
+      expect(result.current.isValidating).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test('resetForm in mount mode throws a sync schema throw to its caller', () => {

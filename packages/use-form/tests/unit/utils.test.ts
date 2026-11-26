@@ -481,6 +481,8 @@ test('changedPaths lists the leaf paths a merge changes', () => {
   expect(changedPaths(target, { name: 'a', address: { city: 'y' } })).toEqual(['address.city']);
   expect(changedPaths(target, { tags: ['a', 'b'] })).toEqual(['tags']);
   expect(changedPaths(target, { address: { city: 'x' } })).toEqual([]);
+  // Nothing to merge into: the plain object replaces what's there, and its own path changes
+  expect(changedPaths({ a: 1 }, { address: { city: 'x' } })).toEqual(['address']);
   expect(changedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
   expect(changedPaths({ a: 1 }, JSON.parse('{"__proto__": {"x": 1}}'))).toEqual([]);
 });
