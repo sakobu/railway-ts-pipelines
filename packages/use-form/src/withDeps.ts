@@ -1,7 +1,10 @@
 import type { ExtractFieldPaths, FieldTypeAtPath, FieldValidatorAnswer } from './types';
 
-/** Marks a field validator made by {@link withDeps}, so the form tells it from a plain one. */
-export const listsFields: unique symbol = Symbol('listsFields');
+/**
+ * Marks a field validator made by {@link withDeps}, so the form tells it from a plain one. From the global registry, so
+ * a second copy of the package, as a nested install gives, still finds the mark.
+ */
+export const listsFields: unique symbol = Symbol.for('@railway-ts/use-form/listsFields');
 
 /** One own property per listed path, typed. Distributes over a union of lists; a non-tuple list gives optional ones. */
 type DepValues<TValues, D extends readonly ExtractFieldPaths<TValues>[]> = D extends unknown
