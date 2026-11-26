@@ -763,7 +763,7 @@ function MultiStepForm() {
 
 **Problem:** A field's validity depends on another field -- password confirmation, date ranges, conditional requirements.
 
-**Solution:** Use `refineAt` from `@railway-ts/pipelines/schema`. It runs after the object validates, receives the whole object, and attaches the error to a specific field path.
+**Solution:** Use `refineAt` from `@railway-ts/pipelines/schema`. It runs after the object validates, receives the whole object, and attaches the error to a specific field path. For a remote check that reads another field, such as "this slug is free in the selected workspace", list the field with `withDeps` instead: see [Per-Field Async Validation](#per-field-async-validation-fieldvalidators).
 
 ```typescript
 import {
@@ -1145,11 +1145,11 @@ const form = useForm(schema, {
 
 **Solution:** The `errors` object is a merged view of three separate layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                 |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
+| Priority    | Source            | Property       | Populated when                                                                                          |
+| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                             |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field and every field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                            |
 
 **When each layer gets cleared:**
 
@@ -1259,7 +1259,7 @@ function ValibotForm() {
 
 **Problem:** You need to check a value against the server (username availability, coupon codes) without blocking the entire form. Schema-level async validation (`chainAsync`) validates the whole form -- you want per-field control with per-field loading indicators.
 
-**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when the schema produces no error for that field, and `validatingFields` tracks which fields are currently checking.
+**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when the schema produces no error for that field, or for any field it lists with `withDeps`, and `validatingFields` tracks which fields are currently checking.
 
 ```tsx
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
@@ -1303,17 +1303,51 @@ function RegistrationForm() {
 }
 ```
 
+A check can depend on another field: "this slug is free in the selected workspace". List that field with `withDeps(deps, validate)`, written inside the `fieldValidators` entry. `validate` gets the field's value and the listed fields, and only those. The check runs again when the slug or the workspace changes, and its error goes as soon as either one does.
+
+```tsx
+import * as S from '@railway-ts/pipelines/schema';
+import { useForm, withDeps } from '@railway-ts/use-form';
+
+const projectSchema = S.object({
+  workspaceId: S.required(S.string()),
+  slug: S.required(S.chain(S.string(), S.minLength(3))),
+});
+
+function ProjectForm() {
+  const form = useForm(projectSchema, {
+    initialValues: { workspaceId: '', slug: '' },
+    fieldValidators: {
+      slug: withDeps(['workspaceId'], async (slug, { workspaceId }) => {
+        const free = await isSlugFree(workspaceId, slug);
+        return free ? undefined : 'This slug is taken in this workspace';
+      }),
+    },
+  });
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <input {...form.getFieldProps('workspaceId')} />
+      <input {...form.getFieldProps('slug')} />
+      {form.validatingFields.slug && <span>Checking slug...</span>}
+      {form.getFieldError('slug') && <span className="error">{form.getFieldError('slug')}</span>}
+    </form>
+  );
+}
+```
+
 ### fieldValidators vs schema-level async
 
-|                     | `fieldValidators`                  | `chainAsync` / `refineAtAsync` |
-| ------------------- | ---------------------------------- | ------------------------------ |
-| **Scope**           | Single field                       | Entire form                    |
-| **Runs when**       | After schema passes for that field | During schema validation       |
-| **Loading state**   | `validatingFields.fieldName`       | `isValidating` (form-wide)     |
-| **Race conditions** | Handled per-field (latest wins)    | Handled per-form (latest wins) |
-| **Best for**        | Server lookups (username, email)   | Cross-field async checks       |
+|                     | `fieldValidators`                   | `chainAsync` / `refineAtAsync` |
+| ------------------- | ----------------------------------- | ------------------------------ |
+| **Scope**           | Single field                        | Entire form                    |
+| **Runs when**       | After schema passes for that field  | During schema validation       |
+| **Re-runs when**    | Its field or a listed field changes | Any field changes              |
+| **Loading state**   | `validatingFields.fieldName`        | `isValidating` (form-wide)     |
+| **Race conditions** | Handled per-field (latest wins)     | Handled per-form (latest wins) |
+| **Best for**        | Server lookups (username, email)    | Cross-field async checks       |
 
-Field validators return `undefined` for valid, or an error message string for invalid. They receive the typed field value and the full form values object: `(value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>` — no cast needed.
+Field validators return `undefined` for valid, or an error message string for invalid. A function gets its typed field value only: `(value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>` — no cast needed. `withDeps(deps, validate)` gives `validate` its value and the listed fields, typed, and nothing else.
 
 ---
 

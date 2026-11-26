@@ -1,12 +1,12 @@
 /**
  * Cross-field async validation example.
  *
- * Why schema-level async instead of fieldValidators?
- * fieldValidators only fire when their OWN field changes. Here the server check
- * depends on both `username` and `organization` — changing the org dropdown must
- * re-run the username availability check. Only schema-level async validation
- * (via refineAtAsync) can do this, because it re-validates the whole schema on
- * every change.
+ * This example shows schema-level async validation (refineAtAsync). The server check
+ * depends on both `username` and `organization`, and changing the org dropdown
+ * re-runs the username availability check because the whole schema re-validates on
+ * every change. The alternative is a field validator made with
+ * withDeps(['organization'], …), which runs only when username or organization
+ * changes.
  */
 import { useForm } from '../../src/';
 

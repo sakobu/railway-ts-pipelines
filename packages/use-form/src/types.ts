@@ -444,14 +444,28 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   validationMode?: 'live' | 'blur' | 'mount' | 'submit' | undefined;
 
   /**
-   * Per-field validator functions for field-level async validation.
-   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, once the schema passes, every one that is on.
-   * A field validator only runs when the schema produces no error for that field.
+   * Per-field validator functions for field-level async validation. An entry is one of:
+   * - a function of the field's value, `(value) => error`. It reads no other field.
+   * - `withDeps(deps, validate)`, where `validate(value, depValues)` also gets the fields it lists, and only those.
+   *   Write `withDeps` inside the entry, where it takes the form's types: one stored in a variable has none to take.
+   *   A list written inline or `as const` types each listed value exactly. A list held as an array type gives each
+   *   one as optional.
+   *
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
    * Switching one off, by leaving its key out or setting it to undefined, drops its error at once, and a check of it still running never lands.
    * A submit still waits for a check whose validator was switched off, then counts it as never run.
-   * A field's error stays while a check of the same value runs.
+   *
+   * An error shows only while its field and its listed fields hold the values its check saw. An edit that changes
+   * one of them drops the error at once, in every mode, and `isValid` follows.
+   *
+   * What checks a validator again, by mode: an edit of its field or of a listed field in `live` mode (`setValues`
+   * too, for the values it changed), a blur of either in `blur` mode, and a submit in every mode. In `submit` and
+   * `mount` modes an edit only drops the error. A field matches by overlap: editing `address.city` re-checks a
+   * validator on `address`, and the reverse. `shouldValidate: true` checks in any mode.
+   *
+   * A validator is skipped, with no error, when the schema has an error at its field or at any field it lists.
+   * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
    */
   fieldValidators?:

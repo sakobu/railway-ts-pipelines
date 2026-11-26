@@ -34,7 +34,8 @@ export type AsyncUser = InferSchemaType<typeof baseSchema>;
 
 // Wrap with cross-field async check.
 // This fires on ANY field change — so changing the org dropdown re-checks automatically.
-// fieldValidators can't do this: they only fire when their own field changes.
+// The alternative is a field validator made with withDeps(['organization'], …), which
+// runs only when username or organization changes.
 export const asyncUserSchema = chainAsync(
   baseSchema,
   refineAtAsync<AsyncUser>(

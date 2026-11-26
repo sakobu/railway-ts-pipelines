@@ -4,7 +4,7 @@
 
 Schema-first React forms with full TypeScript safety, composable validation, and native HTML bindings.
 
-**~6.5 kB** minified + brotli (under 13 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
+**~6.5 kB** minified + brotli (under 15 kB with [@railway-ts/pipelines](https://github.com/sakobu/railway-ts/tree/main/packages/pipelines) -- [smallest schema bundle on the benchmark](https://schemabenchmarks.dev))
 
 ## Why?
 
@@ -206,7 +206,7 @@ Cross-field validation, async username check, server errors, and React Query int
 - **Railway validation** -- composable validators that accumulate all errors in one pass
 - **Standard Schema v1** -- bring your own Zod, Valibot, or ArkType schema
 - **Native HTML bindings** -- spread `getFieldProps` onto inputs, selects, checkboxes, files, radios, sliders
-- **Three error layers** -- client, per-field async, and server errors with automatic priority
+- **Three error layers** -- client, per-field async (a check can list the fields it reads with `withDeps`), and server errors with automatic priority
 - **Array helpers** -- type-safe `push`, `remove`, `swap`, `insert`, `replace` with field bindings
 - **Four validation modes** -- `live`, `blur`, `mount`, `submit`
 - **Auto-save** -- the `autoSave` option saves after a debounced delay once the form is valid, pauses while `isStale`, and never resends values that already went out

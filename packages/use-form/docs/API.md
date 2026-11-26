@@ -50,7 +50,7 @@ const validator = v.object({
 });
 ```
 
-**A validator that throws.** A validation the form starts on its own (on mount, after a reset, or when it follows new `initialValues`) logs a throw from the schema or a field validator with `console.error('Form validation error:', error)`, and the form keeps rendering. So does an async check that rejects, whatever started it, and its validating state ends. A sync throw during typing or a blur reaches the `setFieldValue`, `setValues` or `setFieldTouched` call that started the check, `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+**A validator that throws.** A sync throw from the schema or a field validator reaches the outermost call of the event that asked for the check: `setFieldValue`, `setValues`, `setFieldTouched` or `resetForm`, and the array helpers through `setFieldValue`. Calls made inside `onFieldChange` join that event, so a throw from their check reaches the outermost call too. When one event's pass reaches several field validators and more than one throws, the first throw reaches the outermost call and each later one is logged. A check with no caller, which is the mount check, the check after a `resetKey` change or a follow of new `initialValues`, the follow after a save, and auto-save's check, logs every throw, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering. An async check that rejects is logged too, whatever started it, and its validating state ends. `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
 
 #### options
 
@@ -74,7 +74,8 @@ Configuration object. Every option but `initialValues` can be set to `undefined`
   fieldValidators?:
     | {
         [K in ExtractFieldPaths<TValues>]?:
-          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | ((value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>)
+          | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>> // made by withDeps; see withDeps
           | undefined;
       }
     | undefined;
@@ -206,14 +207,31 @@ Controls when validation occurs.
 
 #### fieldValidators
 
-Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>) | undefined }`
+Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>) | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>> | undefined }`
 Optional
 
-Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator: on a change, only the changed field's validator runs; on submit, once the schema passes, every validator that is on runs. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
+Per-field validator functions for field-level async validation. Run independently from the main schema validator. An entry is one of two forms:
+
+- A function of the field's value, `(value) => error`. The `value` parameter is typed from the field path, so no cast is needed. It reads no other field, and is called with that one argument.
+- A validator made by [`withDeps(deps, validate)`](#withdeps), where `validate(value, depValues)` also gets the fields it lists, and only those. Write it inside the entry.
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
-Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A field's error stays while a check of the same value runs. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
+**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs.
+
+**What checks a validator again**, by mode:
+
+- `live`: an edit of its field or of a listed field. `setValues` re-runs the validators of the values it changed.
+- `blur`: a blur of its field or of a listed field.
+- `submit` and `mount`: the error just drops, and the next submit checks again.
+- `shouldValidate: true` on `setFieldValue` or `setValues` checks in any mode.
+- A submit runs every validator that is on, once the schema passes.
+
+A validator's own field matches by overlap: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city`.
+
+**The schema gate.** A validator runs only when the schema produces **no error** at its own field or at any field it lists. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
+
+Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A `deps` list that changes between renders applies from the validator's next check. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
 ```typescript
 const form = useForm(userSchema, {
@@ -267,7 +285,13 @@ route through `setFieldValue`, so `onFieldChange` fires for them with the
 array field path (e.g., `"contacts"`) and the full new array as the value.
 
 It runs after the field's new value is stored, so any form call made inside it
-applies on top of the change, and the field's validation sees the result. A
+applies on top of the change. A `setFieldValue`, `setValues`, `setFieldTouched`
+or `resetForm` call made inside it, or inside a callback such a call fires in
+turn, joins the outermost call: validation runs once, after that outermost call
+returns, on the values as they are then, and a sync throw from it reaches that
+outermost call. So a cascade runs each validator and the schema once.
+`validateForm` and `handleSubmit` aren't part of that: they check at once. A
+throw from `onFieldChange` itself ends the outermost call without validating. A
 `resetForm()` or `setValues()` made here can override the field that just
 changed. To reset the other fields when one changes, pass the new value along:
 
@@ -495,11 +519,11 @@ form.fieldErrors.email; // "Email is already taken"
 
 The `errors` object is a merged view of three separate error layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                 |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
+| Priority    | Source            | Property       | Populated when                                                                                          |
+| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                             |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field and every field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                            |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 
@@ -515,7 +539,7 @@ const errors = {
 **When each layer gets cleared:**
 
 - `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
-- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode), when the field's schema error, or one at a listed field, reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
@@ -613,6 +637,8 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 
 - `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given. To merge a class instance that holds only some fields, such as a model from a PATCH response, spread it into a plain object: `setValues({ address: { ...patch } })`.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
+
+When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. It also hides the schema errors at those paths while an async schema check runs, as `setFieldValue` does for its field. Validation runs once, after the outermost call returns.
 
 **Example:**
 
@@ -1407,6 +1433,48 @@ getFieldId<TField extends ExtractFieldPaths<TItem>>(
 ```tsx
 <label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
 <input {...helpers.getFieldProps(index, "name")} />
+```
+
+## withDeps
+
+Makes a field validator that lists the other fields it reads. It is the second form of a [`fieldValidators`](#fieldvalidators) entry.
+
+```typescript
+function withDeps<TValues, TValue, const D extends readonly ExtractFieldPaths<TValues>[]>(
+  deps: D,
+  validate: (value: TValue, deps: DepValues<TValues, D>) => string | undefined | Promise<string | undefined>,
+): FieldValidatorWithDeps<TValues, TValue>;
+```
+
+**Parameters:**
+
+- `deps` - The other fields the validator reads, as field paths. Only the form's field paths compile.
+- `validate` - Gets the field's value, then `depValues`: an object with one own property per listed path, keyed by the path as written (`{ 'address.city': ... }`), holding the value in the values checked. It can't read any other field, at runtime or in its types.
+
+When `deps` is a tuple, written inline or `as const`, each listed value has its exact type. When `deps` is held in a variable typed as an array, each listed value is optional (`T | undefined`), since which paths it holds is known only at runtime.
+
+Write `withDeps` inside the `fieldValidators` entry, where it takes the form's types. One stored in a variable outside it has no form to take them from, so it doesn't compile. An entry made any other way, such as a hand-written `{ deps, validate }`, is off.
+
+Editing a listed field re-checks the validator in `live` mode, blurring one does in `blur` mode, and the next submit does in every mode. A schema error at a listed field skips the validator. The error shows only while the field and the listed fields hold the values it checked. See [`fieldValidators`](#fieldvalidators).
+
+```tsx
+import * as S from '@railway-ts/pipelines/schema';
+import { useForm, withDeps } from '@railway-ts/use-form';
+
+const projectSchema = S.object({
+  workspaceId: S.required(S.string()),
+  slug: S.required(S.string()),
+});
+
+const form = useForm(projectSchema, {
+  initialValues: { workspaceId: '', slug: '' },
+  fieldValidators: {
+    // The slug must be free in the selected workspace
+    slug: withDeps(['workspaceId'], async (slug, { workspaceId }) =>
+      (await isSlugTaken(workspaceId, slug)) ? 'This slug is taken' : undefined,
+    ),
+  },
+});
 ```
 
 ## useDebounce
