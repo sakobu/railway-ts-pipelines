@@ -44,6 +44,7 @@ import { createFormStore, type FormStore } from './formStore';
 import { createStabilityCheck } from './stabilityCheck';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
 import { createSubmitScheduler, type SubmitScheduler } from './submitScheduler';
+import { useDebounce } from './useDebounce';
 import {
   deepEqual,
   getValueByPath,
@@ -1617,13 +1618,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const autoSaveSchedulerRef = useRef<SubmitScheduler<TValues, Result<TResult, ValidationError[]>> | undefined>(
     undefined,
   );
-  // The timer of the tracked version's delay
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // The latest commit's delay, which a version takes when it starts: a timer already running keeps its length
-  const autoSaveDelayRef = useRef(autoSaveDelay);
-  // The latest commit's runAutoSave, so a timer an earlier render set saves through the latest onSubmit. Set before
-  // any effect runs (below).
+  // The latest commit's runAutoSave, so a delay an earlier render started saves through the latest onSubmit. Set
+  // before any effect runs (below).
   const runAutoSaveRef = useRef<() => void>(() => {});
+
+  // Restarts the tracked version's delay with the latest commit's length: a delay already running keeps its own.
+  // Unmounting cancels it, and one that ends after auto-save is switched off finds no version to save.
+  const restartDelay = useDebounce(() => {
+    autoSaver.delayEnded();
+    runAutoSaveRef.current();
+  }, autoSaveDelay);
 
   /**
    * Decides auto-save's next step for the values the store holds now, and takes it. Values that changed start a new
@@ -1631,17 +1635,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * or reset ends that check. A throw or rejection from the schema validator is logged. Otherwise, once nothing holds
    * them, they're submitted through `handleSubmit`. Does nothing while auto-save is off or unmounted.
    */
-  const runAutoSave = useCallback((): void => {
+  const runAutoSave = (): void => {
     if (!autoSaver.isOn()) return;
     const state = store.getState();
 
-    if (autoSaver.track(state.values)) {
-      clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        autoSaver.delayEnded();
-        runAutoSaveRef.current();
-      }, autoSaveDelayRef.current);
-    }
+    if (autoSaver.track(state.values)) restartDelay();
 
     const step = autoSaver.decide(() => ({
       isDirty: !deepEqual(state.values, store.getInitialValues()),
@@ -1667,22 +1665,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // handleSubmit never rejects, and the scheduler's onIdle reports the settle
       void handleSubmit();
     }
-  }, [store, autoSaver, startValidation, handleSubmit]);
+  };
 
   // Before any effect of the commit runs, a child's included. No ref is written during render.
   useInsertionEffect(() => {
     runAutoSaveRef.current = runAutoSave;
-    autoSaveDelayRef.current = autoSaveDelay;
   });
 
-  // Effect A. Switching auto-save off drops a version waiting out its delay, switching it on starts a fresh delay, and
-  // unmounting stops the timer. A save already running finishes.
+  // Effect A. Switching auto-save off drops a version waiting out its delay, and switching it on starts a fresh delay.
+  // A save already running finishes.
   useEffect(() => {
     if (autoSaveOn) autoSaver.start();
-    return () => {
-      clearTimeout(timerRef.current);
-      autoSaver.stop();
-    };
+    return autoSaver.stop;
   }, [autoSaveOn, autoSaver]);
 
   // Effect B. Decides after each commit that may have changed what auto-save reads: the form's state, the initial

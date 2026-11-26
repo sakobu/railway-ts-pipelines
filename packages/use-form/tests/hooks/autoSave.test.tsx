@@ -704,6 +704,26 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
+    test('switching autoSave back on before a dropped delay would end waits a fresh delay', async () => {
+      const onSubmit = saving();
+      const { result, rerender } = renderAutoSaveForm(onSubmit, delay);
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await sleep(delay / 2);
+      rerender({ values: initial, options: { autoSave: false } });
+      await sleep(delay / 4);
+      rerender({ values: initial, options: { autoSave: { delay } } });
+      // Past the end of the dropped delay, and short of the fresh one
+      await sleep(delay / 2);
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      await sleep(2 * delay);
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
     test('a new delay applies from the next change', async () => {
       const onSubmit = saving();
       const { result, rerender } = renderAutoSaveForm(onSubmit, 50);
