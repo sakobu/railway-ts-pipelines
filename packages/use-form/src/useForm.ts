@@ -54,7 +54,6 @@ import {
   isPathAffected,
   isPromiseLike,
   normalizePath,
-  normalizePathKeys,
   own,
   pathsOverlap,
   valuesAt,
@@ -106,7 +105,7 @@ const UNSTABLE_INITIAL_VALUES_MESSAGE =
 type SchemaOutcome<TValues> = { values: TValues; result: Result<TValues, ValidationError[]> | undefined };
 
 /**
- * A schema check's errors as a waiting field check reads them, by normalized path: none for a pass, and undefined once
+ * A schema check's errors as a waiting field check reads them, by path as `formatErrors` writes it: none for a pass, and undefined once
  * the schema validator threw or rejected.
  */
 type SchemaErrors = Readonly<Record<FieldPath, string>> | undefined;
@@ -229,14 +228,14 @@ const schemaErrorsOf = <TValues>(result: Result<TValues, ValidationError[]>): Re
   isErr(result) ? formatErrors(result.error) : {};
 
 /**
- * The errors a schema check's result places on the form, by normalized path, as a waiting field check reads them.
- * Built once per result, however many field checks it moves on.
+ * The errors a schema check's result places on the form, as a waiting field check reads them: it matches their paths
+ * by overlap, so they stay as `formatErrors` writes them. Built once per result, however many field checks it moves on.
  *
  * @param result - What the schema validator returned, or resolved to, or undefined once it threw or rejected
  * @returns The errors, or undefined with no result
  */
-const schemaErrorsByPath = <TValues>(result: Result<TValues, ValidationError[]> | undefined): SchemaErrors =>
-  result && normalizePathKeys(schemaErrorsOf(result));
+const schemaErrorsIfAny = <TValues>(result: Result<TValues, ValidationError[]> | undefined): SchemaErrors =>
+  result && schemaErrorsOf(result);
 
 /**
  * Runs a step that answers at once or later, and tells how it settled: `onAnswer` gets its answer, and `onFail` hears
@@ -761,8 +760,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * comes first moves the check on, and a later one finds it no longer waiting.
    *
    * 1. No result, since the schema validator threw or rejected: the check ends with no error.
-   * 2. A schema error at any of the check's input paths, the field or a listed one: it ends with no error, so the
-   *    schema's error shows.
+   * 2. A schema error that overlaps any of the check's input paths, the field or a listed one, at, inside or above
+   *    it: it ends with no error, so the schema's error shows.
    * 3. The field's validator in the latest commit reads other paths than the check recorded, since its list changed:
    *    it ends with no error, without calling the validator. The next check uses the new list.
    * 4. Otherwise it runs that validator on the checked values, and ends with its answer.
@@ -774,7 +773,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * @param id - The check's id
    * @param inputs - The check's recorded inputs
    * @param checked - The values the schema check checked
-   * @param schemaErrors - Its errors, by normalized path, or undefined with no result ({@link schemaErrorsByPath})
+   * @param schemaErrors - Its errors, or undefined with no result ({@link schemaErrorsIfAny})
    */
   const moveOnWithSchema = useCallback(
     (
@@ -792,7 +791,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const validator = fieldValidatorsRef.current.get(key);
       if (
         !schemaErrors ||
-        Object.keys(inputs).some((path) => own(schemaErrors, path) !== undefined) ||
+        Object.keys(schemaErrors).some((errorPath) =>
+          Object.keys(inputs).some((path) => pathsOverlap(errorPath, path)),
+        ) ||
         !validator ||
         !sameInputs(validator.inputs, inputs)
       ) {
@@ -833,7 +834,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const waiting = Object.entries(waitingFieldChecksOf(store.getState().checks.fields, id));
       if (waiting.length === 0) return;
       if (held !== outcome.values && !deepEqual(held, outcome.values)) return;
-      const schemaErrors = schemaErrorsByPath(outcome.result);
+      const schemaErrors = schemaErrorsIfAny(outcome.result);
       for (const [key, check] of waiting) {
         try {
           moveOnWithSchema(key, check.id, check.inputs, outcome.values, schemaErrors);
@@ -963,7 +964,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
 
       // The schema's errors, read once for every field check it moves on, and not at all with none to move on
-      const errorsOf = moveOns.length > 0 ? schemaErrorsByPath : () => undefined;
+      const errorsOf = moveOns.length > 0 ? schemaErrorsIfAny : () => undefined;
       let schemaErrors: SchemaErrors | Promise<SchemaErrors>;
       try {
         const result = checkSchema(dispatch, schemaId, values, moveOnWaitingChecks);

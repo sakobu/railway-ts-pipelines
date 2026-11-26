@@ -1145,11 +1145,11 @@ const form = useForm(schema, {
 
 **Solution:** The `errors` object is a merged view of three separate layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                                          |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                             |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field and every field it lists) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                            |
+| Priority    | Source            | Property       | Populated when                                                                                            |
+| ----------- | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                               |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after no schema error overlaps that field or a field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                              |
 
 **When each layer gets cleared:**
 
@@ -1259,7 +1259,7 @@ function ValibotForm() {
 
 **Problem:** You need to check a value against the server (username availability, coupon codes) without blocking the entire form. Schema-level async validation (`chainAsync`) validates the whole form -- you want per-field control with per-field loading indicators.
 
-**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when the schema produces no error for that field, or for any field it lists with `withDeps`, and `validatingFields` tracks which fields are currently checking.
+**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking.
 
 ```tsx
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
@@ -1341,7 +1341,7 @@ function ProjectForm() {
 |                     | `fieldValidators`                                                  | `chainAsync` / `refineAtAsync`    |
 | ------------------- | ------------------------------------------------------------------ | --------------------------------- |
 | **Scope**           | Single field                                                       | Entire form                       |
-| **Runs when**       | After schema passes for that field and every field it lists        | During schema validation          |
+| **Runs when**       | After no schema error overlaps that field or a field it lists      | During schema validation          |
 | **Re-runs when**    | Its field or a listed field changes                                | Any field changes                 |
 | **Loading state**   | `validatingFields.fieldName`                                       | `isValidating` (form-wide)        |
 | **Race conditions** | Handled per-field (latest wins)                                    | Handled per-form (latest wins)    |

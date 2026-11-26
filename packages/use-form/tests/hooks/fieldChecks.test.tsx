@@ -1709,6 +1709,71 @@ describe('withDeps', () => {
     expect(result.current.errors.workspaceId).toBe('Pick a workspace');
   });
 
+  describe('the schema gate matches by overlap', () => {
+    const addressForm = { name: 'Ann', address: { street: 's', city: 'c', zip: '' } };
+    const zipSchema = S.object({
+      name: S.required(S.string()),
+      address: S.required(
+        S.object({
+          street: S.required(S.string()),
+          city: S.required(S.string()),
+          zip: S.required(S.chain(S.string(), S.nonEmpty('Zip is required'))),
+        }),
+      ),
+    });
+
+    test('a schema error inside a listed field skips the validator', () => {
+      const validate = mock((_name: string, _deps: { readonly address: unknown }) => undefined);
+      const { result } = renderHook(() =>
+        useForm(zipSchema, {
+          initialValues: addressForm,
+          fieldValidators: { name: withDeps(['address'], validate) },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('name', 'Bob'));
+
+      expect(result.current.errors['address.zip']).toBe('Zip is required');
+      expect(validate).not.toHaveBeenCalled();
+    });
+
+    test('a schema error above a listed field skips the validator', () => {
+      const wholeSchema = S.object({
+        name: S.required(S.string()),
+        address: S.required(
+          S.chain(
+            S.object({ street: S.required(S.string()), city: S.required(S.string()) }),
+            S.refine((address) => address.city !== 'Nowhere', 'Not a real city'),
+          ),
+        ),
+      });
+      const validate = mock((_name: string, _deps: { readonly 'address.city': string }) => undefined);
+      const { result } = renderHook(() =>
+        useForm(wholeSchema, {
+          initialValues: { name: 'Ann', address: { street: 's', city: 'Nowhere' } },
+          fieldValidators: { name: withDeps(['address.city'], validate) },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('name', 'Bob'));
+
+      expect(result.current.errors.address).toBe('Not a real city');
+      expect(validate).not.toHaveBeenCalled();
+    });
+
+    test("a schema error inside a validator's own field skips a plain validator", () => {
+      const validate = mock((_address: unknown) => undefined);
+      const { result } = renderHook(() =>
+        useForm(zipSchema, { initialValues: addressForm, fieldValidators: { address: validate } }),
+      );
+
+      act(() => result.current.setFieldValue('address.city', 'Oslo'));
+
+      expect(result.current.errors['address.zip']).toBe('Zip is required');
+      expect(validate).not.toHaveBeenCalled();
+    });
+  });
+
   test('validate gets exactly the listed fields, and a function gets only its value', () => {
     const validate = slugCheck();
     const checkName = mock((_v: string) => undefined);

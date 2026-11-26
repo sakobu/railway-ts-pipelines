@@ -462,7 +462,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * `mount` modes an edit only drops the error. A field matches by overlap: editing `address.city` re-checks a
    * validator on `address`, and the reverse. `shouldValidate: true` checks in any mode.
    *
-   * A validator is skipped, with no error, when the schema has an error at its field or at any field it lists.
+   * A validator is skipped, with no error, when a schema error overlaps its field or any field it lists: one at, inside
+   * or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on `address`.
    * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
    */

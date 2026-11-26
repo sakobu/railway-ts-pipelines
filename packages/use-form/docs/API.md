@@ -234,7 +234,7 @@ Return `undefined` for valid, or an error message string for invalid. An entry s
 
 A validator's own field matches by overlap: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city`.
 
-**The schema gate.** A validator runs only when the schema produces **no error** at its own field or at any field it lists. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
+**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is skipped by an error at `address.zip`, and one that lists `address.city` is skipped by an error at `address`. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
 
 Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
@@ -524,11 +524,11 @@ form.fieldErrors.email; // "Email is already taken"
 
 The `errors` object is a merged view of three separate error layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                                          |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                             |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field and every field it lists) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                            |
+| Priority    | Source            | Property       | Populated when                                                                                            |
+| ----------- | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                               |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after no schema error overlaps that field or a field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                              |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 

@@ -10,7 +10,7 @@ A field validator lists the fields it reads with the new `withDeps`, and its err
 - A field-validator error goes as soon as an edit changes its field or a listed field, in every mode, and `isValid` follows. A Save button disabled while `!isValid`, and auto-save, no longer get stuck on an error for values the form no longer holds.
 - `setValues` that validates (by default in `live` mode, or with `shouldValidate: true` in any mode) runs the field validators of the values it changed, and hides the schema errors at those paths while an async schema check runs.
 - A validator's own field matches by overlap: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city`.
-- A schema error at a listed field skips the validator, as one at its own field does.
+- A schema error at, inside or above the validator's field or a listed field skips it, so no request goes out with an input the schema rejects. **Breaking** for a validator on an object field: it no longer runs while a schema error sits inside that object.
 - A field check of values the form no longer holds ends with no error, such as a submit's check of a field edited while the submit's schema check ran. `handleSubmit`'s `err` still includes it.
 - Validation asked for inside `onFieldChange` runs once, after the outermost call returns. A cascade no longer runs a validator twice, and the schema runs once per call.
 - A sync throw from a check asked for inside `onFieldChange` reaches the outermost call. A sync throw from the schema in `resetForm()` (in `mount` mode), or from the schema or a field validator in a follow an edit caused, reaches the caller instead of being logged.
