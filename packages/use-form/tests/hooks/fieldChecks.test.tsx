@@ -1857,6 +1857,27 @@ describe('withDeps', () => {
       expect(validate).not.toHaveBeenCalled();
     });
 
+    test('a root schema error sits above every field, so it skips every validator', () => {
+      const rootSchema = S.chain(
+        S.object({ name: S.required(S.string()), title: S.required(S.string()) }),
+        S.refine((form) => form.name !== form.title, 'Name and title must differ'),
+      );
+      const checkName = mock((_name: string) => undefined);
+      const { result } = renderHook(() =>
+        useForm(rootSchema, {
+          initialValues: { name: 'Ann', title: 'Lead' },
+          fieldValidators: { name: checkName },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('name', 'Lead'));
+      expect(result.current.errors._root).toBe('Name and title must differ');
+      expect(checkName).not.toHaveBeenCalled();
+
+      act(() => result.current.setFieldValue('name', 'Bob'));
+      expect(checkName).toHaveBeenCalledWith('Bob');
+    });
+
     test("a schema error inside a validator's own field skips a plain validator", () => {
       const validate = mock((_address: unknown) => undefined);
       const { result } = renderHook(() =>

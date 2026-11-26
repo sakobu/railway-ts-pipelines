@@ -469,7 +469,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * record's own value lists the record's id with `withDeps`.
    *
    * A validator is skipped, with no error, when a schema error overlaps its field or any field it lists: one at, inside
-   * or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on `address`.
+   * or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on `address`. A root
+   * error (path `[]`) sits above every field, so it skips every validator.
    * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
    */

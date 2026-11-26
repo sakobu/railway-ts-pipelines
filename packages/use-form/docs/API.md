@@ -241,7 +241,7 @@ Return `undefined` for valid, or an error message string for invalid. An entry s
 
 A validator's own field matches by overlap: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city`.
 
-**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is skipped by an error at `address.zip`, and one that lists `address.city` is skipped by an error at `address`. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
+**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is skipped by an error at `address.zip`, and one that lists `address.city` is skipped by an error at `address`. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it skips every validator until it clears: put a cross-field rule on its field with `refineAt` to keep the other lookups running. Otherwise its check ends with no error and no request goes out with an input the schema rejects.
 
 Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 

@@ -226,6 +226,17 @@ const validatorsByPath = <TValues extends Record<string, unknown>>(
   );
 
 /**
+ * Whether a schema error, at its path as `formatErrors` writes it, rejects any of a check's input paths: it sits at,
+ * inside or above one of them. A root error sits above them all.
+ *
+ * @param errorPath - The schema error's path, {@link ROOT_ERROR_KEY} for the root
+ * @param inputPaths - The check's input paths
+ * @returns Whether the gate skips the validator
+ */
+const rejectsInputs = (errorPath: FieldPath, inputPaths: readonly FieldPath[]): boolean =>
+  errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, inputPaths);
+
+/**
  * Whether a validator's input paths are the ones a check recorded, in any order. Neither repeats a path.
  *
  * @param paths - The validator's input paths
@@ -776,7 +787,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * 1. No result, since the schema validator threw or rejected: the check ends with no error.
    * 2. A schema error that overlaps any of the input paths the check recorded, the field or a listed one, at, inside
-   *    or above it: it ends with no error, so the schema's error shows.
+   *    or above it, a root error included: it ends with no error, so the schema's error shows.
    * 3. The field's validator in the latest commit reads other paths than the check recorded, since its list changed:
    *    it ends with no error, without calling the validator. The next check uses the new list.
    * 4. Otherwise it runs that validator on the checked values, and ends with its answer.
@@ -801,7 +812,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const validator = fieldValidatorsRef.current.get(key);
       if (
         !schemaErrors ||
-        Object.keys(schemaErrors).some((errorPath) => overlapsAny(errorPath, inputPaths)) ||
+        Object.keys(schemaErrors).some((errorPath) => rejectsInputs(errorPath, inputPaths)) ||
         !validator ||
         !sameInputs(validator.inputs, check.inputs)
       ) {
