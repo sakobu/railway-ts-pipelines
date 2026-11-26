@@ -410,6 +410,12 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
 };
 
 /**
+ * Whether a plain object in `setValues` merges into this value ({@link deepMerge}): a value the form
+ * looks inside (see {@link isBranch}) that isn't an array. Its fields read as any object's do.
+ */
+const isMergeTarget = (value: unknown): value is Record<string, unknown> => isBranch(value) && !Array.isArray(value);
+
+/**
  * Merges `source` into `target` for `setValues`, returning a new object.
  *
  * A plain object in `source` is a partial update. It merges into the object there, as
@@ -436,12 +442,42 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
     if (key === '__proto__') continue;
     const srcVal = source[key];
     const tgtVal = target[key];
-    const merges = isPlainObject(srcVal) && isBranch(tgtVal) && !Array.isArray(tgtVal);
-    result[key] = merges ? deepMerge(tgtVal as Record<string, unknown>, srcVal) : srcVal;
+    const merges = isPlainObject(srcVal) && isMergeTarget(tgtVal);
+    result[key] = merges ? deepMerge(tgtVal, srcVal) : srcVal;
   }
 
   return result as T;
 };
+
+/**
+ * The leaf paths whose value `deepMerge(target, source)` changes, so `setValues` checks only what it
+ * changed. It descends where {@link deepMerge} merges, and skips `__proto__` as it does. Every other
+ * value `source` holds is a leaf it writes, compared with what `target` holds there by
+ * {@link deepEqual}. An object merged into isn't a path it writes.
+ *
+ * @param target - The values before the merge
+ * @param source - The values merged in
+ * @returns Each path whose value the merge changes, in dot form
+ *
+ * @example
+ * changedPaths({ address: { city: "LA", zip: "90001" } }, { address: { city: "NYC" } }); // ["address.city"]
+ *
+ * @example
+ * changedPaths({ tags: ["a"] }, { tags: ["a", "b"] }); // ["tags"]: an array is replaced whole
+ */
+export const changedPaths = (target: Record<string, unknown>, source: Record<string, unknown>): FieldPath[] =>
+  changedWithin(target, source, '');
+
+/** {@link changedPaths}, for the objects merged at `prefix`. */
+const changedWithin = (target: Record<string, unknown>, source: Record<string, unknown>, prefix: string): FieldPath[] =>
+  Object.keys(source).flatMap((key) => {
+    if (key === '__proto__') return [];
+    const srcVal = source[key];
+    const tgtVal = target[key];
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(srcVal) && isMergeTarget(tgtVal)) return changedWithin(tgtVal, srcVal, path);
+    return deepEqual(tgtVal, srcVal) ? [] : [path];
+  });
 
 /**
  * Compares two values the way the form sees them. Used for `isDirty`, for following new

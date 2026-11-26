@@ -7,7 +7,13 @@ import { StrictMode } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { createGatedFieldValidator, createGatedValidator, nextTask, thenableOf } from '../fixtures/gates';
-import { alwaysValidValidator, publishValidator, userValidator, type PublishForm } from '../fixtures/validators';
+import {
+  alwaysValidValidator,
+  publishValidator,
+  userValidator,
+  userWithAddressValidator,
+  type PublishForm,
+} from '../fixtures/validators';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const user = { name: 'John', email: 'john@test.com', age: 25 };
@@ -1251,5 +1257,293 @@ describe('an error lasts only while its values hold (#58)', () => {
 
     expect(result.current.errors.name).toBeUndefined();
     expect(result.current.isValid).toBe(true);
+  });
+});
+
+describe('one call, one check pass (#57)', () => {
+  /** The publish schema, as a mock that counts its calls. */
+  const countingSchema = () => mock(publishValidator);
+
+  test('#57: an onFieldChange cascade runs a waiting field check once', async () => {
+    // Sync when status is 'bad', async otherwise, as in the issue
+    const halfAsync: S.MaybeAsyncValidator<unknown, PublishForm> = (input, path) =>
+      (input as PublishForm).status === 'bad'
+        ? publishValidator(input, path)
+        : Promise.resolve(publishValidator(input, path));
+    const checkTitle = mock((_value: string) => undefined);
+    let cascade = false;
+    const { result } = renderHook(() =>
+      useForm(halfAsync, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle },
+        onFieldChange: (field) => {
+          if (cascade && field === 'title') result.current.setFieldValue('status', 'bad');
+        },
+      }),
+    );
+    act(() => {
+      result.current.setFieldValue('title', 'x'); // its check waits on the async schema
+      cascade = true;
+      result.current.setFieldValue('title', 'x');
+    });
+    await act(async () => {
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+  });
+
+  test('an onFieldChange that rewrites its own field runs the validator once and the schema once', () => {
+    const schema = countingSchema();
+    const checkTitle = mock((_value: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(schema, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle },
+        onFieldChange: (field, value) => {
+          if (field === 'title' && typeof value === 'string' && value !== value.trim()) {
+            result.current.setFieldValue('title', value.trim());
+          }
+        },
+      }),
+    );
+    schema.mockClear();
+    checkTitle.mockClear();
+
+    act(() => result.current.setFieldValue('title', ' x '));
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle.mock.calls[0]![0]).toBe('x');
+    expect(schema).toHaveBeenCalledTimes(1);
+  });
+
+  test('the setValues reset pattern in onFieldChange runs each validator once and the schema once', () => {
+    const schema = countingSchema();
+    const checkTitle = mock((_value: string) => undefined);
+    const checkStatus = mock((_value: string) => undefined);
+    let cascade = false;
+    const { result } = renderHook(() =>
+      useForm(schema, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle, status: checkStatus },
+        onFieldChange: (field, value) => {
+          if (cascade && field === 'status' && typeof value === 'string') {
+            result.current.setValues({ ...draft, status: value });
+          }
+        },
+      }),
+    );
+    act(() => result.current.setFieldValue('title', 'Edited'));
+    schema.mockClear();
+    checkTitle.mockClear();
+    checkStatus.mockClear();
+
+    cascade = true;
+    act(() => result.current.setFieldValue('status', 'published'));
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkStatus).toHaveBeenCalledTimes(1);
+    expect(schema).toHaveBeenCalledTimes(1);
+  });
+
+  test('a cascade write with shouldValidate false is still checked on the final values', () => {
+    const schema = countingSchema();
+    const checkTitle = mock((_value: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(schema, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle },
+        onFieldChange: (field) => {
+          if (field === 'status') result.current.setFieldValue('title', 'Changed', false);
+        },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('status', 'published'));
+
+    // title isn't a recorded path, and no validator lists status
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(schema).toHaveBeenCalledTimes(1);
+    expect(schema.mock.calls.at(-1)?.[0]).toEqual({ ...draft, status: 'published', title: 'Changed' });
+  });
+
+  test('after onFieldChange throws, the errors its edit outdated are gone, and the next call still validates', () => {
+    const checkTitle = mock((value: string) => (value === 'Taken' ? 'Taken' : undefined));
+    let failing = false;
+    const { result, rerender } = renderHook(() =>
+      useForm(publishValidator, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle },
+        onFieldChange: () => {
+          if (failing) throw new Error('boom');
+        },
+      }),
+    );
+    act(() => result.current.setFieldValue('title', 'Taken'));
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+
+    failing = true;
+    expect(() => act(() => result.current.setFieldValue('title', 'a'))).toThrow();
+    // An act that throws doesn't render the store's change: render it, so the assertions read the store
+    rerender();
+
+    // The event ran no check, and the edit outdated the error
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(result.current.fieldErrors).toEqual({});
+
+    failing = false;
+    act(() => result.current.setFieldValue('title', 'b'));
+
+    expect(checkTitle).toHaveBeenCalledTimes(2);
+  });
+
+  test('a sync validator throw asked for inside a cascade reaches the outermost call', () => {
+    const checkTitle = mock((value: string): string | undefined => {
+      if (value === 'boom') throw new Error('boom');
+      return undefined;
+    });
+    const { result, rerender } = renderHook(() =>
+      useForm(publishValidator, {
+        initialValues: draft,
+        fieldValidators: { title: checkTitle },
+        onFieldChange: (field) => {
+          if (field === 'status') result.current.setFieldValue('title', 'boom');
+        },
+      }),
+    );
+
+    expect(() => act(() => result.current.setFieldValue('status', 'x'))).toThrow('boom');
+    rerender();
+
+    // The outer call's body finished, marking status touched, before the pass threw
+    expect(result.current.touched).toEqual({ title: true, status: true });
+  });
+
+  test('when one validator throws in the pass, the rest still run, and the first throw reaches the caller', () => {
+    const checkTitle = mock((): string | undefined => {
+      throw new Error('boom');
+    });
+    const checkStatus = mock((_v: string) => undefined);
+    const { result, rerender } = renderHook(() =>
+      useForm(publishValidator, { initialValues: draft, fieldValidators: { title: checkTitle, status: checkStatus } }),
+    );
+
+    // One event reaches both validators. title comes first, so it runs first.
+    expect(() => act(() => result.current.setValues({ title: 'a', status: 'b' }))).toThrow('boom');
+    rerender();
+
+    expect(checkStatus).toHaveBeenCalledTimes(1);
+    expect(checkStatus.mock.calls[0]![0]).toBe('b');
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('resetForm in mount mode throws a sync schema throw to its caller', () => {
+    let failing = false;
+    const flagged: S.Validator<unknown, PublishForm> = (input, path) => {
+      if (failing) throw new Error('boom');
+      return publishValidator(input, path);
+    };
+    const { result } = renderHook(() => useForm(flagged, { initialValues: draft, validationMode: 'mount' }));
+
+    failing = true;
+    expect(() => act(() => result.current.resetForm())).toThrow('boom');
+  });
+
+  test('an edit that makes the form follow throws a sync schema throw to its caller', () => {
+    let failing = false;
+    const flagged: S.Validator<unknown, PublishForm> = (input, path) => {
+      if (failing) throw new Error('boom');
+      return publishValidator(input, path);
+    };
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) => useForm(flagged, { initialValues: initial, validationMode: 'live' }),
+      { initialProps: { initial: draft } },
+    );
+    act(() => result.current.setFieldValue('title', 'Edited'));
+    rerender({ initial: { ...draft, status: 'published' } });
+    expect(result.current.isStale).toBe(true);
+
+    failing = true;
+    // Setting the title back leaves no edits, so the form follows the newer version
+    expect(() => act(() => result.current.setFieldValue('title', draft.title))).toThrow('boom');
+  });
+
+  test('setValues clears the schema errors at the paths it changed while an async check runs', async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
+    act(() => result.current.setFieldValue('title', ''));
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+      await nextTask();
+    });
+    expect(result.current.errors.title).toBe('Title is required');
+
+    act(() => result.current.setValues({ title: 'New' }));
+
+    expect(pending).toHaveLength(2);
+    expect(result.current.errors.title).toBeUndefined();
+  });
+
+  test('setValues with shouldValidate true runs field validators in submit mode', () => {
+    const checkTitle = mock((_value: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(publishValidator, {
+        initialValues: draft,
+        validationMode: 'submit',
+        fieldValidators: { title: checkTitle },
+      }),
+    );
+
+    act(() => result.current.setValues({ title: 'x' }, true));
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+  });
+
+  test('setValues reaches only the validators whose values it changed', () => {
+    const checkTitle = mock((_value: string) => undefined);
+    const checkStatus = mock((_value: string) => undefined);
+    const { result } = renderHook(() =>
+      useForm(publishValidator, { initialValues: draft, fieldValidators: { title: checkTitle, status: checkStatus } }),
+    );
+
+    act(() => result.current.setValues({ title: draft.title, status: 'published' }));
+
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(checkStatus).toHaveBeenCalledTimes(1);
+  });
+
+  test('setValues that replaces an array runs its validator once', () => {
+    const checkTags = mock(() => undefined);
+    const { result } = renderHook(() =>
+      useForm(publishValidator, { initialValues: draft, fieldValidators: { tags: checkTags } }),
+    );
+
+    act(() => result.current.setValues({ tags: ['a'] }));
+
+    expect(checkTags).toHaveBeenCalledTimes(1);
+  });
+
+  test('a validator on a parent field reruns when a child changes, and the reverse', () => {
+    const checkAddress = mock(() => undefined);
+    const checkCity = mock(() => undefined);
+    // Every field is filled, so no schema error skips either one
+    const { result } = renderHook(() =>
+      useForm(userWithAddressValidator, {
+        initialValues: { name: 'Ann', address: { street: 's', city: 'c', zip: '1' } },
+        fieldValidators: { address: checkAddress, 'address.city': checkCity },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('address.city', 'Oslo'));
+
+    expect(checkAddress).toHaveBeenCalledTimes(1);
+    expect(checkCity).toHaveBeenCalledTimes(1);
+
+    checkAddress.mockClear();
+    checkCity.mockClear();
+    act(() => result.current.setFieldValue('address', { street: 's', city: 'Bergen', zip: '1' }));
+
+    expect(checkAddress).toHaveBeenCalledTimes(1);
+    expect(checkCity).toHaveBeenCalledTimes(1);
   });
 });

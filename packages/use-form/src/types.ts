@@ -483,9 +483,12 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * route through setFieldValue, so this catches every user-driven field interaction.
    *
    * It runs after the field's new value is stored, so any form call made inside it applies on top
-   * of this change, and the field's validation sees the result. A resetForm() or setValues() made
-   * here can override the field that just changed. To reset the other fields when one changes,
-   * call setValues({ ...defaults, [field]: value }).
+   * of this change. The calls made inside it join the setFieldValue call that fired it: their
+   * validation runs with the field's, once, after that call returns, on the values as they are then,
+   * and a sync throw from it reaches that call. So a cascade runs each validator and the schema once.
+   * If this callback throws, nothing is validated. A resetForm() or setValues() made here can
+   * override the field that just changed. To reset the other fields when one changes, call
+   * setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *
@@ -1475,6 +1478,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Updates a single field value and optionally triggers validation. Automatically clears related server errors.
+   * Validation runs once, after the outermost call returns, so the calls `onFieldChange` makes validate with it.
    *
    * @example
    * form.setFieldValue("email", "user@example.com");
@@ -1482,7 +1486,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   setFieldValue: <TValue>(field: FieldPath, value: TValue, shouldValidate?: boolean) => void;
 
   /**
-   * Marks a field as touched or untouched and optionally triggers validation.
+   * Marks a field as touched or untouched and optionally triggers validation. Validation runs once, after the
+   * outermost call returns.
    *
    * @example
    * form.setFieldTouched("email");
@@ -1491,6 +1496,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Updates multiple field values simultaneously. More efficient than calling `setFieldValue` multiple times.
+   * Validation runs once, after the outermost call returns, and reaches the field validators of the values it changed.
    *
    * @example
    * form.setValues({ firstName: "John", lastName: "Doe" });

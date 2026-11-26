@@ -7,6 +7,7 @@ import {
   isPathAffected,
   pathsOverlap,
   collectFieldPaths,
+  changedPaths,
   deepMerge,
   deepEqual,
   isPromiseLike,
@@ -473,6 +474,15 @@ describe('deepMerge', () => {
     const result = deepMerge({ address: { street: '1 Main', city: 'LA' } }, { address });
     expect(result).toEqual({ address: { street: '1 Main', city: 'NYC' } });
   });
+});
+
+test('changedPaths lists the leaf paths a merge changes', () => {
+  const target = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
+  expect(changedPaths(target, { name: 'a', address: { city: 'y' } })).toEqual(['address.city']);
+  expect(changedPaths(target, { tags: ['a', 'b'] })).toEqual(['tags']);
+  expect(changedPaths(target, { address: { city: 'x' } })).toEqual([]);
+  expect(changedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
+  expect(changedPaths({ a: 1 }, JSON.parse('{"__proto__": {"x": 1}}'))).toEqual([]);
 });
 
 describe('deepEqual', () => {
