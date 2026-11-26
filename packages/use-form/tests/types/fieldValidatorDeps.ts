@@ -1,6 +1,6 @@
 import * as S from '@railway-ts/pipelines/schema';
 
-import { useForm, withDeps } from '../../src';
+import { useForm, withDeps, type ExtractFieldPaths } from '../../src';
 
 import type { FormOptions } from '../../src/types';
 
@@ -123,6 +123,30 @@ export function useExplicit() {
     fieldValidators: {
       // @ts-expect-error -- a listed path must be a field
       slug: withDeps(['nope'], () => undefined),
+    },
+  });
+}
+
+const someListed: ExtractFieldPaths<V>[] = on ? ['workspaceId'] : [];
+
+/** A list that isn't a tuple holds paths known only when it runs, so each listed value may be missing. */
+export function useUntupled() {
+  useForm(schema, {
+    initialValues: init,
+    fieldValidators: {
+      slug: withDeps(someListed, (_v, { workspaceId }) => {
+        // @ts-expect-error -- the list may not hold workspaceId
+        const id: number = workspaceId;
+        return id > 0 ? undefined : 'x';
+      }),
+    },
+  });
+  useForm(schema, {
+    initialValues: init,
+    fieldValidators: {
+      slug: withDeps(someListed, (_v, { workspaceId }) =>
+        workspaceId === undefined || workspaceId > 0 ? undefined : 'x',
+      ),
     },
   });
 }

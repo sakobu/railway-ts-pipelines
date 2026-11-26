@@ -3,9 +3,15 @@ import type { ExtractFieldPaths, FieldTypeAtPath, FieldValidatorAnswer } from '.
 /** Marks a field validator made by {@link withDeps}, so the form tells it from a plain one. */
 export const listsFields: unique symbol = Symbol('listsFields');
 
-/** The listed values `validate` gets: one own property per listed path. Distributes over a list that may be one of several. */
+/**
+ * The listed values `validate` gets: one own property per listed path. Distributes over a list that may be one of
+ * several. A list that isn't a tuple (not written inline or `as const`) gives each listed value as optional, since which
+ * paths it holds isn't known until it runs.
+ */
 export type DepValues<TValues, D extends readonly ExtractFieldPaths<TValues>[]> = D extends unknown
-  ? { readonly [R in D[number]]: FieldTypeAtPath<TValues, R> }
+  ? number extends D['length']
+    ? { readonly [R in D[number]]?: FieldTypeAtPath<TValues, R> }
+    : { readonly [R in D[number]]: FieldTypeAtPath<TValues, R> }
   : never;
 
 /**
@@ -21,6 +27,7 @@ export interface FieldValidatorWithDeps<TValues, TValue> {
 /**
  * Makes a field validator that lists the other fields it reads. `validate` gets the field's value, then the values at
  * `deps`: one own property per listed path, keyed by the path as written, and typed. It can't read any other field.
+ * A list that isn't a tuple, such as one typed as an array, gives each listed value as optional.
  *
  * Write it inside the `fieldValidators` entry, where it takes the form's types: one stored in a variable outside it
  * has no form to take them from.
