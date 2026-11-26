@@ -460,8 +460,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * What checks a validator again, by mode: an edit of its field or of a listed field in `live` mode (`setValues`
    * too, for the values it changed), a blur of either in `blur` mode, and a submit in every mode. In `submit` and
    * `mount` modes an edit only drops the error. A field matches by overlap: editing `address.city` re-checks a
-   * validator on `address`, and the reverse. `shouldValidate: true` on `setFieldValue` or `setValues` checks in any
-   * mode.
+   * validator on `address`, and the reverse. `shouldValidate: true` on `setFieldValue`, `setValues` or
+   * `setFieldTouched` checks in any mode.
    *
    * A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator
    * whose field or listed field it changed, even one that passed, and in every mode a check it cut short runs again
@@ -1524,7 +1524,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Marks a field as touched or untouched and optionally triggers validation. Validation runs once, after the
-   * outermost call returns.
+   * outermost call returns. By default the mode decides; `shouldValidate: true` checks the schema and the field
+   * validators the field reaches in any mode, and `false` never checks.
    *
    * @example
    * form.setFieldTouched("email");

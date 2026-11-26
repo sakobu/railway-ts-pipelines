@@ -235,7 +235,7 @@ Return `undefined` for valid, or an error message string for invalid. An entry s
 - `live`: an edit of its field or of a listed field. `setValues` re-runs the validators of the values it changed.
 - `blur`: a blur of its field or of a listed field.
 - `submit` and `mount`: the error just drops, and the next submit checks again.
-- `shouldValidate: true` on `setFieldValue` or `setValues` checks in any mode.
+- `shouldValidate: true` on `setFieldValue`, `setValues` or `setFieldTouched` checks in any mode.
 - A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator whose field or listed field it changed, even one that passed. In every mode, a check the follow cut short runs again while its values hold. A refetch can then send lookups: a check like "username taken" that should accept the record's own value lists the record's id with `withDeps`.
 - A submit runs every validator that is on, once the schema passes.
 
@@ -632,7 +632,7 @@ setFieldTouched<TField extends ExtractFieldPaths<TValues>>(
 
 - `field` - Field path with autocomplete
 - `isTouched` - Whether field is touched (default: true)
-- `shouldValidate` - Whether to validate after update (default: false)
+- `shouldValidate` - Whether to check the schema and the field validators the field reaches. `true` checks in any mode, and `false` never does. Left out, the mode decides: `blur` mode checks, `submit` and `mount` modes don't, and `live` mode checks only a field's first touch, and only the schema, since typing has checked the field already.
 
 **Example:**
 

@@ -1301,6 +1301,47 @@ describe("a validator that answers with a thenable that isn't a native Promise",
   });
 });
 
+describe('setFieldTouched with shouldValidate', () => {
+  const renderTouchForm = (validationMode: 'live' | 'blur' | 'submit') => {
+    const checkTitle = mock((_value: string) => 'Taken');
+    const rendered = renderHook(() =>
+      useForm(publishValidator, { initialValues: draft, validationMode, fieldValidators: { title: checkTitle } }),
+    );
+    return { ...rendered, checkTitle };
+  };
+
+  test.each(['live', 'blur', 'submit'] as const)(
+    'true checks the field validators in %s mode, touched before or not',
+    (validationMode) => {
+      const { result, checkTitle } = renderTouchForm(validationMode);
+
+      act(() => result.current.setFieldTouched('title', true, true));
+      act(() => result.current.setFieldTouched('title', true, true));
+
+      expect(checkTitle).toHaveBeenCalledTimes(2);
+      expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    },
+  );
+
+  test('left out, live mode checks only the first touch, and only the schema', () => {
+    const { result, checkTitle } = renderTouchForm('live');
+
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldTouched('title'));
+
+    expect(checkTitle).not.toHaveBeenCalled();
+  });
+
+  test('false never checks, even in blur mode', () => {
+    const { result, checkTitle } = renderTouchForm('blur');
+
+    act(() => result.current.setFieldTouched('title', true, false));
+
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(result.current.touched.title).toBe(true);
+  });
+});
+
 describe('an error lasts only while its values hold (#58)', () => {
   const nameSchema = S.object({ name: S.required(S.string()), email: S.required(S.string()) });
   const blank = { name: '', email: 'a@b.co' };

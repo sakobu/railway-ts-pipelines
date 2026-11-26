@@ -1308,14 +1308,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Marks a field as touched or untouched and optionally triggers validation.
    * Touched fields typically display their validation errors to the user.
    *
-   * When it validates, by default in `live` and `blur` modes or with `shouldValidate: true`, validation runs once,
-   * after the outermost call returns, as for `setFieldValue`. Outside `live` mode it checks the schema and the field
-   * validators the field reaches. In `live` mode, typing has checked the field already, so only its first touch checks,
-   * and only the schema.
+   * Validation runs once, after the outermost call returns, as for `setFieldValue`. When it checks, it checks the schema
+   * and the field validators the field reaches. By default the mode decides: `blur` mode checks, `submit` and `mount`
+   * modes don't, and in `live` mode, where typing has checked the field already, only its first touch checks, and only
+   * the schema. `shouldValidate: true` checks in any mode, and `false` never does.
    *
    * @param field - The field path to mark
    * @param isTouched - Whether the field should be marked as touched (default: true)
-   * @param shouldValidate - Whether to trigger validation after update (default: depends on validationMode)
+   * @param shouldValidate - Whether to check: `true` checks in any mode, `false` never does, and leaving it out lets
+   *   the mode decide
    *
    * @example
    * // Mark a field as touched (will show validation errors)
@@ -1333,7 +1334,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * };
    */
   const setFieldTouched = useCallback(
-    (field: FieldPath, isTouched = true, shouldValidate = validateOnBlur): void =>
+    (field: FieldPath, isTouched = true, shouldValidate?: boolean): void =>
       runEvent(({ check }) => {
         const key = normalizePath(field);
         const wasTouched = own(store.getState().touched, key);
@@ -1343,11 +1344,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           isTouched,
         });
 
-        if (!shouldValidate || (validateOnChange && wasTouched)) return;
-        // Live mode: typing already checked the field, so only its first touch checks, and only the schema
-        if (validateOnChange) check();
-        // Other modes: the schema, and the field validators the field reaches
-        else check([key]);
+        if (shouldValidate === undefined && validateOnChange) {
+          // Live mode's default: typing already checked the field, so only its first touch checks, and only the schema
+          if (!wasTouched) check();
+        } else if (shouldValidate ?? validateOnBlur) {
+          // The schema, and the field validators the field reaches
+          check([key]);
+        }
       }),
     [store, dispatch, runEvent, validateOnBlur, validateOnChange],
   );
