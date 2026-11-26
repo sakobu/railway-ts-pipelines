@@ -2,17 +2,22 @@ import { describe, test, expect, mock } from 'bun:test';
 
 import { createAutoSave, type AutoSaveView } from '../../src/autoSave';
 
+import type { SchemaVerdict } from '../../src/types';
+
 type V = { name: string };
 
 const A: V = { name: 'a' };
 const B: V = { name: 'b' };
 const B2: V = { name: 'b2' };
 
+/** The verdict of a check that passed `values`. */
+const passed = (values: V): SchemaVerdict<V> => ({ values, passed: true });
+
 /** A view that allows a submit of `A`; each test overrides what it needs. */
 const view = (over: Partial<AutoSaveView<V>> = {}): AutoSaveView<V> => ({
   values: A,
   isDirty: true,
-  checkedValues: A,
+  verdict: passed(A),
   isChecking: false,
   isValidating: false,
   isValid: true,
@@ -61,6 +66,7 @@ describe('createAutoSave', () => {
   const holds: Array<[string, Partial<AutoSaveView<V>>]> = [
     ['isDirty: false', { isDirty: false }],
     ['wentOut equal to the values', { wentOut: { ...A } }],
+    ["a verdict that didn't pass the values", { verdict: { values: { ...A }, passed: false } }],
     ['isValidating', { isValidating: true }],
     ['not isValid', { isValid: false }],
     ['isStale', { isStale: true }],
@@ -75,29 +81,29 @@ describe('createAutoSave', () => {
 
   test('unchecked values get one check per version', () => {
     const auto = due();
-    expect(auto.decide(() => view({ checkedValues: B }))).toBe('check');
-    expect(auto.decide(() => view({ checkedValues: B }))).toBe('wait');
+    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('wait');
 
     auto.track(B2);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B2, checkedValues: B }))).toBe('check');
+    expect(auto.decide(() => view({ values: B2, verdict: passed(B) }))).toBe('check');
   });
 
   test('a check started before a follow or reset holds no check after it', () => {
     const auto = due();
-    expect(auto.decide(() => view({ checkedValues: B }))).toBe('check');
-    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(B) }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('check');
   });
 
   test('a check started since the latest follow or reset still holds one', () => {
     const auto = due();
-    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('check');
-    expect(auto.decide(() => view({ checkedValues: B, baselineEpoch: 1 }))).toBe('wait');
+    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('check');
+    expect(auto.decide(() => view({ verdict: passed(B), baselineEpoch: 1 }))).toBe('wait');
   });
 
   test('waits for a running schema check instead of starting one', () => {
     const auto = due();
-    expect(auto.decide(() => view({ checkedValues: B, isChecking: true }))).toBe('wait');
+    expect(auto.decide(() => view({ verdict: passed(B), isChecking: true }))).toBe('wait');
   });
 
   test('submits once while its own save runs, even for a new version', () => {
@@ -106,10 +112,10 @@ describe('createAutoSave', () => {
 
     auto.track(B);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B, checkedValues: B }))).toBe('wait');
+    expect(auto.decide(() => view({ values: B, verdict: passed(B) }))).toBe('wait');
 
     auto.saveSettled();
-    expect(auto.decide(() => view({ values: B, checkedValues: B }))).toBe('submit');
+    expect(auto.decide(() => view({ values: B, verdict: passed(B) }))).toBe('submit');
   });
 
   test('checks a new version while its own save runs', () => {
@@ -118,7 +124,7 @@ describe('createAutoSave', () => {
 
     auto.track(B);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B, checkedValues: A }))).toBe('check');
+    expect(auto.decide(() => view({ values: B, verdict: passed(A) }))).toBe('check');
   });
 
   test('isOn is off at creation, on after start, and off after stop', () => {

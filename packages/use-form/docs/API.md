@@ -312,7 +312,7 @@ Optional, Default: off
 
 Saves the form on its own as the user edits, through [`handleSubmit`](#handlesubmit), as a Save click does. `true` waits 200 ms after the values last change, as `{}` does, and `{ delay }` sets the wait.
 
-It saves the current values once all of these hold: they have unsaved edits, they haven't gone out already, `delay` ms have passed since they last changed, the form has checked them and shows them valid, the form isn't stale, and no submission is running. Whichever comes true last, it saves then. Switching off a field validator, or `clearServerErrors()`, is enough to send values their errors held.
+It saves the current values once all of these hold: they have unsaved edits, they haven't gone out already, `delay` ms have passed since they last changed, the form's latest schema check passed them and the form shows them valid, the form isn't stale, and no submission is running. Whichever comes true last, it saves then. Switching off a field validator, or `clearServerErrors()`, is enough to send values their errors held. Values the schema rejected aren't sent, even with no error shown, until a later check passes them.
 
 Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's values return to `initialValues`, whatever the server answered. To retry, call `clearServerErrors()` then `handleSubmit()`.
 

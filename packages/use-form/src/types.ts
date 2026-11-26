@@ -171,17 +171,31 @@ export interface FormState<TValues extends Record<string, unknown>> {
    */
   baselineEpoch: number;
 
-  /** The values the latest landed schema check checked: one that ended with a result while current. Unset until one lands, and after a reset. */
-  checkedValues?: TValues;
+  /**
+   * The verdict of the latest schema check that landed: one that ended with an answer while current. Unset until one
+   * lands, and after a reset.
+   */
+  verdict?: SchemaVerdict<TValues>;
 
   /**
-   * The values of the latest submission that went out: it called `onSubmit`, reached it with none set, threw, or its
-   * schema check rejected the values, landed, and left the form valid. Dropped when an action changes the values to
-   * ones equal to the initial values: an edit back, a follow or a reset. Kept when the initial values catch up to
-   * unchanged values, since that may be an optimistic write that a failed save rolls back. Auto-save doesn't send them
-   * again.
+   * The values of the latest submission that went out: it called `onSubmit`, reached it with none set, or threw.
+   * Dropped when an action changes the values to ones equal to the initial values: an edit back, a follow or a reset.
+   * Kept when the initial values catch up to unchanged values, since that may be an optimistic write that a failed save
+   * rolls back. Auto-save doesn't send them again.
    */
   wentOut?: TValues;
+}
+
+/**
+ * What a schema check that landed found.
+ *
+ * @template TValues - The shape of the form values
+ */
+export interface SchemaVerdict<TValues> {
+  /** The values the check checked */
+  values: TValues;
+  /** Whether the schema passed them. A rejection with no errors fails them too. */
+  passed: boolean;
 }
 
 /** A check's id. The store hands them out in increasing order for its lifetime. */
@@ -372,9 +386,10 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * `true` waits 200 ms after the values last change, as `{}` does, and `{ delay }` sets the wait.
    *
    * 1. It saves the current values as soon as the last of these holds: they have unsaved edits, they haven't gone out
-   *    already, `delay` ms have passed since they last changed, the form has checked them and shows them valid, the
-   *    form isn't stale, and no submission is running, so switching off a field validator, or `clearServerErrors()`,
-   *    is enough to send values their errors held.
+   *    already, `delay` ms have passed since they last changed, the form's latest schema check passed them and the
+   *    form shows them valid, the form isn't stale, and no submission is running, so switching off a field validator,
+   *    or `clearServerErrors()`, is enough to send values their errors held. Values the schema rejected aren't sent,
+   *    even with no error shown, until a later check passes them.
    * 2. Values that reached `onSubmit`, or made the submission throw, aren't sent again until they change, or the form's
    *    values return to `initialValues`, whatever the server answered, so to retry, call `clearServerErrors()` then
    *    `handleSubmit()`.
@@ -1218,14 +1233,15 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
     }
   | {
-      /** Ends a schema check. Its errors land only while it is the current one. */
+      /** Ends a schema check. Its answer lands only while it is the current one. */
       type: 'END_SCHEMA_CHECK';
       /** The check's id */
       id: CheckId;
-      /** The schema's errors, as `SET_CLIENT_ERRORS` takes them. None ends the check and keeps the errors. */
-      errors?: Record<FieldPath, string>;
-      /** The values the check checked */
-      values: TValues;
+      /**
+       * The schema's answer: its verdict, and its errors as `SET_CLIENT_ERRORS` takes them. None, as after a throw or
+       * rejection, ends the check and keeps the errors and the verdict.
+       */
+      answer?: SchemaVerdict<TValues> & { errors: Record<FieldPath, string> };
     }
   | {
       /** Records the values of a submission that went out */

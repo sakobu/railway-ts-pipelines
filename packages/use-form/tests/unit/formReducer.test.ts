@@ -1035,9 +1035,9 @@ describe('checks', () => {
   test('END_SCHEMA_CHECK sets clientErrors only for the current check', () => {
     const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
 
-    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: { name: 'Bad' }, values: v1 })).toBe(started);
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, answer: { values: v1, passed: false, errors: { name: 'Bad' } } })).toBe(started);
 
-    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, errors: { name: 'Bad' }, values: v1 });
+    const ended = apply(started, { type: 'END_SCHEMA_CHECK', id: 2, answer: { values: v1, passed: false, errors: { name: 'Bad' } } });
     expect(ended.clientErrors).toEqual({ name: 'Bad' });
     expect(ended.checks.schema).toBeUndefined();
   });
@@ -1046,55 +1046,52 @@ describe('checks', () => {
     const ended = apply(
       start,
       { type: 'START_SCHEMA_CHECK', id: 1 },
-      { type: 'END_SCHEMA_CHECK', id: 1, errors: { 'r1[0]': 'Bad' }, values: v1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, answer: { values: v1, passed: false, errors: { 'r1[0]': 'Bad' } } },
     );
 
     expect(ended.clientErrors).toEqual({ 'r1.0': 'Bad' });
   });
 
-  test('END_SCHEMA_CHECK without errors ends the check and keeps clientErrors', () => {
+  test('END_SCHEMA_CHECK without an answer ends the check and keeps clientErrors', () => {
     const withErrors: FormState<typeof v1> = { ...start, clientErrors: { name: 'Bad' } };
 
     const ended = apply(
       withErrors,
       { type: 'START_SCHEMA_CHECK', id: 1 },
-      { type: 'END_SCHEMA_CHECK', id: 1, values: v1 },
+      { type: 'END_SCHEMA_CHECK', id: 1 },
     );
 
     expect(ended.checks.schema).toBeUndefined();
     expect(ended.clientErrors).toBe(withErrors.clientErrors);
   });
 
-  test('END_SCHEMA_CHECK that lands records the values it checked', () => {
+  test.each([true, false])('END_SCHEMA_CHECK that lands records its verdict, with no errors too: passed %p', (passed) => {
     const ended = apply(
       start,
       { type: 'START_SCHEMA_CHECK', id: 1 },
-      { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: edited },
+      { type: 'END_SCHEMA_CHECK', id: 1, answer: { values: edited, passed, errors: {} } },
     );
 
-    expect(ended.checkedValues).toBe(edited);
+    expect(ended.verdict).toEqual({ values: edited, passed });
   });
 
   test('END_SCHEMA_CHECK of a replaced check records nothing', () => {
     const started = apply(start, { type: 'START_SCHEMA_CHECK', id: 1 }, { type: 'START_SCHEMA_CHECK', id: 2 });
 
-    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: edited })).toBe(started);
+    expect(apply(started, { type: 'END_SCHEMA_CHECK', id: 1, answer: { values: edited, passed: true, errors: {} } }),
+    ).toBe(started);
   });
 
-  test('END_SCHEMA_CHECK without errors keeps checkedValues', () => {
+  test('END_SCHEMA_CHECK without an answer keeps the verdict', () => {
     const landed = apply(
       start,
       { type: 'START_SCHEMA_CHECK', id: 1 },
-      { type: 'END_SCHEMA_CHECK', id: 1, errors: {}, values: v1 },
+      { type: 'END_SCHEMA_CHECK', id: 1, answer: { values: v1, passed: true, errors: {} } },
     );
 
-    const ended = apply(
-      landed,
-      { type: 'START_SCHEMA_CHECK', id: 2 },
-      { type: 'END_SCHEMA_CHECK', id: 2, values: edited },
-    );
+    const ended = apply(landed, { type: 'START_SCHEMA_CHECK', id: 2 }, { type: 'END_SCHEMA_CHECK', id: 2 });
 
-    expect(ended.checkedValues).toBe(v1);
+    expect(ended.verdict).toBe(landed.verdict);
   });
 
   test('field check actions normalize a bracket path', () => {
@@ -1205,20 +1202,20 @@ describe('wentOut', () => {
     });
   });
 
-  describe('a reset leaves checkedValues and wentOut unset', () => {
-    const both: FormState<typeof v1> = { ...recorded, checkedValues: edited };
+  describe('a reset leaves the verdict and wentOut unset', () => {
+    const both: FormState<typeof v1> = { ...recorded, verdict: { values: edited, passed: true } };
 
     test('RESET_FORM', () => {
       const reset = formReducer(both, { type: 'RESET_FORM' }, v1);
 
-      expect(reset.checkedValues).toBeUndefined();
+      expect(reset.verdict).toBeUndefined();
       expect(reset.wentOut).toBeUndefined();
     });
 
     test('a resetKey reset', () => {
       const reset = formReducer(both, sync(v2, 'b'), v2);
 
-      expect(reset.checkedValues).toBeUndefined();
+      expect(reset.verdict).toBeUndefined();
       expect(reset.wentOut).toBeUndefined();
     });
   });

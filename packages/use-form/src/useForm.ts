@@ -1,4 +1,4 @@
-import { isErr, isResult, ok, err, type Result } from '@railway-ts/pipelines/result';
+import { isErr, isOk, isResult, ok, err, type Result } from '@railway-ts/pipelines/result';
 import {
   validate,
   formatErrors,
@@ -655,10 +655,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     ): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> => {
       const held = store.getState().values;
       const end = (result: Result<TValues, ValidationError[]> | undefined): void => {
-        const action: FormAction<TValues> =
-          result === undefined
-            ? { type: 'END_SCHEMA_CHECK', id, values }
-            : { type: 'END_SCHEMA_CHECK', id, errors: schemaErrorsOf(result), values };
+        const action: FormAction<TValues> = {
+          type: 'END_SCHEMA_CHECK',
+          id,
+          ...(result !== undefined && { answer: { values, passed: isOk(result), errors: schemaErrorsOf(result) } }),
+        };
         const current = store.getState().checks.schema === id;
         write(action);
         if (current && store.getState().checks.schema === undefined) onLanded(id, { values, result }, held);
@@ -1349,14 +1350,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
         let validationResult: Result<TValues, ValidationError[]>;
-        // Whether its schema check landed: a newer check, a follow or a reset can replace it first
-        let landed = false;
         try {
           // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
           // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
           // Otherwise its field step's checks replace them, so no validator runs twice.
           validationResult = await checkSchema(send, checkId, values, (id, outcome, held) => {
-            landed = true;
             if (!outcome.result || isErr(outcome.result)) moveOnWaitingChecks(id, outcome, held);
           });
         } finally {
@@ -1364,10 +1362,6 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         if (isErr(validationResult)) {
-          // A rejection that landed and left the form valid went out, with no verdict on the values, so auto-save
-          // doesn't resubmit them in a loop. One whose errors landed holds them until the form turns valid, and one a
-          // newer check replaced waits on that check's verdict.
-          if (landed && isValidState(store.getState())) send({ type: 'SUBMISSION_WENT_OUT', values });
           // No SET_SUBMITTING dispatch — isSubmitting was never set to true
           return validationResult;
         }
@@ -1647,7 +1641,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     const step = autoSaver.decide(() => ({
       values: state.values,
       isDirty: !deepEqual(state.values, store.getInitialValues()),
-      checkedValues: state.checkedValues,
+      verdict: state.verdict,
       isChecking: state.checks.schema !== undefined,
       isValidating: isValidatingState(state),
       isValid: isValidState(state),

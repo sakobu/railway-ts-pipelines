@@ -446,9 +446,36 @@ describe('autoSave', () => {
       }
     });
 
-    test("a schema that rejects the values without an error doesn't make auto-save resubmit", async () => {
-      // Rejects the name 'Jane' with no error. Its 20th rejection holds one, which ends a resubmit loop, so a
-      // regression fails instead of hanging the runner.
+    test.each(['live', 'submit'] as const)(
+      "doesn't send values the schema rejected without an error, though the form shows them valid: %s mode",
+      async (validationMode) => {
+        // Rejects the name 'Jane' with no error. Its 20th rejection holds one, which ends a resubmit loop, so a
+        // regression fails instead of hanging the runner.
+        let rejections = 0;
+        const schema = (input: unknown): Result<UserForm, ValidationError[]> => {
+          if ((input as UserForm).name !== 'Jane') return validate(input, userValidator);
+          rejections += 1;
+          return err(rejections < 20 ? [] : [{ path: ['name'], message: 'Looped' }]);
+        };
+        const onSubmit = saving();
+        const { result } = renderHook(() =>
+          useForm(schema, { initialValues: initial, onSubmit, validationMode, autoSave: { delay } }),
+        );
+
+        act(() => {
+          result.current.setFieldValue('name', 'Jane');
+        });
+        await sleep(5 * delay);
+
+        // The edit's live check, or in submit mode auto-save's own, and no save
+        expect(rejections).toBe(1);
+        expect(result.current.isValid).toBe(true);
+        expect(result.current.submitCount).toBe(0);
+        expect(onSubmit).not.toHaveBeenCalled();
+      },
+    );
+
+    test("doesn't resend values a Save click's schema rejected without an error", async () => {
       let rejections = 0;
       const schema = (input: unknown): Result<UserForm, ValidationError[]> => {
         if ((input as UserForm).name !== 'Jane') return validate(input, userValidator);
@@ -456,15 +483,18 @@ describe('autoSave', () => {
         return err(rejections < 20 ? [] : [{ path: ['name'], message: 'Looped' }]);
       };
       const onSubmit = saving();
-      const { result } = renderHook(() => useForm(schema, { initialValues: initial, onSubmit, autoSave: { delay } }));
+      const { result } = renderHook(() =>
+        useForm(schema, { initialValues: initial, onSubmit, validationMode: 'submit', autoSave: { delay } }),
+      );
 
       act(() => {
         result.current.setFieldValue('name', 'Jane');
       });
+      await act(() => result.current.handleSubmit());
       await sleep(5 * delay);
 
-      // The edit's live check, then the save's
-      expect(rejections).toBe(2);
+      // The Save's check only: auto-save neither checks the values again nor sends them
+      expect(rejections).toBe(1);
       expect(result.current.submitCount).toBe(1);
       expect(onSubmit).not.toHaveBeenCalled();
     });

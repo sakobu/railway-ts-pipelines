@@ -1,7 +1,10 @@
 import { deepEqual } from './utils';
 
+import type { SchemaVerdict } from './types';
+
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
-// out already, the form has checked it and shows it valid, the form isn't stale, and no submission is running.
+// out already, the form's latest schema check passed it and the form shows it valid, the form isn't stale, and no
+// submission is running.
 // Values the form hasn't checked get one schema check per version first, and another once a follow or reset ends that
 // check. This module only decides, and holds whether auto-save is on; the caller acts.
 
@@ -15,8 +18,8 @@ export type AutoSaveView<TValues> = {
   values: TValues;
   /** The values differ from the store's initial values, by content */
   isDirty: boolean;
-  /** FormState.checkedValues */
-  checkedValues: TValues | undefined;
+  /** FormState.verdict */
+  verdict: SchemaVerdict<TValues> | undefined;
   /** A schema check is running: FormState.checks.schema !== undefined */
   isChecking: boolean;
   /** As the form computes isValidating */
@@ -126,12 +129,14 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
     const view = readView();
     if (!view.isDirty) return 'wait';
     if (view.wentOut !== undefined && deepEqual(view.values, view.wentOut)) return 'wait';
-    if (!deepEqual(view.values, view.checkedValues)) {
+    const { verdict } = view;
+    if (verdict === undefined || !deepEqual(view.values, verdict.values)) {
       if (view.isChecking || checkedIn === view.baselineEpoch) return 'wait';
       checkedIn = view.baselineEpoch;
       return 'check';
     }
-    if (view.isValidating || !view.isValid || view.isStale || view.isSubmitting || ownSaveRunning) return 'wait';
+    if (!verdict.passed || view.isValidating || !view.isValid || view.isStale || view.isSubmitting || ownSaveRunning)
+      return 'wait';
     ownSaveRunning = true;
     return 'submit';
   };

@@ -256,8 +256,9 @@ const reduce = <TValues extends Record<string, unknown>>(
     case 'END_SCHEMA_CHECK': {
       // endSchemaCheck changes the checks only when the check is current, so a new state means its errors land
       const ended = withChecks(state, endSchemaCheck(state.checks, action.id));
-      if (ended === state || action.errors === undefined) return ended;
-      return { ...withClientErrors(ended, action.errors), checkedValues: action.values };
+      if (ended === state || action.answer === undefined) return ended;
+      const { values, passed, errors } = action.answer;
+      return { ...withClientErrors(ended, errors), verdict: { values, passed } };
     }
 
     case 'SUBMISSION_WENT_OUT':
