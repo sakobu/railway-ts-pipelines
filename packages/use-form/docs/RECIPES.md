@@ -240,7 +240,7 @@ function EditContact({ ids }: { ids: string[] }) {
 
 What happens:
 
-- A refetch with no edits is followed: the form shows the new values in the same render.
+- A refetch with no edits is followed: the form shows the new values in the same render. It changes them as an edit does, so in `live` mode a field validator whose field or listed field changed runs again.
 - With edits, the form keeps them, `isStale` turns true, and Save waits for a Reload.
 - A change the app hasn't fetched yet comes back from the server as a conflict. The refetch then turns `isStale` true.
 - A save is followed even if the server changes the record, such as by normalizing the email. `savedValues` tells the form which version is the save's answer, so an optimistic write isn't taken for it, and a saved record equal to the version before the save is followed too.

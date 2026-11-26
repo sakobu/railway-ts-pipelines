@@ -543,25 +543,97 @@ describe('an error while its field is re-checked', () => {
   });
 });
 
-test('a follow re-checks a field whose check was waiting on the schema', async () => {
-  const { pending, gated } = createGatedValidator<PublishForm>();
-  const checkTitle = mock((_value: string) => undefined);
-  const { result, rerender } = renderHook(
-    ({ initial }: { initial: PublishForm }) =>
-      useForm(gated, { initialValues: initial, validationMode: 'blur', fieldValidators: { title: checkTitle } }),
-    { initialProps: { initial: draft } },
-  );
+describe('a follow re-checks as an edit does', () => {
+  /** A blur-mode form that checks title with `checkTitle`, on `initial` as its initial values. */
+  const renderBlurForm = (
+    checkTitle: (value: string) => string | undefined,
+    validator: S.MaybeAsyncValidator<unknown, PublishForm> = publishValidator,
+  ) =>
+    renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(validator, { initialValues: initial, validationMode: 'blur', fieldValidators: { title: checkTitle } }),
+      { initialProps: { initial: draft } },
+    );
 
-  act(() => result.current.setFieldTouched('title'));
-  rerender({ initial: { ...draft, title: 'Updated' } });
-  await act(async () => {
-    pending[0]!.resolve(ok(draft));
-    pending[1]!.resolve(ok({ ...draft, title: 'Updated' }));
-    await nextTask();
+  test('a check the follow cut short re-runs while its value holds', async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock((_value: string) => undefined);
+    const { result, rerender } = renderBlurForm(checkTitle, gated);
+
+    // title's check waits on the schema when the follow, which leaves title as it was, ends it
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: { ...draft, status: 'published' } });
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      pending[1]!.resolve(ok({ ...draft, status: 'published' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(checkTitle).toHaveBeenCalledWith('Hello');
   });
 
-  expect(checkTitle).toHaveBeenCalledTimes(1);
-  expect(checkTitle).toHaveBeenCalledWith('Updated');
+  test('outside live mode, a check of a value the follow changed ends without running, as an edit leaves it', async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const checkTitle = mock((_value: string) => undefined);
+    const { result, rerender } = renderBlurForm(checkTitle, gated);
+
+    act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: { ...draft, title: 'Updated' } });
+    await act(async () => {
+      pending[0]!.resolve(ok(draft));
+      pending[1]!.resolve(ok({ ...draft, title: 'Updated' }));
+      await nextTask();
+    });
+
+    expect(checkTitle).not.toHaveBeenCalled();
+    expect(result.current.validatingFields).toEqual({});
+    expect(result.current.isValidating).toBe(false);
+  });
+
+  test('outside live mode, an error whose value the follow changed drops, and its validator waits for a blur', () => {
+    const checkTitle = mock((_value: string) => 'Taken');
+    const { result, rerender } = renderBlurForm(checkTitle);
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+
+    rerender({ initial: { ...draft, title: 'Updated' } });
+
+    expect(result.current.fieldErrors).toEqual({});
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+  });
+
+  test("an error whose value the follow left as it was stays, and isn't re-run", () => {
+    const checkTitle = mock((_value: string) => 'Taken');
+    const { result, rerender } = renderBlurForm(checkTitle);
+    act(() => result.current.setFieldTouched('title'));
+
+    rerender({ initial: { ...draft, status: 'published' } });
+
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+  });
+
+  test('in live mode, a validator that passed re-runs when the follow changes its value', () => {
+    const checkTitle = mock((value: string) => (value === 'Updated' ? 'Taken' : undefined));
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { title: checkTitle },
+        }),
+      { initialProps: { initial: draft } },
+    );
+
+    rerender({ initial: { ...draft, status: 'published' } });
+    expect(checkTitle).not.toHaveBeenCalled();
+
+    rerender({ initial: { ...draft, title: 'Updated' } });
+
+    expect(checkTitle).toHaveBeenCalledTimes(1);
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+  });
 });
 
 test('isValidating ends once the newest schema check moves on a field check that waited on a replaced one', async () => {
@@ -1772,6 +1844,35 @@ describe('withDeps', () => {
       expect(result.current.errors['address.zip']).toBe('Zip is required');
       expect(validate).not.toHaveBeenCalled();
     });
+  });
+
+  test('a follow in live mode re-runs a validator that passed when it changes a listed field, and only then', () => {
+    const validate = mock((_slug: string, { workspaceId }: { readonly workspaceId: string }) =>
+      workspaceId === 'w2' ? 'Slug taken' : undefined,
+    );
+    const saved: SlugForm = { ...record, slug: 'mine', name: 'Mine' };
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: SlugForm }) =>
+        useForm(slugSchema, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { slug: withDeps(['workspaceId'], validate) },
+        }),
+      { initialProps: { initial: saved } },
+    );
+    // A check of the slug as it is, which passes and leaves the form clean
+    act(() => result.current.setFieldValue('slug', 'mine', true));
+    expect(validate).toHaveBeenCalledTimes(1);
+
+    // Neither the slug nor its listed field changes
+    rerender({ initial: { ...saved, name: 'Renamed' } });
+    expect(validate).toHaveBeenCalledTimes(1);
+
+    rerender({ initial: { ...saved, name: 'Renamed', workspaceId: 'w2' } });
+
+    expect(validate).toHaveBeenCalledTimes(2);
+    expect(validate).toHaveBeenLastCalledWith('mine', { workspaceId: 'w2' });
+    expect(result.current.fieldErrors).toEqual({ slug: 'Slug taken' });
   });
 
   test('validate gets exactly the listed fields, and a function gets only its value', () => {

@@ -22,7 +22,7 @@ const withEntries = <T>(
   entries: readonly [FieldPath, T][],
 ): Readonly<Record<FieldPath, T>> => (entries.length === 0 ? record : { ...record, ...Object.fromEntries(entries) });
 
-/** Whether a check is pending, or shows an error: the checks an edit can outdate and a follow re-checks. */
+/** Whether a check is pending, or shows an error: the checks an edit can outdate. */
 const isPendingOrErroring = (check: FieldCheck): boolean => check.status !== 'done' || check.error !== undefined;
 
 /** The check ended with no error, keeping its id and inputs. */
@@ -212,8 +212,14 @@ export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldChe
 export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
   Object.values(fields).some((check) => check.error !== undefined);
 
-/** The fields with a pending check or an error shown. */
-export const fieldsToRecheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): FieldPath[] =>
+/**
+ * The fields whose check is pending in `fields` and whose inputs `values` hold: a follow to `values` ends such a check
+ * before it answers, while the verdict it was asked for still applies.
+ */
+export const fieldsCutShort = (
+  fields: Readonly<Record<FieldPath, FieldCheck>>,
+  values: Record<string, unknown>,
+): FieldPath[] =>
   Object.entries(fields)
-    .filter(([, check]) => isPendingOrErroring(check))
+    .filter(([, check]) => check.status !== 'done' && inputsHeld(check.inputs, values))
     .map(([key]) => key);

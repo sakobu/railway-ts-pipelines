@@ -231,6 +231,16 @@ describe('errors after a follow', () => {
     expect(result.current.clientErrors).toEqual({});
   });
 
+  test('a follow re-validates when only server errors showed, as for other errors', () => {
+    const { result, rerender } = renderForm({ validationMode: 'submit' });
+    act(() => result.current.setServerErrors([{ path: ['title'], message: 'Server says no' }]));
+
+    rerender({ initial: { ...draft, title: '' } });
+
+    expect(result.current.serverErrors).toEqual({});
+    expect(result.current.clientErrors).toEqual({ title: 'Title is required' });
+  });
+
   test('mount mode marks the fields of a followed version touched', () => {
     const { result, rerender } = renderForm({ validationMode: 'mount' });
 
@@ -295,11 +305,28 @@ describe('errors after a follow', () => {
     expect(result.current.isValidating).toBe(false);
   });
 
-  test('a field validator still running for the old value is re-run for the followed value', async () => {
+  test("a field validator still running for the old value ends, and outside live mode isn't re-run", async () => {
     const { calls, gate } = createGatedFieldValidator();
     const { result, rerender } = renderForm({ validationMode: 'blur', fieldValidators: { title: () => gate() } });
 
     act(() => result.current.setFieldTouched('title'));
+    rerender({ initial: loaded });
+    expect(result.current.validatingFields).toEqual({});
+    await act(async () => {
+      calls[0]!.resolve('Stale');
+      await nextTask();
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(result.current.fieldErrors).toEqual({});
+  });
+
+  test('in live mode, a field validator still running for the old value is re-run for the followed value', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const { result, rerender } = renderForm({ validationMode: 'live', fieldValidators: { title: () => gate() } });
+
+    // A check of the title as it is, so the form stays clean and follows
+    act(() => result.current.setFieldValue('title', draft.title, true));
     rerender({ initial: loaded });
     await act(async () => {
       calls[0]!.resolve('Stale');
@@ -307,6 +334,7 @@ describe('errors after a follow', () => {
       await nextTask();
     });
 
+    expect(calls).toHaveLength(2);
     expect(result.current.fieldErrors).toEqual({});
     expect(result.current.validatingFields).toEqual({});
   });

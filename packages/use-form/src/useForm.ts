@@ -34,7 +34,8 @@ import {
 } from './fieldPropsFactory';
 import {
   fieldErrorsOf,
-  fieldsToRecheck,
+  fieldsCutShort,
+  inputsHeld,
   validatingFieldsOf,
   validatorPeriod,
   waitingFieldCheck,
@@ -1040,13 +1041,20 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
-   * Records the checks of a follow, so the errors describe the values shown. It asks for a check when the mode calls
-   * for it, when the form has validated before (a blurred field in `blur` mode, a submit attempt in any mode), or when
-   * errors are shown or still being checked. That check re-checks every field whose check was pending or showed an
-   * error before the follow, and hides the old values' schema errors while an async schema check runs or once it threw.
-   * A field keeps its error while it's re-checked only if the follow left the values it checked unchanged. A mode that
-   * wouldn't have validated yet still doesn't. In `mount` mode it does what the mount does ({@link recordMountCheck}),
-   * so the new version's fields are marked touched at once.
+   * Records the checks of a follow, so the errors describe the values shown. A follow changes the values as an edit
+   * does: the reducer has already dropped every field error whose inputs it changed.
+   *
+   * It asks for a schema check when the mode calls for it, when the form has validated before (a blurred field in
+   * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. That check hides the
+   * old values' schema errors while an async schema check runs or once it threw. A mode that wouldn't have validated
+   * yet still doesn't. The check re-runs two kinds of field validator:
+   *
+   * - in `live` mode, each one whose inputs the follow changed, as an edit of them would
+   * - in any mode, each one whose check the follow cut short while its inputs still hold, since the verdict it was
+   *   asked for still applies
+   *
+   * In `mount` mode it does what the mount does ({@link recordMountCheck}), so the new version's fields are marked
+   * touched at once.
    *
    * Called right after the follow, so the store holds the state after it.
    *
@@ -1055,7 +1063,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const recordFollow = useCallback(
     (requests: EventRequests, prev: FormState<TValues>): void => {
-      const fields = fieldsToRecheck(prev.checks.fields);
+      const { values } = store.getState();
+      const changed = validateOnChange
+        ? Array.from(fieldValidatorsRef.current)
+            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), values))
+            .map(([key]) => key)
+        : [];
+      const fields = [...changed, ...fieldsCutShort(prev.checks.fields, values)];
       const blurred = validateOnBlur && Object.values(prev.touched).some(Boolean);
 
       if (
@@ -1063,16 +1077,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         validateOnMount ||
         blurred ||
         prev.submitCount > 0 ||
-        Object.keys(prev.clientErrors).length > 0 ||
-        prev.checks.schema !== undefined ||
-        fields.length > 0
+        !isValidState(prev) ||
+        isValidatingState(prev)
       ) {
         requests.recheckAfterFollow(fields);
       }
 
       if (validateOnMount) recordMountCheck(requests);
     },
-    [recordMountCheck, validateOnChange, validateOnBlur, validateOnMount],
+    [store, recordMountCheck, validateOnChange, validateOnBlur, validateOnMount],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates

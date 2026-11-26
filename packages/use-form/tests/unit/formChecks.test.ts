@@ -7,7 +7,7 @@ import {
   endPendingChecks,
   endSchemaCheck,
   fieldErrorsOf,
-  fieldsToRecheck,
+  fieldsCutShort,
   hasFieldError,
   hasPendingFieldCheck,
   inputsHeld,
@@ -148,8 +148,8 @@ test('startOver clears every check and keeps the validators', () => {
   expect(over.fields).toEqual({});
   expect(over.validators).toBe(failed.validators);
 });
-test('fieldsToRecheck takes pending checks and errors, not a check done without one', () => {
-  let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
+test('fieldsCutShort takes pending checks whose inputs the values hold, not done ones or outdated ones', () => {
+  let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c', 'd'));
   // a waits on the schema
   checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 1 });
   // b runs
@@ -157,8 +157,11 @@ test('fieldsToRecheck takes pending checks and errors, not a check done without 
   // c is done, with no error
   checks = startFieldCheck(checks, 'c', 3, 'running', { c: 1 });
   checks = endFieldCheck(checks, 'c', 3, { error: undefined });
-  expect(fieldsToRecheck(checks.fields).sort()).toEqual(['a', 'b']);
-  expect(fieldsToRecheck(failed.fields)).toEqual(['name']);
+  // d runs on a value the values no longer hold
+  checks = startFieldCheck(checks, 'd', 4, 'running', { d: 1 });
+  expect(fieldsCutShort(checks.fields, { a: 1, b: 1, c: 1, d: 2 }).sort()).toEqual(['a', 'b']);
+  // An error shown, with no check pending, isn't cut short
+  expect(fieldsCutShort(failed.fields, { name: 'x' })).toEqual([]);
 });
 test('selectors share one empty object when there is nothing to show', () => {
   expect(fieldErrorsOf({})).toBe(fieldErrorsOf(withName.fields));

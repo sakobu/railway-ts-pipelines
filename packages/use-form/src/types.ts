@@ -462,6 +462,11 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * `mount` modes an edit only drops the error. A field matches by overlap: editing `address.city` re-checks a
    * validator on `address`, and the reverse. `shouldValidate: true` checks in any mode.
    *
+   * A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator
+   * whose field or listed field it changed, even one that passed, and in every mode a check it cut short runs again
+   * while its values hold. So a refetch can send lookups: a check like "username taken" that should accept the
+   * record's own value lists the record's id with `withDeps`.
+   *
    * A validator is skipped, with no error, when a schema error overlaps its field or any field it lists: one at, inside
    * or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on `address`.
    * On submit, once the schema passes, every one that is on runs.
