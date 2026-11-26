@@ -447,7 +447,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * Per-field validator functions for field-level async validation. An entry is one of:
    * - a function of the field's value, `(value) => error`. It reads no other field.
    * - `withDeps(deps, validate)`: `validate(value, depValues)` also gets the listed fields, and only those. Write it
-   *   inside the entry, where it takes the form's types. See {@link withDeps}.
+   *   inside the entry, where it takes the form's types. See `withDeps`.
    *
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
