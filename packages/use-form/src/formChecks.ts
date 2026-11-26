@@ -1,4 +1,4 @@
-import { deepEqual, own } from './utils';
+import { deepEqual, getValueByPath, own } from './utils';
 
 import type {
   CheckId,
@@ -47,7 +47,7 @@ export const syncValidators = (checks: ChecksState, on: ReadonlySet<FieldPath>):
     if (validator.on && !on.has(key)) {
       validators.push([key, { on: false, period: validator.period + 1 }]);
       const check = own(checks.fields, key);
-      if (check) fields.push([key, { id: check.id, status: 'done', value: check.value }]);
+      if (check) fields.push([key, { id: check.id, status: 'done', inputs: check.inputs }]);
     } else if (!validator.on && on.has(key)) {
       validators.push([key, { on: true, period: validator.period }]);
     }
@@ -81,21 +81,39 @@ export const endSchemaCheck = (checks: ChecksState, id: CheckId): ChecksState =>
 
 /**
  * Registers a field check, only while the field's validator is on and `id` is newer than its
- * current check. The replaced check's error stays shown only while the value is unchanged.
+ * current check. The replaced check's error stays shown only while every input is unchanged.
  */
 export const startFieldCheck = (
   checks: ChecksState,
   key: FieldPath,
   id: CheckId,
   status: PendingStatus,
-  value: unknown,
+  inputs: Readonly<Record<FieldPath, unknown>>,
 ): ChecksState => {
   if (!own(checks.validators, key)?.on) return checks;
   const replaced = own(checks.fields, key);
   if (replaced && replaced.id >= id) return checks;
-  const next: FieldCheck = { id, status, value };
-  if (replaced?.error !== undefined && deepEqual(replaced.value, value)) next.error = replaced.error;
+  const next: FieldCheck = { id, status, inputs };
+  if (replaced?.error !== undefined && deepEqual(replaced.inputs, inputs)) next.error = replaced.error;
   return { ...checks, fields: { ...checks.fields, [key]: next } };
+};
+
+/** Whether `values` hold every input a check recorded: each path's value deep-equals the recorded one. */
+export const inputsHeld = (inputs: Readonly<Record<FieldPath, unknown>>, values: Record<string, unknown>): boolean =>
+  Object.entries(inputs).every(([path, value]) => deepEqual(getValueByPath(values, path), value));
+
+/**
+ * Ends every check that is pending or shows an error and whose inputs `values` no longer hold. It ends with no error
+ * and keeps its id and inputs.
+ */
+export const endOutdatedChecks = (checks: ChecksState, values: Record<string, unknown>): ChecksState => {
+  const ended: [FieldPath, FieldCheck][] = [];
+  for (const [key, check] of Object.entries(checks.fields)) {
+    if ((check.status !== 'done' || check.error !== undefined) && !inputsHeld(check.inputs, values)) {
+      ended.push([key, { id: check.id, status: 'done', inputs: check.inputs }]);
+    }
+  }
+  return ended.length === 0 ? checks : { ...checks, fields: withEntries(checks.fields, ended) };
 };
 
 /** The field's check `id`, while it is the field's latest check and has not ended. */

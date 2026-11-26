@@ -3,12 +3,14 @@ import { expect, test } from 'bun:test';
 import {
   NO_CHECKS,
   endFieldCheck,
+  endOutdatedChecks,
   endPendingChecks,
   endSchemaCheck,
   fieldErrorsOf,
   fieldsToRecheck,
   hasFieldError,
   hasPendingFieldCheck,
+  inputsHeld,
   isWaitingFieldCheck,
   markFieldCheckRunning,
   startFieldCheck,
@@ -22,7 +24,9 @@ import {
 
 const on = (...keys: string[]) => new Set(keys);
 const withName = syncValidators(NO_CHECKS, on('name'));
-const failed = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', 'x'), 'name', 1, { error: 'Taken' });
+const failed = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', { name: 'x' }), 'name', 1, {
+  error: 'Taken',
+});
 
 test('a validator coming on starts at period 0', () => {
   expect(validatorPeriod(withName, 'name')).toBe(0);
@@ -51,68 +55,76 @@ test('a validator already off, or never on, stays as it is', () => {
   expect(syncValidators(NO_CHECKS, on())).toBe(NO_CHECKS);
 });
 test('startFieldCheck registers only a newer check', () => {
-  const started = startFieldCheck(withName, 'name', 2, 'running', 'x');
-  expect(startFieldCheck(started, 'name', 1, 'running', 'x')).toBe(started);
+  const started = startFieldCheck(withName, 'name', 2, 'running', { name: 'x' });
+  expect(startFieldCheck(started, 'name', 1, 'running', { name: 'x' })).toBe(started);
 });
 test('startFieldCheck registers no check for a field whose validator is off', () => {
-  expect(startFieldCheck(NO_CHECKS, 'name', 1, 'running', 'x')).toBe(NO_CHECKS);
+  expect(startFieldCheck(NO_CHECKS, 'name', 1, 'running', { name: 'x' })).toBe(NO_CHECKS);
 });
 test('a check of the same value keeps the last error, and one of a new value shows none', () => {
-  const same = startFieldCheck(failed, 'name', 2, 'running', 'x');
+  const same = startFieldCheck(failed, 'name', 2, 'running', { name: 'x' });
   expect(fieldErrorsOf(same.fields)).toEqual({ name: 'Taken' });
   expect(validatingFieldsOf(same.fields)).toEqual({ name: true });
-  expect(fieldErrorsOf(startFieldCheck(failed, 'name', 2, 'waiting', 'y').fields)).toEqual({});
+  expect(fieldErrorsOf(startFieldCheck(failed, 'name', 2, 'waiting', { name: 'y' }).fields)).toEqual({});
 });
 test('a check waiting on the schema shows the last error while the value is unchanged', () => {
-  const waiting = startFieldCheck(failed, 'name', 2, 'waiting', 'x');
+  const waiting = startFieldCheck(failed, 'name', 2, 'waiting', { name: 'x' });
   expect(fieldErrorsOf(waiting.fields)).toEqual({ name: 'Taken' });
   expect(validatingFieldsOf(waiting.fields)).toEqual({});
 });
 test('the same value compares by content', () => {
-  const tagged = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', ['a']), 'name', 1, { error: 'Bad' });
-  expect(fieldErrorsOf(startFieldCheck(tagged, 'name', 2, 'running', ['a']).fields)).toEqual({ name: 'Bad' });
+  const tagged = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', { name: ['a'] }), 'name', 1, {
+    error: 'Bad',
+  });
+  expect(fieldErrorsOf(startFieldCheck(tagged, 'name', 2, 'running', { name: ['a'] }).fields)).toEqual({ name: 'Bad' });
 });
 test('markFieldCheckRunning moves the current waiting check to running, and ignores a replaced one', () => {
-  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', 'x');
+  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', { name: 'x' });
   expect(markFieldCheckRunning(waiting, 'name', 1).fields.name?.status).toBe('running');
-  const replaced = startFieldCheck(waiting, 'name', 2, 'waiting', 'y');
+  const replaced = startFieldCheck(waiting, 'name', 2, 'waiting', { name: 'y' });
   expect(markFieldCheckRunning(replaced, 'name', 1)).toBe(replaced);
 });
 test('markFieldCheckRunning returns its input for a check already running or done', () => {
-  const running = startFieldCheck(withName, 'name', 1, 'running', 'x');
+  const running = startFieldCheck(withName, 'name', 1, 'running', { name: 'x' });
   expect(markFieldCheckRunning(running, 'name', 1)).toBe(running);
   expect(markFieldCheckRunning(failed, 'name', 1)).toBe(failed);
 });
 test('endFieldCheck lands only the current check', () => {
-  const replaced = startFieldCheck(startFieldCheck(withName, 'name', 1, 'running', 'x'), 'name', 2, 'running', 'y');
+  const replaced = startFieldCheck(
+    startFieldCheck(withName, 'name', 1, 'running', { name: 'x' }),
+    'name',
+    2,
+    'running',
+    { name: 'y' },
+  );
   expect(endFieldCheck(replaced, 'name', 1, { error: 'Old' })).toBe(replaced);
   expect(endFieldCheck(failed, 'name', 1, { error: 'Again' })).toBe(failed);
 });
 test("'none' keeps the error shown, and an answer of no error clears it", () => {
-  const rechecking = startFieldCheck(failed, 'name', 2, 'running', 'x');
+  const rechecking = startFieldCheck(failed, 'name', 2, 'running', { name: 'x' });
   expect(fieldErrorsOf(endFieldCheck(rechecking, 'name', 2, 'none').fields)).toEqual({ name: 'Taken' });
   expect(fieldErrorsOf(endFieldCheck(rechecking, 'name', 2, { error: undefined }).fields)).toEqual({});
 });
 test('isWaitingFieldCheck holds while the check waits, not once it runs, ends or is replaced', () => {
-  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', 'x');
+  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', { name: 'x' });
   expect(isWaitingFieldCheck(waiting, 'name', 1)).toBe(true);
   expect(isWaitingFieldCheck(waiting, 'name', 2)).toBe(false);
   expect(isWaitingFieldCheck(markFieldCheckRunning(waiting, 'name', 1), 'name', 1)).toBe(false);
   expect(isWaitingFieldCheck(endFieldCheck(waiting, 'name', 1, 'none'), 'name', 1)).toBe(false);
-  expect(isWaitingFieldCheck(startFieldCheck(waiting, 'name', 2, 'waiting', 'y'), 'name', 1)).toBe(false);
+  expect(isWaitingFieldCheck(startFieldCheck(waiting, 'name', 2, 'waiting', { name: 'y' }), 'name', 1)).toBe(false);
   expect(isWaitingFieldCheck(NO_CHECKS, 'name', 1)).toBe(false);
 });
 test('waitingFieldChecksOf takes the checks that wait, not those running or done', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
-  checks = startFieldCheck(checks, 'a', 1, 'waiting', 'x');
-  checks = startFieldCheck(checks, 'b', 2, 'running', 'x');
-  checks = endFieldCheck(startFieldCheck(checks, 'c', 3, 'waiting', 'x'), 'c', 3, 'none');
-  expect(waitingFieldChecksOf(checks.fields, 4)).toEqual({ a: { id: 1, status: 'waiting', value: 'x' } });
+  checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 'x' });
+  checks = startFieldCheck(checks, 'b', 2, 'running', { b: 'x' });
+  checks = endFieldCheck(startFieldCheck(checks, 'c', 3, 'waiting', { c: 'x' }), 'c', 3, 'none');
+  expect(waitingFieldChecksOf(checks.fields, 4)).toEqual({ a: { id: 1, status: 'waiting', inputs: { a: 'x' } } });
 });
 test('waitingFieldChecksOf takes only the checks that started before the given schema check', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b'));
-  checks = startFieldCheck(checks, 'a', 1, 'waiting', 'x');
-  checks = startFieldCheck(checks, 'b', 3, 'waiting', 'x');
+  checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 'x' });
+  checks = startFieldCheck(checks, 'b', 3, 'waiting', { b: 'x' });
   expect(Object.keys(waitingFieldChecksOf(checks.fields, 2))).toEqual(['a']);
   expect(Object.keys(waitingFieldChecksOf(checks.fields, 3))).toEqual(['a']);
   expect(waitingFieldChecksOf(checks.fields, 1)).toBe(waitingFieldChecksOf({}, 1));
@@ -124,7 +136,7 @@ test('the newest schema check wins, and ending it clears it', () => {
   expect(startSchemaCheck(second, 1)).toBe(second);
 });
 test('endPendingChecks ends pending checks, keeps their errors, and clears the schema check', () => {
-  const pending = startSchemaCheck(startFieldCheck(failed, 'name', 2, 'running', 'x'), 3);
+  const pending = startSchemaCheck(startFieldCheck(failed, 'name', 2, 'running', { name: 'x' }), 3);
   const ended = endPendingChecks(pending);
   expect(ended.schema).toBeUndefined();
   expect(ended.fields.name).toMatchObject({ id: 2, status: 'done', error: 'Taken' });
@@ -139,11 +151,11 @@ test('startOver clears every check and keeps the validators', () => {
 test('fieldsToRecheck takes pending checks and errors, not a check done without one', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
   // a waits on the schema
-  checks = startFieldCheck(checks, 'a', 1, 'waiting', 1);
+  checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 1 });
   // b runs
-  checks = startFieldCheck(checks, 'b', 2, 'running', 1);
+  checks = startFieldCheck(checks, 'b', 2, 'running', { b: 1 });
   // c is done, with no error
-  checks = startFieldCheck(checks, 'c', 3, 'running', 1);
+  checks = startFieldCheck(checks, 'c', 3, 'running', { c: 1 });
   checks = endFieldCheck(checks, 'c', 3, { error: undefined });
   expect(fieldsToRecheck(checks.fields).sort()).toEqual(['a', 'b']);
   expect(fieldsToRecheck(failed.fields)).toEqual(['name']);
@@ -156,13 +168,13 @@ test('selectors share one empty object when there is nothing to show', () => {
 test('a field named after an Object.prototype member syncs on, starts, ends and shows its error', () => {
   const synced = syncValidators(NO_CHECKS, on('constructor'));
   expect(validatorPeriod(synced, 'constructor')).toBe(0);
-  const started = startFieldCheck(synced, 'constructor', 1, 'waiting', 'x');
+  const started = startFieldCheck(synced, 'constructor', 1, 'waiting', { constructor: 'x' });
   expect(isWaitingFieldCheck(started, 'constructor', 1)).toBe(true);
   const ended = endFieldCheck(markFieldCheckRunning(started, 'constructor', 1), 'constructor', 1, { error: 'Bad' });
   expect(fieldErrorsOf(ended.fields)).toEqual({ constructor: 'Bad' });
 });
 test('hasPendingFieldCheck takes a check waiting or running, not one done', () => {
-  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', 'x');
+  const waiting = startFieldCheck(withName, 'name', 1, 'waiting', { name: 'x' });
   expect(hasPendingFieldCheck(waiting.fields)).toBe(true);
   expect(hasPendingFieldCheck(markFieldCheckRunning(waiting, 'name', 1).fields)).toBe(true);
   expect(hasPendingFieldCheck(failed.fields)).toBe(false);
@@ -180,18 +192,58 @@ test('a __proto__ key syncs on as its own entry, so syncing the same set again r
 });
 test('a __proto__ field keeps its own entry in every record its checks write', () => {
   const synced = syncValidators(NO_CHECKS, on('__proto__'));
-  const waiting = startFieldCheck(synced, '__proto__', 1, 'waiting', 'x');
+  const waiting = startFieldCheck(synced, '__proto__', 1, 'waiting', Object.fromEntries([['__proto__', 'x']]));
   expect(Object.entries(waitingFieldChecksOf(waiting.fields, 2))).toEqual([
-    ['__proto__', { id: 1, status: 'waiting', value: 'x' }],
+    ['__proto__', { id: 1, status: 'waiting', inputs: Object.fromEntries([['__proto__', 'x']]) }],
   ]);
   const running = markFieldCheckRunning(waiting, '__proto__', 1);
   expect(Object.entries(validatingFieldsOf(running.fields))).toEqual([['__proto__', true]]);
   expect(Object.entries(endPendingChecks(running).fields)).toEqual([
-    ['__proto__', { id: 1, status: 'done', value: 'x' }],
+    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
   ]);
   const shown = endFieldCheck(running, '__proto__', 1, { error: 'Bad' });
   expect(Object.entries(fieldErrorsOf(shown.fields))).toEqual([['__proto__', 'Bad']]);
   const off = syncValidators(shown, on());
   expect(Object.entries(off.validators)).toEqual([['__proto__', { on: false, period: 1 }]]);
-  expect(Object.entries(off.fields)).toEqual([['__proto__', { id: 1, status: 'done', value: 'x' }]]);
+  expect(Object.entries(off.fields)).toEqual([
+    ['__proto__', { id: 1, status: 'done', inputs: Object.fromEntries([['__proto__', 'x']]) }],
+  ]);
+});
+test('inputsHeld compares each input path by value', () => {
+  expect(inputsHeld({ name: 'x' }, { name: 'x', email: 'a' })).toBe(true);
+  expect(inputsHeld({ name: 'x', email: 'a' }, { name: 'x', email: 'b' })).toBe(false);
+  expect(inputsHeld({ 'address.city': 'Oslo' }, { address: { city: 'Oslo' } })).toBe(true);
+  expect(inputsHeld({ tags: ['a'] }, { tags: ['a'] })).toBe(true);
+});
+
+test('endOutdatedChecks drops an error whose inputs the values no longer hold', () => {
+  const ended = endOutdatedChecks(failed, { name: 'y' });
+  expect(fieldErrorsOf(ended.fields)).toEqual({});
+  expect(ended.fields.name).toEqual({ id: 1, status: 'done', inputs: { name: 'x' } });
+});
+
+test('endOutdatedChecks ends a pending check whose inputs changed', () => {
+  const running = startFieldCheck(withName, 'name', 2, 'running', { name: 'x' });
+  expect(hasPendingFieldCheck(endOutdatedChecks(running, { name: 'y' }).fields)).toBe(false);
+});
+
+test('endOutdatedChecks returns its input when every check still holds, or has nothing to drop', () => {
+  expect(endOutdatedChecks(failed, { name: 'x', email: 'other' })).toBe(failed);
+  const passed = endFieldCheck(startFieldCheck(withName, 'name', 1, 'running', { name: 'x' }), 'name', 1, {
+    error: undefined,
+  });
+  expect(endOutdatedChecks(passed, { name: 'y' })).toBe(passed);
+});
+
+test('a new check keeps the replaced error only while every input is unchanged', () => {
+  const twoInputs = endFieldCheck(
+    startFieldCheck(withName, 'name', 1, 'running', { name: 'x', email: 'a' }),
+    'name',
+    1,
+    { error: 'Taken' },
+  );
+  expect(startFieldCheck(twoInputs, 'name', 2, 'waiting', { name: 'x', email: 'a' }).fields.name?.error).toBe('Taken');
+  expect(
+    startFieldCheck(twoInputs, 'name', 2, 'waiting', { name: 'x', email: 'b' }).fields.name?.error,
+  ).toBeUndefined();
 });

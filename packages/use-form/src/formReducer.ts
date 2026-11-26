@@ -1,6 +1,7 @@
 import {
   NO_CHECKS,
   endFieldCheck,
+  endOutdatedChecks,
   endPendingChecks,
   endSchemaCheck,
   hasFieldError,
@@ -267,7 +268,7 @@ const reduce = <TValues extends Record<string, unknown>>(
     case 'START_FIELD_CHECK':
       return withChecks(
         state,
-        startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.value),
+        startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.inputs),
       );
 
     case 'RUN_FIELD_CHECK':
@@ -389,6 +390,9 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Settling a successful submit
  * - Tracking checks: the schema check, each field's validator and its checks
  *
+ * After every action that leaves new values or new checks, a check that is pending or shows an error and whose inputs
+ * the values no longer hold ends with no error, so an error always describes the values the form holds.
+ *
  * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
  * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged
  * values don't: they may be a save's answer, or an optimistic write that a failed save rolls back, while it runs or
@@ -440,7 +444,11 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   action: FormAction<TValues>,
   initialValues: TValues,
 ): FormState<TValues> => {
-  const next = reduce(state, action, initialValues);
+  const reduced = reduce(state, action, initialValues);
+  const next =
+    reduced.values === state.values && reduced.checks === state.checks
+      ? reduced
+      : withChecks(reduced, endOutdatedChecks(reduced.checks, reduced.values));
   if (
     next.wentOut === undefined ||
     next.values === state.values ||

@@ -214,9 +214,9 @@ export type FieldCheck = {
   id: CheckId;
   /** Pending, or done: it ended */
   status: PendingStatus | 'done';
-  /** The field's value the check checks */
-  value: unknown;
-  /** The error shown: once done, the validator's; while pending, the last one, while the value is unchanged */
+  /** The value at each of the check's input paths, keyed by normalized path, the validator's own field first */
+  inputs: Readonly<Record<FieldPath, unknown>>;
+  /** The error shown: once done, the validator's; while pending, the last one, while the inputs are unchanged */
   error?: string;
 };
 
@@ -1263,8 +1263,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
       /** The status it starts in */
       status: PendingStatus;
-      /** The field's value the check checks */
-      value: unknown;
+      /** The value at each of the check's input paths, keyed by normalized path */
+      inputs: Readonly<Record<FieldPath, unknown>>;
     }
   | {
       /** Moves a field's waiting check to running */
@@ -1424,8 +1424,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors.
-   * Cleared at once when a check of a changed value starts, when the field's validator is switched off, and on reset.
-   * A check of an unchanged value keeps the error until it answers.
+   * Cleared at once when a value the check read changes, when the field's validator is switched off, and on reset.
+   * A check of unchanged values keeps the error until it answers.
    */
   fieldErrors: Readonly<Record<FieldPath, string>>;
 

@@ -626,7 +626,7 @@ describe('a waiting field check follows the newest schema check', () => {
     expect(result.current.isValidating).toBe(false);
   });
 
-  test('ends without running the validator when the newest check holds another value', async () => {
+  test("an edit ends a waiting check, so a newer schema check doesn't run its validator", async () => {
     const { pending, checkTitle, result } = renderBlurTitle();
 
     act(() => result.current.setFieldTouched('title'));
@@ -642,7 +642,7 @@ describe('a waiting field check follows the newest schema check', () => {
     expect(result.current.isValidating).toBe(false);
   });
 
-  test('keeps the error it shows when the newest check holds another value', async () => {
+  test('an edit drops the error of a check waiting on a schema check that never settles', async () => {
     const { pending, checkTitle, result } = renderBlurTitle();
     act(() => result.current.setFieldTouched('title'));
     await act(async () => {
@@ -654,6 +654,7 @@ describe('a waiting field check follows the newest schema check', () => {
     // A re-check of the unchanged value keeps the error while it waits, on a schema check that never settles
     act(() => result.current.setFieldTouched('title'));
     act(() => result.current.setFieldValue('title', 'new'));
+    expect(result.current.fieldErrors).toEqual({});
     act(() => result.current.setFieldTouched('status'));
     await act(async () => {
       pending[2]!.resolve(ok({ ...draft, title: 'new' }));
@@ -661,7 +662,7 @@ describe('a waiting field check follows the newest schema check', () => {
     });
 
     expect(checkTitle).toHaveBeenCalledTimes(1);
-    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    expect(result.current.fieldErrors).toEqual({});
     expect(result.current.isValidating).toBe(false);
   });
 
@@ -1190,5 +1191,65 @@ describe("a validator that answers with a thenable that isn't a native Promise",
 
     expect(result.current.clientErrors).toEqual({ title: 'Title is taken' });
     expect(result.current.isValidating).toBe(false);
+  });
+});
+
+describe('an error lasts only while its values hold (#58)', () => {
+  const nameSchema = S.object({ name: S.required(S.string()), email: S.required(S.string()) });
+  const blank = { name: '', email: 'a@b.co' };
+  const taken = (value: string) => (value === 'Taken' ? 'Name taken' : undefined);
+
+  test('submit mode: an edit drops the error a submit put on the field', async () => {
+    const { result } = renderHook(() =>
+      useForm(nameSchema, {
+        initialValues: blank,
+        validationMode: 'submit',
+        fieldValidators: { name: taken },
+        onSubmit: () => {},
+      }),
+    );
+    act(() => result.current.setFieldValue('name', 'Taken'));
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+    expect(result.current.errors.name).toBe('Name taken');
+
+    act(() => result.current.setFieldValue('name', 'Free'));
+
+    expect(result.current.errors.name).toBeUndefined();
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test('blur mode: an edit drops the error a blur put on the field', async () => {
+    const { result } = renderHook(() =>
+      useForm(nameSchema, { initialValues: blank, validationMode: 'blur', fieldValidators: { name: taken } }),
+    );
+    act(() => result.current.setFieldValue('name', 'Taken'));
+    await act(async () => {
+      result.current.setFieldTouched('name');
+      await nextTask();
+    });
+    expect(result.current.errors.name).toBe('Name taken');
+
+    act(() => result.current.setFieldValue('name', 'Free'));
+
+    expect(result.current.errors.name).toBeUndefined();
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test('live mode: setValues drops the error of a field it changes', async () => {
+    const { result } = renderHook(() =>
+      useForm(nameSchema, { initialValues: blank, fieldValidators: { name: taken } }),
+    );
+    await act(async () => {
+      result.current.setFieldValue('name', 'Taken');
+      await nextTask();
+    });
+    expect(result.current.errors.name).toBe('Name taken');
+
+    act(() => result.current.setValues({ name: 'Free' }));
+
+    expect(result.current.errors.name).toBeUndefined();
+    expect(result.current.isValid).toBe(true);
   });
 });
