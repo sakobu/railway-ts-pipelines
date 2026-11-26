@@ -1261,7 +1261,7 @@ function ValibotForm() {
 
 **Problem:** You need to check a value against the server (username availability, coupon codes) without blocking the entire form. Schema-level async validation (`chainAsync`) validates the whole form -- you want per-field control with per-field loading indicators.
 
-**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking.
+**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it skips every validator: put a cross-field rule on its field with `refineAt` to keep the lookups running.
 
 ```tsx
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
