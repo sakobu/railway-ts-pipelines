@@ -11,7 +11,6 @@ import {
   hasFieldError,
   hasPendingFieldCheck,
   inputsHeld,
-  isWaitingFieldCheck,
   markFieldCheckRunning,
   startFieldCheck,
   startOver,
@@ -19,6 +18,7 @@ import {
   syncValidators,
   validatingFieldsOf,
   validatorPeriod,
+  waitingFieldCheck,
   waitingFieldChecksOf,
 } from '../../src/formChecks';
 
@@ -105,14 +105,14 @@ test("'none' keeps the error shown, and an answer of no error clears it", () => 
   expect(fieldErrorsOf(endFieldCheck(rechecking, 'name', 2, 'none').fields)).toEqual({ name: 'Taken' });
   expect(fieldErrorsOf(endFieldCheck(rechecking, 'name', 2, { error: undefined }).fields)).toEqual({});
 });
-test('isWaitingFieldCheck holds while the check waits, not once it runs, ends or is replaced', () => {
+test('waitingFieldCheck gives the check while it waits, not once it runs, ends or is replaced', () => {
   const waiting = startFieldCheck(withName, 'name', 1, 'waiting', { name: 'x' });
-  expect(isWaitingFieldCheck(waiting, 'name', 1)).toBe(true);
-  expect(isWaitingFieldCheck(waiting, 'name', 2)).toBe(false);
-  expect(isWaitingFieldCheck(markFieldCheckRunning(waiting, 'name', 1), 'name', 1)).toBe(false);
-  expect(isWaitingFieldCheck(endFieldCheck(waiting, 'name', 1, 'none'), 'name', 1)).toBe(false);
-  expect(isWaitingFieldCheck(startFieldCheck(waiting, 'name', 2, 'waiting', { name: 'y' }), 'name', 1)).toBe(false);
-  expect(isWaitingFieldCheck(NO_CHECKS, 'name', 1)).toBe(false);
+  expect(waitingFieldCheck(waiting, 'name', 1)).toEqual({ id: 1, status: 'waiting', inputs: { name: 'x' } });
+  expect(waitingFieldCheck(waiting, 'name', 2)).toBeUndefined();
+  expect(waitingFieldCheck(markFieldCheckRunning(waiting, 'name', 1), 'name', 1)).toBeUndefined();
+  expect(waitingFieldCheck(endFieldCheck(waiting, 'name', 1, 'none'), 'name', 1)).toBeUndefined();
+  expect(waitingFieldCheck(startFieldCheck(waiting, 'name', 2, 'waiting', { name: 'y' }), 'name', 1)).toBeUndefined();
+  expect(waitingFieldCheck(NO_CHECKS, 'name', 1)).toBeUndefined();
 });
 test('waitingFieldChecksOf takes the checks that wait, not those running or done', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c'));
@@ -169,7 +169,7 @@ test('a field named after an Object.prototype member syncs on, starts, ends and 
   const synced = syncValidators(NO_CHECKS, on('constructor'));
   expect(validatorPeriod(synced, 'constructor')).toBe(0);
   const started = startFieldCheck(synced, 'constructor', 1, 'waiting', { constructor: 'x' });
-  expect(isWaitingFieldCheck(started, 'constructor', 1)).toBe(true);
+  expect(waitingFieldCheck(started, 'constructor', 1)).toBeDefined();
   const ended = endFieldCheck(markFieldCheckRunning(started, 'constructor', 1), 'constructor', 1, { error: 'Bad' });
   expect(fieldErrorsOf(ended.fields)).toEqual({ constructor: 'Bad' });
 });

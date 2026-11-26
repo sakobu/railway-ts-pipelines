@@ -126,18 +126,14 @@ const currentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): Fi
   return check?.id === id && check.status !== 'done' ? check : undefined;
 };
 
-/** The field's check `id`, while it is the field's latest check and still waits on a schema result. */
-const waitingFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
+/**
+ * The field's check `id`, while it is the field's latest check and still waits on a schema result. Only a waiting
+ * check moves on with one: once the first result moved it on, a later one finds it running or done.
+ */
+export const waitingFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
   const check = own(checks.fields, key);
   return check?.id === id && check.status === 'waiting' ? check : undefined;
 };
-
-/**
- * Whether `id` is the field's latest check and still waits on a schema result. Only a waiting check moves on with
- * one: once the first result moved it on, a later one finds it running or done.
- */
-export const isWaitingFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): boolean =>
-  waitingFieldCheck(checks, key, id) !== undefined;
 
 /** Moves the field's current check from waiting to running. */
 export const markFieldCheckRunning = (checks: ChecksState, key: FieldPath, id: CheckId): ChecksState => {

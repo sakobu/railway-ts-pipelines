@@ -35,9 +35,9 @@ import {
 import {
   fieldErrorsOf,
   fieldsToRecheck,
-  isWaitingFieldCheck,
   validatingFieldsOf,
   validatorPeriod,
+  waitingFieldCheck,
   waitingFieldChecksOf,
 } from './formChecks';
 import { createInitialFormState, formReducer, isValidState, isValidatingState } from './formReducer';
@@ -765,8 +765,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * comes first moves the check on, and a later one finds it no longer waiting.
    *
    * 1. No result, since the schema validator threw or rejected: the check ends with no error.
-   * 2. A schema error that overlaps any of the check's input paths, the field or a listed one, at, inside or above
-   *    it: it ends with no error, so the schema's error shows.
+   * 2. A schema error that overlaps any of the input paths the check recorded, the field or a listed one, at, inside
+   *    or above it: it ends with no error, so the schema's error shows.
    * 3. The field's validator in the latest commit reads other paths than the check recorded, since its list changed:
    *    it ends with no error, without calling the validator. The next check uses the new list.
    * 4. Otherwise it runs that validator on the checked values, and ends with its answer.
@@ -776,31 +776,24 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * @param key - The field's normalized path
    * @param id - The check's id
-   * @param inputs - The check's recorded inputs
    * @param checked - The values the schema check checked
    * @param schemaErrors - Its errors, or undefined with no result
    */
   const moveOnWithSchema = useCallback(
-    (
-      key: FieldPath,
-      id: CheckId,
-      inputs: Readonly<Record<FieldPath, unknown>>,
-      checked: TValues,
-      schemaErrors: SchemaErrors,
-    ): void => {
-      if (!isWaitingFieldCheck(store.getState().checks, key, id)) return;
+    (key: FieldPath, id: CheckId, checked: TValues, schemaErrors: SchemaErrors): void => {
+      const check = waitingFieldCheck(store.getState().checks, key, id);
+      if (!check) return;
       const end = (result: FieldCheckResult) => dispatch({ type: 'END_FIELD_CHECK', field: key, id, result });
 
       // Steps 1 to 3, in order. While the check waits, its validator stays on: the insertion effect that switches it
       // off also ends the check.
+      const inputPaths = Object.keys(check.inputs);
       const validator = fieldValidatorsRef.current.get(key);
       if (
         !schemaErrors ||
-        Object.keys(schemaErrors).some((errorPath) =>
-          Object.keys(inputs).some((path) => pathsOverlap(errorPath, path)),
-        ) ||
+        Object.keys(schemaErrors).some((errorPath) => inputPaths.some((path) => pathsOverlap(errorPath, path))) ||
         !validator ||
-        !sameInputs(validator.inputs, inputs)
+        !sameInputs(validator.inputs, check.inputs)
       ) {
         end({ error: undefined });
         return;
@@ -841,7 +834,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       if (held !== outcome.values && !deepEqual(held, outcome.values)) return;
       for (const [key, check] of waiting) {
         try {
-          moveOnWithSchema(key, check.id, check.inputs, outcome.values, outcome.errors);
+          moveOnWithSchema(key, check.id, outcome.values, outcome.errors);
         } catch (error) {
           logValidationError(error);
         }
@@ -910,10 +903,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       values: TValues,
     ): ((schemaErrors: SchemaErrors | Promise<SchemaErrors>) => void) => {
       const id = store.takeCheckId();
-      const inputs = valuesAt(values, validator.inputs);
-      dispatch({ type: 'START_FIELD_CHECK', field: key, id, status: 'waiting', inputs });
+      dispatch({
+        type: 'START_FIELD_CHECK',
+        field: key,
+        id,
+        status: 'waiting',
+        inputs: valuesAt(values, validator.inputs),
+      });
 
-      const afterSchema = (schemaErrors: SchemaErrors): void => moveOnWithSchema(key, id, inputs, values, schemaErrors);
+      const afterSchema = (schemaErrors: SchemaErrors): void => moveOnWithSchema(key, id, values, schemaErrors);
 
       return (schemaErrors) => {
         if (schemaErrors instanceof Promise) {
