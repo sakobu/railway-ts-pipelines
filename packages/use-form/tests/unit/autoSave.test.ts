@@ -106,25 +106,13 @@ describe('createAutoSave', () => {
     expect(auto.decide(() => view({ verdict: passed(B), isChecking: true }))).toBe('wait');
   });
 
-  test('submits once while its own save runs, even for a new version', () => {
+  test('checks a new version while a submission runs', () => {
     const auto = due();
     expect(auto.decide(() => view())).toBe('submit');
 
     auto.track(B);
     auto.delayEnded();
-    expect(auto.decide(() => view({ values: B, verdict: passed(B) }))).toBe('wait');
-
-    auto.saveSettled();
-    expect(auto.decide(() => view({ values: B, verdict: passed(B) }))).toBe('submit');
-  });
-
-  test('checks a new version while its own save runs', () => {
-    const auto = due();
-    expect(auto.decide(() => view())).toBe('submit');
-
-    auto.track(B);
-    auto.delayEnded();
-    expect(auto.decide(() => view({ values: B, verdict: passed(A) }))).toBe('check');
+    expect(auto.decide(() => view({ values: B, verdict: passed(A), isSubmitting: true }))).toBe('check');
   });
 
   test('isOn is off at creation, on after start, and off after stop', () => {
@@ -144,20 +132,6 @@ describe('createAutoSave', () => {
     expect(auto.track(A)).toBe(true);
     expect(auto.decide(() => view())).toBe('wait');
     auto.delayEnded();
-    expect(auto.decide(() => view())).toBe('submit');
-  });
-
-  test('stop keeps its own running save', () => {
-    const auto = due();
-    expect(auto.decide(() => view())).toBe('submit');
-
-    auto.stop();
-    auto.start();
-    auto.track(A);
-    auto.delayEnded();
-    expect(auto.decide(() => view())).toBe('wait');
-
-    auto.saveSettled();
     expect(auto.decide(() => view())).toBe('submit');
   });
 });

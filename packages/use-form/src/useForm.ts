@@ -43,7 +43,7 @@ import { createInitialFormState, formReducer, isValidState, isValidatingState } 
 import { createFormStore, type FormStore } from './formStore';
 import { createStabilityCheck } from './stabilityCheck';
 import { isStandardSchema, fromStandardSchema, type FormValidator } from './standardSchema';
-import { createSubmitScheduler } from './submitScheduler';
+import { createSubmitScheduler, type SubmitScheduler } from './submitScheduler';
 import {
   deepEqual,
   getValueByPath,
@@ -1612,6 +1612,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // reads the store, never a render's state. A submission's settle doesn't decide: it counts (noteSettle, above), and
   // the commit that follows decides. The auto-saver sits above too, since noteSettle reads whether it is on.
 
+  // The scheduler auto-save last submitted on. After a resetKey reset it is the previous record's, whose running
+  // submissions hold the new record's auto-save until its onIdle reports them settled.
+  const autoSaveSchedulerRef = useRef<SubmitScheduler<TValues, Result<TResult, ValidationError[]>> | undefined>(
+    undefined,
+  );
   // The timer of the tracked version's delay
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The latest commit's delay, which a version takes when it starts: a timer already running keeps its length
@@ -1646,7 +1651,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       isValidating: isValidatingState(state),
       isValid: isValidState(state),
       isStale: state.isStale,
-      isSubmitting: submitSchedulerRef.current.isBusy(),
+      isSubmitting: submitSchedulerRef.current.isBusy() || autoSaveSchedulerRef.current?.isBusy() === true,
       wentOut: state.wentOut,
       baselineEpoch: state.baselineEpoch,
     }));
@@ -1659,14 +1664,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         logValidationError(error);
       }
     } else if (step === 'submit') {
-      // handleSubmit never rejects. The scheduler's onIdle may count before saveSettled runs, so this count comes
-      // after it, whatever order React renders in.
-      void handleSubmit().then(() => {
-        autoSaver.saveSettled();
-        noteSettle();
-      });
+      autoSaveSchedulerRef.current = submitSchedulerRef.current;
+      // handleSubmit never rejects, and the scheduler's onIdle reports the settle
+      void handleSubmit();
     }
-  }, [store, autoSaver, startValidation, handleSubmit, noteSettle]);
+  }, [store, autoSaver, startValidation, handleSubmit]);
 
   // Before any effect of the commit runs, a child's included. No ref is written during render.
   useInsertionEffect(() => {

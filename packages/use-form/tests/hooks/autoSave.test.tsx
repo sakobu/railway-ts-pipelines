@@ -1497,6 +1497,46 @@ describe('autoSave', () => {
       expect(onSubmit.mock.calls[1]).toEqual([{ ...other, name: 'Bobby' }]);
     });
 
+    test("after a resetKey switch, the new record's save also waits for a Save queued behind the previous record's save", async () => {
+      const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
+      const other: UserForm = { name: 'Bob', email: 'bob@example.com', age: 30 };
+      const { result, rerender } = renderHook(
+        ({ values, id }: { values: UserForm; id: string }) =>
+          useForm(userValidator, { initialValues: values, resetKey: id, onSubmit, autoSave: { delay: 50 } }),
+        { initialProps: { values: initial, id: 'a' } },
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1), { timeout: 1000 });
+      // A Save of newer values waits behind the auto-save
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+        void result.current.handleSubmit();
+      });
+
+      rerender({ values: other, id: 'b' });
+      act(() => {
+        result.current.setFieldValue('name', 'Bobby');
+      });
+      await act(async () => {
+        saves[0]!.resolve(undefined);
+        await nextTask();
+      });
+      await sleep(300);
+      // The queued Save went out with the previous record's values, and holds the new record's save
+      expect(onSubmit).toHaveBeenCalledTimes(2);
+      expect(onSubmit.mock.calls[1]).toEqual([{ ...initial, name: 'Janet' }]);
+
+      await act(async () => {
+        saves[1]!.resolve(undefined);
+        await nextTask();
+      });
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(3), { timeout: 1000 });
+      expect(onSubmit.mock.calls[2]).toEqual([{ ...other, name: 'Bobby' }]);
+    });
+
     test("after a resetKey switch, the new record's held save goes out even with the values of the previous record's save", async () => {
       const { saves, onSubmit } = createGatedOnSubmit<UserForm>();
       const other: UserForm = { ...initial, name: 'Bob' };

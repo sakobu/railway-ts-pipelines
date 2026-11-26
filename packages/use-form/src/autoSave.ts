@@ -28,7 +28,7 @@ export type AutoSaveView<TValues> = {
   isValid: boolean;
   /** FormState.isStale: the store's, which a running submission doesn't hide */
   isStale: boolean;
-  /** The current submit scheduler's isBusy() */
+  /** A submission runs on the current submit scheduler, or on the one auto-save last submitted on */
   isSubmitting: boolean;
   /** FormState.wentOut */
   wentOut: TValues | undefined;
@@ -48,10 +48,7 @@ export type AutoSave<TValues> = {
   /** Switches auto-save on. */
   start: () => void;
 
-  /**
-   * Switches auto-save off, and forgets the tracked version, so the next `track` starts a new one. Its own running
-   * save still holds the next version until `saveSettled`.
-   */
+  /** Switches auto-save off, and forgets the tracked version, so the next `track` starts a new one. */
   stop: () => void;
 
   /** Whether auto-save is on: started, and not stopped since. */
@@ -70,22 +67,17 @@ export type AutoSave<TValues> = {
 
   /**
    * Decides for the tracked version. It returns `'check'` at most once per version in each baseline epoch, and records
-   * it: a follow or reset ends the check. It returns `'submit'` only while its own save isn't running, and records that
-   * save as running.
+   * it: a follow or reset ends the check.
    *
    * @param readView - Reads what the form shows now. `decide` calls it once, only after the delay has ended, so a
    *   caller pays for the view only then.
    * @returns What the caller does next
    */
   decide: (readView: () => AutoSaveView<TValues>) => AutoSaveStep;
-
-  /** Its own save settled. */
-  saveSettled: () => void;
 };
 
 /**
- * Creates an {@link AutoSave} that is off and tracks no version yet. A `stop` doesn't clear its own running save: a
- * save started before it still holds the next version until `saveSettled`.
+ * Creates an {@link AutoSave} that is off and tracks no version yet.
  *
  * @template TValues - The shape of the form values
  * @returns An auto-save, off, with nothing tracked
@@ -96,7 +88,6 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
   let delayPassed = false;
   // The baseline epoch the tracked version's check started in
   let checkedIn: number | undefined;
-  let ownSaveRunning = false;
   let on = false;
 
   const start = (): void => {
@@ -135,15 +126,9 @@ export const createAutoSave = <TValues>(): AutoSave<TValues> => {
       checkedIn = view.baselineEpoch;
       return 'check';
     }
-    if (!verdict.passed || view.isValidating || !view.isValid || view.isStale || view.isSubmitting || ownSaveRunning)
-      return 'wait';
-    ownSaveRunning = true;
+    if (!verdict.passed || view.isValidating || !view.isValid || view.isStale || view.isSubmitting) return 'wait';
     return 'submit';
   };
 
-  const saveSettled = (): void => {
-    ownSaveRunning = false;
-  };
-
-  return { start, stop, isOn, track, delayEnded, decide, saveSettled };
+  return { start, stop, isOn, track, delayEnded, decide };
 };
