@@ -52,7 +52,7 @@ const validator = v.object({
 
 **A validator that throws.** Where a sync throw from the schema, or from a field validator after a sync schema check, goes depends on what asked for the check:
 
-- **Called:** `setFieldValue`, `setValues`, `setFieldTouched`, `resetForm` and the array helpers (through `setFieldValue`), plus the calls made inside `onFieldChange`, which join the event, and a follow that an edit causes, which belongs to that edit's call. The first sync throw reaches the event's outermost call. When one pass reaches several field validators and more than one throws, each later throw is logged. A field validator's throw after an async schema check is logged.
+- **Called:** `setFieldValue`, `setValues`, `setFieldTouched`, `resetForm` and the array helpers (through `setFieldValue`), plus the calls made inside `onFieldChange`, which join the event, and a follow that an edit causes, which belongs to that edit's call. The first sync throw reaches the event's outermost call. A throw from `onFieldChange` itself skips all of that call's validation, a follow's re-check included. When one pass reaches several field validators and more than one throws, each later throw is logged. A field validator's throw after an async schema check is logged.
 - **No caller:** the mount check, the check after a `resetKey` change, the layout effect's follow of new `initialValues`, the follow after a save, and auto-save's check. Every throw is logged, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering.
 - **Async rejection:** logged, whatever started the check, and its validating state ends.
 - **`validateForm` and `handleSubmit`:** `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
@@ -296,7 +296,10 @@ turn, joins the outermost call: validation runs once, after that outermost call
 returns, on the values as they are then, and a sync throw from it reaches that
 outermost call. So a cascade runs each validator and the schema once.
 `validateForm` and `handleSubmit` aren't part of that: they check at once. A
-throw from `onFieldChange` itself ends the outermost call without validating. A
+throw from `onFieldChange` itself ends the outermost call without validating,
+the re-check of a follow the edit caused included: the errors the edit outdated
+are already gone, but schema errors from before it stay shown until the next
+check. A
 `resetForm()` or `setValues()` made here can override the field that just
 changed. To reset the other fields when one changes, pass the new value along:
 
