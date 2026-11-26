@@ -7,7 +7,13 @@ import { StrictMode, useState } from 'react';
 
 import { useForm } from '../../src/useForm';
 import { withDeps } from '../../src/withDeps';
-import { createGatedOnSubmit, createGatedValidator, nextTask, withoutAct } from '../fixtures/gates';
+import {
+  createGatedFieldValidator,
+  createGatedOnSubmit,
+  createGatedValidator,
+  nextTask,
+  withoutAct,
+} from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -1888,6 +1894,44 @@ describe('autoSave', () => {
 
       expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a save whose field check failed on a value edited since sets no submit error, and saves the edit', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const onSubmit = saving();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: initial,
+          onSubmit,
+          validationMode: 'submit',
+          fieldValidators: { name: () => gate() },
+          autoSave: { delay },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The save's field step checks 'Jane' while the user types on
+      await waitFor(() => expect(calls).toHaveLength(1));
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.errors._root).toBeUndefined();
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(calls).toHaveLength(2));
+      await act(async () => {
+        calls[1]!.resolve(undefined);
+        await nextTask();
+      });
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Janet' });
     });
   });
 

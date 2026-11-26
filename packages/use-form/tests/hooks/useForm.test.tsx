@@ -29,6 +29,10 @@ import type { InferSchemaType, MaybeAsyncValidator, Validator } from '@railway-t
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 
+/** The default submit error of a submit whose failed checks the form doesn't show, since the values changed. */
+const CHANGED_WHILE_CHECKING =
+  'The values changed while they were checked, so nothing was saved. Review them and save again.';
+
 describe('useForm', () => {
   describe('initialization', () => {
     test('initializes with default values', () => {
@@ -1620,6 +1624,56 @@ describe('useForm', () => {
       expect(result.current.errors._root).toBe('Algo salió mal.');
     });
 
+    test('messages.changedWhileChecking replaces the submit error of values that changed while checked', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const message = 'Los valores cambiaron mientras se comprobaban.';
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'blur',
+          fieldValidators: { title: () => gate() },
+          messages: { changedWhileChecking: message },
+        }),
+      );
+
+      let submitting!: ReturnType<typeof result.current.handleSubmit>;
+      await act(async () => {
+        submitting = result.current.handleSubmit();
+        await nextTask();
+      });
+      act(() => result.current.setFieldValue('title', 'Mine'));
+      let outcome!: Awaited<typeof submitting>;
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        outcome = await submitting;
+      });
+
+      expect(result.current.fieldErrors).toEqual({});
+      expect(result.current.errors._root).toBe(message);
+      expect(outcome).toEqual(
+        err([
+          { path: ['title'], message: 'Taken' },
+          { path: [], message },
+        ]),
+      );
+    });
+
+    test('a submit whose failed checks still show sets no submit error', async () => {
+      const { result } = renderHook(() =>
+        useForm(publishValidator, {
+          initialValues: draft,
+          validationMode: 'blur',
+          fieldValidators: { title: () => 'Taken' },
+        }),
+      );
+
+      const outcome = await act(() => result.current.handleSubmit());
+
+      expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+      expect(result.current.errors._root).toBeUndefined();
+      expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+    });
+
     test('an inline messages object keeps handleSubmit the same', () => {
       const { result, rerender } = renderHook(() =>
         useForm(userValidator, { initialValues: validValues, messages: { submitFailed: 'Algo salió mal.' } }),
@@ -2423,7 +2477,7 @@ describe('useForm', () => {
       expect(result.current.isValidating).toBe(false);
     });
 
-    test("resetForm() during a submission's validation drops its errors", async () => {
+    test("resetForm() during a submission's validation drops its errors, and the submit error says why", async () => {
       const { pending, gated } = createGatedValidator<PublishForm>();
       const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
 
@@ -2440,7 +2494,13 @@ describe('useForm', () => {
 
       expect(result.current.clientErrors).toEqual({});
       expect(result.current.isValidating).toBe(false);
-      expect(outcome).toEqual(err([{ path: ['title'], message: 'Title is required' }]));
+      expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+      expect(outcome).toEqual(
+        err([
+          { path: ['title'], message: 'Title is required' },
+          { path: [], message: CHANGED_WHILE_CHECKING },
+        ]),
+      );
     });
 
     describe('a validator that rejects while typing', () => {
@@ -2483,7 +2543,7 @@ describe('useForm', () => {
     });
 
     describe("a submission's validation results", () => {
-      test("its schema errors don't land over a check of values edited since", async () => {
+      test("its schema errors don't land over a check of values edited since, and the submit error says why", async () => {
         const { pending, gated } = createGatedValidator<PublishForm>();
         const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
 
@@ -2503,7 +2563,13 @@ describe('useForm', () => {
         });
 
         expect(result.current.clientErrors).toEqual({});
-        expect(outcome).toEqual(err([{ path: ['title'], message: 'Stale' }]));
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(outcome).toEqual(
+          err([
+            { path: ['title'], message: 'Stale' },
+            { path: [], message: CHANGED_WHILE_CHECKING },
+          ]),
+        );
       });
 
       test('a validation that passes clears the errors of an earlier attempt', async () => {
@@ -2524,7 +2590,7 @@ describe('useForm', () => {
         expect(result.current.isValid).toBe(true);
       });
 
-      test("a field validator's result doesn't land over a check of the field started since", async () => {
+      test("a field validator's result doesn't land over a check of the field started since, and the submit error says why", async () => {
         const { calls, gate } = createGatedFieldValidator();
         const { result } = renderHook(() =>
           useForm(publishValidator, {
@@ -2551,7 +2617,13 @@ describe('useForm', () => {
         });
 
         expect(result.current.fieldErrors).toEqual({});
-        expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(outcome).toEqual(
+          err([
+            { path: ['title'], message: 'Taken' },
+            { path: [], message: CHANGED_WHILE_CHECKING },
+          ]),
+        );
       });
     });
 
@@ -3344,7 +3416,7 @@ describe('useForm', () => {
       expect(result.current.values).toEqual(draft);
     });
 
-    test("resetForm() during a submission's field checks drops their errors", async () => {
+    test("resetForm() during a submission's field checks drops their errors, and the submit error says why", async () => {
       const { calls, gate } = createGatedFieldValidator();
       const { result } = renderHook(() =>
         useForm(publishValidator, { initialValues: draft, fieldValidators: { title: () => gate() } }),
@@ -3364,7 +3436,13 @@ describe('useForm', () => {
       });
 
       expect(result.current.fieldErrors).toEqual({});
-      expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+      expect(outcome).toEqual(
+        err([
+          { path: ['title'], message: 'Taken' },
+          { path: [], message: CHANGED_WHILE_CHECKING },
+        ]),
+      );
     });
 
     test("a field validator waiting on a replaced schema check doesn't run", async () => {

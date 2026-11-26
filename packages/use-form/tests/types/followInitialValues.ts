@@ -84,7 +84,11 @@ export function useMessages() {
   // Replaces the built-in submit errors, for wording or translation
   useForm(flat, {
     initialValues: { name: '' },
-    messages: { submitFailed: 'Algo salió mal.', changedWhileSaving: 'Otra persona cambió este registro.' },
+    messages: {
+      submitFailed: 'Algo salió mal.',
+      changedWhileSaving: 'Otra persona cambió este registro.',
+      changedWhileChecking: 'Los valores cambiaron mientras se comprobaban.',
+    },
   });
 
   useForm(flat, {

@@ -87,7 +87,13 @@ Configuration object. Every option but `initialValues` can be set to `undefined`
   onValuesChange?: ((values: TValues, prevValues: TValues) => void) | undefined;
   onFieldChange?: ((field: string, value: unknown, values: TValues) => void) | undefined;
   // Replaces the submit errors useForm writes itself; see messages below
-  messages?: { submitFailed?: string | undefined; changedWhileSaving?: string | undefined } | undefined;
+  messages?:
+    | {
+        submitFailed?: string | undefined;
+        changedWhileSaving?: string | undefined;
+        changedWhileChecking?: string | undefined;
+      }
+    | undefined;
 }
 ```
 
@@ -222,7 +228,7 @@ Per-field validator functions for field-level async validation. Run independentl
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
-**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error (`handleSubmit`'s `err` still includes it), and a re-check of unchanged values keeps the error until it answers.
+**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A submit whose check ended that way still fails: `handleSubmit`'s `err` includes the error, and the submit error says the values changed ([`messages.changedWhileChecking`](#messages)).
 
 **What checks a validator again**, by mode:
 
@@ -323,10 +329,11 @@ Optional
 
 Replaces the submit errors useForm writes itself, for other wording or a translation. Each one shows at `errors._root` and comes back in `handleSubmit`'s `err`. Errors from the schema, the field validators and `onSubmit` are already yours, so they aren't here.
 
-| Key                  | When                                                                                                                                      | Default                                                                                            |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `submitFailed`       | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                 | "Something went wrong. Please try again."                                                          |
-| `changedWhileSaving` | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit)) | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+| Key                    | When                                                                                                                                                                                                                                                             | Default                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `submitFailed`         | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                                                                                                                                        | "Something went wrong. Please try again."                                                          |
+| `changedWhileSaving`   | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit))                                                                                                                        | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+| `changedWhileChecking` | A submit's schema or field validators failed on values that changed while they ran (an edit, a follow or a reset), so the form doesn't show all their errors ([`handleSubmit`](#handlesubmit)). Not while auto-save is on, which saves the changed values itself | "The values changed while they were checked, so nothing was saved. Review them and save again."    |
 
 ```typescript
 const form = useForm(contactSchema, {
@@ -334,6 +341,7 @@ const form = useForm(contactSchema, {
   messages: {
     submitFailed: t('form.submitFailed'),
     changedWhileSaving: t('form.changedWhileSaving'),
+    changedWhileChecking: t('form.changedWhileChecking'),
   },
 });
 ```
@@ -732,6 +740,8 @@ handleSubmit(e?: SyntheticEvent): Promise<Result<TResult, ValidationError[]>>
 The previous save's answer isn't a newer version: when it's still to come as the save starts, the first version to arrive is that answer.
 
 Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite. So does one the user reset the form during (`resetForm()`), as with `handleSubmit(); resetForm()` to submit and clear.
+
+**A submit whose values changed while they were checked says so.** When its schema check or a field check fails on values that an edit, a follow of new `initialValues` or `resetForm()` changed while it ran, the form doesn't show those errors: they describe values it no longer holds. `handleSubmit` then resolves to `err` with the errors and `{ path: [], message: 'The values changed while they were checked, so nothing was saved. Review them and save again.' }`, which becomes the submit error, so a Save click doesn't look as if nothing happened. [`messages.changedWhileChecking`](#messages) replaces the text. Not while auto-save is on, since it saves the changed values on its own, nor once a `resetKey` switch retired the submission's record.
 
 **What it does:**
 
