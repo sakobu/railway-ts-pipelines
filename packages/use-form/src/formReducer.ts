@@ -390,8 +390,8 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Settling a successful submit
  * - Tracking checks: the schema check, each field's validator and its checks
  *
- * After every action that leaves new values or new checks, a check that is pending or shows an error and whose inputs
- * the values no longer hold ends with no error, so an error always describes the values the form holds.
+ * After every action that leaves new values or new field checks, a check that is pending or shows an error and whose
+ * inputs the values no longer hold ends with no error, so an error always describes the values the form holds.
  *
  * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
  * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged
@@ -446,7 +446,7 @@ export const formReducer = <TValues extends Record<string, unknown>>(
 ): FormState<TValues> => {
   const reduced = reduce(state, action, initialValues);
   const next =
-    reduced.values === state.values && reduced.checks === state.checks
+    reduced.values === state.values && reduced.checks.fields === state.checks.fields
       ? reduced
       : withChecks(reduced, endOutdatedChecks(reduced.checks, reduced.values));
   if (
