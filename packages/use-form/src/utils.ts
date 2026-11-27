@@ -378,6 +378,32 @@ const isBranch = (value: unknown): value is Readonly<Record<string, unknown>> =>
   return !hidesContents(value) && Object.keys(value).length > 0;
 };
 
+/** The path of `key` inside the value at `path`, where `''` is the root. */
+const join = (path: FieldPath, key: string | number): FieldPath => (path ? `${path}.${key}` : `${key}`);
+
+/**
+ * Walks a value and every value inside it the form looks inside (see {@link isBranch}), calling `visit` at each path,
+ * outer paths first. A leaf is a value the form doesn't look inside, an empty branch, or a value met again inside
+ * itself, which is walked once.
+ *
+ * @param value - The value
+ * @param path - The value's path
+ * @param visit - Called with each path, and whether a leaf is there
+ */
+const walkPaths = (value: unknown, path: FieldPath, visit: (path: FieldPath, isLeaf: boolean) => void): void => {
+  // The values being walked, so a value that contains itself is walked once
+  const ancestors = new Set<object>();
+  const walk = (current: unknown, at: FieldPath): void => {
+    const entries = isBranch(current) && !ancestors.has(current) ? Object.entries(current) : [];
+    visit(at, entries.length === 0);
+    if (!isBranch(current) || entries.length === 0) return;
+    ancestors.add(current);
+    for (const [key, child] of entries) walk(child, join(at, key));
+    ancestors.delete(current);
+  };
+  walk(value, path);
+};
+
 /**
  * Recursively collects all field paths from a nested object structure.
  * Traverses the entire object tree and generates path strings for every field,
@@ -442,27 +468,10 @@ const isBranch = (value: unknown): value is Readonly<Record<string, unknown>> =>
  */
 export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   const paths: FieldPath[] = [];
-  // The values being walked, so a value that contains itself is listed once, where it repeats
-  const ancestors = new Set<object>();
-
-  const visit = (value: unknown, path: string) => {
+  // A value that contains itself is listed once, where it repeats
+  walkPaths(obj, prefix, (path) => {
     if (path) paths.push(path);
-
-    if (!isBranch(value) || ancestors.has(value)) return;
-    ancestors.add(value);
-
-    if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, path ? `${path}.${i}` : `${i}`));
-    } else {
-      for (const [k, v] of Object.entries(value)) {
-        visit(v, path ? `${path}.${k}` : k);
-      }
-    }
-
-    ancestors.delete(value);
-  };
-
-  visit(obj, prefix);
+  });
   return paths;
 };
 
@@ -506,13 +515,10 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
   return result as T;
 };
 
-/** The path of `key` inside the value at `path`, where `''` is the root. */
-const join = (path: FieldPath, key: string | number): FieldPath => (path ? `${path}.${key}` : `${key}`);
-
 /**
- * The path of each leaf inside a value: each value the form doesn't look inside (see {@link isBranch}), and each
- * empty branch. A value that is itself a leaf or an empty branch is the one leaf, at `path`. A value met again inside
- * itself is a leaf where it repeats, so it is walked once.
+ * The path of each leaf inside a value ({@link walkPaths}): each value the form doesn't look inside (see
+ * {@link isBranch}), and each empty branch. A value that is itself a leaf or an empty branch is the one leaf, at
+ * `path`. A value met again inside itself is a leaf where it repeats, so it is walked once.
  *
  * @param value - The value
  * @param path - The value's path
@@ -520,19 +526,9 @@ const join = (path: FieldPath, key: string | number): FieldPath => (path ? `${pa
  */
 const leavesOf = (value: unknown, path: FieldPath): FieldPath[] => {
   const leaves: FieldPath[] = [];
-  // The values being walked, so a value that contains itself is walked once
-  const ancestors = new Set<object>();
-  const visit = (current: unknown, at: FieldPath): void => {
-    const entries = isBranch(current) && !ancestors.has(current) ? Object.entries(current) : [];
-    if (!isBranch(current) || entries.length === 0) {
-      leaves.push(at);
-      return;
-    }
-    ancestors.add(current);
-    for (const [key, child] of entries) visit(child, join(at, key));
-    ancestors.delete(current);
-  };
-  visit(value, path);
+  walkPaths(value, path, (at, isLeaf) => {
+    if (isLeaf) leaves.push(at);
+  });
   return leaves;
 };
 
