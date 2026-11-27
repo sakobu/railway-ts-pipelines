@@ -564,12 +564,12 @@ describe('a follow re-checks as an edit does', () => {
       { initialProps: { initial: draft } },
     );
 
-  test('a check the follow cut short re-runs while its value holds', async () => {
+  test('a check waiting through a follow that left its value as it was runs once, on that value', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const checkTitle = mock((_value: string) => undefined);
     const { result, rerender } = renderBlurForm(checkTitle, gated);
 
-    // title's check waits on the schema when the follow, which leaves title as it was, ends it
+    // title's check waits on the schema through the follow, which leaves title as it was
     act(() => result.current.setFieldTouched('title'));
     rerender({ initial: { ...draft, status: 'published' } });
     await act(async () => {
@@ -580,6 +580,27 @@ describe('a follow re-checks as an edit does', () => {
 
     expect(checkTitle).toHaveBeenCalledTimes(1);
     expect(checkTitle).toHaveBeenCalledWith('Hello');
+  });
+
+  test('a check running through a follow that left its value as it was keeps running, and its answer lands', async () => {
+    const { calls, gate } = createGatedFieldValidator();
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: PublishForm }) =>
+        useForm(publishValidator, { initialValues: initial, validationMode: 'blur', fieldValidators: { title: gate } }),
+      { initialProps: { initial: draft } },
+    );
+    act(() => result.current.setFieldTouched('title'));
+
+    rerender({ initial: { ...draft, status: 'published' } });
+    expect(result.current.validatingFields).toEqual({ title: true });
+    expect(result.current.isValidating).toBe(true);
+    await act(async () => {
+      calls[0]!.resolve('Taken');
+      await nextTask();
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
   });
 
   test('outside live mode, a check of a value the follow changed ends without running, as an edit leaves it', async () => {
@@ -642,6 +663,27 @@ describe('a follow re-checks as an edit does', () => {
 
     expect(checkTitle).toHaveBeenCalledTimes(1);
     expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+  });
+
+  test('in live mode, a follow that adds or removes a key holding undefined re-checks its validator, as an edit does', () => {
+    const profileSchema = S.object({ name: S.required(S.string()), nickname: S.optional(S.string()) });
+    const ann: S.InferSchemaType<typeof profileSchema> = { name: 'Ann' };
+    const checkNickname = mock((_value: string | undefined) => undefined);
+    const { rerender } = renderHook(
+      ({ initial }: { initial: typeof ann }) =>
+        useForm(profileSchema, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { nickname: checkNickname },
+        }),
+      { initialProps: { initial: ann } },
+    );
+
+    rerender({ initial: { name: 'Ann', nickname: undefined } });
+    expect(checkNickname.mock.calls).toEqual([[undefined]]);
+
+    rerender({ initial: { name: 'Ann' } });
+    expect(checkNickname.mock.calls).toEqual([[undefined], [undefined]]);
   });
 
   test('shouldValidate: true on an edit that makes the form follow checks the field too', () => {
@@ -715,7 +757,7 @@ describe('a follow re-checks as an edit does', () => {
       expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
     });
 
-    test("a check the follow cut short doesn't re-run once that edit changed its inputs", () => {
+    test("a check the follow left running ends once that edit changes its inputs, and doesn't run again", () => {
       const { gate } = createGatedFieldValidator();
       const checkTitle = mock((_title: string) => gate());
       const { result } = renderHook(() => {
@@ -732,7 +774,7 @@ describe('a follow re-checks as an edit does', () => {
           },
         });
       });
-      // The blur's check of title runs, and stays pending until the follow cuts it short
+      // The blur's check of title runs, and stays pending through the follow, which leaves title as it was
       act(() => result.current.setFieldTouched('title'));
       expect(checkTitle).toHaveBeenCalledTimes(1);
 
@@ -936,10 +978,10 @@ describe('a follow re-checks as an edit does', () => {
       return { checkTitle, latest, show, settle };
     };
 
-    test('a check the first of them cut short re-runs once the form shows again, while its value holds', async () => {
+    test('a check waiting through them, which leave its value as it was, runs once, on that value', async () => {
       const hidden = renderBlurInActivity();
       const tagged: PublishForm = { ...draft, status: 'published', tags: ['a'] };
-      // title's check waits on the blur's schema check when the first follow, which leaves title as it was, ends it
+      // title's check waits on the blur's schema check through the follows, which leave title as it was
       act(() => hidden.latest.form?.setFieldTouched('title'));
       hidden.show('hidden', draft);
       hidden.show('hidden', { ...draft, status: 'published' });
@@ -951,7 +993,7 @@ describe('a follow re-checks as an edit does', () => {
       expect(hidden.checkTitle.mock.calls).toEqual([['Hello']]);
     });
 
-    test('a field two of them cut short re-runs by the later check, as it does while the form shows', async () => {
+    test("checks of values they changed end and don't run, as while the form shows", async () => {
       const hidden = renderBlurInActivity();
       // title's check of the draft's title waits on the blur's schema check, and the follow to titled ends it
       act(() => hidden.latest.form?.setFieldTouched('title'));

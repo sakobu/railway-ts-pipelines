@@ -1193,22 +1193,23 @@ describe('checks', () => {
     expect(done.checks.fields['r1.0']).toEqual({ id: 1, status: 'done', inputs: { 'r1.0': undefined }, error: 'Bad' });
   });
 
-  test('a follow ends pending checks, keeps their errors and clears the schema check', () => {
+  test('a follow keeps the schema check and each check whose inputs it left as they were, as an edit does', () => {
     const running = apply(
       start,
-      on('name'),
+      on('name', 'email'),
       { type: 'START_FIELD_CHECK', field: 'name', id: 1, status: 'running', inputs: { name: 'John' } },
       { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: { error: 'Bad' } },
       { type: 'START_FIELD_CHECK', field: 'name', id: 2, status: 'running', inputs: { name: 'John' } },
-      { type: 'START_SCHEMA_CHECK', id: 3 },
+      { type: 'START_FIELD_CHECK', field: 'email', id: 3, status: 'waiting', inputs: { email: v1.email } },
+      { type: 'START_SCHEMA_CHECK', id: 4 },
     );
-    expect(running.checks.fields.name?.status).toBe('running');
-    expect(running.checks.schema).toBe(3);
 
+    // v2 changes the email only
     const followed = formReducer(running, sync(v2), v1);
 
-    expect(followed.checks.fields.name).toEqual({ id: 2, status: 'done', inputs: { name: 'John' }, error: 'Bad' });
-    expect(followed.checks.schema).toBeUndefined();
+    expect(followed.checks.fields.name).toBe(running.checks.fields.name);
+    expect(followed.checks.fields.email).toEqual({ id: 3, status: 'done', inputs: { email: v1.email } });
+    expect(followed.checks.schema).toBe(4);
   });
 
   const busy = apply(

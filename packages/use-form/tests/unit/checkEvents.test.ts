@@ -74,19 +74,18 @@ test('a call made from inside the pass is an event of its own', () => {
   expect(inner).toHaveBeenCalledTimes(1);
 });
 
-test('a check records the paths, the named fields and the validator keys it reaches', () => {
+test('a check records the paths and the named fields it reaches, joined with the other checks', () => {
   const events = createCheckEvents(() => {});
   const pass = mock((_record: EventRecord) => {});
 
   events.run((requests) => {
     requests.check({ paths: ['a'], named: ['b'] });
-    requests.check({ validators: ['x', 'y'] });
+    requests.check({ paths: ['a', 'c'] });
   }, pass);
 
   const record = pass.mock.calls[0]![0];
-  expect([...record.paths]).toEqual(['a']);
+  expect([...record.paths]).toEqual(['a', 'c']);
   expect([...record.named]).toEqual(['b']);
-  expect([...record.validators]).toEqual(['x', 'y']);
 });
 
 test('an event with no caller runs at once when none is running, and reports its throw', () => {

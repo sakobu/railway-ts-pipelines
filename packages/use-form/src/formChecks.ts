@@ -172,16 +172,6 @@ export const endFieldCheck = (
   return { ...checks, fields: { ...checks.fields, [key]: ended } };
 };
 
-/** Ends every check that is still pending, keeping the errors shown, and clears the schema check. */
-export const endPendingChecks = (checks: ChecksState): ChecksState => {
-  const ended: [FieldPath, FieldCheck][] = [];
-  for (const [key, check] of Object.entries(checks.fields)) {
-    if (check.status !== 'done') ended.push([key, { ...check, status: 'done' }]);
-  }
-  if (ended.length === 0 && checks.schema === undefined) return checks;
-  return { ...checks, schema: undefined, fields: withEntries(checks.fields, ended) };
-};
-
 /** The errors to show, by field. */
 export const fieldErrorsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): Readonly<Record<FieldPath, string>> => {
   const errors: [FieldPath, string][] = [];
@@ -242,49 +232,13 @@ export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): 
   Object.values(fields).some((check) => check.error !== undefined);
 
 /** A follow that asks for no check. */
-export const NO_FOLLOW_CHECKS: FollowChecks = Object.freeze({
-  check: false,
-  validators: new Set<FieldPath>(),
-  cutShort: EMPTY,
-});
+export const NO_FOLLOW_CHECKS: FollowChecks = Object.freeze({ check: false, paths: new Set<FieldPath>() });
 
 /**
- * The inputs of each check pending in `fields`, by field: those a follow cuts short, since it ends every pending check
- * before it answers.
- */
-export const pendingInputsOf = (
-  fields: Readonly<Record<FieldPath, FieldCheck>>,
-): Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>> =>
-  withEntries(
-    EMPTY,
-    Object.entries(fields).flatMap(([key, check]): [FieldPath, Readonly<Record<FieldPath, unknown>>][] =>
-      check.status === 'done' ? [] : [[key, check.inputs]],
-    ),
-  );
-
-/**
- * The fields of the checks a follow cut short whose inputs `values` hold: the verdict each was asked for still
- * applies to them.
- *
- * @param cutShort - The inputs of each check the follow cut short, by field ({@link pendingInputsOf})
- * @param values - The values the follow's event checks
- */
-export const fieldsCutShort = (
-  cutShort: Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>>,
-  values: Record<string, unknown>,
-): FieldPath[] =>
-  Object.entries(cutShort)
-    .filter(([, inputs]) => inputsHeld(inputs, values))
-    .map(([key]) => key);
-
-/**
- * The checks of two follows, the earlier first, as one: a check when either asks for one, every validator either
- * re-checks, and each check either cut short. A field both cut short keeps the later one's inputs: the check the later
- * follow cut short started after the earlier follow, which had ended every check pending then, so it is the field's
- * newest, and a newer check of a field replaces the older one.
+ * The checks of two follows as one: a check when either asks for one, reaching every path either changed. So a value
+ * one changed and the other put back is checked again, as it is after two edits.
  */
 export const mergeFollowChecks = (earlier: FollowChecks, later: FollowChecks): FollowChecks => ({
   check: earlier.check || later.check,
-  validators: new Set([...earlier.validators, ...later.validators]),
-  cutShort: withEntries(earlier.cutShort, Object.entries(later.cutShort)),
+  paths: new Set([...earlier.paths, ...later.paths]),
 });

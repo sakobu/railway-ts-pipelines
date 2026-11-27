@@ -169,7 +169,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
   /**
    * Increments on each follow, `RESET_FORM` and `resetKey` reset. `SUBMIT_SUCCEEDED` lands only in the epoch its
    * submission started in, and a submission registers its field checks only while the values it submitted are still
-   * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
+   * the baseline. Checks don't need it: a reset ends them in `checks`, and the reducer ends those whose inputs a follow
+   * changed, as it does after an edit.
    */
   baselineEpoch: number;
 
@@ -249,16 +250,17 @@ export type ChecksState = {
 
 /**
  * What a follow of new `initialValues` asks its event to check, taken from the states before and right after it as it
- * happens, so the choice comes from what that follow changed and cut short. Several follows merge into one, whose size
- * is the form's, not their number.
+ * happens, so the choice comes from what that follow changed. Several follows merge into one, whose size is the
+ * form's, not their number.
  */
 export type FollowChecks = {
   /** Whether it asks for a check: as the mode calls for, or since the form validated, showed errors or was checking */
   readonly check: boolean;
-  /** The validators it re-checks: in `live` mode, each one whose inputs it changed */
-  readonly validators: ReadonlySet<FieldPath>;
-  /** The inputs of each check it cut short, by field: one re-runs while the values its event checks hold them */
-  readonly cutShort: Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>>;
+  /**
+   * The paths whose value it changed (`changedPaths`), whose validators it re-checks as an edit does: in `live` mode
+   * only, so none otherwise
+   */
+  readonly paths: ReadonlySet<FieldPath>;
 };
 
 /** What a field validator answers: an error message, or `undefined` when the value passes. */
@@ -491,9 +493,9 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * `setFieldValue`, `setValues` or `setFieldTouched` checks in any mode.
    *
    * A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator
-   * whose field or listed field it changed, even one that passed, and in every mode a check it cut short runs again
-   * while its values hold. So a refetch can send lookups: a check like "username taken" that should accept the
-   * record's own value lists the record's id with `withDeps`.
+   * whose field or listed field it changed, even one that passed, and in every mode a check whose values it left as
+   * they were keeps running and lands. So a refetch can send lookups: a check like "username taken" that should
+   * accept the record's own value lists the record's id with `withDeps`.
    *
    * The schema gate holds a validator back, with no error, while a schema error overlaps its field or any field it
    * lists: one at, inside or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on

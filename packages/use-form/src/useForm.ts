@@ -35,11 +35,9 @@ import {
 import {
   NO_FOLLOW_CHECKS,
   fieldErrorsOf,
-  fieldsCutShort,
   fieldsReadBy,
   inputsHeld,
   mergeFollowChecks,
-  pendingInputsOf,
   validatingFieldsOf,
   validatorPeriod,
   waitingFieldCheck,
@@ -752,7 +750,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * When its end lands, `onLanded` gets its id, its outcome and the values the form held when it started. It lands
    * when the check was still current as its end was written, and `write` applied that end: not once a newer schema
-   * check, a follow or a reset replaced it, nor once `write` dropped the end after a `resetKey` switch.
+   * check or a reset replaced it, nor once `write` dropped the end after a `resetKey` switch.
    */
   const checkSchema = useCallback(
     (
@@ -914,8 +912,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * - When the validator is async, returns `Promise<Result<TValues, ValidationError[]>>`.
    *
    * Each call starts a schema check in the form state, which replaces the schema checks before it, even when it
-   * finishes at once. Its errors land only while it is still the current check: a newer schema check, a follow of new
-   * `initialValues` or a reset ends it first, and drops its result. They land only at the paths where `values` match
+   * finishes at once. Its errors land only while it is still the current check: a newer schema check or a reset ends
+   * it first, and drops its result. They land only at the paths where `values` match
    * the values the form holds then; the returned result holds them all. When they land and it checked the values the
    * form held when it started, every field check that started before it and still waits on a schema result moves on
    * with this one's.
@@ -950,9 +948,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * until the schema accepts them, and otherwise it runs the field's validator from the latest commit and ends with its
    * answer.
    *
-   * The check replaces the field's checks before it as soon as it starts. A newer check of the field, a follow, a
-   * reset or switching the validator off ends it in the form state, and its result no longer lands. While it runs,
-   * the field keeps the error it showed only if the check's inputs are unchanged.
+   * The check replaces the field's checks before it as soon as it starts. A newer check of the field, an edit or a
+   * follow that changes its inputs, a reset or switching the validator off ends it in the form state, and its result
+   * no longer lands. While it runs, the field keeps the error it showed only if the check's inputs are unchanged.
    *
    * After a sync schema result, a validator that throws ends the check, keeping the error shown, and the throw reaches
    * the continuation's caller. After an async one, the validator runs once the caller has returned, so a throw from it
@@ -997,9 +995,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * The check pass: once an event's outermost call returns, it checks what the event recorded, on the values the form
    * holds then. It's the only place that starts a check nothing awaits.
    *
-   * 1. The validators it checks are every one a recorded path reaches, through an input path overlapping it, every one
-   *    whose input path is a named field or contains it, and the validators a follow recorded that are still on. Each
-   *    is checked once.
+   * 1. The validators it checks are every one a recorded path reaches, through an input path overlapping it, and every
+   *    one whose input path is a named field or contains it. Each is checked once.
    * 2. It takes the schema check's id, starts a waiting check per validator, runs the schema once, then continues each
    *    one. So each start replaces its field's older waiting check before the landing could move that one on, and the
    *    landing, even at once, leaves the new checks to their continuations.
@@ -1017,8 +1014,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const named = [...record.named];
       const reaches = (input: FieldPath): boolean =>
         overlapsAny(input, paths) || named.some((field) => isPathAffected(field, input));
-      const validators = Array.from(fieldValidatorsRef.current).filter(
-        ([key, validator]) => record.validators.has(key) || validator.inputs.some(reaches),
+      const validators = Array.from(fieldValidatorsRef.current).filter(([, validator]) =>
+        validator.inputs.some(reaches),
       );
 
       // The first throw of the pass, the schema's landing included, reaches the caller, and each later one is logged,
@@ -1121,18 +1118,15 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   /**
    * What a follow asks its event to check, taken from the state before it and the state right after it as it happens,
-   * so the choice comes from what that follow changed and cut short: a later edit isn't the follow's, whether the call
-   * the follow happened in made it, or a layout effect of its commit, a child's included. A follow changes the values
-   * as an edit does: the reducer has already dropped every field error whose inputs it changed, and the schema and
-   * server errors at the paths it changed.
+   * so the choice comes from what that follow changed: a later edit isn't the follow's, whether the call the follow
+   * happened in made it, or a layout effect of its commit, a child's included. A follow changes the values as an edit
+   * does: the reducer has already ended every field check and dropped every field error whose inputs it changed, and
+   * the schema and server errors at the paths it changed. A check whose inputs it left as they were keeps running.
    *
    * It asks for a schema check when the mode calls for it, when the form has validated before (a blurred field in
    * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. A mode that wouldn't
-   * have validated yet still doesn't. The check re-runs two kinds of field validator:
-   *
-   * - in `live` mode, each one whose inputs the follow changed, as an edit of them would
-   * - in any mode, each one whose check the follow cut short, while its inputs still hold when the event runs
-   *   ({@link recordFollow}), since the verdict it was asked for still applies
+   * have validated yet still doesn't. In `live` mode the check reaches each path the follow changed
+   * ({@link changedPaths}), so it re-runs the validators whose inputs it changed, as an edit of them would.
    *
    * @param prev - The state before the follow
    * @param after - The state right after the follow
@@ -1149,12 +1143,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         !isValidState(prev) ||
         isValidatingState(prev);
       if (!check) return NO_FOLLOW_CHECKS;
-      const changed = validateOnChange
-        ? Array.from(fieldValidatorsRef.current)
-            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), after.values))
-            .map(([key]) => key)
-        : [];
-      return { check, validators: new Set(changed), cutShort: pendingInputsOf(prev.checks.fields) };
+      return { check, paths: new Set(validateOnChange ? changedPaths(prev.values, after.values) : []) };
     },
     [validateOnChange, validateOnBlur, validateOnMount],
   );
@@ -1168,21 +1157,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
    * `onFieldChange`), once that call's event has ended, its pass included. A commit made while the form is hidden in
    * an `<Activity>` runs no layout effect, so the follows made while it's hidden run once it shows again, merged into
-   * one. The checks run on the values the form holds then, and a check a follow cut short re-runs only while its
-   * inputs still hold in them.
+   * one. The checks run on the values the form holds then.
    *
    * @param requests - The event's requests
    * @param follow - What the follow asks to check
    */
   const recordFollow = useCallback(
     (requests: EventRequests, follow: FollowChecks): void => {
-      if (follow.check) {
-        const { values } = store.getState();
-        requests.check({ validators: [...follow.validators, ...fieldsCutShort(follow.cutShort, values)] });
-      }
+      if (follow.check) requests.check({ paths: follow.paths });
       if (validateOnMount) recordMountCheck(requests);
     },
-    [store, recordMountCheck, validateOnMount],
+    [recordMountCheck, validateOnMount],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
@@ -1198,10 +1183,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
-  // here: the syncs, and on a resetKey reset, the switch to a fresh submit scheduler. In the render's order, field
-  // validators first, so the state a follow starts from already holds this commit's switch-offs: the follow doesn't
-  // re-check a field whose validator just went off. Quietly, since an insertion effect mustn't schedule a render: the
-  // layout effect that flushes the store (State Store, above) notifies.
+  // here: the syncs, in the render's order, field validators first, and on a resetKey reset, the switch to a fresh
+  // submit scheduler. Quietly, since an insertion effect mustn't schedule a render: the layout effect that flushes the
+  // store (State Store, above) notifies.
   useInsertionEffect(() => {
     fieldValidatorsRef.current = byPath;
     store.dispatchQuietly({ type: 'SYNC_FIELD_VALIDATORS', fields: onFields });

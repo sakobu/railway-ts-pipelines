@@ -2849,6 +2849,45 @@ describe('useForm', () => {
         expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
       });
 
+      test("after a follow, even one that left the failed check's field as it was, whose error then shows", async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result, rerender } = renderHook(
+          ({ values }: { values: PublishForm }) =>
+            useForm(publishValidator, {
+              initialValues: values,
+              validationMode: 'blur',
+              fieldValidators: { title: gate },
+            }),
+          { initialProps: { values: draft } },
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          await nextTask();
+        });
+        // A refetch the form follows, since it has no edits. It leaves title as it was, so title's check keeps running.
+        rerender({ values: { ...draft, status: 'published' } });
+        expect(result.current.validatingFields).toEqual({ title: true });
+        let outcome: Awaited<typeof submitting> | undefined;
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          outcome = await submitting;
+        });
+
+        expect(calls).toHaveLength(1);
+        expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(outcome).toEqual(
+          err([
+            { path: ['title'], message: 'Taken' },
+            { path: [], message: CHANGED_WHILE_CHECKING },
+          ]),
+        );
+      });
+
       test('with auto-save on, while the form is stale, so auto-save waits', async () => {
         const { calls, gate } = createGatedFieldValidator();
         const { result, rerender } = renderHook(

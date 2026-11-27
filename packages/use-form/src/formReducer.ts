@@ -4,7 +4,6 @@ import {
   NO_CHECKS,
   endFieldCheck,
   endOutdatedChecks,
-  endPendingChecks,
   endSchemaCheck,
   hasFieldError,
   hasPendingFieldCheck,
@@ -95,7 +94,10 @@ const settleOnLatest = <TValues extends Record<string, unknown>>(state: FormStat
   return { ...rest, cleanValues: state.lastVersion, baseVersion: state.lastVersion, isStale: false };
 };
 
-/** Shows `version`, and treats it as clean and as the base of any later edits. */
+/**
+ * Shows `version`, and treats it as clean and as the base of any later edits. Its checks stay, as through an edit:
+ * {@link formReducer} ends those whose inputs it changed, and the others still land.
+ */
 const followVersion = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   version: TValues,
@@ -109,7 +111,6 @@ const followVersion = <TValues extends Record<string, unknown>>(
     cleanValues: version,
     baseVersion: version,
     isStale: false,
-    checks: endPendingChecks(state.checks),
     baselineEpoch: state.baselineEpoch + 1,
   };
 };

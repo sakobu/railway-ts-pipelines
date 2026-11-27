@@ -8,12 +8,10 @@ import type { FieldPath } from './types';
 
 /** What a check reaches: the field validators it re-checks, beside the schema check every request asks for. */
 export type CheckReach = {
-  /** Paths an edit changed, or blurred fields: each reaches every validator with an input path overlapping it. */
+  /** Paths an edit or a follow changed, or blurred fields: each reaches every validator with an input path over it. */
   readonly paths?: Iterable<FieldPath>;
   /** Fields an edit named: each reaches every validator whose input path is it or contains it, changed or not. */
   readonly named?: Iterable<FieldPath>;
-  /** Validator keys to re-check, as a follow asks for. */
-  readonly validators?: Iterable<FieldPath>;
 };
 
 /** What a call can ask its event to check. Every request includes a schema check, so none can lose its check. */
@@ -21,8 +19,7 @@ export type EventRequests = {
   /**
    * Asks for a schema check, and for every field validator the reach covers.
    *
-   * @param reach - The paths, named fields and validator keys it reaches, normalized. None asks for the schema check
-   *   only.
+   * @param reach - The paths and named fields it reaches, normalized. None asks for the schema check only.
    */
   check: (reach?: CheckReach) => void;
 };
@@ -36,8 +33,6 @@ export type EventRecord = {
   readonly paths: ReadonlySet<FieldPath>;
   /** Fields an edit named, normalized: each reaches every validator whose input path is it or contains it */
   readonly named: ReadonlySet<FieldPath>;
-  /** Validator keys to re-check, as a follow asks for */
-  readonly validators: ReadonlySet<FieldPath>;
 };
 
 /** The events of one form. */
@@ -103,15 +98,14 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
 
   // Runs `body` as an event of its own, then its pass
   const runAlone = (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void): void => {
-    const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
+    const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>() };
     // Whether any request was made, so the pass runs
     let requested = false;
     const requests: EventRequests = {
-      check: ({ paths = [], named = [], validators = [] } = {}) => {
+      check: ({ paths = [], named = [] } = {}) => {
         requested = true;
         for (const path of paths) record.paths.add(path);
         for (const field of named) record.named.add(field);
-        for (const key of validators) record.validators.add(key);
       },
     };
     running = requests;

@@ -5,10 +5,8 @@ import {
   NO_FOLLOW_CHECKS,
   endFieldCheck,
   endOutdatedChecks,
-  endPendingChecks,
   endSchemaCheck,
   fieldErrorsOf,
-  fieldsCutShort,
   fieldsReadBy,
   gatedFieldChecksOf,
   hasFieldError,
@@ -16,7 +14,6 @@ import {
   inputsHeld,
   markFieldCheckRunning,
   mergeFollowChecks,
-  pendingInputsOf,
   startFieldCheck,
   startOver,
   startSchemaCheck,
@@ -159,53 +156,22 @@ test('the newest schema check wins, and ending it clears it', () => {
   expect(endSchemaCheck(second, 2).schema).toBeUndefined();
   expect(startSchemaCheck(second, 1)).toBe(second);
 });
-test('endPendingChecks ends pending checks, keeps their errors, and clears the schema check', () => {
-  const pending = startSchemaCheck(startFieldCheck(failed, 'name', 2, 'running', { name: 'x' }), 3);
-  const ended = endPendingChecks(pending);
-  expect(ended.schema).toBeUndefined();
-  expect(ended.fields.name).toMatchObject({ id: 2, status: 'done', error: 'Taken' });
-  expect(endPendingChecks(ended)).toBe(ended);
-});
 test('startOver clears every check and keeps the validators', () => {
   const over = startOver(startSchemaCheck(failed, 2));
   expect(over.schema).toBeUndefined();
   expect(over.fields).toEqual({});
   expect(over.validators).toBe(failed.validators);
 });
-test('a follow cuts short the pending checks, and re-runs those whose inputs the values hold', () => {
-  let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c', 'd'));
-  // a waits on the schema
-  checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 1 });
-  // b runs
-  checks = startFieldCheck(checks, 'b', 2, 'running', { b: 1 });
-  // c is done, with no error
-  checks = startFieldCheck(checks, 'c', 3, 'running', { c: 1 });
-  checks = endFieldCheck(checks, 'c', 3, { error: undefined });
-  // d runs on a value the values no longer hold
-  checks = startFieldCheck(checks, 'd', 4, 'running', { d: 1 });
-  const cutShort = pendingInputsOf(checks.fields);
-  expect(cutShort).toEqual({ a: { a: 1 }, b: { b: 1 }, d: { d: 1 } });
-  expect(fieldsCutShort(cutShort, { a: 1, b: 1, c: 1, d: 2 }).sort()).toEqual(['a', 'b']);
-  // An error shown, with no check pending, isn't cut short
-  expect(pendingInputsOf(failed.fields)).toEqual({});
-});
-test('merged follows check if either does, re-check what either does, and keep the later cut-short check', () => {
-  const merged = mergeFollowChecks(
-    { check: true, validators: on('a'), cutShort: { a: { a: 1 }, b: { b: 1 } } },
-    { check: false, validators: on('b'), cutShort: { a: { a: 2 } } },
-  );
+test('merged follows check if either does, and reach every path either changed', () => {
+  const merged = mergeFollowChecks({ check: true, paths: on('a') }, { check: false, paths: on('a', 'b') });
   expect(merged.check).toBe(true);
-  expect([...merged.validators].sort()).toEqual(['a', 'b']);
-  expect(merged.cutShort).toEqual({ a: { a: 2 }, b: { b: 1 } });
+  expect([...merged.paths].sort()).toEqual(['a', 'b']);
   expect(mergeFollowChecks(NO_FOLLOW_CHECKS, NO_FOLLOW_CHECKS).check).toBe(false);
 });
-test('many merged follows keep one entry per validator and field, however many there are', () => {
+test('many merged follows keep one entry per path, however many there are', () => {
   let merged = NO_FOLLOW_CHECKS;
-  for (let i = 0; i < 1000; i++) {
-    merged = mergeFollowChecks(merged, { check: true, validators: on('a', 'b'), cutShort: { a: { a: i } } });
-  }
-  expect(merged.validators.size).toBe(2);
-  expect(merged.cutShort).toEqual({ a: { a: 999 } });
+  for (let i = 0; i < 1000; i++) merged = mergeFollowChecks(merged, { check: true, paths: on('a', 'b') });
+  expect(merged.paths.size).toBe(2);
 });
 test('selectors share one empty object when there is nothing to show', () => {
   expect(fieldErrorsOf({})).toBe(fieldErrorsOf(withName.fields));
@@ -246,9 +212,6 @@ test('a __proto__ field keeps its own entry in every record its checks write', (
   ]);
   const running = markFieldCheckRunning(waiting, '__proto__', 1);
   expect(Object.entries(validatingFieldsOf(running.fields))).toEqual([['__proto__', true]]);
-  expect(Object.entries(endPendingChecks(running).fields)).toEqual([
-    ['__proto__', { id: 1, status: 'done', inputs: protoInputs }],
-  ]);
   const shown = endFieldCheck(running, '__proto__', 1, { error: 'Bad' });
   expect(Object.entries(fieldErrorsOf(shown.fields))).toEqual([['__proto__', 'Bad']]);
   const off = syncValidators(shown, on());
