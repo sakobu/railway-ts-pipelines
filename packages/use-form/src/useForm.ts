@@ -60,7 +60,6 @@ import {
   isPromiseLike,
   mapAnswer,
   normalizePath,
-  outdatedBy,
   overlapsAny,
   own,
   valuesAt,
@@ -364,8 +363,8 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
  * @param send - Dispatches the write, or drops it when the errors no longer belong to the form's state
  * @param errors - Server validation errors, each with a `path` and a `message`
  * @param describes - The values the errors describe, when the form may no longer hold them: an error at, inside or
- *   above a path where the form's values part from them doesn't land ({@link outdatedBy}). Without them, every error
- *   lands. The submit error isn't at a path, and lands either way.
+ *   above a path where the form's values part from them doesn't land (the reducer's error rule, `outdatedBy`).
+ *   Without them, every error lands. The submit error isn't at a path, and lands either way.
  */
 const placeErrorsWith = <TValues extends Record<string, unknown>>(
   send: (action: FormAction<TValues>) => void,
@@ -1046,7 +1045,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Runs `body` as an event, or as part of the event already running, and once the outermost call returns, checks what
    * the event asked for ({@link checkRecorded}). A sync throw from the check reaches the outermost call.
    *
-   * @param body - What the event asks to check, through its check requestCheck
+   * @param body - What the event asks to check, through its `requestCheck`
    */
   const runEvent = useCallback(
     (body: (requestCheck: RequestCheck) => void): void => events.run(body, checkRecorded),
@@ -1061,7 +1060,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * inside `onFieldChange` commits does, waits until the outermost call's event has ended, its pass included, then
    * runs as its own, after those that started before it. A sync throw is logged, since nothing could catch it.
    *
-   * @param body - What the event asks to check, through its check requestCheck
+   * @param body - What the event asks to check, through its `requestCheck`
    */
   const runUncalled = useCallback(
     (body: (requestCheck: RequestCheck) => void): void => events.runUncalled(body, checkRecorded),
@@ -1101,7 +1100,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * so the choice comes from what that follow changed: a later edit isn't the follow's, whether the call the follow
    * happened in made it, or a layout effect of its commit, a child's included. A follow changes the values as an edit
    * does: the reducer has already ended every field check and dropped every field error whose inputs it changed, and
-   * the schema and server errors at the paths it changed. A check whose inputs it left as they were keeps running.
+   * the schema errors at the paths it changed. A follow drops every server error. A check whose inputs it left as they
+   * were keeps running.
    *
    * It asks for a schema check when the mode calls for it, when the form has validated before (a blurred field in
    * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. A mode that wouldn't
@@ -1874,7 +1874,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Decides auto-save's next step for the values the store holds now, and takes it. Values that changed start a new
    * version and its delay. Values the form hasn't checked get one schema check per version, and another once a follow
-   * or reset ends that check, or a check of other values lands in its place. A throw or rejection from the schema
+   * or reset starts a new baseline, or a check of other values lands in its place. A throw or rejection from the schema
    * validator is logged. Otherwise, once nothing holds them, they're submitted through `handleSubmit`. Does nothing
    * while auto-save is off or unmounted.
    */
