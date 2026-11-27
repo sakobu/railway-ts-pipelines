@@ -212,13 +212,16 @@ export type CheckId = number;
  */
 export type PendingStatus = 'waiting' | 'running';
 
+/** The value at each of a check's input paths, keyed by normalized path, the validator's own field first. */
+export type CheckInputs = Readonly<Record<FieldPath, unknown>>;
+
 /** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
 export type FieldCheck = {
   id: CheckId;
   /** Pending, or done: it ended */
   status: PendingStatus | 'done';
-  /** The value at each of the check's input paths, keyed by normalized path, the validator's own field first */
-  inputs: Readonly<Record<FieldPath, unknown>>;
+  /** The values it checks */
+  inputs: CheckInputs;
   /** The error shown: once done, the validator's; while pending, the last one, while the inputs are unchanged */
   error?: string;
   /**
@@ -1338,8 +1341,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
       /** The status it starts in */
       status: PendingStatus;
-      /** The value at each of the check's input paths, keyed by normalized path */
-      inputs: Readonly<Record<FieldPath, unknown>>;
+      /** The values it checks */
+      inputs: CheckInputs;
     }
   | {
       /** Moves a field's waiting check to running */

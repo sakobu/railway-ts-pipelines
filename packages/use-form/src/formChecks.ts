@@ -2,6 +2,7 @@ import { deepEqual, getValueByPath, own } from './utils';
 
 import type {
   CheckId,
+  CheckInputs,
   ChecksState,
   FieldCheck,
   FieldCheckResult,
@@ -23,14 +24,14 @@ const withEntries = <T>(
   entries: readonly [FieldPath, T][],
 ): Readonly<Record<FieldPath, T>> => (entries.length === 0 ? record : { ...record, ...Object.fromEntries(entries) });
 
-/** Whether a check is pending, or shows an error. */
-const isPendingOrErroring = (check: FieldCheck): boolean => check.status !== 'done' || check.error !== undefined;
+/** Whether a check is pending: waiting on a schema result, or running. */
+const isPending = (check: FieldCheck): boolean => check.status !== 'done';
 
 /**
  * Whether a check's verdict on its inputs is still open or shows: it's pending, shows an error, or waits held back by
  * the schema gate. An edit of its inputs outdates such a check.
  */
-const isOpen = (check: FieldCheck): boolean => isPendingOrErroring(check) || check.gated === true;
+const isOpen = (check: FieldCheck): boolean => isPending(check) || check.error !== undefined || check.gated === true;
 
 /** The check ended with no error, keeping its id and inputs, and no longer held back. */
 const endedWithoutError = (check: FieldCheck): FieldCheck => ({ id: check.id, status: 'done', inputs: check.inputs });
@@ -101,7 +102,7 @@ export const startFieldCheck = (
   key: FieldPath,
   id: CheckId,
   status: PendingStatus,
-  inputs: Readonly<Record<FieldPath, unknown>>,
+  inputs: CheckInputs,
 ): ChecksState => {
   if (!own(checks.validators, key)?.on) return checks;
   const replaced = own(checks.fields, key);
@@ -112,7 +113,7 @@ export const startFieldCheck = (
 };
 
 /** Whether `values` hold every input a check recorded: each path's value deep-equals the recorded one. */
-export const inputsHeld = (inputs: Readonly<Record<FieldPath, unknown>>, values: Record<string, unknown>): boolean =>
+export const inputsHeld = (inputs: CheckInputs, values: Record<string, unknown>): boolean =>
   Object.entries(inputs).every(([path, value]) => deepEqual(getValueByPath(values, path), value));
 
 /**
@@ -130,7 +131,7 @@ export const endOutdatedChecks = (checks: ChecksState, values: Record<string, un
 /** The field's check `id`, while it is the field's latest check and has not ended. */
 const currentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
   const check = own(checks.fields, key);
-  return check?.id === id && check.status !== 'done' ? check : undefined;
+  return check?.id === id && isPending(check) ? check : undefined;
 };
 
 /**
@@ -214,18 +215,13 @@ export const waitingFieldChecksOf = (
     Object.entries(fields).filter(([, check]) => check.status === 'waiting' && check.id < before),
   );
 
-/** The checks the schema gate holds back, by field: those a landed schema check that accepts their inputs runs. */
-export const gatedFieldChecksOf = (
-  fields: Readonly<Record<FieldPath, FieldCheck>>,
-): Readonly<Record<FieldPath, FieldCheck>> =>
-  withEntries(
-    EMPTY,
-    Object.entries(fields).filter(([, check]) => check.gated === true),
-  );
+/** The fields whose check the schema gate holds back: those a landed schema check that accepts their inputs runs. */
+export const gatedFieldsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): FieldPath[] =>
+  Object.entries(fields).flatMap(([key, check]) => (check.gated === true ? [key] : []));
 
 /** Whether a field check is pending: waiting on a schema result, or running. */
 export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
-  Object.values(fields).some((check) => check.status !== 'done');
+  Object.values(fields).some(isPending);
 
 /** Whether any field check holds an error. */
 export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>

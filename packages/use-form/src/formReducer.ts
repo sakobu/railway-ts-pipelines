@@ -161,12 +161,6 @@ const withEdit = <TValues extends Record<string, unknown>>(
 const sharedWhenEmpty = (errors: Readonly<Record<FieldPath, string>>): Readonly<Record<FieldPath, string>> =>
   Object.keys(errors).length === 0 ? EMPTY : errors;
 
-/** Sets the client errors, as a current schema check's end does. */
-const withClientErrors = <TValues extends Record<string, unknown>>(
-  state: FormState<TValues>,
-  errors: Readonly<Record<FieldPath, string>>,
-): FormState<TValues> => ({ ...state, clientErrors: sharedWhenEmpty(normalizePathKeys(errors)) });
-
 /**
  * The errors that still describe the values once they changed: without each error the change outdates
  * ({@link outdatedBy}), and without a root error ({@link ROOT_ERROR_KEY}) once anything changed, since it describes
@@ -282,7 +276,7 @@ const reduce = <TValues extends Record<string, unknown>>(
       const { values, passed, errors } = action.answer;
       // Its errors describe the values it checked: those at the paths edited since it started no longer apply
       const landed = withoutOutdated(errors, outdatedBy(values, state.values));
-      return { ...withClientErrors(ended, landed), verdict: { values, passed } };
+      return { ...ended, clientErrors: sharedWhenEmpty(normalizePathKeys(landed)), verdict: { values, passed } };
     }
 
     case 'SUBMISSION_WENT_OUT':

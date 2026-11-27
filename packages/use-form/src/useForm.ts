@@ -41,7 +41,7 @@ import {
   validatingFieldsOf,
   validatorPeriod,
   waitingFieldCheck,
-  gatedFieldChecksOf,
+  gatedFieldsOf,
   waitingFieldChecksOf,
 } from './formChecks';
 import { createInitialFormState, formReducer, isValidState, isValidatingState } from './formReducer';
@@ -70,6 +70,7 @@ import { listsFields } from './withDeps';
 import type {
   ArrayHelpers,
   CheckId,
+  CheckInputs,
   DeepPartial,
   ExtractFieldPaths,
   FieldCheckResult,
@@ -133,7 +134,7 @@ type SchemaAnswer<TValues> = {
 type SchemaOutcome<TValues> = SchemaAnswer<TValues> | { values: TValues; result: undefined; errors: undefined };
 
 /** The errors of a submit's field checks that count, and the values the failed ones read, by normalized path. */
-type CheckedErrors = { errors: ValidationError[]; read: Readonly<Record<FieldPath, unknown>> };
+type CheckedErrors = { errors: ValidationError[]; read: CheckInputs };
 
 /** A plain `fieldValidators` function: it gets its field's value only, at a path the form only knows as a string. */
 type FieldValidatorFn = (value: unknown) => FieldValidatorAnswer;
@@ -235,10 +236,7 @@ const validatorsByPath = <TValues extends Record<string, unknown>>(
  * @param inputs - What the check recorded, keyed by normalized path
  * @returns Whether the gate holds the check back
  */
-const gateRejects = (
-  schemaErrors: Readonly<Record<FieldPath, string>>,
-  inputs: Readonly<Record<FieldPath, unknown>>,
-): boolean => {
+const gateRejects = (schemaErrors: Readonly<Record<FieldPath, string>>, inputs: CheckInputs): boolean => {
   const inputPaths = Object.keys(inputs);
   return Object.keys(schemaErrors).some(
     (errorPath) => errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, inputPaths),
@@ -252,7 +250,7 @@ const gateRejects = (
  * @param inputs - What the check recorded, keyed by normalized path
  * @returns Whether they're the same paths
  */
-const sameInputs = (paths: readonly FieldPath[], inputs: Readonly<Record<FieldPath, unknown>>): boolean =>
+const sameInputs = (paths: readonly FieldPath[], inputs: CheckInputs): boolean =>
   paths.length === Object.keys(inputs).length && paths.every((path) => Object.hasOwn(inputs, path));
 
 /**
@@ -325,18 +323,11 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   const runs = Array.from(validators, ([key, validator]) => ({
     key,
     validator,
+    inputs: valuesAt(values, validator.inputs),
     period: validatorPeriod(atStart, key),
   }));
   if (register) {
-    runs.forEach(({ key, validator }) =>
-      send({
-        type: 'START_FIELD_CHECK',
-        field: key,
-        id,
-        status: 'running',
-        inputs: valuesAt(values, validator.inputs),
-      }),
-    );
+    runs.forEach(({ key, inputs }) => send({ type: 'START_FIELD_CHECK', field: key, id, status: 'running', inputs }));
   }
 
   // Each runs in a promise, so a throw becomes a rejection: every check ends and is waited for, whatever the others do
@@ -360,7 +351,7 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   const errors: ValidationError[] = [];
   const read: [FieldPath, unknown][] = [];
   let failed: PromiseRejectedResult | undefined;
-  for (const [index, { key, validator, period }] of runs.entries()) {
+  for (const [index, { key, inputs, period }] of runs.entries()) {
     const outcome = settled[index]!;
     if (now === generation && validatorPeriod(checks, key) !== period) {
       // It counts as never run, so nothing else sees its throw or rejection: logged, as a live check's is
@@ -369,7 +360,7 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
       failed ??= outcome;
     } else if (outcome.value !== undefined) {
       errors.push({ path: [key], message: outcome.value });
-      read.push(...Object.entries(valuesAt(values, validator.inputs)));
+      read.push(...Object.entries(inputs));
     }
   }
   // Thrown once the pass is over, so every check that doesn't count has been logged
@@ -874,8 +865,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const waiting = Object.entries(waitingFieldChecksOf(checks.fields, id));
       const { errors } = outcome;
       // The held-back checks it runs, by field, each with what its validator reads now, so a list changed since counts
-      const released: [FieldPath, Readonly<Record<FieldPath, unknown>>][] = [];
-      const gated = Object.keys(gatedFieldChecksOf(checks.fields));
+      const released: [FieldPath, CheckInputs][] = [];
+      const gated = gatedFieldsOf(checks.fields);
       if (errors && gated.length > 0 && deepEqual(values, outcome.values)) {
         for (const key of gated) {
           const validator = fieldValidatorsRef.current.get(key);
@@ -1597,7 +1588,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         // none of it, nor while auto-save can save the changed values on its own: on, and the form not stale.
         const failedCheck = (
           errors: ValidationError[],
-          read: Readonly<Record<FieldPath, unknown>> | undefined,
+          read: CheckInputs | undefined,
         ): Result<TResult, ValidationError[]> => {
           const now = store.getState();
           const holds = isBaseline() && (read ? inputsHeld(read, now.values) : deepEqual(now.values, values));
