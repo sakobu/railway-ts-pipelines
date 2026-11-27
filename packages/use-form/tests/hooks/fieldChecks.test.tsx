@@ -881,21 +881,18 @@ describe('a follow re-checks as an edit does', () => {
 
     type Shown = { mode: 'visible' | 'hidden'; initial: PublishForm; resetKey: string };
 
-    /**
-     * A live form inside an `<Activity>`, on the version and resetKey `show` gives, whose validators are mocks: title's
-     * answers as `answerTitle` does.
-     */
-    const renderInActivity = (answerTitle: (title: string) => string | undefined = () => undefined) => {
-      const checkTitle = mock(answerTitle);
-      const checkStatus = mock((_status: string) => undefined);
+    /** A form inside an `<Activity>`, on the version and resetKey `show` gives. */
+    const renderShown = (
+      validator: S.MaybeAsyncValidator<unknown, PublishForm>,
+      validationMode: 'live' | 'blur',
+      fieldValidators: {
+        title?: (title: string) => string | undefined;
+        status?: (status: string) => string | undefined;
+      },
+    ) => {
       const latest: { form?: UseFormReturn<PublishForm> } = {};
       const Probe = ({ initial, resetKey }: Omit<Shown, 'mode'>) => {
-        latest.form = useForm(publishValidator, {
-          initialValues: initial,
-          resetKey,
-          validationMode: 'live',
-          fieldValidators: { title: checkTitle, status: checkStatus },
-        });
+        latest.form = useForm(validator, { initialValues: initial, resetKey, validationMode, fieldValidators });
         return null;
       };
       const View = ({ mode, ...props }: Shown) => (
@@ -906,7 +903,32 @@ describe('a follow re-checks as an edit does', () => {
       const { rerender } = render(<View mode="visible" initial={draft} resetKey="a" />);
       const show = (mode: Shown['mode'], initial: PublishForm, resetKey = 'a') =>
         rerender(<View mode={mode} initial={initial} resetKey={resetKey} />);
-      return { checkTitle, checkStatus, show, latest };
+      return { show, latest };
+    };
+
+    /** A live form inside an `<Activity>` ({@link renderShown}) whose validators are mocks: title's answers as `answerTitle` does. */
+    const renderInActivity = (answerTitle: (title: string) => string | undefined = () => undefined) => {
+      const checkTitle = mock(answerTitle);
+      const checkStatus = mock((_status: string) => undefined);
+      return {
+        checkTitle,
+        checkStatus,
+        ...renderShown(publishValidator, 'live', { title: checkTitle, status: checkStatus }),
+      };
+    };
+
+    /** A blur-mode form inside an `<Activity>` ({@link renderShown}), on a schema gated per call, whose title validator is a mock. */
+    const renderBlurInActivity = () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const checkTitle = mock((_title: string) => undefined);
+      /** Settles every schema check so far, so the field checks still waiting on one run. */
+      const settle = async (values: PublishForm) => {
+        await act(async () => {
+          for (const check of pending) check.resolve(ok(values));
+          await nextTask();
+        });
+      };
+      return { checkTitle, settle, ...renderShown(gated, 'blur', { title: checkTitle }) };
     };
 
     test('each re-checks what it changed once the form shows again, as the same follows while it shows do', () => {
@@ -948,36 +970,6 @@ describe('a follow re-checks as an edit does', () => {
       expect(shown.latest.form?.fieldErrors).toEqual({ title: 'Taken' });
     });
 
-    /** A blur-mode form inside an `<Activity>`, on a schema gated per call, whose title validator is a mock. */
-    const renderBlurInActivity = () => {
-      const { pending, gated } = createGatedValidator<PublishForm>();
-      const checkTitle = mock((_title: string) => undefined);
-      const latest: { form?: UseFormReturn<PublishForm> } = {};
-      const Probe = ({ initial }: { initial: PublishForm }) => {
-        latest.form = useForm(gated, {
-          initialValues: initial,
-          validationMode: 'blur',
-          fieldValidators: { title: checkTitle },
-        });
-        return null;
-      };
-      const View = ({ mode, initial }: Omit<Shown, 'resetKey'>) => (
-        <Activity mode={mode}>
-          <Probe initial={initial} />
-        </Activity>
-      );
-      const { rerender } = render(<View mode="visible" initial={draft} />);
-      const show = (mode: Shown['mode'], initial: PublishForm) => rerender(<View mode={mode} initial={initial} />);
-      /** Settles every schema check so far, so the field checks still waiting on one run. */
-      const settle = async (values: PublishForm) => {
-        await act(async () => {
-          for (const check of pending) check.resolve(ok(values));
-          await nextTask();
-        });
-      };
-      return { checkTitle, latest, show, settle };
-    };
-
     test('a check waiting through them, which leave its value as it was, runs once, on that value', async () => {
       const hidden = renderBlurInActivity();
       const tagged: PublishForm = { ...draft, status: 'published', tags: ['a'] };
@@ -1017,34 +1009,18 @@ describe('a follow re-checks as an edit does', () => {
     });
 
     test("an edit made after them isn't theirs, so they don't re-check what only it changed", () => {
-      const checkTitle = mock((_title: string) => undefined);
-      const checkStatus = mock((_status: string) => undefined);
-      const latest: { form?: UseFormReturn<PublishForm> } = {};
-      const Probe = ({ initial }: { initial: PublishForm }) => {
-        latest.form = useForm(publishValidator, {
-          initialValues: initial,
-          validationMode: 'live',
-          fieldValidators: { title: checkTitle, status: checkStatus },
-        });
-        return null;
-      };
-      const View = ({ mode, initial }: Omit<Shown, 'resetKey'>) => (
-        <Activity mode={mode}>
-          <Probe initial={initial} />
-        </Activity>
-      );
+      const hidden = renderInActivity();
       const tagged: PublishForm = { ...titled, tags: ['a'] };
-      const { rerender } = render(<View mode="visible" initial={draft} />);
-      rerender(<View mode="hidden" initial={draft} />);
-      rerender(<View mode="hidden" initial={titled} />);
+      hidden.show('hidden', draft);
+      hidden.show('hidden', titled);
       // The edit checks status itself, and the next version only makes the form stale
-      act(() => latest.form?.setFieldValue('status', 'published'));
-      rerender(<View mode="hidden" initial={tagged} />);
+      act(() => hidden.latest.form?.setFieldValue('status', 'published'));
+      hidden.show('hidden', tagged);
 
-      rerender(<View mode="visible" initial={tagged} />);
+      hidden.show('visible', tagged);
 
-      expect(checkTitle.mock.calls).toEqual([['Updated']]);
-      expect(checkStatus.mock.calls).toEqual([['published']]);
+      expect(hidden.checkTitle.mock.calls).toEqual([['Updated']]);
+      expect(hidden.checkStatus.mock.calls).toEqual([['published']]);
     });
 
     test('a resetKey reset starts over, so the follows made before it re-check nothing once the form shows', () => {
@@ -1825,55 +1801,50 @@ describe('an error lasts only while its values hold (#58)', () => {
   const blank = { name: '', email: 'a@b.co' };
   const taken = (value: string) => (value === 'Taken' ? 'Name taken' : undefined);
 
-  test('submit mode: an edit drops the error a submit put on the field', async () => {
+  type NameForm = UseFormReturn<typeof blank>;
+
+  test.each<['submit' | 'blur' | 'live', string, (form: NameForm) => Promise<unknown>, (form: NameForm) => void]>([
+    [
+      'submit',
+      'an edit drops the error a submit put on the field',
+      (form) => {
+        form.setFieldValue('name', 'Taken');
+        return form.handleSubmit();
+      },
+      (form) => form.setFieldValue('name', 'Free'),
+    ],
+    [
+      'blur',
+      'an edit drops the error a blur put on the field',
+      async (form) => {
+        form.setFieldValue('name', 'Taken');
+        form.setFieldTouched('name');
+        await nextTask();
+      },
+      (form) => form.setFieldValue('name', 'Free'),
+    ],
+    [
+      'live',
+      'setValues drops the error of a field it changes',
+      async (form) => {
+        form.setFieldValue('name', 'Taken');
+        await nextTask();
+      },
+      (form) => form.setValues({ name: 'Free' }),
+    ],
+  ])('%s mode: %s', async (validationMode, _, raise, edit) => {
     const { result } = renderHook(() =>
       useForm(nameSchema, {
         initialValues: blank,
-        validationMode: 'submit',
+        validationMode,
         fieldValidators: { name: taken },
         onSubmit: () => {},
       }),
     );
-    act(() => result.current.setFieldValue('name', 'Taken'));
-    await act(async () => {
-      await result.current.handleSubmit();
-    });
+    await act(() => raise(result.current));
     expect(result.current.errors.name).toBe('Name taken');
 
-    act(() => result.current.setFieldValue('name', 'Free'));
-
-    expect(result.current.errors.name).toBeUndefined();
-    expect(result.current.isValid).toBe(true);
-  });
-
-  test('blur mode: an edit drops the error a blur put on the field', async () => {
-    const { result } = renderHook(() =>
-      useForm(nameSchema, { initialValues: blank, validationMode: 'blur', fieldValidators: { name: taken } }),
-    );
-    act(() => result.current.setFieldValue('name', 'Taken'));
-    await act(async () => {
-      result.current.setFieldTouched('name');
-      await nextTask();
-    });
-    expect(result.current.errors.name).toBe('Name taken');
-
-    act(() => result.current.setFieldValue('name', 'Free'));
-
-    expect(result.current.errors.name).toBeUndefined();
-    expect(result.current.isValid).toBe(true);
-  });
-
-  test('live mode: setValues drops the error of a field it changes', async () => {
-    const { result } = renderHook(() =>
-      useForm(nameSchema, { initialValues: blank, fieldValidators: { name: taken } }),
-    );
-    await act(async () => {
-      result.current.setFieldValue('name', 'Taken');
-      await nextTask();
-    });
-    expect(result.current.errors.name).toBe('Name taken');
-
-    act(() => result.current.setValues({ name: 'Free' }));
+    act(() => edit(result.current));
 
     expect(result.current.errors.name).toBeUndefined();
     expect(result.current.isValid).toBe(true);

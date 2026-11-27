@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 
+import { endOutdatedChecks } from '../../src/formChecks';
 import { createInitialFormState, formReducer } from '../../src/formReducer';
 
 import type { FormAction, FormState, ResetKey } from '../../src/types';
@@ -1271,31 +1272,18 @@ describe('checks', () => {
     { type: 'END_FIELD_CHECK', field, id, result: { error } },
   ];
 
-  test("an edit of a check's own input drops its error", () => {
-    const checked = apply(start, on('name'), ...check('name', { name: 'John' }));
+  test.each<[string, FormAction<typeof v1>]>([
+    ["an edit of a check's own input", { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }],
+    ['an edit of a listed input', { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }],
+    ['SET_VALUES of an input', { type: 'SET_VALUES', values: { name: 'Jane' } }],
+  ])('%s ends the check, keeping its id and inputs, and drops its error', (_, edit) => {
+    const inputs = { name: 'John', email: 'john@example.com' };
+    const checked = apply(start, on('name'), ...check('name', inputs));
     expect(checked.checks.fields.name?.error).toBe('Taken');
 
-    const after = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }, v1);
+    const after = formReducer(checked, edit, v1);
 
-    expect(after.checks.fields.name).toEqual({ id: 1, status: 'done', inputs: { name: 'John' } });
-  });
-
-  test('an edit of a listed input drops the error', () => {
-    const checked = apply(start, on('name'), ...check('name', { name: 'John', email: 'john@example.com' }));
-    expect(checked.checks.fields.name?.error).toBe('Taken');
-
-    const after = formReducer(checked, { type: 'SET_FIELD_VALUE', field: 'email', value: 'x@y.z' }, v1);
-
-    expect(after.checks.fields.name?.error).toBeUndefined();
-  });
-
-  test('SET_VALUES drops the errors of the inputs it changed', () => {
-    const checked = apply(start, on('name'), ...check('name', { name: 'John', email: 'john@example.com' }));
-    expect(checked.checks.fields.name?.error).toBe('Taken');
-
-    const after = formReducer(checked, { type: 'SET_VALUES', values: { name: 'Jane' } }, v1);
-
-    expect(after.checks.fields.name?.error).toBeUndefined();
+    expect(after.checks.fields.name).toEqual({ id: 1, status: 'done', inputs });
   });
 
   test('a follow drops the errors of the inputs the new version changed', () => {
@@ -1329,6 +1317,63 @@ describe('checks', () => {
     expect(after.values).not.toBe(checked.values);
     expect(after.checks).toBe(checked.checks);
     expect(after.checks.fields.name?.error).toBe('Taken');
+  });
+
+  describe('no action leaves an open check on inputs the values no longer hold', () => {
+    type Action = FormAction<typeof v1>;
+    // The reducer scans the checks only after the values change, and START_FIELD_CHECK tests its own check. That's
+    // enough only while no other action can leave a check on values the form doesn't hold. Keyed by type, so a new
+    // action doesn't compile until it has a sample here, and this test checks it keeps the rule.
+    const samples: { [K in Action['type']]: readonly Extract<Action, { type: K }>[] } = {
+      SYNC_FIELD_VALIDATORS: [on('name'), on('name', 'email', 'other')],
+      START_SCHEMA_CHECK: [{ type: 'START_SCHEMA_CHECK', id: 5 }],
+      END_SCHEMA_CHECK: [
+        { type: 'END_SCHEMA_CHECK', id: 3, answer: { values: v2, passed: false, errors: { email: 'Bad' } } },
+        { type: 'END_SCHEMA_CHECK', id: 3 },
+      ],
+      SUBMISSION_WENT_OUT: [{ type: 'SUBMISSION_WENT_OUT', values: v2 }],
+      START_FIELD_CHECK: [
+        { type: 'START_FIELD_CHECK', field: 'name', id: 4, status: 'running', inputs: { name: 'Old' } },
+        { type: 'START_FIELD_CHECK', field: 'email', id: 4, status: 'waiting', inputs: { email: v2.email } },
+        { type: 'START_FIELD_CHECK', field: 'name', id: 4, status: 'running', inputs: { name: v1.name } },
+      ],
+      RUN_FIELD_CHECK: [{ type: 'RUN_FIELD_CHECK', field: 'email', id: 2 }],
+      END_FIELD_CHECK: [
+        { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: { error: 'Taken' } },
+        { type: 'END_FIELD_CHECK', field: 'email', id: 2, result: 'gated' },
+        { type: 'END_FIELD_CHECK', field: 'name', id: 1, result: 'none' },
+      ],
+      SYNC_INITIAL_VALUES: [sync(v2), sync(v1, 'b')],
+      SUBMIT_SUCCEEDED: [{ type: 'SUBMIT_SUCCEEDED', values: v1, baselineEpoch: 0, lastVersion: v1 }],
+      SET_FIELD_VALUE: [{ type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' }],
+      SET_VALUES: [{ type: 'SET_VALUES', values: { email: 'x@y.z' } }],
+      SET_FIELD_TOUCHED: [{ type: 'SET_FIELD_TOUCHED', field: 'name', isTouched: true }],
+      SET_SERVER_ERRORS: [{ type: 'SET_SERVER_ERRORS', errors: { name: 'Taken' }, describes: v2 }],
+      SET_SUBMIT_ERROR: [{ type: 'SET_SUBMIT_ERROR', submitError: 'Down' }],
+      CLEAR_SERVER_ERRORS: [{ type: 'CLEAR_SERVER_ERRORS' }],
+      SET_SUBMITTING: [{ type: 'SET_SUBMITTING', isSubmitting: true }],
+      INCREMENT_SUBMIT_COUNT: [{ type: 'INCREMENT_SUBMIT_COUNT' }],
+      SET_SUBMIT_VALIDATING: [{ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true }],
+      RESET_FORM: [{ type: 'RESET_FORM' }],
+      MARK_ALL_TOUCHED: [{ type: 'MARK_ALL_TOUCHED', fields: ['name'] }],
+    };
+    // name's check runs and email's waits, both on the values held, under schema check 3
+    const pending = apply(
+      start,
+      on('name', 'email'),
+      { type: 'START_FIELD_CHECK', field: 'name', id: 1, status: 'running', inputs: { name: v1.name } },
+      { type: 'START_FIELD_CHECK', field: 'email', id: 2, status: 'waiting', inputs: { email: v1.email } },
+      { type: 'START_SCHEMA_CHECK', id: 3 },
+    );
+
+    test.each(Object.values(samples).flatMap((actions) => actions.map((action) => [action.type, action] as const)))(
+      '%s',
+      (_, action) => {
+        const next = formReducer(pending, action, v1);
+
+        expect(endOutdatedChecks(next.checks, next.values)).toBe(next.checks);
+      },
+    );
   });
 });
 
