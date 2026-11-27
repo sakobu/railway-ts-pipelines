@@ -42,7 +42,7 @@ Patterns and techniques. Each recipe is self-contained.
 
 **Problem:** You're building a create/edit form that talks to an API. The server might reject the data (duplicate email, username taken), and you need those errors to appear on the correct fields.
 
-**Solution:** Use `onSubmit` to call the API and return an `err` built from the backend's `ValidationError[]`: it lands on the matching fields. Server errors auto-clear when the user edits the affected field.
+**Solution:** Use `onSubmit` to call the API and return an `err` built from the backend's `ValidationError[]`: it lands on the matching fields. An edit that changes the affected field's value clears its server error (an equal value keeps it).
 
 ```tsx
 import { err, ok } from '@railway-ts/pipelines/result';
@@ -1312,7 +1312,7 @@ import * as S from '@railway-ts/pipelines/schema';
 import { useForm, withDeps } from '@railway-ts/use-form';
 
 const projectSchema = S.object({
-  workspaceId: S.required(S.string()),
+  workspaceId: S.required(S.chain(S.string(), S.nonEmpty())),
   slug: S.required(S.chain(S.string(), S.minLength(3))),
 });
 
@@ -1337,6 +1337,8 @@ function ProjectForm() {
   );
 }
 ```
+
+`S.nonEmpty()` matters here: `S.required` accepts `''`, and the schema gate holds the lookup back only while the schema rejects an input.
 
 ### fieldValidators vs schema-level async
 
@@ -1970,7 +1972,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `fieldValidators` for username availability with `validatingFields` loading state
-- **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both auto-clear on edit
+- **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both clear when an edit changes the value (an equal value keeps them)
 - **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching, including on `handleSubmit`'s result to navigate on success
 - **React 19 compatibility** -- `(e) => void handleRegister(e)` pattern
 
@@ -2108,7 +2110,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `queryClient.fetchQuery` with `staleTime` for caching username checks
-- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors([...])`, auto-clear on edit
+- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors([...])`, cleared when an edit changes the value (an equal value keeps them)
 - **React Query integration** -- `useMutation` for submit, `fetchQuery` for field validation
 - **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
 

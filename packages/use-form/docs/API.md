@@ -503,7 +503,7 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run. A newer schema check of the values the form held when it started moves a waiting field check on with its result when it ends, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
+Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run, unless an edit, a follow or a reset changes the values they check: such a check ends in the form at once, and the submit still waits for it. A newer schema check of the values the form held when it started moves a waiting field check on with its result when it ends, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
 
 ```typescript
 <button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
@@ -515,7 +515,7 @@ Derived property. True when **any** async validation is in progress -- form-leve
 
 Type: `Readonly<Record<FieldPath, boolean>>`
 
-Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running, including a submit's field checks. Use this to show inline loading indicators next to individual fields.
+Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running, including a submit's field checks, until an edit, a follow or a reset changes the values they check. Use this to show inline loading indicators next to individual fields.
 
 ```typescript
 {form.validatingFields.username && <span>Checking username...</span>}
@@ -698,7 +698,7 @@ form.setServerErrors([
 ]);
 ```
 
-Per-path errors land on their fields, under the same keys as client errors, and mark those paths touched. A path-`[]` error becomes the submit error, shown at `form.errors._root`. Server errors automatically clear when affected fields change (and on the groups that contain them); the submit error clears on any value change.
+Per-path errors land on their fields, under the same keys as client errors, and mark those paths touched. A path-`[]` error becomes the submit error, shown at `form.errors._root`. An edit that changes a value clears the server errors at, inside or above its path (an equal value keeps them); the submit error clears on any value change.
 
 ### clearServerErrors
 
@@ -752,7 +752,7 @@ Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], m
 2. Marks all fields as touched
 3. Clears existing server errors
 4. Runs schema validation (awaits if async). Its errors show, or a pass clears those of an earlier attempt, unless a check of newer values started meanwhile, as typing starts one
-5. If schema passes, runs the field validators that are on when it gets there, in parallel. Their checks show in `validatingFields` and `isValidating`. Each result shows unless a check of that field started after the submit did. A check whose validator is switched off before it ends is still waited for, then counts as never run.
+5. If schema passes, runs the field validators that are on when it gets there, in parallel. Their checks show in `validatingFields` and `isValidating` until an edit, a follow or a reset changes the values they check: such a check ends in the form at once, and the submit still waits for it. Each result shows unless a check of that field started after the submit did. A check whose validator is switched off before it ends is still waited for, then counts as never run.
 6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 
@@ -1496,8 +1496,8 @@ import * as S from '@railway-ts/pipelines/schema';
 import { useForm, withDeps } from '@railway-ts/use-form';
 
 const projectSchema = S.object({
-  workspaceId: S.required(S.string()),
-  slug: S.required(S.string()),
+  workspaceId: S.required(S.chain(S.string(), S.nonEmpty())),
+  slug: S.required(S.chain(S.string(), S.nonEmpty())),
 });
 
 const form = useForm(projectSchema, {
@@ -1510,6 +1510,8 @@ const form = useForm(projectSchema, {
   },
 });
 ```
+
+`S.nonEmpty()` matters here: `S.required` accepts `''`, and the schema gate holds the lookup back only while the schema rejects an input.
 
 ## useDebounce
 

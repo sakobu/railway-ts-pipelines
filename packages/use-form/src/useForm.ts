@@ -1416,7 +1416,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Sets server-side validation errors received from API responses.
    * These errors take precedence over client-side errors in the merged `errors` object.
-   * Server errors are automatically cleared when the related field value changes.
+   * Server errors are cleared when an edit changes the related field's value (an equal value keeps them).
    * An error at path `[]` becomes the submit error. Every other error's path is marked touched,
    * so the errors show through `getFieldError` straight away.
    *
@@ -1448,7 +1448,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Clears all server-side validation errors.
    * Client-side validation errors are not affected.
-   * Server errors are also automatically cleared when field values change.
+   * Server errors are also cleared when an edit changes a field's value.
    *
    * @example
    * // Clear server errors when user starts editing
