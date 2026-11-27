@@ -2,7 +2,8 @@ import type { FieldPath } from './types';
 
 // One public call is one event. The calls made while it runs, such as from `onFieldChange`, join it, and each asks
 // what it wants checked. Once the outermost call returns, one pass checks what the event recorded, on the values as
-// they stand then. So within one event a validator runs at most once, and the schema runs once.
+// they stand then. So within one event a validator runs at most once, and the schema runs once. An event with no
+// caller, such as an effect's, never joins one: it runs as its own once the event running has ended.
 
 /** What a check reaches: the field validators it re-checks, beside the schema check every request asks for. */
 export type CheckReach = {
@@ -47,35 +48,39 @@ export type CheckEvents = {
    * runs once the event has ended, so a call made from inside it is an event of its own.
    */
   run: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
+  /**
+   * An event with no caller. It never joins a running event: it waits until that one has ended, its pass included
+   * (and even when its body or pass threw), then runs as its own. A throw from its body or pass goes to `report`.
+   */
+  runUncalled: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
 };
 
 /**
  * Creates the events of one form, none running.
  *
+ * @param report - Where a throw from an event with no caller goes, since nothing could catch it
  * @returns The form's events
  */
-export const createCheckEvents = (): CheckEvents => {
-  // The requests of the event running, if one is
-  let running: EventRequests | undefined;
+export const createCheckEvents = (report: (error: unknown) => void): CheckEvents => {
+  // The event running, if one is: its requests, and the events with no caller that started inside it, in order
+  let running: { requests: EventRequests; waiting: (() => void)[] } | undefined;
 
-  return {
-    run: (body, pass) => {
-      if (running) {
-        body(running);
-        return;
-      }
-      const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
-      // Whether any request was made, so the pass runs
-      let requested = false;
-      const requests: EventRequests = {
-        check: ({ paths = [], named = [], validators = [] } = {}) => {
-          requested = true;
-          for (const path of paths) record.paths.add(path);
-          for (const field of named) record.named.add(field);
-          for (const key of validators) record.validators.add(key);
-        },
-      };
-      running = requests;
+  // Runs `body` as an event of its own, then its pass, then the events with no caller that started inside it
+  const runAlone = (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void): void => {
+    const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
+    // Whether any request was made, so the pass runs
+    let requested = false;
+    const requests: EventRequests = {
+      check: ({ paths = [], named = [], validators = [] } = {}) => {
+        requested = true;
+        for (const path of paths) record.paths.add(path);
+        for (const field of named) record.named.add(field);
+        for (const key of validators) record.validators.add(key);
+      },
+    };
+    const waiting: (() => void)[] = [];
+    running = { requests, waiting };
+    try {
       try {
         body(requests);
       } finally {
@@ -83,6 +88,28 @@ export const createCheckEvents = (): CheckEvents => {
         running = undefined;
       }
       if (requested) pass(record);
+    } finally {
+      // Once the event has ended, its pass included, whatever either threw. None is added while they run, since the
+      // event has ended, and each reports its own throw.
+      for (const next of waiting) next();
+    }
+  };
+
+  return {
+    run: (body, pass) => {
+      if (running) body(running.requests);
+      else runAlone(body, pass);
+    },
+    runUncalled: (body, pass) => {
+      const runOwn = (): void => {
+        try {
+          runAlone(body, pass);
+        } catch (error) {
+          report(error);
+        }
+      };
+      if (running) running.waiting.push(runOwn);
+      else runOwn();
     },
   };
 };

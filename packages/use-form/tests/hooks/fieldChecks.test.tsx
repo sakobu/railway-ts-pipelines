@@ -3,7 +3,8 @@ import { describe, test, expect, mock, spyOn } from 'bun:test';
 import { ok, err } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 import { renderHook, act } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { StrictMode, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { useForm } from '../../src/useForm';
 import { withDeps } from '../../src/withDeps';
@@ -1660,6 +1661,31 @@ describe('one call, one check pass (#57)', () => {
     expect(() => act(() => result.current.setFieldValue('title', draft.title))).toThrow('boom');
   });
 
+  test('an event with no caller that starts inside a called one runs as its own, and logs its throw', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const boom = new Error('schema boom');
+    const throwsOnC: S.Validator<unknown, { title: string }> = (value) => {
+      if ((value as { title: string }).title === 'C') throw boom;
+      return ok(value as { title: string });
+    };
+    const { result } = renderHook(() => {
+      const [key, setKey] = useState(0);
+      return useForm(throwsOnC, {
+        initialValues: key === 0 ? { title: 'A' } : { title: 'C' },
+        resetKey: key,
+        validationMode: 'mount',
+        // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a commit inside onFieldChange is the case under test
+        onFieldChange: () => flushSync(() => setKey(1)),
+      });
+    });
+    consoleError.mockClear();
+
+    expect(() => act(() => result.current.setFieldValue('title', 'B', true))).toThrow(boom);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith('Form validation error:', boom);
+    consoleError.mockRestore();
+  });
+
   test('setValues clears the schema errors at the paths it changed while an async check runs', async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const { result } = renderHook(() => useForm(gated, { initialValues: draft, validationMode: 'live' }));
@@ -2583,5 +2609,25 @@ describe('the schema gate holds a check back until the schema accepts its inputs
     expect(onSubmit).not.toHaveBeenCalled();
     expect(checkUsername).toHaveBeenCalledWith('ann');
     expect(result.current.fieldErrors).toEqual({ username: 'Taken' });
+  });
+
+  test('a held-back validator the schema releases in a call throws to that call', () => {
+    const boom = new Error('lookup failed');
+    const { result } = renderHook(() =>
+      useForm(crossFieldSchema, {
+        initialValues: signup,
+        validationMode: 'live',
+        fieldValidators: {
+          username: (username) => {
+            if (username === 'bob') throw boom;
+            return undefined;
+          },
+        },
+      }),
+    );
+    act(() => result.current.setFieldValue('contact', 'other'));
+    act(() => result.current.setFieldValue('username', 'bob'));
+
+    expect(() => act(() => result.current.setFieldValue('contact', signup.email))).toThrow(boom);
   });
 });

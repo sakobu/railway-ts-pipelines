@@ -594,8 +594,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const fieldValidatorsRef = useRef(byPath);
 
   // One public call is one event, and the calls made while it runs, such as from onFieldChange, join it. Its checks
-  // run in one pass once the outermost call returns (checkRecorded, below).
-  const [events] = useState(createCheckEvents);
+  // run in one pass once the outermost call returns (checkRecorded, below). An event with no caller runs as its own
+  // once the one running has ended, and its throws are logged (runUncalled, below).
+  const [events] = useState(() => createCheckEvents(logValidationError));
 
   // Notifies of a change the quiet syncs of this commit made (Following initialValues, below), before any other
   // layout effect of the form runs. On every commit, since one that only switches a validator off changes no prop the
@@ -853,14 +854,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * of a render's stale copy, says nothing about them, and the checks keep waiting on their own results. An edit made
    * since doesn't stop it moving on the waiting checks: it still checked the form's values, and is the newest.
    *
-   * A throw from a validator is logged: the check belongs to a call that has returned.
+   * A throw from a validator goes to `report`: the caller's pass when the landing happens inside it, and the log
+   * otherwise. Every check moves on, whatever the others throw.
    *
    * @param id - The landed schema check's id
    * @param outcome - Its outcome
    * @param held - The values the form held when it started
+   * @param report - Where a validator's throw goes
    */
   const afterSchemaLands = useCallback(
-    (id: CheckId, outcome: SchemaOutcome<TValues>, held: TValues): void => {
+    (id: CheckId, outcome: SchemaOutcome<TValues>, held: TValues, report: (error: unknown) => void): void => {
       const { checks, values } = store.getState();
       const waiting = Object.entries(waitingFieldChecksOf(checks.fields, id));
       const { errors } = outcome;
@@ -882,7 +885,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         try {
           moveOnWithSchema(key, checkId, outcome.values, errors);
         } catch (error) {
-          logValidationError(error);
+          report(error);
         }
       };
       for (const [key, check] of waiting) moveOn(key, check.id);
@@ -920,7 +923,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const validateForm = useCallback(
     (values: TValues): Result<TValues, ValidationError[]> | Promise<Result<TValues, ValidationError[]>> =>
-      mapAnswer(checkSchema(dispatch, store.takeCheckId(), values, afterSchemaLands), (answer) => answer.result),
+      mapAnswer(
+        checkSchema(dispatch, store.takeCheckId(), values, (id, outcome, held) =>
+          afterSchemaLands(id, outcome, held, logValidationError),
+        ),
+        (answer) => answer.result,
+      ),
     [store, dispatch, checkSchema, afterSchemaLands],
   );
 
@@ -990,7 +998,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * @param record - What the event recorded
    * @throws A sync throw from the schema validator, once the field checks ended with no result. Otherwise the first
-   *   sync throw from a field validator, once every other one ran. Each later throw is logged.
+   *   sync throw from a field validator, once every other one ran: one of the pass's own checks, or a held-back or
+   *   waiting check that the schema's sync landing releases or moves on ({@link afterSchemaLands}), whose throws count
+   *   as the pass's. Each later throw is logged, and so is a throw after an async landing, once the pass has returned.
    */
   const checkRecorded = useCallback(
     (record: EventRecord): void => {
@@ -1003,35 +1013,46 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         ([key, validator]) => record.validators.has(key) || validator.inputs.some(reaches),
       );
 
-      const schemaId = store.takeCheckId();
-      const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
-
-      let schemaErrors: SchemaErrors | Promise<SchemaErrors>;
-      try {
-        // Nothing awaits the schema check, so a rejection is logged, and leaves it with no result
-        schemaErrors = mapAnswer(
-          checkSchema(dispatch, schemaId, values, afterSchemaLands),
-          (answer): SchemaErrors => answer.errors,
-          logValidationError,
-        );
-      } catch (error) {
-        // The schema validator threw: the field checks end with no result, and the throw reaches the caller
-        moveOns.forEach((moveOn) => moveOn(undefined));
-        throw error;
-      }
-
-      // Every field check moves on, whatever the others throw. The first throw then reaches the caller, and each later
-      // one is logged, since only one can.
+      // The first throw of the pass, the schema's landing included, reaches the caller, and each later one is logged,
+      // since only one can. A landing after the pass, as an async one is, logs its throws.
       let failed: { error: unknown } | undefined;
-      for (const moveOn of moveOns) {
+      const fail = (error: unknown): void => {
+        if (failed) logValidationError(error);
+        else failed = { error };
+      };
+      let report: (error: unknown) => void = fail;
+      try {
+        const schemaId = store.takeCheckId();
+        const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
+
+        let schemaErrors: SchemaErrors | Promise<SchemaErrors>;
         try {
-          moveOn(schemaErrors);
+          // Nothing awaits the schema check, so a rejection is logged, and leaves it with no result
+          schemaErrors = mapAnswer(
+            checkSchema(dispatch, schemaId, values, (id, outcome, held) =>
+              afterSchemaLands(id, outcome, held, (error) => report(error)),
+            ),
+            (answer): SchemaErrors => answer.errors,
+            logValidationError,
+          );
         } catch (error) {
-          if (failed) logValidationError(error);
-          else failed = { error };
+          // The schema validator threw: the field checks end with no result, and the throw reaches the caller
+          moveOns.forEach((moveOn) => moveOn(undefined));
+          throw error;
         }
+
+        // Every field check moves on, whatever the others throw
+        for (const moveOn of moveOns) {
+          try {
+            moveOn(schemaErrors);
+          } catch (error) {
+            fail(error);
+          }
+        }
+        if (failed) throw failed.error;
+      } finally {
+        report = logValidationError;
       }
-      if (failed) throw failed.error;
     },
     [store, dispatch, checkSchema, afterSchemaLands, startWaitingCheck],
   );
@@ -1050,19 +1071,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Runs `body` as an event with no caller to throw to, as an effect, a timer or a save's settle does: the mount check,
    * the layout effect's check after a `resetKey` reset and its follow of new `initialValues`, the follow after a save,
-   * and auto-save's check. A sync throw is logged, since nothing could catch it.
+   * and auto-save's check. Its checks run in a pass of their own ({@link checkRecorded}). It never joins a call that
+   * is running: one that starts inside a call, as a `resetKey` reset that a `flushSync` inside `onFieldChange` commits
+   * does, waits until that call's event has ended, its pass included, then runs as its own. A sync throw is logged,
+   * since nothing could catch it.
    *
    * @param body - What the event asks to check, through its requests
    */
   const runUncalled = useCallback(
-    (body: (requests: EventRequests) => void): void => {
-      try {
-        runEvent(body);
-      } catch (error) {
-        logValidationError(error);
-      }
-    },
-    [runEvent],
+    (body: (requests: EventRequests) => void): void => events.runUncalled(body, checkRecorded),
+    [events, checkRecorded],
   );
 
   /**
@@ -1568,7 +1586,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
           // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
           // Otherwise its field step's checks replace them, so no validator runs twice.
           const answer = await checkSchema(send, checkId, values, (id, outcome, held) => {
-            if (!outcome.result || isErr(outcome.result)) afterSchemaLands(id, outcome, held);
+            if (!outcome.result || isErr(outcome.result)) afterSchemaLands(id, outcome, held, logValidationError);
           });
           validationResult = answer.result;
         } finally {
