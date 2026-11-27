@@ -247,6 +247,20 @@ export type ChecksState = {
   validators: Readonly<Record<FieldPath, ValidatorState>>;
 };
 
+/**
+ * What a follow of new `initialValues` asks its event to check, taken from the states before and right after it as it
+ * happens, so the choice comes from what that follow changed and cut short. Several follows merge into one, whose size
+ * is the form's, not their number.
+ */
+export type FollowChecks = {
+  /** Whether it asks for a check: as the mode calls for, or since the form validated, showed errors or was checking */
+  readonly check: boolean;
+  /** The validators it re-checks: in `live` mode, each one whose inputs it changed */
+  readonly validators: ReadonlySet<FieldPath>;
+  /** The inputs of each check it cut short, by field: one re-runs while the values its event checks hold them */
+  readonly cutShort: Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>>;
+};
+
 /** What a field validator answers: an error message, or `undefined` when the value passes. */
 export type FieldValidatorAnswer = string | undefined | Promise<string | undefined>;
 

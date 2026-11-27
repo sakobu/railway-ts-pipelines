@@ -33,10 +33,13 @@ import {
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
 import {
+  NO_FOLLOW_CHECKS,
   fieldErrorsOf,
   fieldsCutShort,
   fieldsReadBy,
   inputsHeld,
+  mergeFollowChecks,
+  pendingInputsOf,
   validatingFieldsOf,
   validatorPeriod,
   waitingFieldCheck,
@@ -77,6 +80,7 @@ import type {
   NativeCheckboxProps,
   NativeCheckboxGroupOptionProps,
   FormAction,
+  FollowChecks,
   FormOptions,
   FormState,
   NativeSelectProps,
@@ -1116,73 +1120,81 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
-   * Records the checks of a follow, so the errors describe the values shown. A follow changes the values as an edit
-   * does: the reducer has already dropped every field error whose inputs it changed, and the schema and server errors
-   * at the paths it changed.
+   * What a follow asks its event to check, taken from the state before it and the state right after it as it happens,
+   * so the choice comes from what that follow changed and cut short: a later edit isn't the follow's, whether the call
+   * the follow happened in made it, or a layout effect of its commit, a child's included. A follow changes the values
+   * as an edit does: the reducer has already dropped every field error whose inputs it changed, and the schema and
+   * server errors at the paths it changed.
    *
    * It asks for a schema check when the mode calls for it, when the form has validated before (a blurred field in
    * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. A mode that wouldn't
    * have validated yet still doesn't. The check re-runs two kinds of field validator:
    *
    * - in `live` mode, each one whose inputs the follow changed, as an edit of them would
-   * - in any mode, each one whose check the follow cut short while its inputs still hold, since the verdict it was
-   *   asked for still applies
+   * - in any mode, each one whose check the follow cut short, while its inputs still hold when the event runs
+   *   ({@link recordFollow}), since the verdict it was asked for still applies
    *
-   * In `mount` mode it does what the mount does ({@link recordMountCheck}), so the new version's fields are marked
-   * touched at once.
-   *
-   * What the follow changed, it reads from the state before the follow and the state right after it, so a later edit
-   * isn't the follow's: one of the call the follow happened in, or one a layout effect of its commit made, a child's
-   * included. It runs once its event runs: right after the follow when an edit or a save made it, after the commit's
-   * earlier layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
-   * `onFieldChange`), once that call's event has ended, its pass included. A commit made while the form is hidden in an
-   * `<Activity>` runs no layout effect, so each follow made while it's hidden runs once it shows again, in one event
-   * with the others. The checks run on the values the form holds then, and a check the follow cut short re-runs only
-   * while its inputs still hold in them.
-   *
-   * @param requests - The event's requests
    * @param prev - The state before the follow
    * @param after - The state right after the follow
+   * @returns What it asks to check
    */
-  const recordFollow = useCallback(
-    (requests: EventRequests, prev: FormState<TValues>, after: FormState<TValues>): void => {
-      const { values } = store.getState();
-      const changed = validateOnChange
-        ? Array.from(fieldValidatorsRef.current)
-            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), after.values))
-            .map(([key]) => key)
-        : [];
-      const fields = [...changed, ...fieldsCutShort(prev.checks.fields, values)];
+  const followChecksOf = useCallback(
+    (prev: FormState<TValues>, after: FormState<TValues>): FollowChecks => {
       const blurred = validateOnBlur && Object.values(prev.touched).some(Boolean);
-
-      if (
+      const check =
         validateOnChange ||
         validateOnMount ||
         blurred ||
         prev.submitCount > 0 ||
         !isValidState(prev) ||
-        isValidatingState(prev)
-      ) {
-        requests.check({ validators: fields });
-      }
+        isValidatingState(prev);
+      if (!check) return NO_FOLLOW_CHECKS;
+      const changed = validateOnChange
+        ? Array.from(fieldValidatorsRef.current)
+            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), after.values))
+            .map(([key]) => key)
+        : [];
+      return { check, validators: new Set(changed), cutShort: pendingInputsOf(prev.checks.fields) };
+    },
+    [validateOnChange, validateOnBlur, validateOnMount],
+  );
 
+  /**
+   * Records what one follow, or several merged ({@link mergeFollowChecks}), asks to check ({@link followChecksOf}), so
+   * the errors describe the values shown. In `mount` mode it also does what the mount does ({@link recordMountCheck}),
+   * so the new version's fields are marked touched at once.
+   *
+   * It runs once its event runs: right after the follow when an edit or a save made it, after the commit's earlier
+   * layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
+   * `onFieldChange`), once that call's event has ended, its pass included. A commit made while the form is hidden in
+   * an `<Activity>` runs no layout effect, so the follows made while it's hidden run once it shows again, merged into
+   * one. The checks run on the values the form holds then, and a check a follow cut short re-runs only while its
+   * inputs still hold in them.
+   *
+   * @param requests - The event's requests
+   * @param follow - What the follow asks to check
+   */
+  const recordFollow = useCallback(
+    (requests: EventRequests, follow: FollowChecks): void => {
+      if (follow.check) {
+        const { values } = store.getState();
+        requests.check({ validators: [...follow.validators, ...fieldsCutShort(follow.cutShort, values)] });
+      }
       if (validateOnMount) recordMountCheck(requests);
     },
-    [store, recordMountCheck, validateOnChange, validateOnBlur, validateOnMount],
+    [store, recordMountCheck, validateOnMount],
   );
 
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
   // What the syncs that changed the state since the layout effect below last ran did, for it to run their side effects:
-  // whether one was a `resetKey` reset, and each follow since the last reset, oldest first, with the state before it
-  // and the state right after it. A sync that neither resets nor follows adds no follow, so an edit made after a follow
-  // isn't counted as the follow's. Usually it's this commit's sync alone, but a commit inside a hidden `<Activity>`
-  // runs the insertion effect below and not the layout effect, so the syncs made while the form is hidden gather here
-  // until it shows again.
-  const syncedRef = useRef<
-    { restarted: boolean; follows: { from: FormState<TValues>; to: FormState<TValues> }[] } | undefined
-  >(undefined);
+  // whether one was a `resetKey` reset, and what the follows since the last reset ask to check, each taken as it
+  // happened (followChecksOf) and merged (mergeFollowChecks), so its size is the form's, however many syncs there were.
+  // A sync that neither resets nor follows adds nothing to check. Usually it's this commit's sync alone, but a commit
+  // inside a hidden `<Activity>` runs the insertion effect below and not the layout effect, so the syncs made while
+  // the form is hidden gather here until it shows again.
+  const syncedRef = useRef<{ restarted: boolean; follow?: FollowChecks } | undefined>(undefined);
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
@@ -1202,15 +1214,16 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // Started over, so the follows before it no longer count. The old record's running submission and waiting
       // follow-up still run as the old record's, and the follow-up submits the values the form held. The new record's
       // submits start on a fresh scheduler.
-      syncedRef.current = { restarted: true, follows: [] };
+      syncedRef.current = { restarted: true };
       submitSchedulerRef.current.retire(prev.values);
       retiredSchedulerRef.current = submitSchedulerRef.current;
       submitSchedulerRef.current = createSubmitScheduler(noteSettle);
     } else if (next.baselineEpoch !== prev.baselineEpoch) {
-      const follows = [...(gathered?.follows ?? []), { from: prev, to: next }];
-      syncedRef.current = { restarted: gathered?.restarted ?? false, follows };
+      const own = followChecksOf(prev, next);
+      const follow = gathered?.follow === undefined ? own : mergeFollowChecks(gathered.follow, own);
+      syncedRef.current = { restarted: gathered?.restarted ?? false, follow };
     } else {
-      syncedRef.current = gathered ?? { restarted: false, follows: [] };
+      syncedRef.current = gathered ?? { restarted: false };
     }
   });
 
@@ -1218,20 +1231,18 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // on the values the form now holds, once the store has notified of the state it caught up to. It's one event with no
   // caller, so a validator two follows made while hidden both re-check runs once, and a throw from its check is
   // logged. A follow in `mount` mode does what the mount does, so a reset with a follow after it runs the follow's
-  // alone. Whether a sync reset or followed, and what each follow changed, come from the syncs' own states, not from
-  // the store's now: an earlier layout effect of the commit, a child's included, may have edited or reset since, and a
-  // `resetForm()` there is no follow.
+  // alone. Whether a sync reset or followed, and what each follow changed, come from the syncs' own states, taken as
+  // they happened, not from the store's now: an earlier layout effect of the commit, a child's included, may have
+  // edited or reset since, and a `resetForm()` there is no follow.
   // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
   // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
   // resetKey are, so a commit whose sync changed the state always runs it.
   useLayoutEffect(() => {
     const synced = syncedRef.current;
     syncedRef.current = undefined;
-    const follows = synced?.follows ?? [];
-    if (follows.length > 0) {
-      runUncalled((requests) => {
-        for (const { from, to } of follows) recordFollow(requests, from, to);
-      });
+    const follow = synced?.follow;
+    if (follow) {
+      runUncalled((requests) => recordFollow(requests, follow));
     } else if (synced?.restarted && validateOnMount) {
       runUncalled(recordMountCheck);
     }
@@ -1275,10 +1286,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const prev = store.getState();
       dispatch(action);
       const next = store.getState();
-      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev, next);
+      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, followChecksOf(prev, next));
       if (checkNamed) requests.check({ paths: changedPaths(prev.values, next.values), named: checkNamed });
     },
-    [store, dispatch, recordFollow],
+    [store, dispatch, recordFollow, followChecksOf],
   );
 
   /**
@@ -1675,7 +1686,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             });
             const after = store.getState();
             if (after.baselineEpoch !== before.baselineEpoch) {
-              runUncalled((requests) => recordFollow(requests, before, after));
+              const follow = followChecksOf(before, after);
+              runUncalled((requests) => recordFollow(requests, follow));
             }
           };
 
@@ -1750,6 +1762,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       savedValues,
       runUncalled,
       recordFollow,
+      followChecksOf,
       dispatchIn,
       submitFailedMessage,
       changedWhileSavingMessage,

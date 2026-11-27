@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   NO_CHECKS,
+  NO_FOLLOW_CHECKS,
   endFieldCheck,
   endOutdatedChecks,
   endPendingChecks,
@@ -14,6 +15,8 @@ import {
   hasPendingFieldCheck,
   inputsHeld,
   markFieldCheckRunning,
+  mergeFollowChecks,
+  pendingInputsOf,
   startFieldCheck,
   startOver,
   startSchemaCheck,
@@ -169,7 +172,7 @@ test('startOver clears every check and keeps the validators', () => {
   expect(over.fields).toEqual({});
   expect(over.validators).toBe(failed.validators);
 });
-test('fieldsCutShort takes pending checks whose inputs the values hold, not done ones or outdated ones', () => {
+test('a follow cuts short the pending checks, and re-runs those whose inputs the values hold', () => {
   let checks = syncValidators(NO_CHECKS, on('a', 'b', 'c', 'd'));
   // a waits on the schema
   checks = startFieldCheck(checks, 'a', 1, 'waiting', { a: 1 });
@@ -180,9 +183,29 @@ test('fieldsCutShort takes pending checks whose inputs the values hold, not done
   checks = endFieldCheck(checks, 'c', 3, { error: undefined });
   // d runs on a value the values no longer hold
   checks = startFieldCheck(checks, 'd', 4, 'running', { d: 1 });
-  expect(fieldsCutShort(checks.fields, { a: 1, b: 1, c: 1, d: 2 }).sort()).toEqual(['a', 'b']);
+  const cutShort = pendingInputsOf(checks.fields);
+  expect(cutShort).toEqual({ a: { a: 1 }, b: { b: 1 }, d: { d: 1 } });
+  expect(fieldsCutShort(cutShort, { a: 1, b: 1, c: 1, d: 2 }).sort()).toEqual(['a', 'b']);
   // An error shown, with no check pending, isn't cut short
-  expect(fieldsCutShort(failed.fields, { name: 'x' })).toEqual([]);
+  expect(pendingInputsOf(failed.fields)).toEqual({});
+});
+test('merged follows check if either does, re-check what either does, and keep the later cut-short check', () => {
+  const merged = mergeFollowChecks(
+    { check: true, validators: on('a'), cutShort: { a: { a: 1 }, b: { b: 1 } } },
+    { check: false, validators: on('b'), cutShort: { a: { a: 2 } } },
+  );
+  expect(merged.check).toBe(true);
+  expect([...merged.validators].sort()).toEqual(['a', 'b']);
+  expect(merged.cutShort).toEqual({ a: { a: 2 }, b: { b: 1 } });
+  expect(mergeFollowChecks(NO_FOLLOW_CHECKS, NO_FOLLOW_CHECKS).check).toBe(false);
+});
+test('many merged follows keep one entry per validator and field, however many there are', () => {
+  let merged = NO_FOLLOW_CHECKS;
+  for (let i = 0; i < 1000; i++) {
+    merged = mergeFollowChecks(merged, { check: true, validators: on('a', 'b'), cutShort: { a: { a: i } } });
+  }
+  expect(merged.validators.size).toBe(2);
+  expect(merged.cutShort).toEqual({ a: { a: 999 } });
 });
 test('selectors share one empty object when there is nothing to show', () => {
   expect(fieldErrorsOf({})).toBe(fieldErrorsOf(withName.fields));

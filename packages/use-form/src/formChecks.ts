@@ -6,6 +6,7 @@ import type {
   FieldCheck,
   FieldCheckResult,
   FieldPath,
+  FollowChecks,
   PendingStatus,
   ValidatorState,
 } from './types';
@@ -240,14 +241,50 @@ export const hasPendingFieldCheck = (fields: Readonly<Record<FieldPath, FieldChe
 export const hasFieldError = (fields: Readonly<Record<FieldPath, FieldCheck>>): boolean =>
   Object.values(fields).some((check) => check.error !== undefined);
 
+/** A follow that asks for no check. */
+export const NO_FOLLOW_CHECKS: FollowChecks = Object.freeze({
+  check: false,
+  validators: new Set<FieldPath>(),
+  cutShort: EMPTY,
+});
+
 /**
- * The fields whose check is pending in `fields` and whose inputs `values` hold: a follow to `values` ends such a check
- * before it answers, while the verdict it was asked for still applies.
+ * The inputs of each check pending in `fields`, by field: those a follow cuts short, since it ends every pending check
+ * before it answers.
+ */
+export const pendingInputsOf = (
+  fields: Readonly<Record<FieldPath, FieldCheck>>,
+): Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>> =>
+  withEntries(
+    EMPTY,
+    Object.entries(fields).flatMap(([key, check]): [FieldPath, Readonly<Record<FieldPath, unknown>>][] =>
+      check.status === 'done' ? [] : [[key, check.inputs]],
+    ),
+  );
+
+/**
+ * The fields of the checks a follow cut short whose inputs `values` hold: the verdict each was asked for still
+ * applies to them.
+ *
+ * @param cutShort - The inputs of each check the follow cut short, by field ({@link pendingInputsOf})
+ * @param values - The values the follow's event checks
  */
 export const fieldsCutShort = (
-  fields: Readonly<Record<FieldPath, FieldCheck>>,
+  cutShort: Readonly<Record<FieldPath, Readonly<Record<FieldPath, unknown>>>>,
   values: Record<string, unknown>,
 ): FieldPath[] =>
-  Object.entries(fields)
-    .filter(([, check]) => check.status !== 'done' && inputsHeld(check.inputs, values))
+  Object.entries(cutShort)
+    .filter(([, inputs]) => inputsHeld(inputs, values))
     .map(([key]) => key);
+
+/**
+ * The checks of two follows, the earlier first, as one: a check when either asks for one, every validator either
+ * re-checks, and each check either cut short. A field both cut short keeps the later one's inputs: the check the later
+ * follow cut short started after the earlier follow, which had ended every check pending then, so it is the field's
+ * newest, and a newer check of a field replaces the older one.
+ */
+export const mergeFollowChecks = (earlier: FollowChecks, later: FollowChecks): FollowChecks => ({
+  check: earlier.check || later.check,
+  validators: new Set([...earlier.validators, ...later.validators]),
+  cutShort: withEntries(earlier.cutShort, Object.entries(later.cutShort)),
+});
