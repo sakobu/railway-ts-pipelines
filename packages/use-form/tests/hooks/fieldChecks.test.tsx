@@ -706,6 +706,33 @@ describe('a follow re-checks as an edit does', () => {
       expect(checkTitle).toHaveBeenCalledWith(draft.title);
       expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
     });
+
+    test("a check the follow cut short doesn't re-run once that edit changed its inputs", () => {
+      const { gate } = createGatedFieldValidator();
+      const checkTitle = mock((_title: string) => gate());
+      const { result } = renderHook(() => {
+        const [initial, setInitial] = useState(draft);
+        return useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'blur',
+          fieldValidators: { title: checkTitle },
+          onFieldChange: (changed) => {
+            if (changed !== 'tags') return;
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            flushSync(() => setInitial({ ...draft, status: 'published' }));
+            result.current.setFieldValue('title', 'Edited');
+          },
+        });
+      });
+      // The blur's check of title runs, and stays pending until the follow cuts it short
+      act(() => result.current.setFieldTouched('title'));
+      expect(checkTitle).toHaveBeenCalledTimes(1);
+
+      act(() => result.current.setFieldValue('tags', draft.tags));
+
+      expect(result.current.values).toEqual({ ...draft, status: 'published', title: 'Edited' });
+      expect(checkTitle).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
