@@ -889,6 +889,9 @@ export type NativeCheckboxGroupOptionProps = {
  * Companion to ExtractFieldPaths — while ExtractFieldPaths extracts all valid paths,
  * FieldTypeAtPath resolves the value type at a given path.
  *
+ * A path through an optional or nullable object can hold `undefined`, because the form reads a missing object's
+ * fields as missing, so the type adds it.
+ *
  * @template T - The root type to traverse
  * @template P - A dot-separated path string
  *
@@ -896,9 +899,6 @@ export type NativeCheckboxGroupOptionProps = {
  * type User = { name: string; address: { city: string; zip: number } };
  * type City = FieldTypeAtPath<User, "address.city">; // string
  * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
- *
- * A path through an optional or nullable object can hold `undefined`, because the form reads a missing object's
- * fields as missing, so the type adds it.
  *
  * @example
  * type City = FieldTypeAtPath<{ address?: { city: string } }, "address.city">; // string | undefined

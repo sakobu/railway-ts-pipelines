@@ -41,7 +41,9 @@ export function useHonest() {
       slug: withDeps(['address.city', 'billing.country'], (value, deps) => {
         const c: string | undefined = deps['address.city'];
         const b: string = deps['billing.country'];
-        return value && b && c?.trim() ? undefined : 'x';
+        // @ts-expect-error -- address is optional, so its city can be undefined
+        const strict: string = deps['address.city'];
+        return value && b && strict && c?.trim() ? undefined : 'x';
       }),
     },
   });
