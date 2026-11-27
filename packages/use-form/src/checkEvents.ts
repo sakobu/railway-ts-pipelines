@@ -61,8 +61,9 @@ export type CheckEvents = {
 /**
  * Creates the events of one form, none running.
  *
- * @param report - Where a throw from an event with no caller goes, since nothing could catch it. One that throws in
- *   turn still lets every waiting event run, then reaches the outermost event's caller, unless that event threw its own.
+ * @param report - Where a throw from an event with no caller goes, since nothing could catch it. When it throws in
+ *   turn, every waiting event still runs, and its first throw reaches the outermost event's caller, unless that event
+ *   threw its own. Its later throws are dropped.
  * @returns The form's events
  */
 export const createCheckEvents = (report: (error: unknown) => void): CheckEvents => {
@@ -77,7 +78,8 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
   // Runs `event` as an active one. Once the outermost has ended, its pass included, whatever it threw, the waiting
   // events run inside it, in order, whatever any of them or `report` throws. The outermost stays active meanwhile, so
   // one that starts inside them waits behind them. Then the outermost's own throw reaches its caller, or else the first
-  // that escaped the waiting events, so none is lost. Nothing throws past its catch, so `active` is always restored.
+  // that escaped the waiting events, so a throwing `report` isn't swallowed. Every other throw that escaped them is
+  // dropped. Nothing throws past its catch, so `active` is always restored.
   const activate = (event: () => void): void => {
     active += 1;
     let thrown: { error: unknown } | undefined;
