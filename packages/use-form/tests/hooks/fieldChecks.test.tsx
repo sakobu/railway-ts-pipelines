@@ -906,7 +906,8 @@ describe('a follow re-checks as an edit does', () => {
       expect(shown.latest.form?.fieldErrors).toEqual({ title: 'Taken' });
     });
 
-    test('a check the first of them cut short re-runs once the form shows again, while its value holds', async () => {
+    /** A blur-mode form inside an `<Activity>`, on a schema gated per call, whose title validator is a mock. */
+    const renderBlurInActivity = () => {
       const { pending, gated } = createGatedValidator<PublishForm>();
       const checkTitle = mock((_title: string) => undefined);
       const latest: { form?: UseFormReturn<PublishForm> } = {};
@@ -923,21 +924,54 @@ describe('a follow re-checks as an edit does', () => {
           <Probe initial={initial} />
         </Activity>
       );
-      const tagged: PublishForm = { ...draft, status: 'published', tags: ['a'] };
       const { rerender } = render(<View mode="visible" initial={draft} />);
+      const show = (mode: Shown['mode'], initial: PublishForm) => rerender(<View mode={mode} initial={initial} />);
+      /** Settles every schema check so far, so the field checks still waiting on one run. */
+      const settle = async (values: PublishForm) => {
+        await act(async () => {
+          for (const check of pending) check.resolve(ok(values));
+          await nextTask();
+        });
+      };
+      return { checkTitle, latest, show, settle };
+    };
+
+    test('a check the first of them cut short re-runs once the form shows again, while its value holds', async () => {
+      const hidden = renderBlurInActivity();
+      const tagged: PublishForm = { ...draft, status: 'published', tags: ['a'] };
       // title's check waits on the blur's schema check when the first follow, which leaves title as it was, ends it
-      act(() => latest.form?.setFieldTouched('title'));
-      rerender(<View mode="hidden" initial={draft} />);
-      rerender(<View mode="hidden" initial={{ ...draft, status: 'published' }} />);
-      rerender(<View mode="hidden" initial={tagged} />);
+      act(() => hidden.latest.form?.setFieldTouched('title'));
+      hidden.show('hidden', draft);
+      hidden.show('hidden', { ...draft, status: 'published' });
+      hidden.show('hidden', tagged);
 
-      rerender(<View mode="visible" initial={tagged} />);
-      await act(async () => {
-        for (const check of pending) check.resolve(ok(tagged));
-        await nextTask();
-      });
+      hidden.show('visible', tagged);
+      await hidden.settle(tagged);
 
-      expect(checkTitle.mock.calls).toEqual([['Hello']]);
+      expect(hidden.checkTitle.mock.calls).toEqual([['Hello']]);
+    });
+
+    test('a field two of them cut short re-runs by the later check, as it does while the form shows', async () => {
+      const hidden = renderBlurInActivity();
+      // title's check of the draft's title waits on the blur's schema check, and the follow to titled ends it
+      act(() => hidden.latest.form?.setFieldTouched('title'));
+      hidden.show('hidden', draft);
+      hidden.show('hidden', titled);
+      // A check of the updated title, which the follow back to the draft ends
+      act(() => hidden.latest.form?.setFieldTouched('title', true, true));
+      hidden.show('hidden', draft);
+
+      hidden.show('visible', draft);
+      await hidden.settle(draft);
+
+      expect(hidden.checkTitle).not.toHaveBeenCalled();
+      const shown = renderBlurInActivity();
+      act(() => shown.latest.form?.setFieldTouched('title'));
+      shown.show('visible', titled);
+      act(() => shown.latest.form?.setFieldTouched('title', true, true));
+      shown.show('visible', draft);
+      await shown.settle(draft);
+      expect(shown.checkTitle).not.toHaveBeenCalled();
     });
 
     test("an edit made after them isn't theirs, so they don't re-check what only it changed", () => {
