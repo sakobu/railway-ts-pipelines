@@ -368,8 +368,8 @@ function LambertForm() {
 ```
 
 The `VecFieldset` component is a thin wrapper that renders three inputs and
-surfaces the first error. Because `form.errors` is dot-keyed, you read it
-directly with the same path you'd pass to `getFieldProps`:
+surfaces the first error. `getFieldError` takes the same dot path you'd pass
+to `getFieldProps`:
 
 ```tsx
 type VecFieldsetProps<TValues extends Record<string, unknown>> = {
@@ -380,7 +380,7 @@ type VecFieldsetProps<TValues extends Record<string, unknown>> = {
 };
 
 function VecFieldset<TValues extends Record<string, unknown>>({ label, unit, form, names }: VecFieldsetProps<TValues>) {
-  const errors = names.map((n) => (form.touched[n] ? form.errors[n] : undefined));
+  const errors = names.map((n) => form.getFieldError(n));
   const firstError = errors.find((e): e is string => Boolean(e));
 
   return (

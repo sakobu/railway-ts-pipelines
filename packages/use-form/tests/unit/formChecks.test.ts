@@ -8,6 +8,7 @@ import {
   endSchemaCheck,
   fieldErrorsOf,
   fieldsCutShort,
+  fieldsReadBy,
   gatedFieldChecksOf,
   hasFieldError,
   hasPendingFieldCheck,
@@ -270,4 +271,17 @@ test('a new check keeps the replaced error only while every input is unchanged',
   expect(
     startFieldCheck(twoInputs, 'name', 2, 'waiting', { name: 'x', email: 'b' }).fields.name?.error,
   ).toBeUndefined();
+});
+
+test('fieldsReadBy gives the fields a check read while it shows an error, and none otherwise', () => {
+  const on = syncValidators(NO_CHECKS, new Set(['slug']));
+  const started = startFieldCheck(on, 'slug', 1, 'running', { slug: 'docs', workspaceId: 'w2' });
+
+  expect(fieldsReadBy(started.fields, 'slug')).toEqual([]);
+  expect(fieldsReadBy(endFieldCheck(started, 'slug', 1, { error: 'Taken' }).fields, 'slug')).toEqual([
+    'slug',
+    'workspaceId',
+  ]);
+  expect(fieldsReadBy(endFieldCheck(started, 'slug', 1, { error: undefined }).fields, 'slug')).toEqual([]);
+  expect(fieldsReadBy(started.fields, 'other')).toEqual([]);
 });

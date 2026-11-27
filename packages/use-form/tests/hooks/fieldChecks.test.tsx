@@ -2561,6 +2561,45 @@ describe('withDeps', () => {
 
     expect(outcome).toEqual(ok({ ...record, slug: 'taken' }));
   });
+
+  describe('its error shows once a field it read is touched', () => {
+    const nonEmptySlugSchema = S.object({
+      workspaceId: S.required(S.string()),
+      slug: S.required(S.chain(S.string(), S.nonEmpty())),
+    });
+
+    test('picking another workspace shows the slug it now finds taken', () => {
+      const { result } = renderHook(() =>
+        useForm(nonEmptySlugSchema, {
+          initialValues: { workspaceId: 'w1', slug: 'docs' },
+          fieldValidators: {
+            slug: withDeps(['workspaceId'], (slug, { workspaceId }) =>
+              workspaceId === 'w2' && slug === 'docs' ? 'This slug is taken in this workspace' : undefined,
+            ),
+          },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('workspaceId', 'w2'));
+
+      expect(result.current.touched).toEqual({ workspaceId: true });
+      expect(result.current.getFieldError('slug')).toBe('This slug is taken in this workspace');
+    });
+
+    test('a schema error on the untouched field stays hidden', () => {
+      const { result } = renderHook(() =>
+        useForm(nonEmptySlugSchema, {
+          initialValues: { workspaceId: 'w1', slug: '' },
+          fieldValidators: { slug: withDeps(['workspaceId'], () => 'Never') },
+        }),
+      );
+
+      act(() => result.current.setFieldValue('workspaceId', 'w2'));
+
+      expect(result.current.errors.slug).toBe('Field must not be empty');
+      expect(result.current.getFieldError('slug')).toBeUndefined();
+    });
+  });
 });
 
 describe('the schema gate holds a check back until the schema accepts its inputs', () => {

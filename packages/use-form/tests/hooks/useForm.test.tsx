@@ -2220,6 +2220,23 @@ describe('useForm', () => {
       expect(error).toBeUndefined();
     });
 
+    test('arrayHelpers getFieldError shows a group error once a field inside it is touched, as getFieldError does', () => {
+      type Team = { members: { name: { first: string; last: string } }[] };
+      const nameTaken: Validator<unknown, Team> = () =>
+        err([{ path: ['members', '0', 'name'], message: 'Name taken' }]);
+      const { result } = renderHook(() =>
+        useForm(nameTaken, {
+          initialValues: { members: [{ name: { first: 'Ann', last: 'Lee' } }] },
+          validationMode: 'blur',
+        }),
+      );
+
+      act(() => result.current.setFieldTouched('members.0.name.first'));
+
+      expect(result.current.errors['members.0.name']).toBe('Name taken');
+      expect(result.current.arrayHelpers('members').getFieldError(0, 'name')).toBe('Name taken');
+    });
+
     test('arrayHelpers getFieldId returns path without optionValue', () => {
       const { result } = renderHook(() =>
         useForm(alwaysValidValidator, {

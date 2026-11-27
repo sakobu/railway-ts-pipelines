@@ -811,6 +811,12 @@ Returns the error message for a field path, gated on user interaction.
   (e.g. `S.refineAt("confirm", v => v.password === v.confirm, …)` or
   `S.refineAt("r2", …)` over a tuple) surface naturally on the group container,
   without callers having to read `form.errors` and `form.touched` directly.
+- **Field-validator errors**: a validator's error also shows once any field its
+  check read is touched, its own or one it lists with `withDeps`. So picking a
+  workspace shows that the slug is taken there. A schema or server error at the
+  same path still needs a touch at or below that path. Only `getFieldError` and
+  the array helpers' `getFieldError` apply this: reading `touched.slug && errors.slug`
+  yourself doesn't.
 
 Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
 
@@ -855,7 +861,7 @@ const schema = S.chain(
 The descendant scan uses a path-prefix check that guards against sibling
 collisions — `r2` does not match a touch on `r20`. `getFieldError` never
 aggregates _across_ paths: it only returns an error attached at the queried
-path, gated on touch of the path or any of its descendants.
+path, gated on touch of the path or any of its descendants, or, for a field-validator error, of a field its check read.
 
 ### getFieldId
 
@@ -1421,7 +1427,7 @@ getRadioGroupOptionProps<TField extends ExtractFieldPaths<TItem>>(
 
 #### getFieldError
 
-Get validation error for item field.
+Get the validation error for an item field, shown by the same rules as [`getFieldError`](#getfielderror).
 
 ```typescript
 getFieldError<TField extends ExtractFieldPaths<TItem>>(

@@ -190,6 +190,15 @@ export const fieldErrorsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): 
   return withEntries(EMPTY, errors);
 };
 
+/**
+ * The fields the check at `key` read, while it shows an error: the keys of its `inputs`. It's empty when the field has
+ * no check or its check shows no error.
+ */
+export const fieldsReadBy = (fields: Readonly<Record<FieldPath, FieldCheck>>, key: FieldPath): FieldPath[] => {
+  const check = own(fields, key);
+  return check?.error === undefined ? [] : Object.keys(check.inputs);
+};
+
 /** The fields whose validator is running now. */
 export const validatingFieldsOf = (
   fields: Readonly<Record<FieldPath, FieldCheck>>,

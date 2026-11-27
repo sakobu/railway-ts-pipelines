@@ -35,6 +35,7 @@ import {
 import {
   fieldErrorsOf,
   fieldsCutShort,
+  fieldsReadBy,
   inputsHeld,
   validatingFieldsOf,
   validatorPeriod,
@@ -475,10 +476,10 @@ const placeErrorsWith = <TValues extends Record<string, unknown>>(
  * // Render with native HTML elements
  * <form onSubmit={form.handleSubmit}>
  *   <input type="text" {...form.getFieldProps("name")} />
- *   {form.touched.name && form.errors.name && <span>{form.errors.name}</span>}
+ *   {form.getFieldError("name") && <span>{form.getFieldError("name")}</span>}
  *
  *   <input type="email" {...form.getFieldProps("email")} />
- *   {form.touched.email && form.errors.email && <span>{form.errors.email}</span>}
+ *   {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
  *
  *   <button type="submit" disabled={!form.isValid || form.isSubmitting}>
  *     {form.isSubmitting ? "Submitting..." : "Submit"}
@@ -1931,6 +1932,25 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // ===========================================================================
 
   /**
+   * The error at `key` while it shows: once a touched path is at or below any path the error describes. Those are
+   * `key` when a server error wins there, and otherwise `key` and the fields its field validator's check read.
+   * `getFieldError` and the array helpers' `getFieldError` both show errors by this one rule.
+   */
+  const shownError = useCallback(
+    (key: FieldPath): string | undefined => {
+      const error = own(errors, key);
+      if (!error) return undefined;
+      const described =
+        own(formState.serverErrors, key) === undefined ? [key, ...fieldsReadBy(formState.checks.fields, key)] : [key];
+      for (const touchedKey in formState.touched) {
+        if (formState.touched[touchedKey] && described.some((path) => isPathAffected(touchedKey, path))) return error;
+      }
+      return undefined;
+    },
+    [formState.touched, formState.serverErrors, formState.checks.fields, errors],
+  );
+
+  /**
    * Returns the error message for a field path, gated on user interaction.
    *
    * - Leaf paths: returns the error iff the field itself has been touched.
@@ -1940,6 +1960,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *   === v.confirm, …)` or `S.refineAt("r2", …)` over a tuple) surface
    *   naturally on the group container, without callers having to read
    *   `form.errors` and `form.touched` directly.
+   * - Field-validator errors: a validator's error also shows once any field its
+   *   check read is touched, its own or one it lists with `withDeps`. So picking
+   *   a workspace shows that the slug is taken there. A schema or server error
+   *   at the same path still needs a touch at or below that path. Only
+   *   `getFieldError` and the array helpers' `getFieldError` apply this: reading
+   *   `touched.slug && errors.slug` yourself doesn't.
    *
    * Eliminates the common `touched[field] ? errors[field] : undefined`
    * boilerplate and removes the leaf-only constraint that previously hid
@@ -1958,20 +1984,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * {form.getFieldError("r2") && <Banner msg={form.getFieldError("r2")} />}
    */
   const getFieldError = useCallback(
-    <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => {
-      const key = normalizePath(field);
-      const err = own(errors, key);
-      if (!err) return undefined;
-      // Visible iff the queried path itself or any descendant has been touched.
-      // `isPathAffected(touchedKey, key)` already encodes "same path or
-      // descendant," reusing the same semantics used for cascading error
-      // clears (see utils.ts).
-      for (const touchedKey in formState.touched) {
-        if (formState.touched[touchedKey] && isPathAffected(touchedKey, key)) return err;
-      }
-      return undefined;
-    },
-    [formState.touched, errors],
+    <TField extends ExtractFieldPaths<TValues>>(field: TField): string | undefined => shownError(normalizePath(field)),
+    [shownError],
   );
 
   // ===========================================================================
@@ -2289,10 +2303,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const getRadioGroupOptionPropsAtPath = (path: string, opt: string | number) =>
         createRadioGroupOptionProps(path, opt, formState.values, setFieldValue, setFieldTouched);
 
-      const getFieldErrorAtPath = (path: string) => {
-        const key = normalizePath(path);
-        return own(formState.touched, key) ? own(errors, key) : undefined;
-      };
+      const getFieldErrorAtPath = (path: string) => shownError(normalizePath(path));
 
       const getFieldIdAtPath = (path: string, optionValue?: string | number) =>
         optionValue !== undefined ? `${path}-${String(optionValue)}` : path;
@@ -2313,7 +2324,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         getFieldIdAtPath,
       );
     },
-    [store, formState.values, formState.touched, errors, setFieldValue, setFieldTouched],
+    [store, formState.values, shownError, setFieldValue, setFieldTouched],
   );
 
   // ===========================================================================

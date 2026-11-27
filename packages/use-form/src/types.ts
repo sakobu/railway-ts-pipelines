@@ -1220,13 +1220,13 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
   ) => NativeRadioGroupOptionProps;
 
   /**
-   * Returns the validation error for a field within an array item, but only
-   * if the field has been touched. Mirrors the top-level `form.getFieldError`
-   * behaviour using the `(index, subField)` pattern.
+   * Returns the validation error for a field within an array item, shown by the
+   * same rules as `form.getFieldError`: once the field, a field inside it, or
+   * for a field-validator error a field its check read, is touched.
    *
    * @param index - The zero-based index of the array item
    * @param subField - Field path within the array item (type-safe)
-   * @returns The error message string, or `undefined` if untouched / valid
+   * @returns The error message string while it shows, or `undefined`
    *
    * @example
    * {helpers.getFieldError(index, "email") && (
@@ -1621,7 +1621,11 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Error helper
 
   /**
-   * Returns the error message for a field only if it has been touched, otherwise `undefined`.
+   * Returns the error message for a field while it shows, otherwise `undefined`: once the field or a field inside it
+   * is touched. A field validator's error also shows once any field its check read is touched, its own or one it lists
+   * with `withDeps`. A schema or server error at the same path still needs a touch at or below that path. Only
+   * `getFieldError` and the array helpers' `getFieldError` apply this: reading `touched.slug && errors.slug` yourself
+   * doesn't.
    *
    * @example
    * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}
