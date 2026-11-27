@@ -1049,6 +1049,73 @@ describe('checks', () => {
     expect(edited.serverErrors).toBe(state.serverErrors);
   });
 
+  describe('a value replaced whole takes every error inside it, at keys it lacked too', () => {
+    type Located = { address?: { city: string; zip?: string } | undefined };
+    const located: Located = { address: { city: 'NYC' } };
+
+    test('clearing an object drops the client and server errors inside it', () => {
+      const state: FormState<Located> = {
+        ...createInitialFormState(located, 'a'),
+        clientErrors: { 'address.zip': 'Required' },
+        serverErrors: { 'address.zip': 'Unknown zip' },
+      };
+
+      const cleared = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'address', value: undefined }, located);
+
+      expect(cleared.clientErrors).toEqual({});
+      expect(cleared.serverErrors).toEqual({});
+    });
+
+    test('a follow that removes a key drops the errors inside it', () => {
+      const named: Located & { name: string } = { name: 'Ann', ...located };
+      const state: FormState<typeof named> = {
+        ...createInitialFormState(named, 'a'),
+        clientErrors: { 'address.zip': 'Required', name: 'Too short' },
+      };
+
+      const followed = formReducer(state, sync({ name: 'Ann' }), named);
+
+      expect(followed.values).toEqual({ name: 'Ann' });
+      expect(followed.clientErrors).toEqual({ name: 'Too short' });
+    });
+
+    test('removing an array item drops the errors inside it', () => {
+      type Contacts = { contacts: { email?: string; name?: string }[] };
+      const listed: Contacts = { contacts: [{ email: 'a@x' }, { name: 'b' }] };
+      const state: FormState<Contacts> = {
+        ...createInitialFormState(listed, 'a'),
+        clientErrors: { 'contacts.1.email': 'Required' },
+      };
+
+      const removed = formReducer(
+        state,
+        { type: 'SET_FIELD_VALUE', field: 'contacts', value: listed.contacts.slice(0, 1) },
+        listed,
+      );
+
+      expect(removed.clientErrors).toEqual({});
+    });
+
+    test('END_SCHEMA_CHECK of an object cleared since places no error inside it', () => {
+      const actions: FormAction<Located>[] = [
+        { type: 'START_SCHEMA_CHECK', id: 1 },
+        { type: 'SET_FIELD_VALUE', field: 'address', value: undefined },
+        {
+          type: 'END_SCHEMA_CHECK',
+          id: 1,
+          answer: { values: located, passed: false, errors: { 'address.zip': 'Required' } },
+        },
+      ];
+
+      const ended = actions.reduce(
+        (state, action) => formReducer(state, action, located),
+        createInitialFormState(located, 'a'),
+      );
+
+      expect(ended.clientErrors).toEqual({});
+    });
+  });
+
   test('END_SCHEMA_CHECK normalizes bracket keys', () => {
     const ended = apply(
       start,

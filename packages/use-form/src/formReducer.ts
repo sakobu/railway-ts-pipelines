@@ -15,13 +15,13 @@ import {
   syncValidators,
 } from './formChecks';
 import {
-  changedPaths,
   deepEqual,
   deepMerge,
   getValueByPath,
   normalizePath,
   normalizePathKeys,
   overlapsAny,
+  replacedPaths,
   setValueByPath,
   withoutPaths,
 } from './utils';
@@ -133,10 +133,10 @@ const answeredBy = <TValues extends Record<string, unknown>>(
 };
 
 /**
- * The state after an edit set `values`. The edit clears the submit error. Values that come to equal the latest version
- * end `isStale`, and count as clean when {@link latestIsSettled} allows. Values that come back to the clean values leave
- * no unsaved edits, so the form follows the latest version then, as a form with no edits does. The comparisons only run
- * once a version arrived under edits, so most forms pay nothing for them.
+ * The state after an edit set `values`. The edit clears the submit error. Values that come to equal the latest
+ * version end `isStale`, and count as clean when {@link latestIsSettled} allows. Values that come back to the clean
+ * values leave no unsaved edits, so the form follows the latest version then, as a form with no edits does. The
+ * comparisons only run once a version arrived under edits, so most forms pay nothing for them.
  */
 const withEdit = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
@@ -171,7 +171,8 @@ const withClientErrors = <TValues extends Record<string, unknown>>(
  * field. Errors that lose none keep their identity.
  *
  * @param errors - The errors, by path
- * @param changed - The paths whose value changed
+ * @param changed - The paths whose value was replaced ({@link replacedPaths}), so a cleared or removed object counts as
+ *   a change at its own path and takes every error inside it, at keys it lacked too
  */
 const withoutErrorsAt = (
   errors: Readonly<Record<FieldPath, string>>,
@@ -194,7 +195,7 @@ const withoutErrorsChanged = <TValues extends Record<string, unknown>>(
 ): FormState<TValues> => {
   // A form that shows no client or server error has none to drop, so it skips comparing the values
   if (Object.keys(state.clientErrors).length === 0 && Object.keys(state.serverErrors).length === 0) return state;
-  const changed = changedPaths(before, state.values);
+  const changed = replacedPaths(before, state.values);
   const clientErrors = withoutErrorsAt(state.clientErrors, changed);
   const serverErrors = withoutErrorsAt(state.serverErrors, changed);
   if (clientErrors === state.clientErrors && serverErrors === state.serverErrors) return state;
@@ -279,7 +280,7 @@ const reduce = <TValues extends Record<string, unknown>>(
       if (ended === state || action.answer === undefined) return ended;
       const { values, passed, errors } = action.answer;
       // Its errors describe the values it checked: those at the paths edited since it started no longer apply
-      const landed = withoutErrorsAt(errors, changedPaths(values, state.values));
+      const landed = withoutErrorsAt(errors, replacedPaths(values, state.values));
       return { ...withClientErrors(ended, landed), verdict: { values, passed } };
     }
 
@@ -412,9 +413,9 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Tracking checks: the schema check, each field's validator and its checks
  *
  * After every action that leaves new values, the client and server errors at, inside or above each path whose value
- * changed go, and a root error with them. After every action that leaves new values or new field checks, a check that
- * is pending or shows an error and whose inputs the values no longer hold ends with no error. So an error always
- * describes the values the form holds.
+ * changed go, a cleared or removed object counting as a change at its own path, and a root error with them. After
+ * every action that leaves new values or new field checks, a check that is pending or shows an error and whose inputs
+ * the values no longer hold ends with no error. So an error always describes the values the form holds.
  *
  * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
  * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged

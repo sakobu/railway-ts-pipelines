@@ -1943,6 +1943,21 @@ describe('every error shows only while the form holds the values it describes', 
     expect(result.current.errors.title).toBe('Title is required');
   });
 
+  test('in blur mode, clearing an object drops every schema error inside it, at keys it lacked too', () => {
+    const schema = S.object({
+      address: S.optional(S.object({ city: S.required(S.string()), zip: S.required(S.string()) })),
+    });
+    const { result } = renderHook(() => useForm(schema, { initialValues: {}, validationMode: 'blur' }));
+    act(() => result.current.setFieldValue('address.city', 'Oslo'));
+    act(() => result.current.setFieldTouched('address.city'));
+    expect(Object.keys(result.current.clientErrors)).toEqual(['address.zip']);
+
+    act(() => result.current.setFieldValue('address', undefined));
+
+    expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValid).toBe(true);
+  });
+
   test("a schema check that lands after an edit places its errors only where the values didn't change", async () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     const { result } = renderHook(() =>

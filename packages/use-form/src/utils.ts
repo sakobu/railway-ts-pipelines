@@ -358,8 +358,8 @@ const hidesContents = (value: object): boolean =>
 
 /**
  * Whether the form looks inside a value, or treats it as one value. `setValues` ({@link deepMerge}),
- * {@link deepEqual}, {@link changedPaths} and {@link collectFieldPaths} all follow it, so they agree on the shape of
- * form values.
+ * {@link deepEqual}, {@link replacedPaths}, {@link changedPaths} and {@link collectFieldPaths} all follow it, so they
+ * agree on the shape of form values.
  *
  * The form looks inside arrays and objects that keep their state in their own fields: plain
  * objects, and class instances with fields, such as a record class or a dayjs value. That's how
@@ -537,16 +537,17 @@ const leavesOf = (value: unknown, path: FieldPath): FieldPath[] => {
 };
 
 /**
- * Walks two values by {@link deepEqual}'s rules, calling `found` at each path where they differ until it returns
- * `false`. A key or item only one side has differs at each leaf inside it ({@link leavesOf}), and so does a value the
- * form looks inside where the other side holds one it doesn't, such as `undefined`. A pair met again inside itself is
- * settled by the walk already running on it, so a value that contains itself is walked once.
+ * Walks two values by {@link deepEqual}'s rules, calling `found` at each path where they part, until it returns
+ * `false`. They part where the walk can't go on into both: at a key or item only one side has, at a value the form
+ * looks inside (see {@link isBranch}) against one it doesn't, at an array against an object, and at two other values
+ * that differ. `found` gets the two values there, `undefined` for a side that lacks the key. A pair met again inside
+ * itself is settled by the walk already running on it, so a value that contains itself is walked once.
  *
  * @param a - The first value
  * @param b - The second value
  * @param path - The path of the values walked, `''` at the root
  * @param running - The pairs of values whose walk is running, outermost first
- * @param found - Called with each path where the values differ. Returning `false` stops the walk.
+ * @param found - Called with each path where the values part, and the values there. Returning `false` stops the walk.
  * @returns `false` when `found` stopped the walk, and `true` otherwise
  */
 const walkDifferences = (
@@ -554,19 +555,14 @@ const walkDifferences = (
   b: unknown,
   path: FieldPath,
   running: Array<readonly [object, object]>,
-  found: (path: FieldPath) => boolean,
+  found: (path: FieldPath, before: unknown, after: unknown) => boolean,
 ): boolean => {
   if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime()) || found(path);
-  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString() || found(path);
-  const branchA = isBranch(a);
-  const branchB = isBranch(b);
-  // Only one side is a value the form looks inside: it differs at each leaf inside that one, as a key only one side
-  // has does, so a missing object and one set to undefined count alike
-  if (branchA !== branchB) return leavesOf(branchA ? a : b, path).every(found);
-  // Neither is, and any other value compares by identity, which Object.is has ruled out. Or both are, of different
-  // kinds: the form's edits keep an array an array.
-  if (!branchA || !branchB || Array.isArray(a) !== Array.isArray(b)) return found(path);
+  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime()) || found(path, a, b);
+  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString() || found(path, a, b);
+  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out. The form's
+  // edits keep an array an array.
+  if (!isBranch(a) || !isBranch(b) || Array.isArray(a) !== Array.isArray(b)) return found(path, a, b);
   // Met again inside itself: the walk already running on this pair settles it
   if (running.some(([x, y]) => x === a && y === b)) return true;
 
@@ -574,20 +570,21 @@ const walkDifferences = (
   try {
     if (Array.isArray(a) && Array.isArray(b)) {
       for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const at = join(path, i);
         const walked =
-          i >= a.length || i >= b.length
-            ? leavesOf(i < a.length ? a[i] : b[i], join(path, i)).every(found)
-            : walkDifferences(a[i], b[i], join(path, i), running, found);
+          i < a.length && i < b.length ? walkDifferences(a[i], b[i], at, running, found) : found(at, a[i], b[i]);
         if (!walked) return false;
       }
       return true;
     }
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
       const inA = Object.hasOwn(a, key);
+      const inB = Object.hasOwn(b, key);
+      const at = join(path, key);
       const walked =
-        inA && Object.hasOwn(b, key)
-          ? walkDifferences(a[key], b[key], join(path, key), running, found)
-          : leavesOf(inA ? a[key] : b[key], join(path, key)).every(found);
+        inA && inB
+          ? walkDifferences(a[key], b[key], at, running, found)
+          : found(at, inA ? a[key] : undefined, inB ? b[key] : undefined);
       if (!walked) return false;
     }
     return true;
@@ -597,12 +594,55 @@ const walkDifferences = (
 };
 
 /**
- * Each path where two values differ, by {@link deepEqual}'s rules, so an edit re-checks and drops errors only where
- * it changed something. It looks inside the values the form looks inside (see {@link isBranch}) and reports the
- * deepest path where they differ. A key or item only one side has is a change at each leaf inside it, or at the key
- * itself when it holds a leaf or an empty branch, so one holding `undefined` counts too. So is an object or array
- * where the other side holds a value the form doesn't look inside, such as `undefined` or `null`: a missing object and
- * one set to `undefined` change the same paths.
+ * Walks two values ({@link walkDifferences}) and collects the paths `pathsAt` gives for each place they part.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @param pathsAt - The paths to collect where the values part, given the path there and the values on each side
+ * @returns The paths collected, in the order the walk meets them
+ */
+const collectParted = (
+  before: unknown,
+  after: unknown,
+  pathsAt: (path: FieldPath, before: unknown, after: unknown) => readonly FieldPath[],
+): FieldPath[] => {
+  const paths: FieldPath[] = [];
+  walkDifferences(before, after, '', [], (path, from, to) => {
+    for (const at of pathsAt(path, from, to)) paths.push(at);
+    return true;
+  });
+  return paths;
+};
+
+/**
+ * Each path where two values part, by {@link deepEqual}'s rules: where the value there was replaced whole, so the
+ * errors at, inside or above it no longer describe the values. It looks inside the values the form looks inside (see
+ * {@link isBranch}) and stops where it can't go on into both: at a key or item only one side has, at an object or array
+ * where the other side holds a value the form doesn't look inside, such as `undefined`, at an array against an object,
+ * and at two other values that differ. So clearing or removing an object is a change at its own path.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @returns Each path where the values part, in dot form
+ *
+ * @example
+ * replacedPaths({ address: { city: "LA", zip: "1" } }, { address: { city: "NYC", zip: "1" } }); // ["address.city"]
+ *
+ * @example
+ * replacedPaths({ address: { city: "LA" } }, { address: undefined }); // ["address"]
+ *
+ * @example
+ * replacedPaths({ tags: ["a", "b"] }, { tags: ["a"] }); // ["tags.1"]
+ */
+export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
+  collectParted(before, after, (path) => [path]);
+
+/**
+ * Each path where two values differ, by {@link deepEqual}'s rules, so an edit re-checks only the validators whose
+ * values it changed. Where the values part ({@link replacedPaths}) and only one side there is a value the form looks
+ * inside (see {@link isBranch}), each leaf inside that side changed, and elsewhere the path where they part did. A side
+ * that lacks the key counts as `undefined`. So a key holding `undefined` counts, and a missing object and one set to
+ * `undefined` change the same paths.
  *
  * @param before - The values before
  * @param after - The values after
@@ -620,14 +660,11 @@ const walkDifferences = (
  * @example
  * changedPaths({ address: undefined }, { address: { city: "Oslo" } }); // ["address.city"]
  */
-export const changedPaths = (before: unknown, after: unknown): FieldPath[] => {
-  const paths: FieldPath[] = [];
-  walkDifferences(before, after, '', [], (path) => {
-    paths.push(path);
-    return true;
+export const changedPaths = (before: unknown, after: unknown): FieldPath[] =>
+  collectParted(before, after, (path, from, to) => {
+    const branchFrom = isBranch(from);
+    return branchFrom === isBranch(to) ? [path] : leavesOf(branchFrom ? from : to, path);
   });
-  return paths;
-};
 
 /**
  * Compares two values the way the form sees them. Used for `isDirty`, for following new

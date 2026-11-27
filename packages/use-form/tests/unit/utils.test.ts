@@ -8,6 +8,7 @@ import {
   pathsOverlap,
   collectFieldPaths,
   changedPaths,
+  replacedPaths,
   deepMerge,
   deepEqual,
   isPromiseLike,
@@ -545,6 +546,50 @@ describe('changedPaths', () => {
       [Number.NaN, Number.NaN],
     ];
     for (const [a, b] of pairs) expect(changedPaths(a, b).length === 0).toBe(deepEqual(a, b));
+  });
+});
+
+describe('replacedPaths', () => {
+  test('lists each path where the two values part: the key itself where a value was replaced whole', () => {
+    const before = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
+    expect(replacedPaths(before, { ...before, address: { city: 'y', zip: '1' } })).toEqual(['address.city']);
+    expect(replacedPaths(before, structuredClone(before))).toEqual([]);
+    // A key or item only one side has
+    expect(replacedPaths({ a: 1 }, { a: 1, address: { city: 'x', zip: '1' } })).toEqual(['address']);
+    expect(replacedPaths({ address: { city: 'x' } }, {})).toEqual(['address']);
+    expect(replacedPaths({ address: { city: 'x' } }, { address: { city: 'x', zip: undefined } })).toEqual([
+      'address.zip',
+    ]);
+    expect(replacedPaths({ tags: ['a', { v: 1 }] }, { tags: ['a'] })).toEqual(['tags.1']);
+    expect(replacedPaths({ tags: ['a'] }, { tags: ['a', { v: 1 }] })).toEqual(['tags.1']);
+    // An object or array against a value the form doesn't look inside
+    expect(replacedPaths({ address: { city: 'x' } }, { address: undefined })).toEqual(['address']);
+    expect(replacedPaths({ address: undefined }, { address: { city: 'Oslo' } })).toEqual(['address']);
+    expect(replacedPaths({ address: null }, { address: { city: 'Oslo' } })).toEqual(['address']);
+    // An array against an object, and two other values that differ
+    expect(replacedPaths({ list: [1] }, { list: { 0: 1 } })).toEqual(['list']);
+    expect(replacedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
+    expect(replacedPaths({ match: /a/ }, { match: /b/ })).toEqual(['match']);
+  });
+
+  test('finds no path exactly when deepEqual calls the values equal, and each changed path sits at or inside one', () => {
+    const pairs: [unknown, unknown][] = [
+      [{ a: undefined }, {}],
+      [{ a: 1 }, { a: 1 }],
+      [[1], [1, 2]],
+      [{ d: new Date(5) }, { d: new Date(5) }],
+      [{ nested: { deep: [1, { x: 1 }] } }, { nested: { deep: [1, { x: 2 }] } }],
+      [{ a: undefined }, { a: { b: 1, c: [2] } }],
+      [{ address: { city: 'x', zip: '1' } }, {}],
+      [Number.NaN, Number.NaN],
+    ];
+    for (const [a, b] of pairs) {
+      const replaced = replacedPaths(a, b);
+      expect(replaced.length === 0).toBe(deepEqual(a, b));
+      for (const changed of changedPaths(a, b)) {
+        expect(replaced.some((path) => isPathAffected(changed, path))).toBe(true);
+      }
+    }
   });
 });
 
