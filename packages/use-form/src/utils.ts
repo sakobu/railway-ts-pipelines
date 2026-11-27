@@ -563,19 +563,26 @@ const walkDifferences = (
   if (running.some(([x, y]) => x === a && y === b)) return true;
 
   running.push([a, b]);
+  // A child both sides hold by the same reference doesn't part, so the walk skips it before building its path: an
+  // edit shares every subtree it left as it was, and deepEqual and the per-edit diffs stay cheap
   try {
     if (Array.isArray(a) && Array.isArray(b)) {
       for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const inBoth = i < a.length && i < b.length;
+        if (inBoth && Object.is(a[i], b[i])) continue;
         const at = join(path, i);
-        const walked =
-          i < a.length && i < b.length ? walkDifferences(a[i], b[i], at, running, found) : found(at, a[i], b[i]);
+        const walked = inBoth ? walkDifferences(a[i], b[i], at, running, found) : found(at, a[i], b[i]);
         if (!walked) return false;
       }
       return true;
     }
-    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    // a's keys, then b's that a doesn't list, as a set of both would order them
+    const keys = Object.keys(a);
+    for (const key of Object.keys(b)) if (!Object.prototype.propertyIsEnumerable.call(a, key)) keys.push(key);
+    for (const key of keys) {
       const inA = Object.hasOwn(a, key);
       const inB = Object.hasOwn(b, key);
+      if (inA && inB && Object.is(a[key], b[key])) continue;
       const at = join(path, key);
       const walked =
         inA && inB
