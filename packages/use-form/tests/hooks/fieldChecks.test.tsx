@@ -1178,7 +1178,9 @@ describe('a waiting field check follows the newest schema check', () => {
     const { gated } = createGatedValidator<PublishForm>();
     // Sync once the status is published, async before
     const mixed: S.MaybeAsyncValidator<unknown, PublishForm> = (values, path) =>
-      (values as PublishForm).status === 'published' ? publishValidator(values, path) : gated(values, path);
+      typeof values === 'object' && values !== null && 'status' in values && values.status === 'published'
+        ? publishValidator(values, path)
+        : gated(values, path);
     const { result } = renderHook(() =>
       useForm(mixed, {
         initialValues: draft,
@@ -1281,7 +1283,7 @@ describe('a waiting field check follows the newest schema check', () => {
     const { pending, gated } = createGatedValidator<PublishForm>();
     // Sync for a bad status, async otherwise, as a schema whose async refinement runs once its sync checks pass
     const mixed: S.MaybeAsyncValidator<unknown, PublishForm> = (values, path) =>
-      (values as PublishForm).status === 'bad'
+      typeof values === 'object' && values !== null && 'status' in values && values.status === 'bad'
         ? err([{ path: ['status'], message: 'Bad status' }])
         : gated(values, path);
     const checkTitle = mock((_value: string): string | undefined => undefined);
