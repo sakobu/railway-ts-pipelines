@@ -1129,9 +1129,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * What the follow changed, it reads from the state before the follow and the state right after it, so a later edit
    * isn't the follow's: one of the call the follow happened in, or one a layout effect of its commit made, a child's
-   * included. It runs once its event runs: right after the follow, or, when a commit inside a call made the follow (a
-   * `flushSync` inside `onFieldChange`), once that call's event has ended, its pass included. The checks run on the
-   * values the form holds then, and a check the follow cut short re-runs only while its inputs still hold in them.
+   * included. It runs once its event runs: right after the follow when an edit or a save made it, after the commit's
+   * earlier layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
+   * `onFieldChange`), once that call's event has ended, its pass included. The checks run on the values the form holds
+   * then, and a check the follow cut short re-runs only while its inputs still hold in them.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
