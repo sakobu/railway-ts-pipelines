@@ -53,6 +53,7 @@ import { useDebounce } from './useDebounce';
 import {
   changedPaths,
   deepEqual,
+  describesAny,
   getValueByPath,
   collectFieldPaths,
   isPathAffected,
@@ -229,9 +230,7 @@ const validatorsByPath = <TValues extends Record<string, unknown>>(
  */
 const gateRejects = (schemaErrors: Readonly<Record<FieldPath, string>>, inputs: CheckInputs): boolean => {
   const inputPaths = Object.keys(inputs);
-  return Object.keys(schemaErrors).some(
-    (errorPath) => errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, inputPaths),
-  );
+  return Object.keys(schemaErrors).some((errorPath) => describesAny(errorPath, inputPaths));
 };
 
 /**

@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test';
 import { runInNewContext } from 'node:vm';
 
+import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+
 import {
   getValueByPath,
   setValueByPath,
@@ -10,6 +12,7 @@ import {
   changedPaths,
   replacedPaths,
   outdatedBy,
+  describesAny,
   deepMerge,
   deepEqual,
   isPromiseLike,
@@ -610,6 +613,20 @@ describe('outdatedBy', () => {
   test('is undefined for values equal by content, so it outdates no error', () => {
     expect(outdatedBy({ tags: ['a'] }, { tags: ['a'] })).toBeUndefined();
     expect(outdatedBy({ when: new Date(5) }, { when: new Date(5) })).toBeUndefined();
+  });
+
+  test('outdates a whole-form error with any change', () => {
+    expect(outdatedBy({ name: 'a', email: 'b' }, { name: 'a', email: 'c' })?.(ROOT_ERROR_KEY)).toBe(true);
+  });
+});
+
+describe('describesAny', () => {
+  test('matches an error at, inside or above a path, and a whole-form error to every path', () => {
+    expect(describesAny('address', ['address.city'])).toBe(true);
+    expect(describesAny('address.city', ['address'])).toBe(true);
+    expect(describesAny(ROOT_ERROR_KEY, ['name'])).toBe(true);
+    expect(describesAny('email', ['name'])).toBe(false);
+    expect(describesAny('email', [])).toBe(false);
   });
 });
 

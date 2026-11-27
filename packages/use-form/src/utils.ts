@@ -1,3 +1,5 @@
+import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+
 import type { FieldPath } from './types';
 
 /**
@@ -312,6 +314,19 @@ export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffec
  */
 export const overlapsAny = (path: FieldPath, paths: readonly FieldPath[]): boolean =>
   paths.some((other) => pathsOverlap(path, other));
+
+/**
+ * Whether the error at `errorPath` describes any of `paths`: it sits at, inside or above one ({@link overlapsAny}), or
+ * it's a whole-form error ({@link ROOT_ERROR_KEY}), which describes every field. The schema gate and the error rule
+ * ({@link outdatedBy}) both match errors to paths by it.
+ *
+ * @example
+ * describesAny("address", ["address.city"]); // true
+ * describesAny("_root", ["name"]); // true
+ * describesAny("email", ["name"]); // false
+ */
+export const describesAny = (errorPath: FieldPath, paths: readonly FieldPath[]): boolean =>
+  errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, paths);
 
 /**
  * A path-keyed record without the entries whose path `drops` matches, or the record itself when it matches none, so
@@ -642,11 +657,11 @@ export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
 
 /**
  * The form's error rule for a change of values: which errors no longer describe the values once they change from
- * `before` to `after`. An error is outdated when it sits at, inside or above a path where the values part
- * ({@link replacedPaths}), so clearing or removing an object outdates every error inside it, at keys it lacked too,
- * and setting an equal value outdates none. The reducer applies it to the client and server errors after every action
- * that changes the values, and to a schema check's errors as they land, and a failed save to the errors it places. A
- * whole-form error isn't at a path: each caller says what a change does to it.
+ * `before` to `after`. An error is outdated when it describes a path where the values part ({@link describesAny},
+ * {@link replacedPaths}), so clearing or removing an object outdates every error inside it, at keys it lacked too, a
+ * whole-form error goes with any change, and setting an equal value outdates none. The reducer applies it to the client
+ * and server errors after every action that changes the values, and to a schema check's errors as they land, and a
+ * failed save to the errors it places.
  *
  * @param before - The values the errors describe
  * @param after - The values the form holds now
@@ -662,7 +677,7 @@ export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
  */
 export const outdatedBy = (before: unknown, after: unknown): ((path: FieldPath) => boolean) | undefined => {
   const replaced = replacedPaths(before, after);
-  return replaced.length === 0 ? undefined : (path) => overlapsAny(path, replaced);
+  return replaced.length === 0 ? undefined : (path) => describesAny(path, replaced);
 };
 
 /**

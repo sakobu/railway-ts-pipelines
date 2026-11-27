@@ -1,5 +1,3 @@
-import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
-
 import {
   NO_CHECKS,
   endFieldCheck,
@@ -164,8 +162,7 @@ const sharedWhenEmpty = (errors: Readonly<Record<FieldPath, string>>): Readonly<
 
 /**
  * The errors that still describe the values once they changed: without each error the change outdates
- * ({@link outdatedBy}), and without a root error ({@link ROOT_ERROR_KEY}) once anything changed, since it describes
- * every field. Errors that lose none keep their identity.
+ * ({@link outdatedBy}), a root error included once anything changed. Errors that lose none keep their identity.
  *
  * @param errors - The errors, by path
  * @param outdated - The change's test of which errors it outdates, or `undefined` when the values didn't part
@@ -173,10 +170,7 @@ const sharedWhenEmpty = (errors: Readonly<Record<FieldPath, string>>): Readonly<
 const withoutOutdated = (
   errors: Readonly<Record<FieldPath, string>>,
   outdated: ((path: FieldPath) => boolean) | undefined,
-): Readonly<Record<FieldPath, string>> =>
-  outdated === undefined
-    ? errors
-    : withoutPaths(errors, (errorPath) => errorPath === ROOT_ERROR_KEY || outdated(errorPath));
+): Readonly<Record<FieldPath, string>> => (outdated === undefined ? errors : withoutPaths(errors, outdated));
 
 /**
  * The state without the client and server errors that stopped describing its values when they changed from `before`
