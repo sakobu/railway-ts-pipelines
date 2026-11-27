@@ -160,6 +160,70 @@ test('an event with no caller waits through a call made from inside the pass of 
   expect(order).toEqual(['inner pass', 'caller pass', 'own pass']);
 });
 
+test('an event with no caller that starts inside a pass, or inside a call made from it, runs once the outer pass has ended, in order, and its throw is reported', () => {
+  const report = mock((_error: unknown) => {});
+  const events = createCheckEvents(report);
+  const order: string[] = [];
+  const fromPass = new Error('from the pass');
+  const fromCallBody = new Error("from a call's body");
+  const fromCallPass = new Error("from a call's pass");
+  // An event with no caller whose pass throws `error`
+  const startUncalled = (error: Error): void =>
+    events.runUncalled(
+      (requests) => requests.check(),
+      () => {
+        order.push(error.message);
+        throw error;
+      },
+    );
+
+  expect(() =>
+    events.run(
+      (requests) => requests.check(),
+      () => {
+        startUncalled(fromPass);
+        events.run(
+          (requests) => {
+            requests.check();
+            startUncalled(fromCallBody);
+          },
+          () => startUncalled(fromCallPass),
+        );
+        order.push('caller pass');
+      },
+    ),
+  ).not.toThrow();
+
+  expect(order).toEqual(['caller pass', 'from the pass', "from a call's body", "from a call's pass"]);
+  expect(report.mock.calls).toEqual([[fromPass], [fromCallBody], [fromCallPass]]);
+});
+
+test('a report that throws still lets the next event with no caller run', () => {
+  const failure = new Error('report failed');
+  const events = createCheckEvents(() => {
+    throw failure;
+  });
+  const pass = mock(() => {});
+
+  expect(() =>
+    events.run(
+      (requests) => {
+        requests.check();
+        events.runUncalled(
+          (uncalled) => uncalled.check(),
+          () => {
+            throw new Error('own');
+          },
+        );
+      },
+      () => {},
+    ),
+  ).toThrow(failure);
+
+  events.runUncalled((requests) => requests.check(), pass);
+  expect(pass).toHaveBeenCalledTimes(1);
+});
+
 test("an event with no caller still runs when the caller's body throws, and its throw is reported", () => {
   const report = mock((_error: unknown) => {});
   const events = createCheckEvents(report);

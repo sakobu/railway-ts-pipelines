@@ -595,7 +595,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   // One public call is one event, and the calls made while it runs, such as from onFieldChange, join it. Its checks
   // run in one pass once the outermost call returns (checkRecorded, below). An event with no caller runs as its own
-  // once the one running has ended, and its throws are logged (runUncalled, below).
+  // once the one running has ended, its pass included, and its throws are logged (runUncalled, below).
   const [events] = useState(() => createCheckEvents(logValidationError));
 
   // Notifies of a change the quiet syncs of this commit made (Following initialValues, below), before any other
@@ -1072,9 +1072,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Runs `body` as an event with no caller to throw to, as an effect, a timer or a save's settle does: the mount check,
    * the layout effect's check after a `resetKey` reset and its follow of new `initialValues`, the follow after a save,
    * and auto-save's check. Its checks run in a pass of their own ({@link checkRecorded}). It never joins a call that
-   * is running: one that starts inside a call, as a `resetKey` reset that a `flushSync` inside `onFieldChange` commits
-   * does, waits until that call's event has ended, its pass included, then runs as its own. A sync throw is logged,
-   * since nothing could catch it.
+   * is running, nor runs inside a check pass: one that starts inside either, as a `resetKey` reset that a `flushSync`
+   * inside `onFieldChange` commits does, waits until the outermost call's event has ended, its pass included, then
+   * runs as its own, after those that started before it. A sync throw is logged, since nothing could catch it.
    *
    * @param body - What the event asks to check, through its requests
    */

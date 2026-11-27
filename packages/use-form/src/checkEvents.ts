@@ -3,7 +3,8 @@ import type { FieldPath } from './types';
 // One public call is one event. The calls made while it runs, such as from `onFieldChange`, join it, and each asks
 // what it wants checked. Once the outermost call returns, one pass checks what the event recorded, on the values as
 // they stand then. So within one event a validator runs at most once, and the schema runs once. An event with no
-// caller, such as an effect's, never joins one: it runs as its own once the event running has ended.
+// caller, such as an effect's, never joins one nor runs inside a pass: it runs as its own once the event running has
+// ended, its pass included.
 
 /** What a check reaches: the field validators it re-checks, beside the schema check every request asks for. */
 export type CheckReach = {
@@ -49,8 +50,10 @@ export type CheckEvents = {
    */
   run: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
   /**
-   * An event with no caller. It never joins a running event: it waits until that one has ended, its pass included
-   * (and even when its body or pass threw), then runs as its own. A throw from its body or pass goes to `report`.
+   * An event with no caller. It never joins a running event, nor runs inside a pass: one that starts while any event's
+   * body or pass runs, that of a call made from inside a pass included, waits until the outermost event has ended, its
+   * pass included (and even when its body or pass threw). Then it runs as its own, after those that started before it.
+   * A throw from its body or pass goes to `report`.
    */
   runUncalled: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
 };
@@ -62,10 +65,15 @@ export type CheckEvents = {
  * @returns The form's events
  */
 export const createCheckEvents = (report: (error: unknown) => void): CheckEvents => {
-  // The event running, if one is: its requests, and the events with no caller that started inside it, in order
-  let running: { requests: EventRequests; waiting: (() => void)[] } | undefined;
+  // The requests of the event whose body runs, if one does
+  let running: EventRequests | undefined;
+  // How many events have their body or pass running: the outermost, and each call made from inside a pass
+  let active = 0;
+  // The events with no caller that started while one was active, in order
+  const waiting: (() => void)[] = [];
 
-  // Runs `body` as an event of its own, then its pass, then the events with no caller that started inside it
+  // Runs `body` as an event of its own, then its pass. Once the outermost active event has ended, it runs the events
+  // with no caller that started meanwhile.
   const runAlone = (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void): void => {
     const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
     // Whether any request was made, so the pass runs
@@ -78,8 +86,8 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
         for (const key of validators) record.validators.add(key);
       },
     };
-    const waiting: (() => void)[] = [];
-    running = { requests, waiting };
+    active += 1;
+    running = requests;
     try {
       try {
         body(requests);
@@ -89,15 +97,21 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
       }
       if (requested) pass(record);
     } finally {
-      // Once the event has ended, its pass included, whatever either threw. None is added while they run, since the
-      // event has ended, and each reports its own throw.
-      for (const next of waiting) next();
+      try {
+        // Once the outermost has ended, its pass included, whatever either threw, the waiting ones run in order, each
+        // as an event of its own that reports its own throw before the next one runs. The outermost stays active
+        // meanwhile, so one that starts inside them waits behind them.
+        if (active === 1) for (let next = waiting.shift(); next; next = waiting.shift()) next();
+      } finally {
+        // Even when `report` throws, so the form's later events still run
+        active -= 1;
+      }
     }
   };
 
   return {
     run: (body, pass) => {
-      if (running) body(running.requests);
+      if (running) body(running);
       else runAlone(body, pass);
     },
     runUncalled: (body, pass) => {
@@ -108,7 +122,7 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
           report(error);
         }
       };
-      if (running) running.waiting.push(runOwn);
+      if (active > 0) waiting.push(runOwn);
       else runOwn();
     },
   };
