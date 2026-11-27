@@ -1127,7 +1127,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * In `mount` mode it does what the mount does ({@link recordMountCheck}), so the new version's fields are marked
    * touched at once.
    *
-   * Called right after the follow, so the store holds the state after it.
+   * It runs once its event runs: right after the follow, or, when a commit inside a call made the follow (a
+   * `flushSync` inside `onFieldChange`), once that call's event has ended, its pass included, on the values the form
+   * holds then. It compares those with the state before the follow, so a later edit of that call counts as part of the
+   * follow: in `live` mode it re-runs a validator whose inputs only that edit changed, and not one whose inputs that
+   * edit put back.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
