@@ -7,6 +7,7 @@ import {
   endSchemaCheck,
   hasFieldError,
   hasPendingFieldCheck,
+  inputsHeld,
   markFieldCheckRunning,
   startFieldCheck,
   startOver,
@@ -282,11 +283,21 @@ const reduce = <TValues extends Record<string, unknown>>(
     case 'SUBMISSION_WENT_OUT':
       return state.wentOut === action.values ? state : { ...state, wentOut: action.values };
 
-    case 'START_FIELD_CHECK':
+    case 'START_FIELD_CHECK': {
+      const started = startFieldCheck(
+        state.checks,
+        normalizePath(action.field),
+        action.id,
+        action.status,
+        action.inputs,
+      );
+      // The one check action that can leave a check on values the form doesn't hold, such as a submit's of values
+      // edited since: it ends at once. The others keep each check's inputs, or end the check.
       return withChecks(
         state,
-        startFieldCheck(state.checks, normalizePath(action.field), action.id, action.status, action.inputs),
+        inputsHeld(action.inputs, state.values) ? started : endOutdatedChecks(started, state.values),
       );
+    }
 
     case 'RUN_FIELD_CHECK':
       return withChecks(state, markFieldCheckRunning(state.checks, normalizePath(action.field), action.id));
@@ -409,8 +420,9 @@ const reduce = <TValues extends Record<string, unknown>>(
  *
  * After every action that leaves new values, the client and server errors at, inside or above each path whose value
  * changed go, a cleared or removed object counting as a change at its own path, and a root error with them. After
- * every action that leaves new values or new field checks, a check that is pending or shows an error and whose inputs
- * the values no longer hold ends with no error. So an error always describes the values the form holds.
+ * every action that leaves new values, a check that is pending, shows an error or is held back, and whose inputs the
+ * values no longer hold, ends with no error, and a field check that starts on inputs the values don't hold ends at
+ * once. So an error always describes the values the form holds.
  *
  * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
  * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged
@@ -456,11 +468,10 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
 ): FormState<TValues> => {
   const reduced = reduce(state, action, initialValues);
-  const described = reduced.values === state.values ? reduced : withoutErrorsChanged(reduced, state.values);
   const next =
-    described.values === state.values && described.checks.fields === state.checks.fields
-      ? described
-      : withChecks(described, endOutdatedChecks(described.checks, described.values));
+    reduced.values === state.values
+      ? reduced
+      : withChecks(withoutErrorsChanged(reduced, state.values), endOutdatedChecks(reduced.checks, reduced.values));
   if (
     next.wentOut === undefined ||
     next.values === state.values ||
