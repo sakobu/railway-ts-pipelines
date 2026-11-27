@@ -659,6 +659,54 @@ describe('a follow re-checks as an edit does', () => {
     expect(checkTitle).toHaveBeenCalledWith('Latest');
     expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
   });
+
+  describe('when a commit inside a call makes the form follow, and that call edits after it', () => {
+    const updated: PublishForm = { ...draft, title: 'Updated' };
+
+    /**
+     * A live form whose `tags` edit, which leaves no unsaved edit, commits `updated` inside `onFieldChange`, so the
+     * form follows it, then sets `field` to `value` in the same call.
+     */
+    const followThenEdit = (field: 'title' | 'status', value: string, shouldValidate: boolean) => {
+      const checkTitle = mock((title: string) => (title === draft.title ? 'Taken' : undefined));
+      const checkStatus = mock((_status: string) => undefined);
+      const { result } = renderHook(() => {
+        const [initial, setInitial] = useState(draft);
+        return useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { title: checkTitle, status: checkStatus },
+          onFieldChange: (changed) => {
+            if (changed !== 'tags') return;
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            flushSync(() => setInitial(updated));
+            result.current.setFieldValue(field, value, shouldValidate);
+          },
+        });
+      });
+      act(() => result.current.setFieldValue('tags', draft.tags));
+      return { result, checkTitle, checkStatus };
+    };
+
+    test("the follow doesn't re-check what only that edit changed, so its validator runs once", () => {
+      const { result, checkTitle, checkStatus } = followThenEdit('status', 'published', true);
+
+      expect(result.current.values).toEqual({ ...updated, status: 'published' });
+      expect(checkStatus).toHaveBeenCalledTimes(1);
+      expect(checkStatus).toHaveBeenCalledWith('published');
+      expect(checkTitle).toHaveBeenCalledTimes(1);
+      expect(checkTitle).toHaveBeenCalledWith('Updated');
+    });
+
+    test('a value the follow changed that the edit puts back without a check is still re-checked once', () => {
+      const { result, checkTitle } = followThenEdit('title', draft.title, false);
+
+      expect(result.current.values).toEqual(draft);
+      expect(checkTitle).toHaveBeenCalledTimes(1);
+      expect(checkTitle).toHaveBeenCalledWith(draft.title);
+      expect(result.current.fieldErrors).toEqual({ title: 'Taken' });
+    });
+  });
 });
 
 test('isValidating ends once the newest schema check moves on a field check that waited on a replaced one', async () => {

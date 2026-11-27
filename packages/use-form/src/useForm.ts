@@ -1127,21 +1127,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * In `mount` mode it does what the mount does ({@link recordMountCheck}), so the new version's fields are marked
    * touched at once.
    *
-   * It runs once its event runs: right after the follow, or, when a commit inside a call made the follow (a
-   * `flushSync` inside `onFieldChange`), once that call's event has ended, its pass included, on the values the form
-   * holds then. It compares those with the state before the follow, so a later edit of that call counts as part of the
-   * follow: in `live` mode it re-runs a validator whose inputs only that edit changed, and not one whose inputs that
-   * edit put back.
+   * What the follow changed, it reads from the state before the follow and the state right after it, so a later edit
+   * of the call the follow happened in isn't the follow's. It runs once its event runs: right after the follow, or,
+   * when a commit inside a call made the follow (a `flushSync` inside `onFieldChange`), once that call's event has
+   * ended, its pass included. The checks run on the values the form holds then, and a check the follow cut short
+   * re-runs only while its inputs still hold in them.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
+   * @param after - The state right after the follow
    */
   const recordFollow = useCallback(
-    (requests: EventRequests, prev: FormState<TValues>): void => {
+    (requests: EventRequests, prev: FormState<TValues>, after: FormState<TValues>): void => {
       const { values } = store.getState();
       const changed = validateOnChange
         ? Array.from(fieldValidatorsRef.current)
-            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), values))
+            .filter(([, validator]) => !inputsHeld(valuesAt(prev.values, validator.inputs), after.values))
             .map(([key]) => key)
         : [];
       const fields = [...changed, ...fieldsCutShort(prev.checks.fields, values)];
@@ -1205,7 +1206,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       if (now.generation !== prev.generation) {
         if (validateOnMount) runUncalled(recordMountCheck);
       } else if (now.baselineEpoch !== prev.baselineEpoch) {
-        runUncalled((requests) => recordFollow(requests, prev));
+        runUncalled((requests) => recordFollow(requests, prev, now));
       }
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
@@ -1248,7 +1249,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const prev = store.getState();
       dispatch(action);
       const next = store.getState();
-      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev);
+      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev, next);
       if (checkNamed) requests.check({ paths: changedPaths(prev.values, next.values), named: checkNamed });
     },
     [store, dispatch, recordFollow],
@@ -1646,8 +1647,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               lastVersion,
               ...(saved !== undefined && { saved }),
             });
-            if (store.getState().baselineEpoch !== before.baselineEpoch) {
-              runUncalled((requests) => recordFollow(requests, before));
+            const after = store.getState();
+            if (after.baselineEpoch !== before.baselineEpoch) {
+              runUncalled((requests) => recordFollow(requests, before, after));
             }
           };
 
