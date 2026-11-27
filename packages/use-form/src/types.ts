@@ -1524,7 +1524,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Field management
 
   /**
-   * Updates a single field value and optionally triggers validation. Automatically clears related server errors.
+   * Updates a single field value and optionally triggers validation. Automatically drops the schema and server errors
+   * at, inside or above each path whose value it changed.
    * Validation runs once, after the outermost call returns, so the calls `onFieldChange` makes validate with it.
    *
    * @example

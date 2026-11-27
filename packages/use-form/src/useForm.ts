@@ -1297,12 +1297,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Updates multiple field values simultaneously and optionally triggers validation.
    * More efficient than calling setFieldValue multiple times when updating several fields.
-   * Automatically clears server errors for affected fields.
+   * Automatically drops the schema and server errors at, inside or above each path whose value it changed, in every
+   * mode, a cleared or removed object counting as a change at its own path.
    *
    * Validation runs once, after the outermost call returns, as for `setFieldValue`: the schema, and each field
    * validator that a value it changed reaches. A value equal to the one before isn't a change, so a whole-record
-   * `setValues` re-runs only the validators of what changed. An edit drops the errors at the paths it changed in every
-   * mode.
+   * `setValues` re-runs only the validators of what changed.
    *
    * A record to load goes in `initialValues` instead, which the form follows while it has no unsaved edits.
    *
