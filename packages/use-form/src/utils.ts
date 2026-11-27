@@ -1,3 +1,5 @@
+import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+
 import type { FieldPath } from './types';
 
 /**
@@ -36,6 +38,22 @@ export const own = <T>(record: Readonly<Record<FieldPath, T>>, key: FieldPath): 
  */
 export const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   typeof (value as { then?: unknown } | null | undefined)?.then === 'function';
+
+/**
+ * Applies `onAnswer` to an answer now, or once it settles. An answer that settles later, whatever thenable it is,
+ * becomes a native promise, and `onFail`, when given, handles its rejection. A sync throw from `onAnswer` reaches the
+ * caller.
+ *
+ * @param answer - The answer, or a thenable of it
+ * @param onAnswer - Maps the settled answer
+ * @param onFail - Handles a rejection. Without it, the promise rejects.
+ * @returns What `onAnswer` returned, or a native promise of it
+ */
+export const mapAnswer = <T, U>(
+  answer: T | PromiseLike<T>,
+  onAnswer: (settled: T) => U,
+  onFail?: (error: unknown) => U,
+): U | Promise<U> => (isPromiseLike(answer) ? Promise.resolve(answer).then(onAnswer, onFail) : onAnswer(answer));
 
 /**
  * Retrieves a value from a nested object using a path string.
@@ -93,6 +111,17 @@ export const getValueByPath = <TObj extends Record<string, unknown>, TValue = un
 
   return current as TValue | undefined;
 };
+
+/**
+ * The value at each path, read by {@link getValueByPath} and keyed by the path as given. Built with
+ * `Object.fromEntries`, so a path named `__proto__` stays an own key.
+ *
+ * @param values - The values to read
+ * @param paths - The paths to read them at
+ * @returns Each path's value, by path
+ */
+export const valuesAt = (values: Record<string, unknown>, paths: readonly FieldPath[]): Record<FieldPath, unknown> =>
+  Object.fromEntries(paths.map((path) => [path, getValueByPath(values, path)]));
 
 /**
  * Sets a value in a nested object using a path string, returning a new object.
@@ -277,6 +306,46 @@ export const isPathAffected = (path: FieldPath, changePath: FieldPath): boolean 
 export const pathsOverlap = (a: FieldPath, b: FieldPath): boolean => isPathAffected(a, b) || isPathAffected(b, a);
 
 /**
+ * Whether a path overlaps any of `paths` ({@link pathsOverlap}).
+ *
+ * @example
+ * overlapsAny("address.city", ["name", "address"]); // true
+ * overlapsAny("address.city", ["address.zip"]); // false
+ */
+export const overlapsAny = (path: FieldPath, paths: readonly FieldPath[]): boolean =>
+  paths.some((other) => pathsOverlap(path, other));
+
+/**
+ * Whether the error at `errorPath` describes any of `paths`: it sits at, inside or above one ({@link overlapsAny}), or
+ * it's a whole-form error ({@link ROOT_ERROR_KEY}), which describes every field. The schema gate and the error rule
+ * ({@link outdatedBy}) both match errors to paths by it.
+ *
+ * @example
+ * describesAny("address", ["address.city"]); // true
+ * describesAny("_root", ["name"]); // true
+ * describesAny("email", ["name"]); // false
+ */
+export const describesAny = (errorPath: FieldPath, paths: readonly FieldPath[]): boolean =>
+  errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, paths);
+
+/**
+ * A path-keyed record without the entries whose path `drops` matches, or the record itself when it matches none, so
+ * an unchanged record keeps its identity. Built with `Object.fromEntries`, so a path named `__proto__` stays an own key.
+ *
+ * @example
+ * withoutPaths({ "address.city": "Required", name: "Too short" }, (path) => isPathAffected(path, "address"));
+ * // { name: "Too short" }
+ */
+export const withoutPaths = <T>(
+  record: Readonly<Record<FieldPath, T>>,
+  drops: (path: FieldPath) => boolean,
+): Readonly<Record<FieldPath, T>> => {
+  const entries = Object.entries(record);
+  const kept = entries.filter(([path]) => !drops(path));
+  return kept.length === entries.length ? record : Object.fromEntries(kept);
+};
+
+/**
  * Whether a value is a plain object: an object literal, or one with a `null` prototype.
  * Its prototype is a root object, so objects from another realm count too: an iframe,
  * `node:vm`, or a test runner reading JSON from Node's own `fetch`.
@@ -304,7 +373,8 @@ const hidesContents = (value: object): boolean =>
 
 /**
  * Whether the form looks inside a value, or treats it as one value. `setValues` ({@link deepMerge}),
- * {@link deepEqual} and {@link collectFieldPaths} all follow it, so they agree on the shape of form values.
+ * {@link deepEqual}, {@link replacedPaths}, {@link changedPaths} and {@link collectFieldPaths} all follow it, so they
+ * agree on the shape of form values.
  *
  * The form looks inside arrays and objects that keep their state in their own fields: plain
  * objects, and class instances with fields, such as a record class or a dayjs value. That's how
@@ -312,13 +382,41 @@ const hidesContents = (value: object): boolean =>
  * `Blob`, `Map`, `Set`, typed arrays, and objects with no fields of their own, such as Temporal
  * values and classes with only private fields.
  *
+ * A value it looks inside is typed as a record read by key, as any object can be: each field reads as `unknown`.
+ *
  * @param value - Any form value
  * @returns Whether the form looks inside the value
  */
-const isBranch = (value: unknown): value is object => {
+const isBranch = (value: unknown): value is Readonly<Record<string, unknown>> => {
   if (value === null || typeof value !== 'object') return false;
   if (Array.isArray(value) || isPlainObject(value)) return true;
   return !hidesContents(value) && Object.keys(value).length > 0;
+};
+
+/** The path of `key` inside the value at `path`, where `''` is the root. */
+const join = (path: FieldPath, key: string | number): FieldPath => (path ? `${path}.${key}` : `${key}`);
+
+/**
+ * Walks a value and every value inside it the form looks inside (see {@link isBranch}), calling `visit` at each path,
+ * outer paths first. A leaf is a value the form doesn't look inside, an empty branch, or a value met again inside
+ * itself, which is walked once.
+ *
+ * @param value - The value
+ * @param path - The value's path
+ * @param visit - Called with each path, and whether a leaf is there
+ */
+const walkPaths = (value: unknown, path: FieldPath, visit: (path: FieldPath, isLeaf: boolean) => void): void => {
+  // The values being walked, so a value that contains itself is walked once
+  const ancestors = new Set<object>();
+  const walk = (current: unknown, at: FieldPath): void => {
+    const entries = isBranch(current) && !ancestors.has(current) ? Object.entries(current) : [];
+    visit(at, entries.length === 0);
+    if (!isBranch(current) || entries.length === 0) return;
+    ancestors.add(current);
+    for (const [key, child] of entries) walk(child, join(at, key));
+    ancestors.delete(current);
+  };
+  walk(value, path);
 };
 
 /**
@@ -385,29 +483,18 @@ const isBranch = (value: unknown): value is object => {
  */
 export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
   const paths: FieldPath[] = [];
-  // The values being walked, so a value that contains itself is listed once, where it repeats
-  const ancestors = new Set<object>();
-
-  const visit = (value: unknown, path: string) => {
+  // A value that contains itself is listed once, where it repeats
+  walkPaths(obj, prefix, (path) => {
     if (path) paths.push(path);
-
-    if (!isBranch(value) || ancestors.has(value)) return;
-    ancestors.add(value);
-
-    if (Array.isArray(value)) {
-      value.forEach((item, i) => visit(item, path ? `${path}.${i}` : `${i}`));
-    } else {
-      for (const [k, v] of Object.entries(value)) {
-        visit(v, path ? `${path}.${k}` : k);
-      }
-    }
-
-    ancestors.delete(value);
-  };
-
-  visit(obj, prefix);
+  });
   return paths;
 };
+
+/**
+ * Whether a plain object in `setValues` merges into this value ({@link deepMerge}): a value the form
+ * looks inside (see {@link isBranch}) that isn't an array. Its fields read as any object's do.
+ */
+const isMergeTarget = (value: unknown): value is Record<string, unknown> => isBranch(value) && !Array.isArray(value);
 
 /**
  * Merges `source` into `target` for `setValues`, returning a new object.
@@ -415,7 +502,9 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
  * A plain object in `source` is a partial update. It merges into the object there, as
  * `setFieldValue` on each of its keys would, when that object is one the form looks inside
  * (see {@link isBranch}) and isn't an array. Every other value in `source` (an array, `Date`,
- * `File`, `Map`, `Set` or class instance) replaces the value before it, stored as given.
+ * `File`, `Map`, `Set` or class instance) replaces the value before it, stored as given. A
+ * `__proto__` key is skipped: `JSON.parse` makes it an own key, and assigning it would replace the
+ * values' prototype.
  *
  * @param target - The current values (not mutated)
  * @param source - The values to write over them
@@ -432,16 +521,199 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
   const result: Record<string, unknown> = { ...target };
 
   for (const key of Object.keys(source)) {
-    // JSON.parse makes "__proto__" an own key. Assigning it would replace the values' prototype.
     if (key === '__proto__') continue;
-    const srcVal = source[key];
-    const tgtVal = target[key];
-    const merges = isPlainObject(srcVal) && isBranch(tgtVal) && !Array.isArray(tgtVal);
-    result[key] = merges ? deepMerge(tgtVal as Record<string, unknown>, srcVal) : srcVal;
+    const value = source[key];
+    const before = target[key];
+    result[key] = isPlainObject(value) && isMergeTarget(before) ? deepMerge(before, value) : value;
   }
 
   return result as T;
 };
+
+/**
+ * The path of each leaf inside a value ({@link walkPaths}): each value the form doesn't look inside (see
+ * {@link isBranch}), and each empty branch. A value that is itself a leaf or an empty branch is the one leaf, at
+ * `path`. A value met again inside itself is a leaf where it repeats, so it is walked once.
+ *
+ * @param value - The value
+ * @param path - The value's path
+ * @returns Each leaf's path, in dot form
+ */
+const leavesOf = (value: unknown, path: FieldPath): FieldPath[] => {
+  const leaves: FieldPath[] = [];
+  walkPaths(value, path, (at, isLeaf) => {
+    if (isLeaf) leaves.push(at);
+  });
+  return leaves;
+};
+
+/**
+ * Whether a value has `key` as one of its own enumerable keys, the ones `Object.keys` lists, so the walk below treats a
+ * non-enumerable own property as missing, on both sides.
+ */
+const listsKey = (value: object, key: string): boolean => Object.prototype.propertyIsEnumerable.call(value, key);
+
+/**
+ * Walks two values by {@link deepEqual}'s rules, calling `found` at each path where they part, until it returns
+ * `false`. They part where the walk can't go on into both: at a key or item only one side has, at a value the form
+ * looks inside (see {@link isBranch}) against one it doesn't, at an array against an object, and at two other values
+ * that differ. `found` gets the two values there, `undefined` for a side that lacks the key. A pair met again inside
+ * itself is settled by the walk already running on it, so a value that contains itself is walked once.
+ *
+ * @param a - The first value
+ * @param b - The second value
+ * @param path - The path of the values walked, `''` at the root
+ * @param running - The pairs of values whose walk is running, outermost first
+ * @param found - Called with each path where the values part, and the values there. Returning `false` stops the walk.
+ * @returns `false` when `found` stopped the walk, and `true` otherwise
+ */
+const walkDifferences = (
+  a: unknown,
+  b: unknown,
+  path: FieldPath,
+  running: Array<readonly [object, object]>,
+  found: (path: FieldPath, before: unknown, after: unknown) => boolean,
+): boolean => {
+  if (Object.is(a, b)) return true;
+  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime()) || found(path, a, b);
+  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString() || found(path, a, b);
+  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out. The form's
+  // edits keep an array an array.
+  if (!isBranch(a) || !isBranch(b) || Array.isArray(a) !== Array.isArray(b)) return found(path, a, b);
+  // Met again inside itself: the walk already running on this pair settles it
+  if (running.some(([x, y]) => x === a && y === b)) return true;
+
+  running.push([a, b]);
+  // A child both sides hold by the same reference doesn't part, so the walk skips it before building its path: an
+  // edit shares every subtree it left as it was, and deepEqual and the per-edit diffs stay cheap
+  try {
+    if (Array.isArray(a) && Array.isArray(b)) {
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const inBoth = i < a.length && i < b.length;
+        if (inBoth && Object.is(a[i], b[i])) continue;
+        const at = join(path, i);
+        const walked = inBoth ? walkDifferences(a[i], b[i], at, running, found) : found(at, a[i], b[i]);
+        if (!walked) return false;
+      }
+      return true;
+    }
+    // a's keys, then b's that a doesn't list, as a set of both would order them
+    const keys = Object.keys(a);
+    for (const key of Object.keys(b)) if (!listsKey(a, key)) keys.push(key);
+    for (const key of keys) {
+      const inA = listsKey(a, key);
+      const inB = listsKey(b, key);
+      if (inA && inB && Object.is(a[key], b[key])) continue;
+      const at = join(path, key);
+      const walked =
+        inA && inB
+          ? walkDifferences(a[key], b[key], at, running, found)
+          : found(at, inA ? a[key] : undefined, inB ? b[key] : undefined);
+      if (!walked) return false;
+    }
+    return true;
+  } finally {
+    running.pop();
+  }
+};
+
+/**
+ * Walks two values ({@link walkDifferences}) and collects the paths `pathsAt` gives for each place they part.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @param pathsAt - The paths to collect where the values part, given the path there and the values on each side
+ * @returns The paths collected, in the order the walk meets them
+ */
+const collectParted = (
+  before: unknown,
+  after: unknown,
+  pathsAt: (path: FieldPath, before: unknown, after: unknown) => readonly FieldPath[],
+): FieldPath[] => {
+  const paths: FieldPath[] = [];
+  walkDifferences(before, after, '', [], (path, from, to) => {
+    for (const at of pathsAt(path, from, to)) paths.push(at);
+    return true;
+  });
+  return paths;
+};
+
+/**
+ * Each path where two values part, by {@link deepEqual}'s rules: where the value there was replaced whole, so the
+ * errors at, inside or above it no longer describe the values. It looks inside the values the form looks inside (see
+ * {@link isBranch}) and stops where it can't go on into both: at a key or item only one side has, at an object or array
+ * where the other side holds a value the form doesn't look inside, such as `undefined`, at an array against an object,
+ * and at two other values that differ. So clearing or removing an object is a change at its own path.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @returns Each path where the values part, in dot form
+ *
+ * @example
+ * replacedPaths({ address: { city: "LA", zip: "1" } }, { address: { city: "NYC", zip: "1" } }); // ["address.city"]
+ *
+ * @example
+ * replacedPaths({ address: { city: "LA" } }, { address: undefined }); // ["address"]
+ *
+ * @example
+ * replacedPaths({ tags: ["a", "b"] }, { tags: ["a"] }); // ["tags.1"]
+ */
+export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
+  collectParted(before, after, (path) => [path]);
+
+/**
+ * The form's error rule for a change of values: which errors no longer describe the values once they change from
+ * `before` to `after`. An error is outdated when it describes a path where the values part ({@link describesAny},
+ * {@link replacedPaths}), so clearing or removing an object outdates every error inside it, at keys it lacked too, a
+ * whole-form error goes with any change, and setting an equal value outdates none. The reducer applies it to the client
+ * and server errors after every action that changes the values, and to the errors of a schema check and of a failed
+ * save as they land.
+ *
+ * @param before - The values the errors describe
+ * @param after - The values the form holds now
+ * @returns Whether the error at a path is outdated, or `undefined` when the values don't part, so none is
+ *
+ * @example
+ * const outdated = outdatedBy({ address: { city: "Oslo" } }, { address: undefined });
+ * outdated?.("address.zip"); // true: a key the cleared object lacked
+ * outdated?.("name"); // false
+ *
+ * @example
+ * outdatedBy({ tags: ["a"] }, { tags: ["a"] }); // undefined
+ */
+export const outdatedBy = (before: unknown, after: unknown): ((path: FieldPath) => boolean) | undefined => {
+  const replaced = replacedPaths(before, after);
+  return replaced.length === 0 ? undefined : (path) => describesAny(path, replaced);
+};
+
+/**
+ * Each path where two values differ, by {@link deepEqual}'s rules, so an edit re-checks only the validators whose
+ * values it changed. Where the values part ({@link replacedPaths}) and only one side there is a value the form looks
+ * inside (see {@link isBranch}), each leaf inside that side changed, and elsewhere the path where they part did. A side
+ * that lacks the key counts as `undefined`. So a key holding `undefined` counts, and a missing object and one set to
+ * `undefined` change the same paths.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @returns Each path where the values differ, in dot form
+ *
+ * @example
+ * changedPaths({ address: { city: "LA", zip: "1" } }, { address: { city: "NYC", zip: "1" } }); // ["address.city"]
+ *
+ * @example
+ * changedPaths({ tags: ["a"] }, { tags: ["a", "b"] }); // ["tags.1"]
+ *
+ * @example
+ * changedPaths({ address: { city: "LA" } }, {}); // ["address.city"]
+ *
+ * @example
+ * changedPaths({ address: undefined }, { address: { city: "Oslo" } }); // ["address.city"]
+ */
+export const changedPaths = (before: unknown, after: unknown): FieldPath[] =>
+  collectParted(before, after, (path, from, to) => {
+    const branchFrom = isBranch(from);
+    return branchFrom === isBranch(to) ? [path] : leavesOf(branchFrom ? from : to, path);
+  });
 
 /**
  * Compares two values the way the form sees them. Used for `isDirty`, for following new
@@ -470,35 +742,4 @@ export const deepMerge = <T extends Record<string, unknown>>(target: T, source: 
  * deepEqual(new Date("2024-01-01"), new Date("2024-01-01")); // true
  * deepEqual(new File(["a"], "a.txt"), new File(["a"], "a.txt")); // false: compared by identity
  */
-export const deepEqual = (a: unknown, b: unknown): boolean => equalWithin(a, b, []);
-
-/** {@link deepEqual}, given the pairs of values whose comparison is running, outermost first. */
-const equalWithin = (a: unknown, b: unknown, running: Array<readonly [object, object]>): boolean => {
-  if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime());
-  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
-  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out
-  if (!isBranch(a) || !isBranch(b)) return false;
-  // The form's edits keep an array an array
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  // Met again inside itself: the comparison already running on this pair settles it
-  if (running.some(([x, y]) => x === a && y === b)) return true;
-
-  running.push([a, b]);
-  const equal = Array.isArray(a) ? itemsEqual(a, b as unknown[], running) : fieldsEqual(a, b, running);
-  running.pop();
-  return equal;
-};
-
-const itemsEqual = (a: unknown[], b: unknown[], running: Array<readonly [object, object]>): boolean =>
-  a.length === b.length && a.every((item, i) => equalWithin(item, b[i], running));
-
-const fieldsEqual = (a: object, b: object, running: Array<readonly [object, object]>): boolean => {
-  const keysA = Object.keys(a);
-  if (keysA.length !== Object.keys(b).length) return false;
-  return keysA.every(
-    (key) =>
-      Object.prototype.hasOwnProperty.call(b, key) &&
-      equalWithin((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], running),
-  );
-};
+export const deepEqual = (a: unknown, b: unknown): boolean => walkDifferences(a, b, '', [], () => false);

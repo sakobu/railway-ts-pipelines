@@ -6,7 +6,14 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { StrictMode, useState } from 'react';
 
 import { useForm } from '../../src/useForm';
-import { createGatedOnSubmit, createGatedValidator, nextTask, withoutAct } from '../fixtures/gates';
+import { withDeps } from '../../src/withDeps';
+import {
+  createGatedFieldValidator,
+  createGatedOnSubmit,
+  createGatedValidator,
+  nextTask,
+  withoutAct,
+} from '../fixtures/gates';
 import {
   userValidator,
   alwaysValidValidator,
@@ -669,6 +676,33 @@ describe('autoSave', () => {
       expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Jane' });
       expect(schema).toHaveBeenCalledTimes(2);
       expect(checkName).toHaveBeenCalledTimes(1);
+    });
+
+    test('live auto-save saves once a listed field clears a cross-field error', async () => {
+      const onSubmit = saving();
+      // Typed as the list gives it: email reads as string
+      const differsFromEmail = mock((name: string, { email }: { readonly email: string }) =>
+        name === email ? 'Must differ' : undefined,
+      );
+      const { result } = renderAutoSaveForm(onSubmit, delay, {
+        fieldValidators: { name: withDeps(['email'], differsFromEmail) },
+      });
+
+      act(() => {
+        result.current.setFieldValue('name', initial.email);
+      });
+      await sleep(delay * 2);
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      act(() => {
+        result.current.setFieldValue('email', 'other@example.com');
+      });
+      // The edit's own pass re-ran it, before the save's field step could
+      expect(differsFromEmail).toHaveBeenLastCalledWith(initial.email, { email: 'other@example.com' });
+      await sleep(delay * 2);
+
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: initial.email, email: 'other@example.com' });
     });
   });
 
@@ -1860,6 +1894,44 @@ describe('autoSave', () => {
 
       expect(onSubmit.mock.calls).toEqual([[{ name: 'a' }], [{ name: 'ab' }]]);
       expect(consoleError).toHaveBeenCalledWith('Form submission error:', expect.any(Error));
+    });
+
+    test('a save whose field check failed on a value edited since sets no submit error, and saves the edit', async () => {
+      const { calls, gate } = createGatedFieldValidator();
+      const onSubmit = saving();
+      const { result } = renderHook(() =>
+        useForm(userValidator, {
+          initialValues: initial,
+          onSubmit,
+          validationMode: 'submit',
+          fieldValidators: { name: () => gate() },
+          autoSave: { delay },
+        }),
+      );
+
+      act(() => {
+        result.current.setFieldValue('name', 'Jane');
+      });
+      // The save's field step checks 'Jane' while the user types on
+      await waitFor(() => expect(calls).toHaveLength(1));
+      act(() => {
+        result.current.setFieldValue('name', 'Janet');
+      });
+      await act(async () => {
+        calls[0]!.resolve('Taken');
+        await nextTask();
+      });
+
+      expect(result.current.errors._root).toBeUndefined();
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(calls).toHaveLength(2));
+      await act(async () => {
+        calls[1]!.resolve(undefined);
+        await nextTask();
+      });
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith({ ...initial, name: 'Janet' });
     });
   });
 

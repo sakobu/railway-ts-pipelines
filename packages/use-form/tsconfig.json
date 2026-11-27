@@ -1,4 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src", "examples", "tests", "*.ts"]
+  "include": ["src", "examples", "tests", "*.ts"],
+  // tests/package type-checks the built package with its own tsconfig.json
+  "exclude": ["tests/package"]
 }

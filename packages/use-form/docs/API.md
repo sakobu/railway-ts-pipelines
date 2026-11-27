@@ -50,7 +50,12 @@ const validator = v.object({
 });
 ```
 
-**A validator that throws.** A validation the form starts on its own (on mount, after a reset, or when it follows new `initialValues`) logs a throw from the schema or a field validator with `console.error('Form validation error:', error)`, and the form keeps rendering. So does an async check that rejects, whatever started it, and its validating state ends. A sync throw during typing or a blur reaches the `setFieldValue`, `setValues` or `setFieldTouched` call that started the check, `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
+**A validator that throws.** Where a sync throw from the schema, or from a field validator after a sync schema check, goes depends on what asked for the check:
+
+- **Called:** `setFieldValue`, `setValues`, `setFieldTouched`, `resetForm` and the array helpers (through `setFieldValue`), plus the calls made inside `onFieldChange`, which join the event, and a follow that an edit causes, which belongs to that edit's call. The first sync throw reaches the event's outermost call, including one from a held-back or waiting check that the call's own sync schema check releases or moves on. A throw from `onFieldChange` itself skips all of that call's validation, a follow's re-check included. When one pass reaches several field validators and more than one throws, each later throw is logged. A field validator's throw after an async schema check is logged.
+- **No caller:** the mount check, the check after a `resetKey` change, the layout effect's follow of new `initialValues`, the follow after a save, and auto-save's check. Such an event never joins a call that is running, as one started by a `flushSync` inside `onFieldChange` would: it runs as its own once that call has returned. Every throw is logged, the first included, with `console.error('Form validation error:', error)`, and the form keeps rendering.
+- **Async rejection:** logged, whatever started the check, and its validating state ends.
+- **`validateForm` and `handleSubmit`:** `validateForm` throws or rejects with the validator, and a submission turns a throw into the submit error (see [`handleSubmit`](#handlesubmit)).
 
 #### options
 
@@ -74,14 +79,21 @@ Configuration object. Every option but `initialValues` can be set to `undefined`
   fieldValidators?:
     | {
         [K in ExtractFieldPaths<TValues>]?:
-          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | ((value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>)
+          | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>> // made by withDeps; see withDeps
           | undefined;
       }
     | undefined;
   onValuesChange?: ((values: TValues, prevValues: TValues) => void) | undefined;
   onFieldChange?: ((field: string, value: unknown, values: TValues) => void) | undefined;
   // Replaces the submit errors useForm writes itself; see messages below
-  messages?: { submitFailed?: string | undefined; changedWhileSaving?: string | undefined } | undefined;
+  messages?:
+    | {
+        submitFailed?: string | undefined;
+        changedWhileSaving?: string | undefined;
+        changedWhileChecking?: string | undefined;
+      }
+    | undefined;
 }
 ```
 
@@ -111,7 +123,7 @@ initialValues: {
 
 The form follows new `initialValues`, such as a refetched record:
 
-- With no unsaved edits, the form shows the new values in the same render. Its errors then describe them: it re-validates in `live` and `mount` modes, in `blur` mode once a field was blurred, after a submit attempt, and whenever errors already show. A mode that wouldn't have validated yet still doesn't.
+- With no unsaved edits, the form shows the new values in the same render. Its errors then describe them: it re-validates in `live` and `mount` modes, in `blur` mode once a field was blurred, after a submit attempt, and whenever errors already show. A mode that wouldn't have validated yet still doesn't. Field validators follow the edit rules, since the follow changes the values as an edit does ([`fieldValidators`](#fieldvalidators)): an error whose values it changed drops, in `live` mode each validator whose field or listed field it changed runs again, and a check of values it left as they were keeps running and lands.
 - With edits, they stay, and [`isStale`](#isstale) reports that a newer version arrived. An edit that undoes every unsaved edit leaves none, so the form then shows the latest version, as a form with no edits does.
 - Values that equal the latest `initialValues` count as having no edits, so the next version is followed. That covers a save made outside `onSubmit` whose record is passed back in, a wrapper that feeds the values back as `initialValues`, and typing that matches the latest version. The form doesn't see a save made outside `onSubmit`, though: when the server changes the record, for example by trimming a value, the form keeps the typed values and shows `isStale`. In an edit form, save in `onSubmit`. While `isSubmitting`, matching values still count as edits: the version may be an optimistic write that a failed save rolls back.
 - New values are compared by content, so an inline object is fine. After a successful save, the saved record passed back in is followed. Pass [`savedValues`](#savedvalues) so the form knows which version is the save's answer. Without it, the form takes a version that arrived during the save, or else the next one, for the answer, so:
@@ -161,7 +173,7 @@ onSubmit: async (values) => {
 };
 ```
 
-An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error. An error for a field the user changed during the save doesn't land: it's about the value they replaced, and an edit clears a server error anyway.
+An `err` is placed on the form like `setServerErrors`: per-path errors on their fields, a path-`[]` error as the submit error. An error at, inside or above a value the user changed during the save doesn't land: it's about the values they replaced, and that edit after the save would drop it anyway. The submit error lands either way.
 
 **Without `onSubmit`, a submit only validates.** Nothing is saved, so the values stay edits: a newer `initialValues` raises `isStale` rather than replacing them.
 
@@ -206,14 +218,35 @@ Controls when validation occurs.
 
 #### fieldValidators
 
-Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>) | undefined }`
+Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>) | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>> | undefined }`
 Optional
 
-Per-field validator functions for field-level async validation. The `value` parameter is typed based on the field path, so no cast is needed. Run independently from the main schema validator: on a change, only the changed field's validator runs; on submit, once the schema passes, every validator that is on runs. A field validator only runs when the schema produces **no error** for that field (schema passes first, then the field validator runs).
+A field under an optional or nullable object is typed `T | undefined`, here and in each value `withDeps` lists: the form holds `undefined` there while that object is missing, and a submit, or an edit that clears it, calls the validator with it. A tuple item's path is typed by index (`'pair.0'`), with its item's type.
+
+Per-field validator functions for field-level async validation. Run independently from the main schema validator. An entry is one of two forms:
+
+- A function of the field's value, `(value) => error`. The `value` parameter is typed from the field path, so no cast is needed. It reads no other field, and is called with that one argument.
+- A validator made by [`withDeps(deps, validate)`](#withdeps), where `validate(value, depValues)` also gets the fields it lists, and only those. Write it inside the entry.
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
-Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. A field's error stays while a check of the same value runs. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
+**The error rule.** Every error the form shows describes the values it holds. In every mode, an edit drops the schema and server errors at, inside or above each path whose value it changed, a cleared or removed object counting as a change at its own path, and a whole-form schema error on any change. Setting an equal value keeps them, and a schema check that lands after an edit places its errors only where the values still match. A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A submit whose check ended that way still fails: `handleSubmit`'s `err` includes the error, and the submit error says the values changed ([`messages.changedWhileChecking`](#messages)), unless auto-save can save the changed values on its own: with auto-save on and the form not stale.
+
+**What checks a validator again**, by mode:
+
+- `live`: an edit of its field or of a listed field. `setValues` re-runs the validators of the values it changed.
+- `blur`: a blur of its field or of a listed field.
+- `submit` and `mount`: the error just drops, and the next submit checks again.
+- `shouldValidate: true` on `setFieldValue`, `setValues` or `setFieldTouched` checks in any mode.
+- A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator whose field or listed field it changed, even one that passed. In every mode, a check whose values the follow left as they were keeps running and lands, as through an edit. A refetch can then send lookups: a check like "username taken" that should accept the record's own value lists the record's id with `withDeps`.
+- A submit runs every validator that is on, once the schema passes.
+- In every mode, a schema check that accepts the inputs of a check the schema gate held back runs it, whatever asked for that schema check: a blur or edit of another field, a follow or a submit (see the schema gate, below).
+
+A validator's own field matches by overlap, counting what an edit changed: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city` when the city changed. An array helper re-checks the array's validator, not those of the items it left as they were. A key an edit adds or removes is a change, even one holding `undefined`. Setting a field to its own value still re-checks its validator and those of the objects around it.
+
+**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is held back by an error at `address.zip`, and one that lists `address.city` is held back by an error at `address`. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it holds back every validator, and any edit that changes a value drops it, since it describes every field: put a cross-field rule on its field with `refineAt` to keep the other lookups running. A check the gate holds back ends with no error and without a spinner, so no request goes out with an input the schema rejects, and it runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in. Fixing the email that a rule on `username` reads runs the held-back `username` lookup, in any mode, as soon as a schema check of the fixed values lands. An edit of the held-back check's own inputs drops it instead, and the mode's rules check them again.
+
+Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
 ```typescript
 const form = useForm(userSchema, {
@@ -267,9 +300,18 @@ route through `setFieldValue`, so `onFieldChange` fires for them with the
 array field path (e.g., `"contacts"`) and the full new array as the value.
 
 It runs after the field's new value is stored, so any form call made inside it
-applies on top of the change, and the field's validation sees the result. A
-`resetForm()` or `setValues()` made here can override the field that just
-changed. To reset the other fields when one changes, pass the new value along:
+applies on top of the change. A `setFieldValue`, `setValues`, `setFieldTouched`
+or `resetForm` call made inside it, or inside a callback such a call fires in
+turn, joins the outermost call: validation runs once, after that outermost call
+returns, on the values as they are then, and a sync throw from it reaches that
+outermost call. So a cascade runs each validator and the schema once.
+`validateForm` and `handleSubmit` aren't part of that: they check at once. A
+throw from `onFieldChange` itself ends the outermost call without validating,
+the re-check of a follow the edit caused included: the errors the edit outdated
+are already gone, but schema errors at the paths it left as they were stay
+shown until the next check. A `resetForm()` or `setValues()` made here can
+override the field that just changed. To reset the other fields when one
+changes, pass the new value along:
 
 ```typescript
 onFieldChange: (field, value) => {
@@ -290,10 +332,11 @@ Optional
 
 Replaces the submit errors useForm writes itself, for other wording or a translation. Each one shows at `errors._root` and comes back in `handleSubmit`'s `err`. Errors from the schema, the field validators and `onSubmit` are already yours, so they aren't here.
 
-| Key                  | When                                                                                                                                      | Default                                                                                            |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `submitFailed`       | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                 | "Something went wrong. Please try again."                                                          |
-| `changedWhileSaving` | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit)) | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+| Key                    | When                                                                                                                                                                                                                                                                               | Default                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `submitFailed`         | A submission threw, or `onSubmit` returned neither a `Result` nor nothing                                                                                                                                                                                                          | "Something went wrong. Please try again."                                                          |
+| `changedWhileSaving`   | A save was cancelled before `onSubmit`, because a newer `initialValues` arrived that it would overwrite ([`handleSubmit`](#handlesubmit))                                                                                                                                          | "The record changed while saving, so nothing was saved. Review the latest version and save again." |
+| `changedWhileChecking` | A submit's schema or field validators failed on values the form no longer holds once the submit returns, after an edit, a follow or a reset ([`handleSubmit`](#handlesubmit)). Not while auto-save is on and the form isn't stale, since auto-save saves the changed values itself | "The values changed while they were checked, so nothing was saved. Review them and save again."    |
 
 ```typescript
 const form = useForm(contactSchema, {
@@ -301,6 +344,7 @@ const form = useForm(contactSchema, {
   messages: {
     submitFailed: t('form.submitFailed'),
     changedWhileSaving: t('form.changedWhileSaving'),
+    changedWhileChecking: t('form.changedWhileChecking'),
   },
 });
 ```
@@ -459,7 +503,7 @@ True when form is currently being submitted.
 
 Type: `boolean`
 
-Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run. A newer schema check of the values the form held when it started moves a waiting field check on with its result when it ends, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
+Derived property. True when **any** async validation is in progress -- form-level (from an async schema like `chainAsync`), a submission's, or field-level (from `fieldValidators`). A field check counts from when it starts, while it waits for the schema's result too, and a submit's field checks count while they run, unless an edit, a follow or a reset changes the values they check: such a check ends in the form at once, and the submit still waits for it. A newer schema check of the values the form held when it started moves a waiting field check on with its result when it ends, so a schema call that never settles, such as one a debouncer dropped, doesn't keep `isValidating` true. Use this to disable the submit button during any async check.
 
 ```typescript
 <button disabled={form.isSubmitting || form.isValidating || !form.isValid}>
@@ -471,7 +515,7 @@ Derived property. True when **any** async validation is in progress -- form-leve
 
 Type: `Readonly<Record<FieldPath, boolean>>`
 
-Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running, including a submit's field checks. Use this to show inline loading indicators next to individual fields.
+Per-field tracking for `fieldValidators` only. Shows which specific fields currently have async validators running, including a submit's field checks, until an edit, a follow or a reset changes the values they check. Use this to show inline loading indicators next to individual fields.
 
 ```typescript
 {form.validatingFields.username && <span>Checking username...</span>}
@@ -495,11 +539,11 @@ form.fieldErrors.email; // "Email is already taken"
 
 The `errors` object is a merged view of three separate error layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                 |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
+| Priority    | Source            | Property       | Populated when                                                                                            |
+| ----------- | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                               |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after no schema error overlaps that field or a field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                              |
 
 The merge is straightforward -- for each field path, the highest-priority non-empty error wins:
 
@@ -514,9 +558,9 @@ const errors = {
 
 **When each layer gets cleared:**
 
-- `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
-- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
+- `clientErrors` -- replaced when a schema check lands, except at paths edited since it started. An edit drops those at, inside or above the paths it changed, in every mode, and a root error on any change
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate holds the check back, with no error, until the schema accepts them. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
+- `serverErrors` -- dropped when an edit changes the value at, inside or above its path (setting an equal value keeps it); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
@@ -591,7 +635,7 @@ setFieldTouched<TField extends ExtractFieldPaths<TValues>>(
 
 - `field` - Field path with autocomplete
 - `isTouched` - Whether field is touched (default: true)
-- `shouldValidate` - Whether to validate after update (default: false)
+- `shouldValidate` - Whether to check the schema and the field validators the field reaches. `true` checks in any mode, and `false` never does. Left out, the mode decides: `blur` mode checks, `submit` and `mount` modes don't, and `live` mode checks only a field's first touch, and only the schema, since typing has checked the field already.
 
 **Example:**
 
@@ -613,6 +657,8 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 
 - `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given. To merge a class instance that holds only some fields, such as a model from a PATCH response, spread it into a plain object: `setValues({ address: { ...patch } })`.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
+
+When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. An edit drops the schema and server errors at, inside or above each path whose value it changed in every mode, a cleared or removed object counting as a change at its own path, and each field-validator error whose field or listed field it changed. Validation runs once, after the outermost call returns.
 
 **Example:**
 
@@ -652,7 +698,7 @@ form.setServerErrors([
 ]);
 ```
 
-Per-path errors land on their fields, under the same keys as client errors, and mark those paths touched. A path-`[]` error becomes the submit error, shown at `form.errors._root`. Server errors automatically clear when affected fields change (and on the groups that contain them); the submit error clears on any value change.
+Per-path errors land on their fields, under the same keys as client errors, and mark those paths touched. A path-`[]` error becomes the submit error, shown at `form.errors._root`. An edit that changes a value clears the server errors at, inside or above its path (an equal value keeps them); the submit error clears on any value change.
 
 ### clearServerErrors
 
@@ -698,14 +744,16 @@ The previous save's answer isn't a newer version: when it's still to come as the
 
 Then `onSubmit` isn't called, and `handleSubmit` resolves to `err([{ path: [], message: 'The record changed while saving, so nothing was saved. Review the latest version and save again.' }])`, which becomes the submit error. [`messages.changedWhileSaving`](#messages) replaces the text. A save started while `isStale` read true still goes out: the app chose to overwrite. So does one the user reset the form during (`resetForm()`), as with `handleSubmit(); resetForm()` to submit and clear.
 
+**A submit whose values changed while they were checked says so.** When its schema check or a field check fails on values that an edit, a follow of new `initialValues` or `resetForm()` changed while it ran, those errors describe values the form no longer holds. It's decided when the submit returns: a blur's re-check of unchanged values that answers differently doesn't count as a change. `handleSubmit` then resolves to `err` with the errors and `{ path: [], message: 'The values changed while they were checked, so nothing was saved. Review them and save again.' }`, which becomes the submit error, so a Save click doesn't look as if nothing happened. [`messages.changedWhileChecking`](#messages) replaces the text. Not while auto-save can save the changed values on its own: with auto-save on and the form not stale. Nor once a `resetKey` switch retired the submission's record.
+
 **What it does:**
 
 1. Calls `preventDefault` on the event (if provided)
 2. Marks all fields as touched
 3. Clears existing server errors
 4. Runs schema validation (awaits if async). Its errors show, or a pass clears those of an earlier attempt, unless a check of newer values started meanwhile, as typing starts one
-5. If schema passes, runs the field validators that are on when it gets there, in parallel. Their checks show in `validatingFields` and `isValidating`. Each result shows unless a check of that field started after the submit did. A check whose validator is switched off before it ends is still waited for, then counts as never run.
-6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except on fields the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
+5. If schema passes, runs the field validators that are on when it gets there, in parallel. Their checks show in `validatingFields` and `isValidating` until an edit, a follow or a reset changes the values they check: such a check ends in the form at once, and the submit still waits for it. Each result shows unless a check of that field started after the submit did. A check whose validator is switched off before it ends is still waited for, then counts as never run.
+6. If everything passes and no newer version arrived that the save would overwrite, calls `onSubmit` (if provided); an `err` it returns is placed on the form, except at, inside or above what the user changed during the save. Without `onSubmit`, nothing is saved and the values stay edits.
 7. Returns the `Result`
 
 **Example:**
@@ -757,12 +805,18 @@ It resets to the `initialValues` passed in the latest render. In `mount` mode it
 
 Returns the error message for a field path, gated on user interaction.
 
-- **Leaf paths**: returns the error iff the field itself has been touched.
+- **Leaf paths**: returns the error once the field itself has been touched.
 - **Group / parent paths**: returns the error iff _any_ descendant field has been
   touched. Cross-field validation errors that schemas attach to a non-leaf path
   (e.g. `S.refineAt("confirm", v => v.password === v.confirm, …)` or
   `S.refineAt("r2", …)` over a tuple) surface naturally on the group container,
   without callers having to read `form.errors` and `form.touched` directly.
+- **Field-validator errors**: a validator's error also shows once any field its
+  check read is touched, its own or one it lists with `withDeps`. So picking a
+  workspace shows that the slug is taken there. A schema or server error at the
+  same path still needs a touch at or below that path. Only `getFieldError` and
+  the array helpers' `getFieldError` apply this: reading
+  `touched.slug && errors.slug` yourself doesn't.
 
 Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
 
@@ -807,7 +861,8 @@ const schema = S.chain(
 The descendant scan uses a path-prefix check that guards against sibling
 collisions — `r2` does not match a touch on `r20`. `getFieldError` never
 aggregates _across_ paths: it only returns an error attached at the queried
-path, gated on touch of the path or any of its descendants.
+path, gated on touch of the path or any of its descendants, or, for a
+field-validator error, of a field its check read.
 
 ### getFieldId
 
@@ -853,7 +908,7 @@ validateForm(values: TValues): Result<TValues, ValidationError[]> | Promise<Resu
 - `values` - Values to validate
 
 **Returns:**
-Railway Result type with validated data or errors. Returns a Promise when using an async validator. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
+Railway Result type with validated data or errors. Returns a Promise when using an async validator. The form shows the errors only at the paths where `values` match the values it holds; the returned result holds them all. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
 
 **Example:**
 
@@ -1373,7 +1428,7 @@ getRadioGroupOptionProps<TField extends ExtractFieldPaths<TItem>>(
 
 #### getFieldError
 
-Get validation error for item field.
+Get the validation error for an item field, shown by the same rules as [`getFieldError`](#getfielderror).
 
 ```typescript
 getFieldError<TField extends ExtractFieldPaths<TItem>>(
@@ -1408,6 +1463,56 @@ getFieldId<TField extends ExtractFieldPaths<TItem>>(
 <label htmlFor={helpers.getFieldId(index, "name")}>Name</label>
 <input {...helpers.getFieldProps(index, "name")} />
 ```
+
+## withDeps
+
+Makes a field validator that lists the other fields it reads. It is the second form of a [`fieldValidators`](#fieldvalidators) entry.
+
+```typescript
+function withDeps<
+  TValues extends Record<string, unknown>,
+  TValue,
+  const D extends readonly ExtractFieldPaths<TValues>[],
+>(
+  deps: D,
+  validate: (value: TValue, deps: DepValues<TValues, D>) => string | undefined | Promise<string | undefined>,
+): FieldValidatorWithDeps<TValues, TValue>;
+```
+
+`FieldValidatorWithDeps`, `DepValues`, `FieldValidatorAnswer` and `FieldTypeAtPath` all import from `@railway-ts/use-form`.
+
+**Parameters:**
+
+- `deps` - The other fields the validator reads, as field paths. Only the form's field paths compile.
+- `validate` - Gets the field's value, then `depValues`: an object with one own property per listed path, keyed by the path as written (`{ 'address.city': ... }`), holding the value in the values checked. It can't read any other field, at runtime or in its types.
+
+When `deps` is a tuple, written inline or `as const`, each listed value has its exact type. When `deps` is held in a variable typed as an array, each listed value is optional (`T | undefined`), since which paths it holds is known only at runtime.
+
+Write `withDeps` inside the `fieldValidators` entry, where it takes the form's types. One declared elsewhere gives its type arguments, `withDeps<Form, string, readonly ['workspaceId']>(…)`. Without them it has no form to take its types from, and one built for another form doesn't fit. An entry made any other way, such as a hand-written `{ deps, validate }`, is off.
+
+A `deps` list that changes between renders applies from the validator's next check. See [`fieldValidators`](#fieldvalidators) for what checks it again, the schema gate and the error rule.
+
+```tsx
+import * as S from '@railway-ts/pipelines/schema';
+import { useForm, withDeps } from '@railway-ts/use-form';
+
+const projectSchema = S.object({
+  workspaceId: S.required(S.chain(S.string(), S.nonEmpty())),
+  slug: S.required(S.chain(S.string(), S.nonEmpty())),
+});
+
+const form = useForm(projectSchema, {
+  initialValues: { workspaceId: '', slug: '' },
+  fieldValidators: {
+    // The slug must be free in the selected workspace
+    slug: withDeps(['workspaceId'], async (slug, { workspaceId }) =>
+      (await isSlugTaken(workspaceId, slug)) ? 'This slug is taken' : undefined,
+    ),
+  },
+});
+```
+
+`S.nonEmpty()` matters here: `S.required` accepts `''`, and the schema gate holds the lookup back only while the schema rejects an input.
 
 ## useDebounce
 

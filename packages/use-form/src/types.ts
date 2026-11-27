@@ -1,3 +1,4 @@
+import type { FieldValidatorWithDeps } from './withDeps';
 import type { Result } from '@railway-ts/pipelines/result';
 import type { ValidationError } from '@railway-ts/pipelines/schema';
 import type { ChangeEvent, SyntheticEvent } from 'react';
@@ -87,16 +88,17 @@ export interface FormState<TValues extends Record<string, unknown>> {
   touched: Record<FieldPath, boolean>;
 
   /**
-   * Validation errors from client-side validation.
-   * These are populated by the validator function and cleared when the field is re-validated.
+   * Validation errors from the schema. A schema check that lands replaces them, placing its errors only at the paths
+   * where the values it checked still match the form's. An edit drops those at, inside or above each path whose value
+   * it changed, and the whole-form error at `_root` on any change.
    * Key is the field path, value is the error message.
    */
   clientErrors: Record<FieldPath, string>;
 
   /**
    * Validation errors from server-side validation.
-   * These are set manually via setServerErrors() and are automatically cleared when
-   * the related field value changes. Server errors take precedence over client errors.
+   * These are set manually via setServerErrors() and are cleared when an edit changes the related field's value (an
+   * equal value keeps them). Server errors take precedence over client errors.
    * Holds per-path errors only; the submit error is kept apart in `submitError`.
    */
   serverErrors: Record<FieldPath, string>;
@@ -167,7 +169,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
   /**
    * Increments on each follow, `RESET_FORM` and `resetKey` reset. `SUBMIT_SUCCEEDED` lands only in the epoch its
    * submission started in, and a submission registers its field checks only while the values it submitted are still
-   * the baseline. Checks don't need it: a follow or reset ends them in `checks`.
+   * the baseline. Checks don't need it: a reset ends them in `checks`, and the reducer ends those whose inputs a follow
+   * changed, as it does after an edit.
    */
   baselineEpoch: number;
 
@@ -209,19 +212,31 @@ export type CheckId = number;
  */
 export type PendingStatus = 'waiting' | 'running';
 
+/** The value at each of a check's input paths, keyed by normalized path, the validator's own field first. */
+export type CheckInputs = Readonly<Record<FieldPath, unknown>>;
+
 /** A field's latest check. Kept once it ends, so its id still tells which check is the newest. */
 export type FieldCheck = {
   id: CheckId;
   /** Pending, or done: it ended */
   status: PendingStatus | 'done';
-  /** The field's value the check checks */
-  value: unknown;
-  /** The error shown: once done, the validator's; while pending, the last one, while the value is unchanged */
+  /** The values it checks */
+  inputs: CheckInputs;
+  /** The error shown: once done, the validator's; while pending, the last one, while the inputs are unchanged */
   error?: string;
+  /**
+   * The schema gate held it back: it ended without calling the validator, with no error, since the schema rejected an
+   * input. While its inputs hold, it runs once a schema check of the values the form still holds accepts what its
+   * validator reads.
+   */
+  gated?: true;
 };
 
-/** How a field check ended: with the validator's answer, or with none (it threw or rejected). */
-export type FieldCheckResult = { error: string | undefined } | 'none';
+/**
+ * How a field check ended: with the validator's answer, with none (it threw or rejected), or held back by the schema
+ * gate, which runs it once the schema accepts its inputs.
+ */
+export type FieldCheckResult = { error: string | undefined } | 'none' | 'gated';
 
 /** A field validator as the checks know it: whether it's on, and its period, which goes up at each switch-off. */
 export type ValidatorState = { on: boolean; period: number };
@@ -235,6 +250,24 @@ export type ChecksState = {
   /** Each field that has had a validator */
   validators: Readonly<Record<FieldPath, ValidatorState>>;
 };
+
+/**
+ * What a follow of new `initialValues` asks its event to check, taken from the states before and right after it as it
+ * happens, so the choice comes from what that follow changed. Several follows merge into one, whose size is the
+ * form's, not their number.
+ */
+export type FollowChecks = {
+  /** Whether it asks for a check: as the mode calls for, or since the form validated, showed errors or was checking */
+  readonly check: boolean;
+  /**
+   * The paths whose value it changed (`changedPaths`), whose validators it re-checks as an edit does: in `live` mode
+   * only, so none otherwise
+   */
+  readonly paths: ReadonlySet<FieldPath>;
+};
+
+/** What a field validator answers: an error message, or `undefined` when the value passes. */
+export type FieldValidatorAnswer = string | undefined | Promise<string | undefined>;
 
 /**
  * The submit handler: it returns nothing on every path, or a `Result` on every path.
@@ -326,8 +359,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **Nothing:** `handleSubmit` resolves to `ok(values)`.
    * - **`ok(value)`:** `handleSubmit` resolves to `ok(value)`.
    * - **`err(errors)`:** each error is placed on its field, as `setServerErrors` does, and an error at
-   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`. An error for a field the
-   *   user changed during the save doesn't land: it's about the value they replaced.
+   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`. An error at, inside or above
+   *   a value the user changed during the save doesn't land: it's about the values they replaced.
    *
    * Without `onSubmit`, a submit only validates. Nothing is saved, so the values stay edits: a newer
    * `initialValues` raises `isStale` rather than replacing them.
@@ -440,20 +473,49 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
   validationMode?: 'live' | 'blur' | 'mount' | 'submit' | undefined;
 
   /**
-   * Per-field validator functions for field-level async validation.
-   * Run independently from the main schema validator: on a change, only the changed field's runs; on submit, once the schema passes, every one that is on.
-   * A field validator only runs when the schema produces no error for that field.
+   * Per-field validator functions for field-level async validation. An entry is one of:
+   * - a function of the field's value, `(value) => error`. It reads no other field.
+   * - `withDeps(deps, validate)`: `validate(value, depValues)` also gets the listed fields, and only those. Write it
+   *   inside the entry, where it takes the form's types. See `withDeps`.
+   *
    * Return undefined for valid, or an error message string for invalid.
    * An entry set to undefined is skipped, as a missing key is.
    * Switching one off, by leaving its key out or setting it to undefined, drops its error at once, and a check of it still running never lands.
    * A submit still waits for a check whose validator was switched off, then counts it as never run.
-   * A field's error stays while a check of the same value runs.
+   *
+   * An error shows only while its field and its listed fields hold the values its check saw. An edit that changes
+   * one of them drops the error at once, in every mode, and `isValid` follows.
+   *
+   * What checks a validator again, by mode: an edit of its field or of a listed field in `live` mode (`setValues`
+   * too, for the values it changed), a blur of either in `blur` mode, and a submit in every mode. In `submit` and
+   * `mount` modes an edit only drops the error. A validator's own field matches by overlap, counting what an edit
+   * changed: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on
+   * `address.city` when the city changed. An array helper re-checks the array's validator, not those of the items it
+   * left as they were. A key an edit adds or removes is a change, even one holding `undefined`. Setting a field to its
+   * own value still re-checks its validator and those of the objects around it. `shouldValidate: true` on
+   * `setFieldValue`, `setValues` or `setFieldTouched` checks in any mode.
+   *
+   * A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator
+   * whose field or listed field it changed, even one that passed, and in every mode a check whose values it left as
+   * they were keeps running and lands. So a refetch can send lookups: a check like "username taken" that should
+   * accept the record's own value lists the record's id with `withDeps`.
+   *
+   * The schema gate holds a validator back, with no error, while a schema error overlaps its field or any field it
+   * lists: one at, inside or above it, such as `address` for a validator on `address.city`, or `address.zip` for one on
+   * `address`. A root error (path `[]`) sits above every field, so it holds back every validator. A held-back check
+   * runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in.
+   * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
+   *
+   * A field under an optional or nullable object is typed `T | undefined`, here and in each value `withDeps` lists:
+   * the form holds `undefined` there while that object is missing, and a submit, or an edit that clears it, calls the
+   * validator with it. A tuple item's path is typed by index (`'pair.0'`), with its item's type.
    */
   fieldValidators?:
     | {
         [K in ExtractFieldPaths<TValues>]?:
-          | ((value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>)
+          | ((value: FieldTypeAtPath<TValues, K>) => FieldValidatorAnswer)
+          | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>>
           | undefined;
       }
     | undefined;
@@ -483,9 +545,15 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * route through setFieldValue, so this catches every user-driven field interaction.
    *
    * It runs after the field's new value is stored, so any form call made inside it applies on top
-   * of this change, and the field's validation sees the result. A resetForm() or setValues() made
-   * here can override the field that just changed. To reset the other fields when one changes,
-   * call setValues({ ...defaults, [field]: value }).
+   * of this change. A setFieldValue, setValues, setFieldTouched or resetForm call made inside it,
+   * or inside a callback such a call fires in turn, joins the outermost call: validation runs once,
+   * after that outermost call returns, on the values as they are then, and a sync throw from it
+   * reaches that outermost call. So a cascade runs each validator and the schema once. validateForm
+   * and handleSubmit still check at once. A throw from this callback that reaches the outermost call
+   * ends it without validating, the re-check of a follow the edit caused included: the errors the edit outdated are
+   * already gone, but schema errors at the paths it left as they were stay shown until the next check. A resetForm()
+   * or setValues() made here can override the field that just changed. To reset the other fields when one changes, call
+   * setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
    *
@@ -506,6 +574,7 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *   messages: {
    *     submitFailed: t('form.submitFailed'),
    *     changedWhileSaving: t('form.changedWhileSaving'),
+   *     changedWhileChecking: t('form.changedWhileChecking'),
    *   },
    * });
    */
@@ -525,6 +594,15 @@ export interface FormMessages {
    * Default: "The record changed while saving, so nothing was saved. Review the latest version and save again."
    */
   changedWhileSaving?: string | undefined;
+
+  /**
+   * A submit's schema or field validators failed on values the form no longer holds once the submit returns, after an
+   * edit, a follow of new `initialValues` or a reset. `handleSubmit`'s `err` still holds their errors, with this
+   * message at path `[]`. Not while auto-save can save the changed values on its own: with auto-save on and the form
+   * not stale.
+   * Default: "The values changed while they were checked, so nothing was saved. Review them and save again."
+   */
+  changedWhileChecking?: string | undefined;
 }
 
 /** How auto-save waits. */
@@ -794,13 +872,53 @@ export type NativeCheckboxGroupOptionProps = {
 };
 
 /**
+ * Resolves the type at a dot-separated field path within a type.
+ * Companion to ExtractFieldPaths — while ExtractFieldPaths extracts all valid paths,
+ * FieldTypeAtPath resolves the value type at a given path.
+ *
+ * A path through an optional or nullable object can hold `undefined`, because the form reads a missing object's
+ * fields as missing, so the type adds it.
+ *
+ * @template T - The root type to traverse
+ * @template P - A dot-separated path string
+ *
+ * @example
+ * type User = { name: string; address: { city: string; zip: number } };
+ * type City = FieldTypeAtPath<User, "address.city">; // string
+ * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
+ *
+ * @example
+ * type City = FieldTypeAtPath<{ address?: { city: string } }, "address.city">; // string | undefined
+ */
+export type FieldTypeAtPath<T, P extends string> = P extends `${infer K}.${infer Rest}`
+  ? K extends keyof NonNullable<T>
+    ? FieldTypeAtPath<NonNullable<T>[K], Rest> | MissingParent<T>
+    : unknown
+  : P extends keyof NonNullable<T>
+    ? NonNullable<T>[P] | MissingParent<T>
+    : unknown;
+
+/** `undefined` when the object a path step reads from may be missing, so the value read through it may be too. */
+type MissingParent<T> = T extends null | undefined ? undefined : never;
+
+// ─── Tuple helpers ─────────────────────────────────────────────────────────
+// number["length"] is `number`; a tuple like [A,B,C]["length"] is literal 3.
+// `number extends T["length"]` is true only for variable-length arrays.
+type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false : true;
+
+// keyof a tuple holds its index keys ('0' | '1' | …) beside the array's own keys; removing those leaves the indices.
+type TupleIndexPaths<T extends readonly unknown[]> = Exclude<keyof T, keyof unknown[]> & `${number}`;
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
  * Extracts all valid field paths from a type, including nested paths and discriminated unions.
  * This advanced utility type recursively traverses object structures to generate a union of
  * all possible dot-notation paths that can be used to access fields.
  *
  * Special handling for:
  * - Nested objects: Generates paths like "user.address.city"
- * - Arrays: Treated as terminal values (returns just "items", not "items[0]")
+ * - Arrays: Treated as terminal values (returns just "items", not "items[0]"). A tuple also gets a path per item
+ *   ("pair.0" | "pair.1")
  * - Dates: Treated as terminal values
  * - Functions: Treated as terminal values
  * - Discriminated unions: Extracts paths from all union variants
@@ -830,36 +948,6 @@ export type NativeCheckboxGroupOptionProps = {
  * type Form = { payment: Payment };
  * type Paths = ExtractFieldPaths<Form>; // "payment" | "payment.type" | "payment.cardNumber" | "payment.email"
  */
-/**
- * Resolves the type at a dot-separated field path within a type.
- * Companion to ExtractFieldPaths — while ExtractFieldPaths extracts all valid paths,
- * FieldTypeAtPath resolves the value type at a given path.
- *
- * @template T - The root type to traverse
- * @template P - A dot-separated path string
- *
- * @example
- * type User = { name: string; address: { city: string; zip: number } };
- * type City = FieldTypeAtPath<User, "address.city">; // string
- * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
- */
-export type FieldTypeAtPath<T, P extends string> = P extends `${infer K}.${infer Rest}`
-  ? K extends keyof T
-    ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
-    : unknown
-  : P extends keyof T
-    ? T[P]
-    : unknown;
-
-// ─── Tuple helpers ─────────────────────────────────────────────────────────
-// number["length"] is `number`; a tuple like [A,B,C]["length"] is literal 3.
-// `number extends T["length"]` is true only for variable-length arrays.
-type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false : true;
-
-// Extract<keyof [A,B,C], number> → 0 | 1 | 2; template-literalize → "0"|"1"|"2"
-type TupleIndexPaths<T extends readonly unknown[]> = `${Extract<keyof T, number>}`;
-// ───────────────────────────────────────────────────────────────────────────
-
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
   ? never
   : T extends object
@@ -1153,13 +1241,13 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
   ) => NativeRadioGroupOptionProps;
 
   /**
-   * Returns the validation error for a field within an array item, but only
-   * if the field has been touched. Mirrors the top-level `form.getFieldError`
-   * behaviour using the `(index, subField)` pattern.
+   * Returns the validation error for a field within an array item, shown by the
+   * same rules as `form.getFieldError`: once the field, a field inside it, or
+   * for a field-validator error a field its check read, is touched.
    *
    * @param index - The zero-based index of the array item
    * @param subField - Field path within the array item (type-safe)
-   * @returns The error message string, or `undefined` if untouched / valid
+   * @returns The error message string while it shows, or `undefined`
    *
    * @example
    * {helpers.getFieldError(index, "email") && (
@@ -1208,16 +1296,6 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  * });
  *
  * @example
- * // Setting multiple validation errors
- * dispatch({
- *   type: "SET_CLIENT_ERRORS",
- *   errors: {
- *     "email": "Invalid email format",
- *     "password": "Must be at least 8 characters"
- *   }
- * });
- *
- * @example
  * // Marking all fields as touched on submit
  * dispatch({
  *   type: "MARK_ALL_TOUCHED",
@@ -1243,8 +1321,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       /** The check's id */
       id: CheckId;
       /**
-       * The schema's answer: its verdict, and its errors as `SET_CLIENT_ERRORS` takes them. None, as after a throw or
-       * rejection, ends the check and keeps the errors and the verdict.
+       * The schema's answer: its verdict, and its errors, by path as `formatErrors` writes them. None, as after a throw
+       * or rejection, ends the check and keeps the errors and the verdict.
        */
       answer?: SchemaVerdict<TValues> & { errors: Record<FieldPath, string> };
     }
@@ -1263,8 +1341,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       id: CheckId;
       /** The status it starts in */
       status: PendingStatus;
-      /** The field's value the check checks */
-      value: unknown;
+      /** The values it checks */
+      inputs: CheckInputs;
     }
   | {
       /** Moves a field's waiting check to running */
@@ -1335,16 +1413,18 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isTouched: boolean;
     }
   | {
-      /** Sets client-side validation errors from the validator function */
-      type: 'SET_CLIENT_ERRORS';
-      /** Map of field paths to error messages */
-      errors: Record<FieldPath, string>;
-    }
-  | {
-      /** Sets server-side validation errors (manually set via setServerErrors) */
+      /**
+       * Sets server-side validation errors, from setServerErrors or a failed save, and marks each one's path touched,
+       * so it shows
+       */
       type: 'SET_SERVER_ERRORS';
       /** Map of field paths to error messages */
       errors: Record<FieldPath, string>;
+      /**
+       * The values the errors describe, when the form may no longer hold them, as after an edit during a save: an
+       * error at, inside or above a path where the form's values part from them doesn't land. Absent, every one lands.
+       */
+      describes?: TValues;
       /** The submit error (a server error at path `[]`); replaces any existing one, and absent clears it */
       submitError?: string;
     }
@@ -1417,15 +1497,15 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   clientErrors: Readonly<Record<FieldPath, string>>;
 
   /**
-   * Validation errors set via `setServerErrors()`, keyed by field path. Automatically cleared when the related
-   * field value changes. Includes the submit error at `_root` when one is set.
+   * Validation errors set via `setServerErrors()`, keyed by field path. Cleared when an edit changes the related
+   * field's value (an equal value keeps them). Includes the submit error at `_root` when one is set.
    */
   serverErrors: Readonly<Record<FieldPath, string>>;
 
   /**
    * Validation errors from field-level validators (both sync and async). Takes precedence over client errors but not server errors.
-   * Cleared at once when a check of a changed value starts, when the field's validator is switched off, and on reset.
-   * A check of an unchanged value keeps the error until it answers.
+   * Cleared at once when a value the check read changes, when the field's validator is switched off, and on reset.
+   * A check of unchanged values keeps the error until it answers.
    */
   fieldErrors: Readonly<Record<FieldPath, string>>;
 
@@ -1436,11 +1516,16 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is
    * currently in progress. A field check counts from when it starts, while it waits for the schema's result too. A
    * newer schema check of the values the form held when it started moves it on with its result when it ends, so a
-   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true.
+   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true. A submit's field check
+   * stops counting once an edit, a follow or a reset changes the values it checks, though the submit still waits for
+   * it.
    */
   isValidating: boolean;
 
-  /** Per-field async validation tracking. `true` when that field's async validator is running, including a submit's check of it. */
+  /**
+   * Per-field async validation tracking. `true` when that field's async validator is running, including a submit's
+   * check of it, until an edit, a follow or a reset changes the values it checks.
+   */
   validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**
@@ -1474,7 +1559,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Field management
 
   /**
-   * Updates a single field value and optionally triggers validation. Automatically clears related server errors.
+   * Updates a single field value and optionally triggers validation. Automatically drops the schema and server errors
+   * at, inside or above each path whose value it changed.
+   * Validation runs once, after the outermost call returns, so the calls `onFieldChange` makes validate with it.
    *
    * @example
    * form.setFieldValue("email", "user@example.com");
@@ -1482,7 +1569,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   setFieldValue: <TValue>(field: FieldPath, value: TValue, shouldValidate?: boolean) => void;
 
   /**
-   * Marks a field as touched or untouched and optionally triggers validation.
+   * Marks a field as touched or untouched and optionally triggers validation. Validation runs once, after the
+   * outermost call returns. By default the mode decides; `shouldValidate: true` checks the schema and the field
+   * validators the field reaches in any mode, and `false` never checks.
    *
    * @example
    * form.setFieldTouched("email");
@@ -1491,6 +1580,7 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
 
   /**
    * Updates multiple field values simultaneously. More efficient than calling `setFieldValue` multiple times.
+   * Validation runs once, after the outermost call returns, and reaches the field validators of the values it changed.
    *
    * @example
    * form.setValues({ firstName: "John", lastName: "Doe" });
@@ -1500,7 +1590,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Server error management
 
   /**
-   * Sets server-side validation errors. These take precedence over client errors and are auto-cleared on field change.
+   * Sets server-side validation errors. These take precedence over client errors and are cleared when an edit changes
+   * the field's value (an equal value keeps them).
    * An error at path `[]` becomes the submit error. Every other error's path is marked touched.
    *
    * @example
@@ -1523,7 +1614,10 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * and never rejects:
    * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent. Without
    *   `onSubmit`, nothing is saved, so the values stay edits.
-   * - `err` with the validation errors, or with `onSubmit`'s `err`
+   * - `err` with the validation errors, or with `onSubmit`'s `err`. When a failed check read values the form no
+   *   longer holds once the submit returns, it also holds a submit error at path `[]`, which the form shows, unless
+   *   auto-save can save the changed values on its own (auto-save on and the form not stale):
+   *   `messages.changedWhileChecking` sets the text.
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`
    *   replaces the text.
@@ -1550,8 +1644,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   resetForm: () => void;
 
   /**
-   * Runs the validator against the given values and returns a Railway `Result`. A validator that throws or rejects
-   * makes it throw or reject too, and leaves the errors as they were.
+   * Runs the validator against the given values and returns a Railway `Result`. The form shows the errors only at the
+   * paths where `values` match the values it holds; the returned result holds them all. A validator that throws or
+   * rejects makes it throw or reject too, and leaves the errors as they were.
    *
    * @example
    * const result = form.validateForm(currentValues);
@@ -1561,7 +1656,11 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Error helper
 
   /**
-   * Returns the error message for a field only if it has been touched, otherwise `undefined`.
+   * Returns the error message for a field while it shows, otherwise `undefined`: once the field or a field inside it
+   * is touched. A field validator's error also shows once any field its check read is touched, its own or one it lists
+   * with `withDeps`. A schema or server error at the same path still needs a touch at or below that path. Only
+   * `getFieldError` and the array helpers' `getFieldError` apply this: reading `touched.slug && errors.slug` yourself
+   * doesn't.
    *
    * @example
    * {form.getFieldError("email") && <span>{form.getFieldError("email")}</span>}

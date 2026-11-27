@@ -10,11 +10,17 @@ Setup, commands, changesets, pull requests and commit format are in the [repo-wi
 src/
 ├── useForm.ts              # Main hook
 ├── formReducer.ts          # State management reducer
+├── formStore.ts            # The form state, held outside React
+├── formChecks.ts           # The schema check and field checks in the form state
+├── checkEvents.ts          # One check pass per public call
+├── withDeps.ts             # Field validators that list the fields they read
 ├── fieldPropsFactory.ts    # Native HTML prop generators
 ├── arrayHelpersFactory.ts  # Array field helpers
 ├── standardSchema.ts       # Standard Schema v1 adapter
 ├── useDebounce.ts          # Debounce hook
 ├── autoSave.ts             # The auto-save decision
+├── submitScheduler.ts      # What an overlapping submit does
+├── stabilityCheck.ts       # Whether initialValues changes on its own
 ├── types.ts                # TypeScript types
 ├── utils.ts                # Internal utilities
 └── index.ts                # Public exports

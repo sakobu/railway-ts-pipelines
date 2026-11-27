@@ -1,16 +1,23 @@
 import { describe, test, expect } from 'bun:test';
 import { runInNewContext } from 'node:vm';
 
+import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+
 import {
   getValueByPath,
   setValueByPath,
   isPathAffected,
   pathsOverlap,
   collectFieldPaths,
+  changedPaths,
+  replacedPaths,
+  outdatedBy,
+  describesAny,
   deepMerge,
   deepEqual,
   isPromiseLike,
   own,
+  valuesAt,
 } from '../../src/utils';
 
 // Shaped like a dayjs value: a date picker creates a new one on every pick
@@ -74,6 +81,17 @@ describe('getValueByPath', () => {
     const obj = { name: 'John' };
     expect(getValueByPath<typeof obj, typeof obj>(obj, '')).toEqual(obj);
   });
+});
+
+test('valuesAt reads each path, keyed by the path as given, and keeps a __proto__ path an own key', () => {
+  expect(valuesAt({ address: { city: 'Oslo' }, name: 'x' }, ['address.city', 'name', 'age'])).toEqual({
+    'address.city': 'Oslo',
+    name: 'x',
+    age: undefined,
+  });
+  const read = valuesAt(Object.fromEntries([['__proto__', 'x']]), ['__proto__']);
+  expect(Object.entries(read)).toEqual([['__proto__', 'x']]);
+  expect(Object.getPrototypeOf(read)).toBe(Object.prototype);
 });
 
 describe('setValueByPath', () => {
@@ -475,6 +493,143 @@ describe('deepMerge', () => {
   });
 });
 
+describe('changedPaths', () => {
+  const before = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
+
+  test('lists each path where two values differ, as deepEqual compares them', () => {
+    expect(changedPaths(before, { ...before, address: { city: 'y', zip: '1' } })).toEqual(['address.city']);
+    expect(changedPaths(before, { ...before, tags: ['a', 'b'] })).toEqual(['tags.1']);
+    expect(changedPaths(before, { ...before, tags: [] })).toEqual(['tags.0']);
+    expect(changedPaths(before, structuredClone(before))).toEqual([]);
+    expect(changedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
+    expect(changedPaths({ when: new Date(0) }, { when: new Date(0) })).toEqual([]);
+    expect(changedPaths({ match: /a/ }, { match: /b/ })).toEqual(['match']);
+    expect(changedPaths({ list: [1] }, { list: { 0: 1 } })).toEqual(['list']);
+  });
+
+  test('a key or item only one side has is a change at each leaf inside it, even a leaf holding undefined', () => {
+    expect(changedPaths({ a: 1 }, { a: 1, address: { city: 'x', zip: '1' } })).toEqual(['address.city', 'address.zip']);
+    expect(changedPaths({ address: { city: 'x' } }, {})).toEqual(['address.city']);
+    expect(changedPaths({ address: { city: 'x' } }, { address: { city: 'x', zip: undefined } })).toEqual([
+      'address.zip',
+    ]);
+    expect(changedPaths({ a: 1 }, { a: 1, list: [] })).toEqual(['list']);
+    expect(changedPaths({ tags: ['a'] }, { tags: ['a', { v: 1 }] })).toEqual(['tags.1.v']);
+  });
+
+  test('an object where the other side holds a leaf is a change at each leaf inside it, as a missing key is', () => {
+    expect(changedPaths({ address: undefined }, { address: { city: 'Oslo' } })).toEqual(['address.city']);
+    expect(changedPaths({ address: { city: 'x', zip: '1' } }, { address: undefined })).toEqual([
+      'address.city',
+      'address.zip',
+    ]);
+    expect(changedPaths({ address: null }, { address: { city: 'Oslo' } })).toEqual(['address.city']);
+    expect(changedPaths({ address: undefined }, { address: {} })).toEqual(['address']);
+  });
+
+  test('a value that contains itself is walked once', () => {
+    const a: Record<string, unknown> = { name: 'a' };
+    a.self = a;
+    const b: Record<string, unknown> = { name: 'b' };
+    b.self = b;
+    expect(changedPaths(a, b)).toEqual(['name']);
+    expect(changedPaths({}, { added: a })).toEqual(['added.name', 'added.self']);
+  });
+
+  test('finds no path exactly when deepEqual calls the values equal', () => {
+    const pairs: [unknown, unknown][] = [
+      [{ a: undefined }, {}],
+      [
+        [1, 2],
+        [1, 2],
+      ],
+      [[1], [1, 2]],
+      [{ d: new Date(5) }, { d: new Date(5) }],
+      [{ nested: { deep: [1, { x: 1 }] } }, { nested: { deep: [1, { x: 2 }] } }],
+      [{ a: undefined }, { a: { b: 1 } }],
+      [Number.NaN, Number.NaN],
+    ];
+    for (const [a, b] of pairs) expect(changedPaths(a, b).length === 0).toBe(deepEqual(a, b));
+  });
+});
+
+describe('replacedPaths', () => {
+  test('lists each path where the two values part: the key itself where a value was replaced whole', () => {
+    const before = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
+    expect(replacedPaths(before, { ...before, address: { city: 'y', zip: '1' } })).toEqual(['address.city']);
+    expect(replacedPaths(before, structuredClone(before))).toEqual([]);
+    // A key or item only one side has
+    expect(replacedPaths({ a: 1 }, { a: 1, address: { city: 'x', zip: '1' } })).toEqual(['address']);
+    expect(replacedPaths({ address: { city: 'x' } }, {})).toEqual(['address']);
+    expect(replacedPaths({ address: { city: 'x' } }, { address: { city: 'x', zip: undefined } })).toEqual([
+      'address.zip',
+    ]);
+    expect(replacedPaths({ tags: ['a', { v: 1 }] }, { tags: ['a'] })).toEqual(['tags.1']);
+    expect(replacedPaths({ tags: ['a'] }, { tags: ['a', { v: 1 }] })).toEqual(['tags.1']);
+    // An object or array against a value the form doesn't look inside
+    expect(replacedPaths({ address: { city: 'x' } }, { address: undefined })).toEqual(['address']);
+    expect(replacedPaths({ address: undefined }, { address: { city: 'Oslo' } })).toEqual(['address']);
+    expect(replacedPaths({ address: null }, { address: { city: 'Oslo' } })).toEqual(['address']);
+    // An array against an object, and two other values that differ
+    expect(replacedPaths({ list: [1] }, { list: { 0: 1 } })).toEqual(['list']);
+    expect(replacedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
+    expect(replacedPaths({ match: /a/ }, { match: /b/ })).toEqual(['match']);
+  });
+
+  test('finds no path exactly when deepEqual calls the values equal, and each changed path sits at or inside one', () => {
+    const pairs: [unknown, unknown][] = [
+      [{ a: undefined }, {}],
+      [{ a: 1 }, { a: 1 }],
+      [[1], [1, 2]],
+      [{ d: new Date(5) }, { d: new Date(5) }],
+      [{ nested: { deep: [1, { x: 1 }] } }, { nested: { deep: [1, { x: 2 }] } }],
+      [{ a: undefined }, { a: { b: 1, c: [2] } }],
+      [{ address: { city: 'x', zip: '1' } }, {}],
+      [Number.NaN, Number.NaN],
+    ];
+    for (const [a, b] of pairs) {
+      const replaced = replacedPaths(a, b);
+      expect(replaced.length === 0).toBe(deepEqual(a, b));
+      for (const changed of changedPaths(a, b)) {
+        expect(replaced.some((path) => isPathAffected(changed, path))).toBe(true);
+      }
+    }
+  });
+});
+
+describe('outdatedBy', () => {
+  test('outdates the errors at, inside and above each path where the values part, at keys a cleared object lacked too', () => {
+    const outdated = outdatedBy({ name: 'a', address: { city: 'Oslo' } }, { name: 'a', address: undefined });
+    expect(outdated?.('address')).toBe(true);
+    expect(outdated?.('address.city')).toBe(true);
+    expect(outdated?.('address.zip')).toBe(true);
+    expect(outdated?.('name')).toBe(false);
+
+    const edited = outdatedBy({ address: { city: 'Oslo', zip: '1' } }, { address: { city: 'Bergen', zip: '1' } });
+    expect(edited?.('address')).toBe(true);
+    expect(edited?.('address.zip')).toBe(false);
+  });
+
+  test('is undefined for values equal by content, so it outdates no error', () => {
+    expect(outdatedBy({ tags: ['a'] }, { tags: ['a'] })).toBeUndefined();
+    expect(outdatedBy({ when: new Date(5) }, { when: new Date(5) })).toBeUndefined();
+  });
+
+  test('outdates a whole-form error with any change', () => {
+    expect(outdatedBy({ name: 'a', email: 'b' }, { name: 'a', email: 'c' })?.(ROOT_ERROR_KEY)).toBe(true);
+  });
+});
+
+describe('describesAny', () => {
+  test('matches an error at, inside or above a path, and a whole-form error to every path', () => {
+    expect(describesAny('address', ['address.city'])).toBe(true);
+    expect(describesAny('address.city', ['address'])).toBe(true);
+    expect(describesAny(ROOT_ERROR_KEY, ['name'])).toBe(true);
+    expect(describesAny('email', ['name'])).toBe(false);
+    expect(describesAny('email', [])).toBe(false);
+  });
+});
+
 describe('deepEqual', () => {
   test('primitives: equal and unequal', () => {
     expect(deepEqual(1, 1)).toBe(true);
@@ -533,6 +688,13 @@ describe('deepEqual', () => {
   test('objects with different key counts', () => {
     expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
     expect(deepEqual({ a: 1, b: 2 }, { a: 1 })).toBe(false);
+  });
+
+  test('a non-enumerable own property counts as missing, as Object.keys lists keys', () => {
+    const hidden = Object.defineProperty({ a: 1 }, 'b', { value: 2, enumerable: false });
+    expect(deepEqual({ a: 1, b: 2 }, hidden)).toBe(false);
+    expect(deepEqual(hidden, { a: 1, b: 2 })).toBe(false);
+    expect(deepEqual(hidden, { a: 1 })).toBe(true);
   });
 
   test('same reference returns true', () => {

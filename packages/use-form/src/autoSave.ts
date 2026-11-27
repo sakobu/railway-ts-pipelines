@@ -5,8 +5,8 @@ import type { SchemaVerdict } from './types';
 // The rule: the tracked version of the values is saved once its delay has ended, it has unsaved edits, it hasn't gone
 // out already, the form's latest schema check passed it and the form shows it valid, the form isn't stale, and no
 // submission is running. Values the form hasn't checked get one schema check per version first, and another once a
-// follow or reset ends that check, or a check of other values lands in its place. This module only decides, and holds
-// whether auto-save is on; the caller acts.
+// follow or reset starts a new baseline, or a check of other values lands in its place. This module only decides, and
+// holds whether auto-save is on; the caller acts.
 
 /**
  * What auto-save reads from the form when it decides.
@@ -30,7 +30,7 @@ export type AutoSaveView<TValues extends Record<string, unknown>> = {
   isSubmitting: boolean;
   /** FormState.wentOut */
   wentOut: TValues | undefined;
-  /** FormState.baselineEpoch: a follow or reset increments it, and ends the running checks */
+  /** FormState.baselineEpoch: a follow or reset increments it, and a reset ends the running checks */
   baselineEpoch: number;
 };
 
@@ -65,8 +65,8 @@ export type AutoSave<TValues extends Record<string, unknown>> = {
 
   /**
    * Decides for the tracked version. It returns `'check'` at most once per version for each baseline epoch and verdict,
-   * and records it: a follow or reset ends the check, and a newer check of other values replaces it, landing a new
-   * verdict. A check that throws or rejects lands none, so it isn't retried.
+   * and records it: a follow or reset starts a new baseline (a reset also ends the check), and a newer check of other
+   * values replaces it, landing a new verdict. A check that throws or rejects lands none, so it isn't retried.
    *
    * @param readView - Reads what the form shows now, for the values the caller tracked last. `decide` calls it once,
    *   only after the delay has ended, so a caller pays for the view only then.

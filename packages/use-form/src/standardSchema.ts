@@ -1,6 +1,6 @@
 import { ok, err } from '@railway-ts/pipelines/result';
 
-import { isPromiseLike } from './utils';
+import { mapAnswer } from './utils';
 
 import type { Result } from '@railway-ts/pipelines/result';
 import type { StandardSchemaV1, MaybeAsyncValidator, ValidationError } from '@railway-ts/pipelines/schema';
@@ -68,13 +68,8 @@ function convertResult<T>(result: StandardSchemaV1.Result<T>): Result<T, Validat
 export function fromStandardSchema<T extends Record<string, unknown>>(
   schema: StandardSchemaV1<unknown, T>,
 ): MaybeAsyncValidator<unknown, T> {
-  return (value: unknown): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> => {
-    const result = schema['~standard'].validate(value);
-    if (isPromiseLike(result)) {
-      return Promise.resolve(result).then((r) => convertResult<T>(r));
-    }
-    return convertResult<T>(result);
-  };
+  return (value: unknown): Result<T, ValidationError[]> | Promise<Result<T, ValidationError[]>> =>
+    mapAnswer(schema['~standard'].validate(value), (result) => convertResult<T>(result));
 }
 
 // =============================================================================

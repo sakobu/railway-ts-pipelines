@@ -42,7 +42,7 @@ Patterns and techniques. Each recipe is self-contained.
 
 **Problem:** You're building a create/edit form that talks to an API. The server might reject the data (duplicate email, username taken), and you need those errors to appear on the correct fields.
 
-**Solution:** Use `onSubmit` to call the API and return an `err` built from the backend's `ValidationError[]`: it lands on the matching fields. Server errors auto-clear when the user edits the affected field.
+**Solution:** Use `onSubmit` to call the API and return an `err` built from the backend's `ValidationError[]`: it lands on the matching fields. An edit that changes the affected field's value clears its server error (an equal value keeps it).
 
 ```tsx
 import { err, ok } from '@railway-ts/pipelines/result';
@@ -129,13 +129,15 @@ function CreateUserForm() {
 }
 ```
 
-For form-level errors (network failures, rate limiting), use a path-`[]` error. It is the submit error: it shows at `form.errors[ROOT_ERROR_KEY]`, does not count toward `isValid`, and clears on any edit. Outside `onSubmit`, set it with `setServerErrors`:
+For form-level errors (network failures, rate limiting), use a path-`[]` error. It is the submit error: it shows at `form.errors[ROOT_ERROR_KEY]`, does not count toward `isValid`, and clears on any edit that changes a value. Outside `onSubmit`, set it with `setServerErrors`:
 
 ```typescript
 form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]);
 ```
 
 If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again." [`messages.submitFailed`](./API.md#messages) replaces it.
+
+When the user edits while a submit's checks run, and a check of the old values fails, the form doesn't show its errors for the values the user changed, since it no longer holds them. The submit error then says why nothing was saved: "The values changed while they were checked, so nothing was saved. Review them and save again." [`messages.changedWhileChecking`](./API.md#messages) replaces it. With auto-save on and the form not stale, auto-save saves the new values on its own instead, so no message shows.
 
 ---
 
@@ -240,7 +242,7 @@ function EditContact({ ids }: { ids: string[] }) {
 
 What happens:
 
-- A refetch with no edits is followed: the form shows the new values in the same render.
+- A refetch with no edits is followed: the form shows the new values in the same render. It changes them as an edit does, so in `live` mode a field validator whose field or listed field changed runs again.
 - With edits, the form keeps them, `isStale` turns true, and Save waits for a Reload.
 - A change the app hasn't fetched yet comes back from the server as a conflict. The refetch then turns `isStale` true.
 - A save is followed even if the server changes the record, such as by normalizing the email. `savedValues` tells the form which version is the save's answer, so an optimistic write isn't taken for it, and a saved record equal to the version before the save is followed too.
@@ -366,8 +368,8 @@ function LambertForm() {
 ```
 
 The `VecFieldset` component is a thin wrapper that renders three inputs and
-surfaces the first error. Because `form.errors` is dot-keyed, you read it
-directly with the same path you'd pass to `getFieldProps`:
+surfaces the first error. `getFieldError` takes the same dot path you'd pass
+to `getFieldProps`:
 
 ```tsx
 type VecFieldsetProps<TValues extends Record<string, unknown>> = {
@@ -378,7 +380,7 @@ type VecFieldsetProps<TValues extends Record<string, unknown>> = {
 };
 
 function VecFieldset<TValues extends Record<string, unknown>>({ label, unit, form, names }: VecFieldsetProps<TValues>) {
-  const errors = names.map((n) => (form.touched[n] ? form.errors[n] : undefined));
+  const errors = names.map((n) => form.getFieldError(n));
   const firstError = errors.find((e): e is string => Boolean(e));
 
   return (
@@ -763,7 +765,7 @@ function MultiStepForm() {
 
 **Problem:** A field's validity depends on another field -- password confirmation, date ranges, conditional requirements.
 
-**Solution:** Use `refineAt` from `@railway-ts/pipelines/schema`. It runs after the object validates, receives the whole object, and attaches the error to a specific field path.
+**Solution:** Use `refineAt` from `@railway-ts/pipelines/schema`. It runs after the object validates, receives the whole object, and attaches the error to a specific field path. For a remote check that reads another field, such as "this slug is free in the selected workspace", list the field with `withDeps` instead: see [Per-Field Async Validation](#per-field-async-validation-fieldvalidators).
 
 ```typescript
 import {
@@ -1145,18 +1147,18 @@ const form = useForm(schema, {
 
 **Solution:** The `errors` object is a merged view of three separate layers. When multiple layers have an error for the same field, higher-priority layers win:
 
-| Priority    | Source            | Property       | Populated when                                                                 |
-| ----------- | ----------------- | -------------- | ------------------------------------------------------------------------------ |
-| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)    |
-| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after schema passes for that field) |
-| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                   |
+| Priority    | Source            | Property       | Populated when                                                                                            |
+| ----------- | ----------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 (lowest)  | Schema validation | `clientErrors` | Schema validator runs (on change, blur, mount, or submit depending on mode)                               |
+| 2           | Field validators  | `fieldErrors`  | `fieldValidators` option runs for a field (after no schema error overlaps that field or a field it lists) |
+| 3 (highest) | Server errors     | `serverErrors` | You call `setServerErrors(...)`, or `onSubmit` returns `err`                                              |
 
 **When each layer gets cleared:**
 
-- `clientErrors` -- replaced on every schema validation run
-- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when a check of a changed value starts (on change in `live` mode, on blur in `blur` mode, or on submit), when the field's schema error reappears, when its validator is switched off, and on `resetForm()` and a `resetKey` change. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on any group that contains it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
-- the submit error (`_root`) -- cleared by any edit, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
+- `clientErrors` -- replaced when a schema check lands, except at paths edited since it started. An edit drops those at, inside or above the paths it changed, in every mode, and a root error on any change
+- `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate holds the check back, with no error, until the schema accepts them. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
+- `serverErrors` -- dropped when an edit changes the value at, inside or above its path (setting an equal value keeps it); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
+- the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
 
@@ -1259,7 +1261,7 @@ function ValibotForm() {
 
 **Problem:** You need to check a value against the server (username availability, coupon codes) without blocking the entire form. Schema-level async validation (`chainAsync`) validates the whole form -- you want per-field control with per-field loading indicators.
 
-**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when the schema produces no error for that field, and `validatingFields` tracks which fields are currently checking.
+**Solution:** The `fieldValidators` option runs independent async checks for specific fields. Each field validator only runs when no schema error overlaps that field, or any field it lists with `withDeps` (an error at, inside or above it), and `validatingFields` tracks which fields are currently checking. A validator the gate holds back runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it holds back every validator until it clears: put a cross-field rule on its field with `refineAt` to keep the other lookups running.
 
 ```tsx
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
@@ -1303,17 +1305,53 @@ function RegistrationForm() {
 }
 ```
 
+A check can depend on another field: "this slug is free in the selected workspace". List that field with `withDeps(deps, validate)`, written inside the `fieldValidators` entry. `validate` gets the field's value and the listed fields, and only those. The check runs again when the slug or the workspace changes, and its error goes as soon as either one does.
+
+```tsx
+import * as S from '@railway-ts/pipelines/schema';
+import { useForm, withDeps } from '@railway-ts/use-form';
+
+const projectSchema = S.object({
+  workspaceId: S.required(S.chain(S.string(), S.nonEmpty())),
+  slug: S.required(S.chain(S.string(), S.minLength(3))),
+});
+
+function ProjectForm() {
+  const form = useForm(projectSchema, {
+    initialValues: { workspaceId: '', slug: '' },
+    fieldValidators: {
+      slug: withDeps(['workspaceId'], async (slug, { workspaceId }) => {
+        const free = await isSlugFree(workspaceId, slug);
+        return free ? undefined : 'This slug is taken in this workspace';
+      }),
+    },
+  });
+
+  return (
+    <form onSubmit={(e) => void form.handleSubmit(e)}>
+      <input {...form.getFieldProps('workspaceId')} />
+      <input {...form.getFieldProps('slug')} />
+      {form.validatingFields.slug && <span>Checking slug...</span>}
+      {form.getFieldError('slug') && <span className="error">{form.getFieldError('slug')}</span>}
+    </form>
+  );
+}
+```
+
+`S.nonEmpty()` matters here: `S.required` accepts `''`, and the schema gate holds the lookup back only while the schema rejects an input.
+
 ### fieldValidators vs schema-level async
 
-|                     | `fieldValidators`                  | `chainAsync` / `refineAtAsync` |
-| ------------------- | ---------------------------------- | ------------------------------ |
-| **Scope**           | Single field                       | Entire form                    |
-| **Runs when**       | After schema passes for that field | During schema validation       |
-| **Loading state**   | `validatingFields.fieldName`       | `isValidating` (form-wide)     |
-| **Race conditions** | Handled per-field (latest wins)    | Handled per-form (latest wins) |
-| **Best for**        | Server lookups (username, email)   | Cross-field async checks       |
+|                     | `fieldValidators`                                                  | `chainAsync` / `refineAtAsync`    |
+| ------------------- | ------------------------------------------------------------------ | --------------------------------- |
+| **Scope**           | Single field                                                       | Entire form                       |
+| **Runs when**       | After no schema error overlaps that field or a field it lists      | During schema validation          |
+| **Re-runs when**    | Its field or a listed field changes (`live`), or blurs (`blur`)    | Any field changes                 |
+| **Loading state**   | `validatingFields.fieldName`                                       | `isValidating` (form-wide)        |
+| **Race conditions** | Handled per-field (latest wins)                                    | Handled per-form (latest wins)    |
+| **Best for**        | Server lookups, including ones that read other fields (`withDeps`) | Async rules over the whole object |
 
-Field validators return `undefined` for valid, or an error message string for invalid. They receive the typed field value and the full form values object: `(value: FieldTypeAtPath<TValues, K>, values: TValues) => string | undefined | Promise<string | undefined>` — no cast needed.
+Field validators return `undefined` for valid, or an error message string for invalid. A function gets its typed field value only: `(value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>` — no cast needed. `withDeps(deps, validate)` gives `validate` its value and the listed fields, typed, and nothing else.
 
 ---
 
@@ -1934,7 +1972,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `fieldValidators` for username availability with `validatingFields` loading state
-- **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both auto-clear on edit
+- **Server errors** -- `onSubmit` returns the API's `err(ValidationError[])`, which lands on the fields; a network failure is a path-`[]` submit error. Both clear when an edit changes the value (an equal value keeps them)
 - **Result handling** -- `fromPromise` for both API calls, explicit `ok`/`err` for registration, `match` for branching, including on `handleSubmit`'s result to navigate on success
 - **React 19 compatibility** -- `(e) => void handleRegister(e)` pattern
 
@@ -2072,7 +2110,7 @@ This form demonstrates:
 - **Schema validation** -- `chain` + `nonEmpty` + `email` + `minLength`
 - **Cross-field validation** -- `refineAt` for password confirmation
 - **Per-field async validation** -- `queryClient.fetchQuery` with `staleTime` for caching username checks
-- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors([...])`, auto-clear on edit
+- **Server errors** -- `ApiValidationError` + `useMutation` `onError` → `setServerErrors([...])`, cleared when an edit changes the value (an equal value keeps them)
 - **React Query integration** -- `useMutation` for submit, `fetchQuery` for field validation
 - **React 19 compatibility** -- `(e) => void form.handleSubmit(e)` pattern
 

@@ -27,6 +27,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
+    "test:package": "bun run build && tsc -p tests/package",
     "test": "bun test",
     "test:coverage": "mkdir -p coverage && bun test --coverage --coverage-reporter=lcov"
   },

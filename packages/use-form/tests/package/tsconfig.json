@@ -1,0 +1,18 @@
+{
+  // Type-checks tests/package/*.ts against the BUILT package (dist/), resolved by name through package.json
+  // "exports", the way a consumer sees it. Declarations are on, as in a library that publishes its own types, so a
+  // type the package uses but doesn't export fails here (TS4023). skipLibCheck is off so broken published
+  // declarations fail too.
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+    "strict": true,
+    "noEmit": true,
+    "declaration": true,
+    "skipLibCheck": false,
+    "exactOptionalPropertyTypes": true,
+    "types": []
+  },
+  "include": ["*.ts"]
+}
