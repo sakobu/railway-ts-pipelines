@@ -1581,7 +1581,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    *   `onSubmit`, nothing is saved, so the values stay edits.
    * - `err` with the validation errors, or with `onSubmit`'s `err`. When a failed check read values the form no
    *   longer holds once the submit returns, it also holds a submit error at path `[]`, which the form shows, unless
-   *   auto-save can save the changed values on its own (auto-save on and the form not stale): `messages.changedWhileChecking` sets the text.
+   *   auto-save can save the changed values on its own (auto-save on and the form not stale):
+   *   `messages.changedWhileChecking` sets the text.
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`
    *   replaces the text.

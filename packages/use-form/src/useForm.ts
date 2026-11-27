@@ -1546,11 +1546,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
         // A check that failed returns its errors. Decided once, when the submit returns, from the values each failed
-        // check read: when a follow or reset replaced the values, or the form no longer holds what they read, the errors
-        // describe values it doesn't show, and the submit error says so, so the failed submit doesn't look as if nothing
-        // happened. The schema check read every value, a field check its inputs. Never from whether errors landed or what
-        // a check's status is. Not once a resetKey switch retired the record, since the form shows none of it, nor while
-        // auto-save can save the changed values on its own: on, and the form not stale.
+        // check read: when a follow or reset replaced the values, or the form no longer holds what they read, the
+        // errors describe values it doesn't show, and the submit error says so, so the failed submit doesn't look as
+        // if nothing happened. The schema check read every value, a field check its inputs. Never from whether errors
+        // landed or what a check's status is. Not once a resetKey switch retired the record, since the form shows
+        // none of it, nor while auto-save can save the changed values on its own: on, and the form not stale.
         const failedCheck = (
           errors: ValidationError[],
           read: Readonly<Record<FieldPath, unknown>> | undefined,

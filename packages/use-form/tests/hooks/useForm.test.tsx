@@ -7,6 +7,7 @@ import { StrictMode, useEffect, useLayoutEffect, type ComponentType } from 'reac
 import { renderToString } from 'react-dom/server';
 
 import { useForm } from '../../src/useForm';
+import { withDeps } from '../../src/withDeps';
 import { createGatedFieldValidator, createGatedOnSubmit, createGatedValidator, nextTask } from '../fixtures/gates';
 import {
   userValidator,
@@ -2778,6 +2779,57 @@ describe('useForm', () => {
 
         expect(result.current.errors._root).toBeUndefined();
         expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      });
+
+      // Blur mode, so an edit starts no check of its own and the failed check's answer is all the submit holds
+      test("not when the form changed a field the failed check didn't read", async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: draft, validationMode: 'blur', fieldValidators: { title: gate } }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          await nextTask();
+        });
+        act(() => result.current.setFieldValue('status', 'published'));
+        let outcome: Awaited<typeof submitting> | undefined;
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          outcome = await submitting;
+        });
+
+        expect(result.current.errors._root).toBeUndefined();
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      });
+
+      test('when the form changed a field the failed check listed in withDeps', async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result } = renderHook(() =>
+          useForm(publishValidator, {
+            initialValues: draft,
+            validationMode: 'blur',
+            fieldValidators: { title: withDeps(['status'], gate) },
+          }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          await nextTask();
+        });
+        act(() => result.current.setFieldValue('status', 'published'));
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          await submitting;
+        });
+
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
       });
 
       test('with auto-save on, while the form is stale, so auto-save waits', async () => {
