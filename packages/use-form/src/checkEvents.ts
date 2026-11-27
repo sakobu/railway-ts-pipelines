@@ -4,34 +4,38 @@ import type { FieldPath } from './types';
 // what it wants checked. Once the outermost call returns, one pass checks what the event recorded, on the values as
 // they stand then. So within one event a validator runs at most once, and the schema runs once.
 
+/** What a check reaches: the field validators it re-checks, beside the schema check every request asks for. */
+export type CheckReach = {
+  /** Paths an edit changed, or blurred fields: each reaches every validator with an input path overlapping it. */
+  readonly paths?: Iterable<FieldPath>;
+  /** Fields an edit named: each reaches every validator whose input path is it or contains it, changed or not. */
+  readonly named?: Iterable<FieldPath>;
+  /** Validator keys to re-check, as a follow asks for. */
+  readonly validators?: Iterable<FieldPath>;
+};
+
 /** What a call can ask its event to check. Every request includes a schema check, so none can lose its check. */
 export type EventRequests = {
   /**
-   * Asks for a schema check, and for every field validator the paths reach.
+   * Asks for a schema check, and for every field validator the reach covers.
    *
-   * @param paths - Edited or blurred paths, normalized. None asks for the schema check only.
+   * @param reach - The paths, named fields and validator keys it reaches, normalized. None asks for the schema check
+   *   only.
    */
-  check: (paths?: Iterable<FieldPath>) => void;
-  /**
-   * A follow's request: a schema check that re-checks the fields, and while it runs async or once it threw, none of
-   * the old values' client errors show.
-   *
-   * @param fields - Validator keys to re-check
-   */
-  recheckAfterFollow: (fields: Iterable<FieldPath>) => void;
+  check: (reach?: CheckReach) => void;
 };
 
 /**
- * What one event asked to have checked, as its pass reads it once the outermost call returns. Every request asks for a
- * schema check, so a pass always runs one.
+ * What one event asked to have checked, as its pass reads it once the outermost call returns: every reach its checks
+ * recorded, joined. Every request asks for a schema check, so a pass always runs one.
  */
 export type EventRecord = {
-  /** Edited or blurred paths, normalized. Each reaches every validator with an input path overlapping it. */
+  /** Changed or blurred paths, normalized: each reaches every validator with an input path overlapping it */
   readonly paths: ReadonlySet<FieldPath>;
-  /** Validator keys a follow re-checks */
-  readonly fields: ReadonlySet<FieldPath>;
-  /** A follow's: hide every client error while an async or throwing schema check runs */
-  readonly clearAll: boolean;
+  /** Fields an edit named, normalized: each reaches every validator whose input path is it or contains it */
+  readonly named: ReadonlySet<FieldPath>;
+  /** Validator keys to re-check, as a follow asks for */
+  readonly validators: ReadonlySet<FieldPath>;
 };
 
 /** The events of one form. */
@@ -60,18 +64,15 @@ export const createCheckEvents = (): CheckEvents => {
         body(running);
         return;
       }
-      const record = { paths: new Set<FieldPath>(), fields: new Set<FieldPath>(), clearAll: false };
+      const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
       // Whether any request was made, so the pass runs
       let requested = false;
       const requests: EventRequests = {
-        check: (paths = []) => {
+        check: ({ paths = [], named = [], validators = [] } = {}) => {
           requested = true;
           for (const path of paths) record.paths.add(path);
-        },
-        recheckAfterFollow: (fields) => {
-          requested = true;
-          record.clearAll = true;
-          for (const field of fields) record.fields.add(field);
+          for (const field of named) record.named.add(field);
+          for (const key of validators) record.validators.add(key);
         },
       };
       running = requests;

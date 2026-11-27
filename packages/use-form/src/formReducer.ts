@@ -1,3 +1,5 @@
+import { ROOT_ERROR_KEY } from '@railway-ts/pipelines/schema';
+
 import {
   NO_CHECKS,
   endFieldCheck,
@@ -13,13 +15,13 @@ import {
   syncValidators,
 } from './formChecks';
 import {
+  changedPaths,
   deepEqual,
   deepMerge,
   getValueByPath,
   normalizePath,
   normalizePathKeys,
   overlapsAny,
-  pathsOverlap,
   setValueByPath,
   withoutPaths,
 } from './utils';
@@ -131,18 +133,17 @@ const answeredBy = <TValues extends Record<string, unknown>>(
 };
 
 /**
- * The state after an edit set `values` and kept `serverErrors`. The edit clears the submit error. Values that
- * come to equal the latest version end `isStale`, and count as clean when {@link latestIsSettled} allows. Values
- * that come back to the clean values leave no unsaved edits, so the form follows the latest version then, as a form
- * with no edits does. The comparisons only run once a version arrived under edits, so most forms pay nothing for them.
+ * The state after an edit set `values`. The edit clears the submit error. Values that come to equal the latest version
+ * end `isStale`, and count as clean when {@link latestIsSettled} allows. Values that come back to the clean values leave
+ * no unsaved edits, so the form follows the latest version then, as a form with no edits does. The comparisons only run
+ * once a version arrived under edits, so most forms pay nothing for them.
  */
 const withEdit = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   values: TValues,
-  serverErrors: Record<FieldPath, string>,
 ): FormState<TValues> => {
   const { submitError: _submitError, ...rest } = state;
-  const next = { ...rest, values, serverErrors };
+  const next = { ...rest, values };
   if (state.cleanValues === state.lastVersion) return next;
   if (deepEqual(values, state.lastVersion)) {
     return latestIsSettled(next) ? settleOnLatest(next) : { ...next, isStale: false };
@@ -151,14 +152,53 @@ const withEdit = <TValues extends Record<string, unknown>>(
   return next;
 };
 
-/** Sets the client errors, as `SET_CLIENT_ERRORS` and a current schema check's end do. */
+/**
+ * The errors, or the shared {@link EMPTY} map when there are none, so values derived from them, like `errors`, keep
+ * their identity.
+ */
+const sharedWhenEmpty = (errors: Readonly<Record<FieldPath, string>>): Readonly<Record<FieldPath, string>> =>
+  Object.keys(errors).length === 0 ? EMPTY : errors;
+
+/** Sets the client errors, as a current schema check's end does. */
 const withClientErrors = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
-  errors: Record<FieldPath, string>,
+  errors: Readonly<Record<FieldPath, string>>,
+): FormState<TValues> => ({ ...state, clientErrors: sharedWhenEmpty(normalizePathKeys(errors)) });
+
+/**
+ * The errors that still describe the values once those at `changed` changed: without each error at, inside or above a
+ * changed path, and without a root error ({@link ROOT_ERROR_KEY}) once anything changed, since it describes every
+ * field. Errors that lose none keep their identity.
+ *
+ * @param errors - The errors, by path
+ * @param changed - The paths whose value changed
+ */
+const withoutErrorsAt = (
+  errors: Readonly<Record<FieldPath, string>>,
+  changed: readonly FieldPath[],
+): Readonly<Record<FieldPath, string>> =>
+  changed.length === 0
+    ? errors
+    : withoutPaths(errors, (errorPath) => errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, changed));
+
+/**
+ * The state without the client and server errors that stopped describing its values when they changed from `before`
+ * ({@link withoutErrorsAt}). A map left empty is the shared {@link EMPTY}.
+ *
+ * @param state - The state after an action that changed the values
+ * @param before - The values before it
+ */
+const withoutErrorsChanged = <TValues extends Record<string, unknown>>(
+  state: FormState<TValues>,
+  before: TValues,
 ): FormState<TValues> => {
-  const clientErrors = normalizePathKeys(errors);
-  // A valid result keeps the shared empty map, so values derived from it, like `errors`, keep their identity
-  return { ...state, clientErrors: Object.keys(clientErrors).length === 0 ? EMPTY : clientErrors };
+  // A form that shows no client or server error has none to drop, so it skips comparing the values
+  if (Object.keys(state.clientErrors).length === 0 && Object.keys(state.serverErrors).length === 0) return state;
+  const changed = changedPaths(before, state.values);
+  const clientErrors = withoutErrorsAt(state.clientErrors, changed);
+  const serverErrors = withoutErrorsAt(state.serverErrors, changed);
+  if (clientErrors === state.clientErrors && serverErrors === state.serverErrors) return state;
+  return { ...state, clientErrors: sharedWhenEmpty(clientErrors), serverErrors: sharedWhenEmpty(serverErrors) };
 };
 
 /** Sets the checks. Checks a rule left unchanged keep the state itself, so the store skips notifying. */
@@ -177,21 +217,11 @@ const reduce = <TValues extends Record<string, unknown>>(
     case 'SET_FIELD_VALUE': {
       if (getValueByPath(state.values, action.field) === action.value) return state;
 
-      return withEdit(
-        state,
-        setValueByPath(state.values, action.field, action.value),
-        withoutPaths(state.serverErrors, (errorPath) => pathsOverlap(errorPath, action.field)),
-      );
+      return withEdit(state, setValueByPath(state.values, action.field, action.value));
     }
 
-    case 'SET_VALUES': {
-      const fields = Object.keys(action.values);
-      return withEdit(
-        state,
-        deepMerge(state.values, action.values),
-        withoutPaths(state.serverErrors, (errorPath) => overlapsAny(errorPath, fields)),
-      );
-    }
+    case 'SET_VALUES':
+      return withEdit(state, deepMerge(state.values, action.values));
 
     case 'SET_FIELD_TOUCHED':
       return {
@@ -201,9 +231,6 @@ const reduce = <TValues extends Record<string, unknown>>(
           [normalizePath(action.field)]: action.isTouched,
         },
       };
-
-    case 'SET_CLIENT_ERRORS':
-      return withClientErrors(state, action.errors);
 
     case 'SET_SERVER_ERRORS': {
       const { submitError: _submitError, ...rest } = state;
@@ -251,7 +278,9 @@ const reduce = <TValues extends Record<string, unknown>>(
       const ended = withChecks(state, endSchemaCheck(state.checks, action.id));
       if (ended === state || action.answer === undefined) return ended;
       const { values, passed, errors } = action.answer;
-      return { ...withClientErrors(ended, errors), verdict: { values, passed } };
+      // Its errors describe the values it checked: those at the paths edited since it started no longer apply
+      const landed = withoutErrorsAt(errors, changedPaths(values, state.values));
+      return { ...withClientErrors(ended, landed), verdict: { values, passed } };
     }
 
     case 'SUBMISSION_WENT_OUT':
@@ -382,8 +411,10 @@ const reduce = <TValues extends Record<string, unknown>>(
  * - Settling a successful submit
  * - Tracking checks: the schema check, each field's validator and its checks
  *
- * After every action that leaves new values or new field checks, a check that is pending or shows an error and whose
- * inputs the values no longer hold ends with no error, so an error always describes the values the form holds.
+ * After every action that leaves new values, the client and server errors at, inside or above each path whose value
+ * changed go, and a root error with them. After every action that leaves new values or new field checks, a check that
+ * is pending or shows an error and whose inputs the values no longer hold ends with no error. So an error always
+ * describes the values the form holds.
  *
  * An action that changes the values by content to ones equal to the initial values, such as an edit back, a follow or
  * a reset, leaves nothing that went out to remember, so it drops `wentOut`. Initial values that catch up to unchanged
@@ -395,13 +426,12 @@ const reduce = <TValues extends Record<string, unknown>>(
  * return the same state object when they change nothing, so the store can skip notifying:
  * SET_FIELD_VALUE with the field's current value, SYNC_INITIAL_VALUES with the version already
  * synced, a SUBMIT_SUCCEEDED from before a follow or reset, and a check action that changes no checks,
- * such as one for a check that is no longer current. Server errors are automatically cleared when
- * related fields are modified to provide a smooth user experience.
+ * such as one for a check that is no longer current.
  *
  * @template TValues - The type of form values being managed
  *
  * @param state - The current form state before the action is applied
- * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_CLIENT_ERRORS, RESET_FORM)
+ * @param action - The action to perform (e.g., SET_FIELD_VALUE, SET_VALUES, RESET_FORM)
  * @param initialValues - Initial form values used when resetting the form
  * @returns A new state object, or the same one for the no-op cases above
  *
@@ -418,13 +448,6 @@ const reduce = <TValues extends Record<string, unknown>>(
  * });
  *
  * @example
- * // Dispatching validation errors
- * dispatch({
- *   type: "SET_CLIENT_ERRORS",
- *   errors: { email: "Invalid email format", password: "Too short" }
- * });
- *
- * @example
  * // Marking all fields as touched on submit
  * dispatch({
  *   type: "MARK_ALL_TOUCHED",
@@ -437,10 +460,11 @@ export const formReducer = <TValues extends Record<string, unknown>>(
   initialValues: TValues,
 ): FormState<TValues> => {
   const reduced = reduce(state, action, initialValues);
+  const described = reduced.values === state.values ? reduced : withoutErrorsChanged(reduced, state.values);
   const next =
-    reduced.values === state.values && reduced.checks.fields === state.checks.fields
-      ? reduced
-      : withChecks(reduced, endOutdatedChecks(reduced.checks, reduced.values));
+    described.values === state.values && described.checks.fields === state.checks.fields
+      ? described
+      : withChecks(described, endOutdatedChecks(described.checks, described.values));
   if (
     next.wentOut === undefined ||
     next.values === state.values ||

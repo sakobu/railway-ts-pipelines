@@ -1740,6 +1740,222 @@ describe('one call, one check pass (#57)', () => {
   });
 });
 
+describe('an edit reaches a nested validator only when its values changed', () => {
+  const addressSchema = S.object({
+    name: S.required(S.string()),
+    address: S.optional(S.object({ city: S.required(S.string()), zip: S.required(S.string()) })),
+    pair: S.required(S.tuple([S.string(), S.number()] as const)),
+  });
+  type AddressForm = S.InferSchemaType<typeof addressSchema>;
+  const filled: AddressForm = { name: 'a', address: { city: 'Paris', zip: '75001' }, pair: ['a', 1] };
+
+  test('setting an object re-runs the validators of what it changed, and of the object', () => {
+    const checkAddress = mock(() => undefined);
+    const checkCity = mock(() => undefined);
+    const checkZip = mock(() => undefined);
+    const { result } = renderHook(() =>
+      useForm(addressSchema, {
+        initialValues: filled,
+        fieldValidators: { address: checkAddress, 'address.city': checkCity, 'address.zip': checkZip },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('address', { city: 'Paris', zip: '75002' }));
+
+    expect(checkAddress).toHaveBeenCalledTimes(1);
+    expect(checkZip).toHaveBeenCalledTimes(1);
+    expect(checkCity).not.toHaveBeenCalled();
+  });
+
+  test('setting a field to its own value still re-runs its validator and those of the objects around it', () => {
+    const checkAddress = mock(() => undefined);
+    const checkCity = mock(() => undefined);
+    const checkZip = mock(() => undefined);
+    const { result } = renderHook(() =>
+      useForm(addressSchema, {
+        initialValues: filled,
+        fieldValidators: { address: checkAddress, 'address.city': checkCity, 'address.zip': checkZip },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('address.city', 'Paris'));
+
+    expect(checkCity).toHaveBeenCalledTimes(1);
+    expect(checkAddress).toHaveBeenCalledTimes(1);
+    expect(checkZip).not.toHaveBeenCalled();
+  });
+
+  test('setting a tuple re-runs only the validators of the items it changed', () => {
+    const checkFirst = mock((_value: string) => undefined);
+    const checkSecond = mock((_value: number) => undefined);
+    const { result } = renderHook(() =>
+      useForm(addressSchema, {
+        initialValues: filled,
+        fieldValidators: { 'pair.0': checkFirst, 'pair.1': checkSecond },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('pair', ['a', 2]));
+
+    expect(checkFirst).not.toHaveBeenCalled();
+    expect(checkSecond).toHaveBeenCalledWith(2);
+  });
+
+  test("an array helper re-runs the array's validator, not those of the items it left as they were", () => {
+    const contactsSchema = S.object({
+      contacts: S.required(S.array(S.object({ value: S.required(S.string()) }))),
+    });
+    const lookup = mock((_value: unknown) => undefined);
+    const checkContacts = mock(() => undefined);
+    const { result } = renderHook(() =>
+      useForm(contactsSchema, {
+        initialValues: { contacts: [{ value: 'a@x' }, { value: 'b@x' }] },
+        fieldValidators: {
+          contacts: checkContacts,
+          ...Object.fromEntries([0, 1].map((index) => [`contacts.${index}.value`, lookup])),
+        },
+      }),
+    );
+
+    act(() => result.current.arrayHelpers('contacts').push({ value: 'c@x' }));
+
+    expect(checkContacts).toHaveBeenCalledTimes(1);
+    expect(lookup).not.toHaveBeenCalled();
+    expect(result.current.validatingFields).toEqual({});
+  });
+
+  test('clearing an optional object calls a validator inside it with undefined, as its type says', () => {
+    const checkCity = mock((city: string | undefined) => (city === undefined || city.length > 1 ? undefined : 'Short'));
+    const { result } = renderHook(() =>
+      useForm(addressSchema, { initialValues: filled, fieldValidators: { 'address.city': checkCity } }),
+    );
+
+    act(() => result.current.setFieldValue('address', undefined));
+
+    expect(checkCity).toHaveBeenCalledWith(undefined);
+    expect(result.current.fieldErrors).toEqual({});
+  });
+
+  test("typing into a field of a missing object doesn't re-run the validators of its other fields", () => {
+    const checkCity = mock((_city: string | undefined) => undefined);
+    const checkZip = mock((_zip: string | undefined) => undefined);
+    const { result } = renderHook(() =>
+      useForm(addressSchema, {
+        initialValues: { name: 'a', pair: ['a', 1] },
+        fieldValidators: { 'address.city': checkCity, 'address.zip': checkZip },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('address.city', 'Oslo'));
+
+    expect(checkCity).toHaveBeenCalledWith('Oslo');
+    expect(checkZip).not.toHaveBeenCalled();
+  });
+
+  test('setValues that adds a key holding undefined re-checks the validators it reaches', () => {
+    const schema = S.object({
+      address: S.required(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
+    });
+    const checkAddress = mock(() => 'Bad address');
+    const { result } = renderHook(() =>
+      useForm(schema, { initialValues: { address: { city: 'LA' } }, fieldValidators: { address: checkAddress } }),
+    );
+    act(() => result.current.setFieldValue('address.city', 'NY'));
+    expect(result.current.fieldErrors).toEqual({ address: 'Bad address' });
+
+    act(() => result.current.setValues({ address: { zip: undefined } }));
+
+    expect(checkAddress).toHaveBeenCalledTimes(2);
+    expect(result.current.fieldErrors).toEqual({ address: 'Bad address' });
+    expect(result.current.isValid).toBe(false);
+  });
+});
+
+describe('every error shows only while the form holds the values it describes', () => {
+  test('in blur mode, an edit drops the schema error of the field it changed', () => {
+    const { result } = renderHook(() =>
+      useForm(publishValidator, { initialValues: { ...draft, title: '' }, validationMode: 'blur' }),
+    );
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.errors.title).toBe('Title is required');
+
+    act(() => result.current.setFieldValue('status', 'published'));
+    expect(result.current.errors.title).toBe('Title is required');
+
+    act(() => result.current.setFieldValue('title', 'Filled'));
+    expect(result.current.errors.title).toBeUndefined();
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test('in blur mode, a whole-form schema error goes on any edit', () => {
+    type Signup = { username: string; email: string; contact: string };
+    const rootSchema = S.chain(
+      S.object({ username: S.required(S.string()), email: S.required(S.string()), contact: S.required(S.string()) }),
+      S.refine((form: Signup) => form.contact === form.email, 'Contact must match the email'),
+    );
+    const { result } = renderHook(() =>
+      useForm(rootSchema, {
+        initialValues: { username: 'ann', email: 'ann@example.com', contact: 'other' },
+        validationMode: 'blur',
+      }),
+    );
+    act(() => result.current.setFieldTouched('contact'));
+    expect(result.current.errors._root).toBe('Contact must match the email');
+
+    act(() => result.current.setFieldValue('username', 'bob'));
+
+    expect(result.current.errors._root).toBeUndefined();
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test('in blur mode, a follow of new initialValues keeps the schema errors of the fields it left as they were', () => {
+    const { result, rerender } = renderHook(
+      ({ values }: { values: PublishForm }) =>
+        useForm(publishValidator, { initialValues: values, validationMode: 'blur' }),
+      { initialProps: { values: { ...draft, title: '' } } },
+    );
+    act(() => result.current.setFieldTouched('title'));
+    expect(result.current.errors.title).toBe('Title is required');
+
+    rerender({ values: { ...draft, title: '', status: 'published' } });
+
+    expect(result.current.values.status).toBe('published');
+    expect(result.current.errors.title).toBe('Title is required');
+  });
+
+  test("a schema check that lands after an edit places its errors only where the values didn't change", async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
+    const { result } = renderHook(() =>
+      useForm(gated, { initialValues: { ...draft, title: '', status: '' }, validationMode: 'blur' }),
+    );
+    act(() => result.current.setFieldTouched('title'));
+    act(() => result.current.setFieldValue('title', 'Filled'));
+
+    await act(async () => {
+      pending[0]!.resolve(
+        err([
+          { path: ['title'], message: 'Title is required' },
+          { path: ['status'], message: 'Status is required' },
+        ]),
+      );
+      await nextTask();
+    });
+
+    expect(result.current.clientErrors).toEqual({ status: 'Status is required' });
+  });
+
+  test('setting a field to an equal value keeps its server error, and a change drops it', () => {
+    const { result } = renderHook(() => useForm(publishValidator, { initialValues: { ...draft, tags: ['a'] } }));
+    act(() => result.current.setServerErrors([{ path: ['tags'], message: 'Too few tags' }]));
+
+    act(() => result.current.setFieldValue('tags', ['a']));
+    expect(result.current.errors.tags).toBe('Too few tags');
+
+    act(() => result.current.setFieldValue('tags', ['a', 'b']));
+    expect(result.current.errors.tags).toBeUndefined();
+  });
+});
+
 describe('withDeps', () => {
   const slugSchema = S.object({
     workspaceId: S.required(S.string()),

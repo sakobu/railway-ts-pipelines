@@ -18,8 +18,8 @@ test('the outermost pass runs once, after the body, with what every nested body 
     expect([...record.paths]).toEqual(['a', 'b']);
   });
   events.run((requests) => {
-    requests.check(['a']);
-    events.run((nested) => nested.check(['b']), inner);
+    requests.check({ paths: ['a'] });
+    events.run((nested) => nested.check({ paths: ['b'] }), inner);
     order.push('body');
   }, pass);
   expect(order).toEqual(['body', 'pass']);
@@ -34,7 +34,7 @@ test('a body that throws runs no pass, and the next event starts fresh', () => {
 
   expect(() =>
     events.run((requests) => {
-      requests.check(['a']);
+      requests.check({ paths: ['a'] });
       throw boom;
     }, pass),
   ).toThrow(boom);
@@ -74,19 +74,17 @@ test('a call made from inside the pass is an event of its own', () => {
   expect(inner).toHaveBeenCalledTimes(1);
 });
 
-test('every request asks for a schema check: a check of paths, and a follow that re-checks fields and clears all', () => {
+test('a check records the paths, the named fields and the validator keys it reaches', () => {
   const events = createCheckEvents();
   const pass = mock((_record: EventRecord) => {});
 
-  events.run((requests) => requests.check(['a']), pass);
-  expect(pass.mock.calls[0]![0].clearAll).toBe(false);
-  expect([...pass.mock.calls[0]![0].fields]).toEqual([]);
+  events.run((requests) => {
+    requests.check({ paths: ['a'], named: ['b'] });
+    requests.check({ validators: ['x', 'y'] });
+  }, pass);
 
-  events.run((requests) => requests.recheckAfterFollow([]), pass);
-  expect(pass).toHaveBeenCalledTimes(2);
-
-  events.run((requests) => requests.recheckAfterFollow(['x', 'y']), pass);
-  expect(pass.mock.calls[2]![0].clearAll).toBe(true);
-  expect([...pass.mock.calls[2]![0].paths]).toEqual([]);
-  expect([...pass.mock.calls[2]![0].fields]).toEqual(['x', 'y']);
+  const record = pass.mock.calls[0]![0];
+  expect([...record.paths]).toEqual(['a']);
+  expect([...record.named]).toEqual(['b']);
+  expect([...record.validators]).toEqual(['x', 'y']);
 });

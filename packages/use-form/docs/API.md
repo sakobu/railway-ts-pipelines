@@ -230,7 +230,7 @@ Per-field validator functions for field-level async validation. Run independentl
 
 Return `undefined` for valid, or an error message string for invalid. An entry set to `undefined` is skipped, as a missing key is.
 
-**The error rule.** A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A submit whose check ended that way still fails: `handleSubmit`'s `err` includes the error, and the submit error says the values changed ([`messages.changedWhileChecking`](#messages)).
+**The error rule.** Every error the form shows describes the values it holds. In every mode, an edit drops the schema and server errors at, inside or above each path whose value it changed, and a whole-form schema error on any edit. Setting an equal value keeps them, and a schema check that lands after an edit places its errors only where the values still match. A field validator's error shows only while its field and its listed fields hold the values its check saw. An edit that changes one of them drops the error at once, in every mode, whatever made the edit (`setFieldValue`, `setValues`, an array helper, a follow of new `initialValues`), and `isValid` follows. So `errors`, `isValid` and auto-save agree, and a Save button disabled while `!isValid` doesn't stay stuck on an error for values the form no longer holds. Undoing an edit doesn't bring the error back: it's gone until a check runs. A check of values the form no longer holds ends with no error, and a re-check of unchanged values keeps the error until it answers. A submit whose check ended that way still fails: `handleSubmit`'s `err` includes the error, and the submit error says the values changed ([`messages.changedWhileChecking`](#messages)).
 
 **What checks a validator again**, by mode:
 
@@ -242,9 +242,9 @@ Return `undefined` for valid, or an error message string for invalid. An entry s
 - A submit runs every validator that is on, once the schema passes.
 - In every mode, a schema check that accepts the inputs of a check the schema gate held back runs it, whatever asked for that schema check: a blur or edit of another field, a follow or a submit (see the schema gate, below).
 
-A validator's own field matches by overlap: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city`.
+A validator's own field matches by overlap, counting what an edit changed: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on `address.city` when the city changed. An array helper re-checks the array's validator, not those of the items it left as they were. A key an edit adds or removes is a change, even one holding `undefined`. Setting a field to its own value still re-checks its validator and those of the objects around it.
 
-**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is held back by an error at `address.zip`, and one that lists `address.city` is held back by an error at `address`. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it holds back every validator: put a cross-field rule on its field with `refineAt` to keep the other lookups running. A check the gate holds back ends with no error and without a spinner, so no request goes out with an input the schema rejects, and it runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in. Fixing the email that a rule on `username` reads runs the held-back `username` lookup, in any mode, as soon as a schema check of the fixed values lands. An edit of the held-back check's own inputs drops it instead, and the mode's rules check them again.
+**The schema gate.** A validator runs only when the schema produces **no error** that overlaps its own field or any field it lists, whether the error sits at, inside or above it: a validator on `address` is held back by an error at `address.zip`, and one that lists `address.city` is held back by an error at `address`. A root error (path `[]`, as an object-level `refine` without `refineAt` gives) sits above every field, so it holds back every validator, and any edit drops it, since it describes every field: put a cross-field rule on its field with `refineAt` to keep the other lookups running. A check the gate holds back ends with no error and without a spinner, so no request goes out with an input the schema rejects, and it runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in. Fixing the email that a rule on `username` reads runs the held-back `username` lookup, in any mode, as soon as a schema check of the fixed values lands. An edit of the held-back check's own inputs drops it instead, and the mode's rules check them again.
 
 Switching a validator off, by leaving its key out or setting it to `undefined`, drops its error at once. A check of it still running never lands, even if it is switched back on. A submit still waits for a check whose validator was switched off, then counts it as never run. Keys are dot paths, and bracket callers find them: `setFieldValue('r1[0]', ...)` finds the `r1.0` validator.
 
@@ -308,9 +308,8 @@ outermost call. So a cascade runs each validator and the schema once.
 `validateForm` and `handleSubmit` aren't part of that: they check at once. A
 throw from `onFieldChange` itself ends the outermost call without validating,
 the re-check of a follow the edit caused included: the errors the edit outdated
-are already gone, but schema errors from before it stay shown until the next
-check. A
-`resetForm()` or `setValues()` made here can override the field that just
+are already gone, but schema errors at the paths it left as they were stay
+shown until the next check. A `resetForm()` or `setValues()` made here can override the field that just
 changed. To reset the other fields when one changes, pass the new value along:
 
 ```typescript
@@ -558,9 +557,9 @@ const errors = {
 
 **When each layer gets cleared:**
 
-- `clientErrors` -- replaced on every schema validation run (the entire object is swapped)
+- `clientErrors` -- replaced when a schema check lands, except at paths edited since it started. An edit drops those at, inside or above the paths it changed, in every mode, and a root error on any edit
 - `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate holds the check back, with no error, until the schema accepts them. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
-- `serverErrors` -- auto-cleared per-field when the user edits the affected field, and on the groups that contain it (editing `address.city` clears a server error on `address`); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
+- `serverErrors` -- dropped when an edit changes the value at, inside or above its path (setting an equal value keeps it); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change. A failed save's field errors don't land when a follow or `resetForm()` replaced the submitted values while it ran; its submit error still does
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit. It does not count toward `isValid`
 
 A server error stays visible until the user changes the field, even if client validation passes. That's intentional -- the server said it's wrong, and only editing should dismiss it.
@@ -658,7 +657,7 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 - `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given. To merge a class instance that holds only some fields, such as a model from a PATCH response, spread it into a plain object: `setValues({ address: { ...patch } })`.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
 
-When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. It also hides the schema errors at those paths while an async schema check runs, as `setFieldValue` does for its field. Validation runs once, after the outermost call returns.
+When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. An edit drops the errors at the paths it changed in every mode. Validation runs once, after the outermost call returns.
 
 **Example:**
 

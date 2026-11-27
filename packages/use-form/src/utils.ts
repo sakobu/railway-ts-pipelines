@@ -358,7 +358,8 @@ const hidesContents = (value: object): boolean =>
 
 /**
  * Whether the form looks inside a value, or treats it as one value. `setValues` ({@link deepMerge}),
- * {@link deepEqual} and {@link collectFieldPaths} all follow it, so they agree on the shape of form values.
+ * {@link deepEqual}, {@link changedPaths} and {@link collectFieldPaths} all follow it, so they agree on the shape of
+ * form values.
  *
  * The form looks inside arrays and objects that keep their state in their own fields: plain
  * objects, and class instances with fields, such as a record class or a dayjs value. That's how
@@ -366,10 +367,12 @@ const hidesContents = (value: object): boolean =>
  * `Blob`, `Map`, `Set`, typed arrays, and objects with no fields of their own, such as Temporal
  * values and classes with only private fields.
  *
+ * A value it looks inside is typed as a record read by key, as any object can be: each field reads as `unknown`.
+ *
  * @param value - Any form value
  * @returns Whether the form looks inside the value
  */
-const isBranch = (value: unknown): value is object => {
+const isBranch = (value: unknown): value is Readonly<Record<string, unknown>> => {
   if (value === null || typeof value !== 'object') return false;
   if (Array.isArray(value) || isPlainObject(value)) return true;
   return !hidesContents(value) && Object.keys(value).length > 0;
@@ -470,36 +473,14 @@ export const collectFieldPaths = (obj: unknown, prefix = ''): FieldPath[] => {
 const isMergeTarget = (value: unknown): value is Record<string, unknown> => isBranch(value) && !Array.isArray(value);
 
 /**
- * What a `setValues` merge does at one key of `source`: merge a plain object into the object there,
- * or write the value, replacing the one `target` holds.
- */
-type MergeStep =
-  | { key: string; merges: true; target: Record<string, unknown>; source: Record<string, unknown> }
-  | { key: string; merges: false; before: unknown; value: unknown };
-
-/**
- * The merge rule, one step per key of `source`, shared by {@link deepMerge} and {@link changedPaths}.
- * A plain object merges into a {@link isMergeTarget} value, and every other value is written. It skips
- * `__proto__`: `JSON.parse` makes it an own key, and assigning it would replace the values' prototype.
- */
-const mergeSteps = (target: Record<string, unknown>, source: Record<string, unknown>): MergeStep[] =>
-  Object.keys(source)
-    .filter((key) => key !== '__proto__')
-    .map((key): MergeStep => {
-      const value = source[key];
-      const before = target[key];
-      return isPlainObject(value) && isMergeTarget(before)
-        ? { key, merges: true, target: before, source: value }
-        : { key, merges: false, before, value };
-    });
-
-/**
  * Merges `source` into `target` for `setValues`, returning a new object.
  *
  * A plain object in `source` is a partial update. It merges into the object there, as
  * `setFieldValue` on each of its keys would, when that object is one the form looks inside
  * (see {@link isBranch}) and isn't an array. Every other value in `source` (an array, `Date`,
- * `File`, `Map`, `Set` or class instance) replaces the value before it, stored as given.
+ * `File`, `Map`, `Set` or class instance) replaces the value before it, stored as given. A
+ * `__proto__` key is skipped: `JSON.parse` makes it an own key, and assigning it would replace the
+ * values' prototype.
  *
  * @param target - The current values (not mutated)
  * @param source - The values to write over them
@@ -515,40 +496,127 @@ const mergeSteps = (target: Record<string, unknown>, source: Record<string, unkn
 export const deepMerge = <T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T => {
   const result: Record<string, unknown> = { ...target };
 
-  for (const step of mergeSteps(target, source)) {
-    result[step.key] = step.merges ? deepMerge(step.target, step.source) : step.value;
+  for (const key of Object.keys(source)) {
+    if (key === '__proto__') continue;
+    const value = source[key];
+    const before = target[key];
+    result[key] = isPlainObject(value) && isMergeTarget(before) ? deepMerge(before, value) : value;
   }
 
   return result as T;
 };
 
+/** The path of `key` inside the value at `path`, where `''` is the root. */
+const join = (path: FieldPath, key: string | number): FieldPath => (path ? `${path}.${key}` : `${key}`);
+
 /**
- * The leaf paths whose value `deepMerge(target, source)` changes, so `setValues` checks only what it
- * changed. It follows the same steps as {@link deepMerge}: it descends where a step merges, and
- * compares each value a step writes with what `target` holds there by {@link deepEqual}. An object
- * merged into isn't a path it writes.
+ * The path of each leaf inside a value: each value the form doesn't look inside (see {@link isBranch}), and each
+ * empty branch. A value that is itself a leaf or an empty branch is the one leaf, at `path`. A value met again inside
+ * itself is a leaf where it repeats, so it is walked once.
  *
- * @param target - The values before the merge
- * @param source - The values merged in
- * @param prefix - The path of the objects merged, when descending into one
- * @returns Each path whose value the merge changes, in dot form
- *
- * @example
- * changedPaths({ address: { city: "LA", zip: "90001" } }, { address: { city: "NYC" } }); // ["address.city"]
- *
- * @example
- * changedPaths({ tags: ["a"] }, { tags: ["a", "b"] }); // ["tags"]: an array is replaced whole
+ * @param value - The value
+ * @param path - The value's path
+ * @returns Each leaf's path, in dot form
  */
-export const changedPaths = (
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-  prefix = '',
-): FieldPath[] =>
-  mergeSteps(target, source).flatMap((step) => {
-    const path = prefix ? `${prefix}.${step.key}` : step.key;
-    if (step.merges) return changedPaths(step.target, step.source, path);
-    return deepEqual(step.before, step.value) ? [] : [path];
+const leavesOf = (value: unknown, path: FieldPath): FieldPath[] => {
+  const leaves: FieldPath[] = [];
+  // The values being walked, so a value that contains itself is walked once
+  const ancestors = new Set<object>();
+  const visit = (current: unknown, at: FieldPath): void => {
+    const entries = isBranch(current) && !ancestors.has(current) ? Object.entries(current) : [];
+    if (!isBranch(current) || entries.length === 0) {
+      leaves.push(at);
+      return;
+    }
+    ancestors.add(current);
+    for (const [key, child] of entries) visit(child, join(at, key));
+    ancestors.delete(current);
+  };
+  visit(value, path);
+  return leaves;
+};
+
+/**
+ * Walks two values by {@link deepEqual}'s rules, calling `found` at each path where they differ until it returns
+ * `false`. A key or item only one side has differs at each leaf inside it ({@link leavesOf}). A pair met again inside
+ * itself is settled by the walk already running on it, so a value that contains itself is walked once.
+ *
+ * @param a - The first value
+ * @param b - The second value
+ * @param path - The path of the values walked, `''` at the root
+ * @param running - The pairs of values whose walk is running, outermost first
+ * @param found - Called with each path where the values differ. Returning `false` stops the walk.
+ * @returns `false` when `found` stopped the walk, and `true` otherwise
+ */
+const walkDifferences = (
+  a: unknown,
+  b: unknown,
+  path: FieldPath,
+  running: Array<readonly [object, object]>,
+  found: (path: FieldPath) => boolean,
+): boolean => {
+  if (Object.is(a, b)) return true;
+  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime()) || found(path);
+  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString() || found(path);
+  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out. The form's
+  // edits keep an array an array.
+  if (!isBranch(a) || !isBranch(b) || Array.isArray(a) !== Array.isArray(b)) return found(path);
+  // Met again inside itself: the walk already running on this pair settles it
+  if (running.some(([x, y]) => x === a && y === b)) return true;
+
+  running.push([a, b]);
+  try {
+    if (Array.isArray(a) && Array.isArray(b)) {
+      for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const walked =
+          i >= a.length || i >= b.length
+            ? leavesOf(i < a.length ? a[i] : b[i], join(path, i)).every(found)
+            : walkDifferences(a[i], b[i], join(path, i), running, found);
+        if (!walked) return false;
+      }
+      return true;
+    }
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const inA = Object.hasOwn(a, key);
+      const walked =
+        inA && Object.hasOwn(b, key)
+          ? walkDifferences(a[key], b[key], join(path, key), running, found)
+          : leavesOf(inA ? a[key] : b[key], join(path, key)).every(found);
+      if (!walked) return false;
+    }
+    return true;
+  } finally {
+    running.pop();
+  }
+};
+
+/**
+ * Each path where two values differ, by {@link deepEqual}'s rules, so an edit re-checks and drops errors only where
+ * it changed something. It looks inside the values the form looks inside (see {@link isBranch}) and reports the
+ * deepest path where they differ. A key or item only one side has is a change at each leaf inside it, or at the key
+ * itself when it holds a leaf or an empty branch, so one holding `undefined` counts too.
+ *
+ * @param before - The values before
+ * @param after - The values after
+ * @returns Each path where the values differ, in dot form
+ *
+ * @example
+ * changedPaths({ address: { city: "LA", zip: "1" } }, { address: { city: "NYC", zip: "1" } }); // ["address.city"]
+ *
+ * @example
+ * changedPaths({ tags: ["a"] }, { tags: ["a", "b"] }); // ["tags.1"]
+ *
+ * @example
+ * changedPaths({ address: { city: "LA" } }, {}); // ["address.city"]
+ */
+export const changedPaths = (before: unknown, after: unknown): FieldPath[] => {
+  const paths: FieldPath[] = [];
+  walkDifferences(before, after, '', [], (path) => {
+    paths.push(path);
+    return true;
   });
+  return paths;
+};
 
 /**
  * Compares two values the way the form sees them. Used for `isDirty`, for following new
@@ -577,35 +645,4 @@ export const changedPaths = (
  * deepEqual(new Date("2024-01-01"), new Date("2024-01-01")); // true
  * deepEqual(new File(["a"], "a.txt"), new File(["a"], "a.txt")); // false: compared by identity
  */
-export const deepEqual = (a: unknown, b: unknown): boolean => equalWithin(a, b, []);
-
-/** {@link deepEqual}, given the pairs of values whose comparison is running, outermost first. */
-const equalWithin = (a: unknown, b: unknown, running: Array<readonly [object, object]>): boolean => {
-  if (Object.is(a, b)) return true;
-  if (a instanceof Date && b instanceof Date) return Object.is(a.getTime(), b.getTime());
-  if (a instanceof RegExp && b instanceof RegExp) return a.toString() === b.toString();
-  // Any other value the form doesn't look inside compares by identity, which Object.is has ruled out
-  if (!isBranch(a) || !isBranch(b)) return false;
-  // The form's edits keep an array an array
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  // Met again inside itself: the comparison already running on this pair settles it
-  if (running.some(([x, y]) => x === a && y === b)) return true;
-
-  running.push([a, b]);
-  const equal = Array.isArray(a) ? itemsEqual(a, b as unknown[], running) : fieldsEqual(a, b, running);
-  running.pop();
-  return equal;
-};
-
-const itemsEqual = (a: unknown[], b: unknown[], running: Array<readonly [object, object]>): boolean =>
-  a.length === b.length && a.every((item, i) => equalWithin(item, b[i], running));
-
-const fieldsEqual = (a: object, b: object, running: Array<readonly [object, object]>): boolean => {
-  const keysA = Object.keys(a);
-  if (keysA.length !== Object.keys(b).length) return false;
-  return keysA.every(
-    (key) =>
-      Object.prototype.hasOwnProperty.call(b, key) &&
-      equalWithin((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], running),
-  );
-};
+export const deepEqual = (a: unknown, b: unknown): boolean => walkDifferences(a, b, '', [], () => false);

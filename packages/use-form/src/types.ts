@@ -468,9 +468,12 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    *
    * What checks a validator again, by mode: an edit of its field or of a listed field in `live` mode (`setValues`
    * too, for the values it changed), a blur of either in `blur` mode, and a submit in every mode. In `submit` and
-   * `mount` modes an edit only drops the error. A field matches by overlap: editing `address.city` re-checks a
-   * validator on `address`, and the reverse. `shouldValidate: true` on `setFieldValue`, `setValues` or
-   * `setFieldTouched` checks in any mode.
+   * `mount` modes an edit only drops the error. A validator's own field matches by overlap, counting what an edit
+   * changed: editing `address.city` re-checks a validator on `address`, and setting `address` re-checks one on
+   * `address.city` when the city changed. An array helper re-checks the array's validator, not those of the items it
+   * left as they were. A key an edit adds or removes is a change, even one holding `undefined`. Setting a field to its
+   * own value still re-checks its validator and those of the objects around it. `shouldValidate: true` on
+   * `setFieldValue`, `setValues` or `setFieldTouched` checks in any mode.
    *
    * A follow of new `initialValues` changes the values as an edit does: in `live` mode it re-checks each validator
    * whose field or listed field it changed, even one that passed, and in every mode a check it cut short runs again
@@ -528,8 +531,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * reaches that outermost call. So a cascade runs each validator and the schema once. validateForm
    * and handleSubmit still check at once. A throw from this callback that reaches the outermost call
    * ends it without validating, the re-check of a follow the edit caused included: the errors the edit outdated are
-   * already gone, but schema errors from before it stay shown until the next check. A resetForm() or setValues() made
-   * here can override the field that just changed. To reset the other fields when one changes, call
+   * already gone, but schema errors at the paths it left as they were stay shown until the next check. A resetForm()
+   * or setValues() made here can override the field that just changed. To reset the other fields when one changes, call
    * setValues({ ...defaults, [field]: value }).
    *
    * The callback is stored in a ref internally, so inline functions are safe.
@@ -1271,16 +1274,6 @@ export interface ArrayHelpers<TItem, TFieldPaths extends string = ExtractFieldPa
  * });
  *
  * @example
- * // Setting multiple validation errors
- * dispatch({
- *   type: "SET_CLIENT_ERRORS",
- *   errors: {
- *     "email": "Invalid email format",
- *     "password": "Must be at least 8 characters"
- *   }
- * });
- *
- * @example
  * // Marking all fields as touched on submit
  * dispatch({
  *   type: "MARK_ALL_TOUCHED",
@@ -1306,8 +1299,8 @@ export type FormAction<TValues extends Record<string, unknown>> =
       /** The check's id */
       id: CheckId;
       /**
-       * The schema's answer: its verdict, and its errors as `SET_CLIENT_ERRORS` takes them. None, as after a throw or
-       * rejection, ends the check and keeps the errors and the verdict.
+       * The schema's answer: its verdict, and its errors, by path as `formatErrors` writes them. None, as after a throw
+       * or rejection, ends the check and keeps the errors and the verdict.
        */
       answer?: SchemaVerdict<TValues> & { errors: Record<FieldPath, string> };
     }
@@ -1396,12 +1389,6 @@ export type FormAction<TValues extends Record<string, unknown>> =
       field: FieldPath;
       /** Whether the field is touched (true) or untouched (false) */
       isTouched: boolean;
-    }
-  | {
-      /** Sets client-side validation errors from the validator function */
-      type: 'SET_CLIENT_ERRORS';
-      /** Map of field paths to error messages */
-      errors: Record<FieldPath, string>;
     }
   | {
       /** Sets server-side validation errors (manually set via setServerErrors) */

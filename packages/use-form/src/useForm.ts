@@ -61,7 +61,6 @@ import {
   overlapsAny,
   own,
   valuesAt,
-  withoutPaths,
 } from './utils';
 import { listsFields } from './withDeps';
 
@@ -991,14 +990,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * The check pass: once an event's outermost call returns, it checks what the event recorded, on the values the form
    * holds then. It's the only place that starts a check nothing awaits.
    *
-   * 1. The validators it checks are every one a recorded path reaches, through an input path overlapping it, and the
-   *    fields a follow recorded whose validator is still on. Each is checked once.
+   * 1. The validators it checks are every one a recorded path reaches, through an input path overlapping it, every one
+   *    whose input path is a named field or contains it, and the validators a follow recorded that are still on. Each
+   *    is checked once.
    * 2. It takes the schema check's id, starts a waiting check per validator, runs the schema once, then continues each
    *    one. So each start replaces its field's older waiting check before the landing could move that one on, and the
    *    landing, even at once, leaves the new checks to their continuations.
-   * 3. While the schema check has no sync answer, since it's async or it threw, the old client errors in the event's
-   *    scope don't show: every one after a follow, so the old values' errors don't show on the new ones, and otherwise
-   *    those at the recorded paths. A sync answer sets the client errors itself.
    *
    * @param record - What the event recorded
    * @throws A sync throw from the schema validator, once the field checks ended with no result. Otherwise the first
@@ -1008,19 +1005,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     (record: EventRecord): void => {
       const { values } = store.getState();
       const paths = [...record.paths];
+      const named = [...record.named];
+      const reaches = (input: FieldPath): boolean =>
+        overlapsAny(input, paths) || named.some((field) => isPathAffected(field, input));
       const validators = Array.from(fieldValidatorsRef.current).filter(
-        ([key, validator]) => record.fields.has(key) || validator.inputs.some((input) => overlapsAny(input, paths)),
+        ([key, validator]) => record.validators.has(key) || validator.inputs.some(reaches),
       );
-
-      // Step 3: hides the old client errors in the event's scope, if any show
-      const hideOld = (): void => {
-        const { clientErrors } = store.getState();
-        const kept = withoutPaths(
-          clientErrors,
-          (errorPath) => record.clearAll || paths.some((path) => isPathAffected(errorPath, path)),
-        );
-        if (kept !== clientErrors) dispatch({ type: 'SET_CLIENT_ERRORS', errors: kept });
-      };
 
       const schemaId = store.takeCheckId();
       const moveOns = validators.map(([key, validator]) => startWaitingCheck(key, validator, values));
@@ -1035,11 +1025,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         );
       } catch (error) {
         // The schema validator threw: the field checks end with no result, and the throw reaches the caller
-        hideOld();
         moveOns.forEach((moveOn) => moveOn(undefined));
         throw error;
       }
-      if (isPromiseLike(schemaErrors)) hideOld();
 
       // Every field check moves on, whatever the others throw. The first throw then reaches the caller, and each later
       // one is logged, since only one can.
@@ -1116,12 +1104,12 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   /**
    * Records the checks of a follow, so the errors describe the values shown. A follow changes the values as an edit
-   * does: the reducer has already dropped every field error whose inputs it changed.
+   * does: the reducer has already dropped every field error whose inputs it changed, and the schema and server errors
+   * at the paths it changed.
    *
    * It asks for a schema check when the mode calls for it, when the form has validated before (a blurred field in
-   * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. That check hides the
-   * old values' schema errors while an async schema check runs or once it threw. A mode that wouldn't have validated
-   * yet still doesn't. The check re-runs two kinds of field validator:
+   * `blur` mode, a submit attempt in any mode), or when errors were shown or still being checked. A mode that wouldn't
+   * have validated yet still doesn't. The check re-runs two kinds of field validator:
    *
    * - in `live` mode, each one whose inputs the follow changed, as an edit of them would
    * - in any mode, each one whose check the follow cut short while its inputs still hold, since the verdict it was
@@ -1154,7 +1142,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         !isValidState(prev) ||
         isValidatingState(prev)
       ) {
-        requests.recheckAfterFollow(fields);
+        requests.check({ validators: fields });
       }
 
       if (validateOnMount) recordMountCheck(requests);
@@ -1232,33 +1220,36 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
   /**
    * Applies an edit and records its checks in the event: its own check, when it asks for one, and when it undoes the
-   * last unsaved edit, so the form follows the latest version, the follow's checks too. The pass reads the event's
-   * record only once the outermost call returns, so a check recorded now still validates the values as any later call
-   * in the event leaves them, and a validator both reach runs once.
+   * last unsaved edit, so the form follows the latest version, the follow's checks too. Its own check reaches each path
+   * whose value the edit changed ({@link changedPaths}), and the fields it names, changed or not. The pass reads the
+   * event's record only once the outermost call returns, so a check recorded now still validates the values as any
+   * later call in the event leaves them, and a validator both reach runs once.
    *
    * @param action - The edit
    * @param requests - The event's requests
-   * @param checkPaths - The paths the edit's own check reaches, normalized: none for a schema check only, or undefined
-   *   when the edit asks for no check
+   * @param checkNamed - The fields the edit names, normalized: its check reaches the validators at each one or above it,
+   *   even when its value is equal. None for the changed paths only, or undefined when the edit asks for no check.
    */
   const applyEdit = useCallback(
-    (action: FormAction<TValues>, requests: EventRequests, checkPaths: readonly FieldPath[] | undefined): void => {
+    (action: FormAction<TValues>, requests: EventRequests, checkNamed: readonly FieldPath[] | undefined): void => {
       const prev = store.getState();
       dispatch(action);
-      if (store.getState().baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev);
-      if (checkPaths) requests.check(checkPaths);
+      const next = store.getState();
+      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, prev);
+      if (checkNamed) requests.check({ paths: changedPaths(prev.values, next.values), named: checkNamed });
     },
     [store, dispatch, recordFollow],
   );
 
   /**
    * Updates a single field value and optionally triggers validation.
-   * Automatically marks the field as touched (in "live" mode) and clears related server errors.
+   * Automatically marks the field as touched (in "live" mode) and drops the schema and server errors at, inside or
+   * above each path whose value it changed.
    *
    * Validation runs once, after the outermost call returns: a call made inside `onFieldChange` joins this one. The
    * schema then runs once, and so does each field validator whose field, or a field it lists with `withDeps`, is this
-   * field, inside it or contains it, on the values as they are then. A sync throw from either reaches the outermost
-   * call.
+   * field or contains it, or sits inside it where the value changed, on the values as they are then. A sync throw from
+   * either reaches the outermost call.
    *
    * @template TValue - The type of the value being set
    * @param field - The field path (supports dot notation and bracket notation)
@@ -1309,8 +1300,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * Validation runs once, after the outermost call returns, as for `setFieldValue`: the schema, and each field
    * validator that a value it changed reaches. A value equal to the one before isn't a change, so a whole-record
-   * `setValues` re-runs only the validators of what changed. The schema errors at the changed paths clear while an
-   * async schema check runs.
+   * `setValues` re-runs only the validators of what changed. An edit drops the errors at the paths it changed in every
+   * mode.
    *
    * A record to load goes in `initialValues` instead, which the form follows while it has no unsaved edits.
    *
@@ -1340,11 +1331,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void =>
       runEvent((requests) => {
-        // With nothing changed, its check is a schema check only
-        const checkPaths = shouldValidate ? changedPaths(store.getState().values, newValues) : undefined;
-        applyEdit({ type: 'SET_VALUES', values: newValues }, requests, checkPaths);
+        // It names no field: its check reaches what it changed, and with nothing changed, it's a schema check only
+        applyEdit({ type: 'SET_VALUES', values: newValues }, requests, shouldValidate ? [] : undefined);
       }),
-    [store, runEvent, applyEdit, validateOnChange],
+    [runEvent, applyEdit, validateOnChange],
   );
 
   /**
@@ -1393,7 +1383,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         } else if (shouldValidate === undefined ? validateOnBlur : shouldValidate) {
           // The schema, and the field validators the field reaches. A `null` from untyped code is off, as it is for
           // setFieldValue and setValues.
-          check([key]);
+          check({ paths: [key] });
         }
       }),
     [store, dispatch, runEvent, validateOnBlur, validateOnChange],

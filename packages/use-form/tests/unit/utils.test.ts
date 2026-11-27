@@ -488,15 +488,53 @@ describe('deepMerge', () => {
   });
 });
 
-test('changedPaths lists the leaf paths a merge changes', () => {
-  const target = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
-  expect(changedPaths(target, { name: 'a', address: { city: 'y' } })).toEqual(['address.city']);
-  expect(changedPaths(target, { tags: ['a', 'b'] })).toEqual(['tags']);
-  expect(changedPaths(target, { address: { city: 'x' } })).toEqual([]);
-  // Nothing to merge into: the plain object replaces what's there, and its own path changes
-  expect(changedPaths({ a: 1 }, { address: { city: 'x' } })).toEqual(['address']);
-  expect(changedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
-  expect(changedPaths({ a: 1 }, JSON.parse('{"__proto__": {"x": 1}}'))).toEqual([]);
+describe('changedPaths', () => {
+  const before = { name: 'a', address: { city: 'x', zip: '1' }, tags: ['a'] };
+
+  test('lists each path where two values differ, as deepEqual compares them', () => {
+    expect(changedPaths(before, { ...before, address: { city: 'y', zip: '1' } })).toEqual(['address.city']);
+    expect(changedPaths(before, { ...before, tags: ['a', 'b'] })).toEqual(['tags.1']);
+    expect(changedPaths(before, { ...before, tags: [] })).toEqual(['tags.0']);
+    expect(changedPaths(before, structuredClone(before))).toEqual([]);
+    expect(changedPaths({ when: new Date(0) }, { when: new Date(1) })).toEqual(['when']);
+    expect(changedPaths({ when: new Date(0) }, { when: new Date(0) })).toEqual([]);
+    expect(changedPaths({ match: /a/ }, { match: /b/ })).toEqual(['match']);
+    expect(changedPaths({ list: [1] }, { list: { 0: 1 } })).toEqual(['list']);
+  });
+
+  test('a key or item only one side has is a change at each leaf inside it, even a leaf holding undefined', () => {
+    expect(changedPaths({ a: 1 }, { a: 1, address: { city: 'x', zip: '1' } })).toEqual(['address.city', 'address.zip']);
+    expect(changedPaths({ address: { city: 'x' } }, {})).toEqual(['address.city']);
+    expect(changedPaths({ address: { city: 'x' } }, { address: { city: 'x', zip: undefined } })).toEqual([
+      'address.zip',
+    ]);
+    expect(changedPaths({ a: 1 }, { a: 1, list: [] })).toEqual(['list']);
+    expect(changedPaths({ tags: ['a'] }, { tags: ['a', { v: 1 }] })).toEqual(['tags.1.v']);
+  });
+
+  test('a value that contains itself is walked once', () => {
+    const a: Record<string, unknown> = { name: 'a' };
+    a.self = a;
+    const b: Record<string, unknown> = { name: 'b' };
+    b.self = b;
+    expect(changedPaths(a, b)).toEqual(['name']);
+    expect(changedPaths({}, { added: a })).toEqual(['added.name', 'added.self']);
+  });
+
+  test('finds no path exactly when deepEqual calls the values equal', () => {
+    const pairs: [unknown, unknown][] = [
+      [{ a: undefined }, {}],
+      [
+        [1, 2],
+        [1, 2],
+      ],
+      [[1], [1, 2]],
+      [{ d: new Date(5) }, { d: new Date(5) }],
+      [{ nested: { deep: [1, { x: 1 }] } }, { nested: { deep: [1, { x: 2 }] } }],
+      [Number.NaN, Number.NaN],
+    ];
+    for (const [a, b] of pairs) expect(changedPaths(a, b).length === 0).toBe(deepEqual(a, b));
+  });
 });
 
 describe('deepEqual', () => {

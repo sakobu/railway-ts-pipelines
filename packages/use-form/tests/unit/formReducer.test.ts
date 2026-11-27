@@ -253,52 +253,6 @@ describe('formReducer', () => {
     });
   });
 
-  describe('SET_CLIENT_ERRORS', () => {
-    test('sets client errors', () => {
-      const errors = {
-        name: 'Name is required',
-        email: 'Email is invalid',
-      };
-
-      const result = formReducer(
-        initialState,
-        {
-          type: 'SET_CLIENT_ERRORS',
-          errors,
-        },
-        initialValues,
-      );
-
-      expect(result.clientErrors).toEqual(errors);
-    });
-
-    test('replaces existing client errors', () => {
-      const stateWithErrors: FormState<typeof initialValues> = {
-        ...initialState,
-        clientErrors: { name: 'Old error' },
-      };
-
-      const newErrors = { email: 'Email is required' };
-
-      const result = formReducer(
-        stateWithErrors,
-        {
-          type: 'SET_CLIENT_ERRORS',
-          errors: newErrors,
-        },
-        initialValues,
-      );
-
-      expect(result.clientErrors).toEqual(newErrors);
-    });
-
-    test('no errors keep the shared empty map, so a valid result changes nothing derived from it', () => {
-      const result = formReducer(initialState, { type: 'SET_CLIENT_ERRORS', errors: {} }, initialValues);
-
-      expect(result.clientErrors).toBe(initialState.clientErrors);
-    });
-  });
-
   describe('SET_SERVER_ERRORS', () => {
     test('SET_SERVER_ERRORS stores the submit error apart from per-path errors', () => {
       const result = formReducer(
@@ -1050,6 +1004,49 @@ describe('checks', () => {
     });
     expect(ended.clientErrors).toEqual({ name: 'Bad' });
     expect(ended.checks.schema).toBeUndefined();
+  });
+
+  test('END_SCHEMA_CHECK of values the form no longer holds lands its errors only where they still match', () => {
+    const ended = apply(
+      start,
+      { type: 'START_SCHEMA_CHECK', id: 1 },
+      { type: 'SET_FIELD_VALUE', field: 'name', value: 'Jane' },
+      {
+        type: 'END_SCHEMA_CHECK',
+        id: 1,
+        answer: { values: v1, passed: false, errors: { name: 'Bad', email: 'Taken', _root: 'Mismatch' } },
+      },
+    );
+
+    expect(ended.clientErrors).toEqual({ email: 'Taken' });
+  });
+
+  test('an edit drops the client and server errors at, inside and above the paths it changed, and a root error', () => {
+    const nested = { name: 'John', address: { city: 'NYC', zip: '1' } };
+    const state: FormState<typeof nested> = {
+      ...createInitialFormState(nested, 'a'),
+      clientErrors: { address: 'Bad address', 'address.zip': 'Bad zip', name: 'Bad name', _root: 'Mismatch' },
+      serverErrors: { 'address.city': 'Unknown city', name: 'Taken' },
+    };
+
+    const edited = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'address.city', value: 'LA' }, nested);
+
+    expect(edited.clientErrors).toEqual({ 'address.zip': 'Bad zip', name: 'Bad name' });
+    expect(edited.serverErrors).toEqual({ name: 'Taken' });
+  });
+
+  test('an edit to an equal value keeps every error', () => {
+    const tagged = { tags: ['a'] };
+    const state: FormState<typeof tagged> = {
+      ...createInitialFormState(tagged, 'a'),
+      clientErrors: { tags: 'Too few' },
+      serverErrors: { tags: 'Rejected' },
+    };
+
+    const edited = formReducer(state, { type: 'SET_FIELD_VALUE', field: 'tags', value: ['a'] }, tagged);
+
+    expect(edited.clientErrors).toBe(state.clientErrors);
+    expect(edited.serverErrors).toBe(state.serverErrors);
   });
 
   test('END_SCHEMA_CHECK normalizes bracket keys', () => {
