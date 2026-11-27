@@ -1,6 +1,16 @@
 import { test, expect, mock } from 'bun:test';
 
-import { createCheckEvents, type EventRecord, type EventRequests } from '../../src/checkEvents';
+import { createCheckEvents, type CheckEvents, type EventRecord, type RequestCheck } from '../../src/checkEvents';
+
+/** A body that asks for the schema check only. */
+const asksForCheck = (requestCheck: RequestCheck): void => requestCheck();
+
+/** Starts an event with no caller that asks for a check, whose pass adds the error's message to `order`, and throws. */
+const startThrowing = (events: CheckEvents, order: string[], error: Error): void =>
+  events.runUncalled(asksForCheck, () => {
+    order.push(error.message);
+    throw error;
+  });
 
 test('a body that asks for no check runs no pass', () => {
   const events = createCheckEvents(() => {});
@@ -17,9 +27,9 @@ test('the outermost pass runs once, after the body, with what every nested body 
     order.push('pass');
     expect([...record.paths]).toEqual(['a', 'b']);
   });
-  events.run((requests) => {
-    requests.check({ paths: ['a'] });
-    events.run((nested) => nested.check({ paths: ['b'] }), inner);
+  events.run((requestCheck) => {
+    requestCheck({ paths: ['a'] });
+    events.run((nestedCheck) => nestedCheck({ paths: ['b'] }), inner);
     order.push('body');
   }, pass);
   expect(order).toEqual(['body', 'pass']);
@@ -33,8 +43,8 @@ test('a body that throws runs no pass, and the next event starts fresh', () => {
   const pass = mock((_record: EventRecord) => {});
 
   expect(() =>
-    events.run((requests) => {
-      requests.check({ paths: ['a'] });
+    events.run((requestCheck) => {
+      requestCheck({ paths: ['a'] });
       throw boom;
     }, pass),
   ).toThrow(boom);
@@ -43,7 +53,7 @@ test('a body that throws runs no pass, and the next event starts fresh', () => {
   events.run(() => {}, pass);
   expect(pass).not.toHaveBeenCalled();
 
-  events.run((requests) => requests.check(), pass);
+  events.run(asksForCheck, pass);
   expect(pass).toHaveBeenCalledTimes(1);
   expect([...pass.mock.calls[0]![0].paths]).toEqual([]);
 });
@@ -51,7 +61,6 @@ test('a body that throws runs no pass, and the next event starts fresh', () => {
 test('a throw from the pass reaches the caller, and the next event still runs its pass', () => {
   const events = createCheckEvents(() => {});
   const boom = new Error('boom');
-  const asksForCheck = (requests: EventRequests) => requests.check();
 
   expect(() =>
     events.run(asksForCheck, () => {
@@ -67,10 +76,7 @@ test('a throw from the pass reaches the caller, and the next event still runs it
 test('a call made from inside the pass is an event of its own', () => {
   const events = createCheckEvents(() => {});
   const inner = mock(() => {});
-  events.run(
-    (requests) => requests.check(),
-    () => events.run((requests) => requests.check(), inner),
-  );
+  events.run(asksForCheck, () => events.run(asksForCheck, inner));
   expect(inner).toHaveBeenCalledTimes(1);
 });
 
@@ -78,9 +84,9 @@ test('a check records the paths and the named fields it reaches, joined with the
   const events = createCheckEvents(() => {});
   const pass = mock((_record: EventRecord) => {});
 
-  events.run((requests) => {
-    requests.check({ paths: ['a'], named: ['b'] });
-    requests.check({ paths: ['a', 'c'] });
+  events.run((requestCheck) => {
+    requestCheck({ paths: ['a'], named: ['b'] });
+    requestCheck({ paths: ['a', 'c'] });
   }, pass);
 
   const record = pass.mock.calls[0]![0];
@@ -93,12 +99,9 @@ test('an event with no caller runs at once when none is running, and reports its
   const events = createCheckEvents(report);
   const boom = new Error('boom');
 
-  events.runUncalled(
-    (requests) => requests.check(),
-    () => {
-      throw boom;
-    },
-  );
+  events.runUncalled(asksForCheck, () => {
+    throw boom;
+  });
 
   expect(report).toHaveBeenCalledWith(boom);
 });
@@ -115,11 +118,11 @@ test('an event with no caller that starts inside a running one runs as its own o
 
   expect(() =>
     events.run(
-      (requests) => {
-        requests.check({ paths: ['a'] });
-        events.runUncalled((uncalled) => {
+      (requestCheck) => {
+        requestCheck({ paths: ['a'] });
+        events.runUncalled((uncalledCheck) => {
           order.push('own body');
-          uncalled.check({ paths: ['b'] });
+          uncalledCheck({ paths: ['b'] });
         }, own);
         order.push('caller body');
       },
@@ -140,18 +143,12 @@ test('an event with no caller waits through a call made from inside the pass of 
   const order: string[] = [];
 
   events.run(
-    (requests) => {
-      requests.check();
-      events.runUncalled(
-        (uncalled) => uncalled.check(),
-        () => order.push('own pass'),
-      );
+    (requestCheck) => {
+      requestCheck();
+      events.runUncalled(asksForCheck, () => order.push('own pass'));
     },
     () => {
-      events.run(
-        (requests) => requests.check(),
-        () => order.push('inner pass'),
-      );
+      events.run(asksForCheck, () => order.push('inner pass'));
       order.push('caller pass');
     },
   );
@@ -166,31 +163,19 @@ test('an event with no caller that starts inside a pass, or inside a call made f
   const fromPass = new Error('from the pass');
   const fromCallBody = new Error("from a call's body");
   const fromCallPass = new Error("from a call's pass");
-  // An event with no caller whose pass throws `error`
-  const startUncalled = (error: Error): void =>
-    events.runUncalled(
-      (requests) => requests.check(),
-      () => {
-        order.push(error.message);
-        throw error;
-      },
-    );
 
   expect(() =>
-    events.run(
-      (requests) => requests.check(),
-      () => {
-        startUncalled(fromPass);
-        events.run(
-          (requests) => {
-            requests.check();
-            startUncalled(fromCallBody);
-          },
-          () => startUncalled(fromCallPass),
-        );
-        order.push('caller pass');
-      },
-    ),
+    events.run(asksForCheck, () => {
+      startThrowing(events, order, fromPass);
+      events.run(
+        (requestCheck) => {
+          requestCheck();
+          startThrowing(events, order, fromCallBody);
+        },
+        () => startThrowing(events, order, fromCallPass),
+      );
+      order.push('caller pass');
+    }),
   ).not.toThrow();
 
   expect(order).toEqual(['caller pass', 'from the pass', "from a call's body", "from a call's pass"]);
@@ -206,20 +191,17 @@ test('a report that throws still lets the next event with no caller run', () => 
 
   expect(() =>
     events.run(
-      (requests) => {
-        requests.check();
-        events.runUncalled(
-          (uncalled) => uncalled.check(),
-          () => {
-            throw new Error('own');
-          },
-        );
+      (requestCheck) => {
+        requestCheck();
+        events.runUncalled(asksForCheck, () => {
+          throw new Error('own');
+        });
       },
       () => {},
     ),
   ).toThrow(failure);
 
-  events.runUncalled((requests) => requests.check(), pass);
+  events.runUncalled(asksForCheck, pass);
   expect(pass).toHaveBeenCalledTimes(1);
 });
 
@@ -236,19 +218,13 @@ test("a report that throws neither stops the events waiting behind it nor hides 
 
   expect(() =>
     events.run(
-      (requests) => {
-        requests.check();
-        events.runUncalled(
-          (uncalled) => uncalled.check(),
-          () => {
-            order.push('first');
-            throw first;
-          },
-        );
-        events.runUncalled(
-          (uncalled) => uncalled.check(),
-          () => order.push('second'),
-        );
+      (requestCheck) => {
+        requestCheck();
+        events.runUncalled(asksForCheck, () => {
+          order.push('first');
+          throw first;
+        });
+        events.runUncalled(asksForCheck, () => order.push('second'));
       },
       () => {
         order.push('caller');
@@ -269,22 +245,13 @@ test("with no throw of the caller's own, a report's first throw reaches the call
     throw failure;
   });
   const order: string[] = [];
-  // An event with no caller whose pass throws
-  const startUncalled = (name: string): void =>
-    events.runUncalled(
-      (requests) => requests.check(),
-      () => {
-        order.push(name);
-        throw new Error(name);
-      },
-    );
 
   expect(() =>
     events.run(
-      (requests) => {
-        requests.check();
-        startUncalled('first');
-        startUncalled('second');
+      (requestCheck) => {
+        requestCheck();
+        startThrowing(events, order, new Error('first'));
+        startThrowing(events, order, new Error('second'));
       },
       () => order.push('caller'),
     ),
@@ -301,14 +268,11 @@ test('an event with no caller reports its own throw before those of the events t
   const inner = new Error('inner');
 
   events.runUncalled(
-    (requests) => {
-      requests.check();
-      events.runUncalled(
-        (uncalled) => uncalled.check(),
-        () => {
-          throw inner;
-        },
-      );
+    (requestCheck) => {
+      requestCheck();
+      events.runUncalled(asksForCheck, () => {
+        throw inner;
+      });
     },
     () => {
       throw outer;
@@ -326,12 +290,9 @@ test("an event with no caller still runs when the caller's body throws, and its 
 
   expect(() =>
     events.run(() => {
-      events.runUncalled(
-        (requests) => requests.check(),
-        () => {
-          throw ownBoom;
-        },
-      );
+      events.runUncalled(asksForCheck, () => {
+        throw ownBoom;
+      });
       throw callerBoom;
     }, mock()),
   ).toThrow(callerBoom);

@@ -6,51 +6,42 @@ import type { FieldPath } from './types';
 // caller, such as an effect's, never joins one nor runs inside a pass: it runs as its own once the event running has
 // ended, its pass included.
 
-/** What a check reaches: the field validators it re-checks, beside the schema check every request asks for. */
-export type CheckReach = {
+/** What a check reaches, normalized: the validators it re-checks, beside the schema check every request asks for. */
+type CheckReach = {
   /** Paths an edit or a follow changed, or blurred fields: each reaches every validator with an input path over it. */
   readonly paths?: Iterable<FieldPath>;
   /** Fields an edit named: each reaches every validator whose input path is it or contains it, changed or not. */
   readonly named?: Iterable<FieldPath>;
 };
 
-/** What a call can ask its event to check. Every request includes a schema check, so none can lose its check. */
-export type EventRequests = {
-  /**
-   * Asks for a schema check, and for every field validator the reach covers.
-   *
-   * @param reach - The paths and named fields it reaches, normalized. None asks for the schema check only.
-   */
-  check: (reach?: CheckReach) => void;
-};
+/**
+ * What a call does to ask its event for a check: a schema check, and every field validator the reach covers. Every
+ * request includes a schema check, so none can lose its check. None reach asks for the schema check only.
+ */
+export type RequestCheck = (reach?: CheckReach) => void;
 
 /**
  * What one event asked to have checked, as its pass reads it once the outermost call returns: every reach its checks
  * recorded, joined. Every request asks for a schema check, so a pass always runs one.
  */
-export type EventRecord = {
-  /** Changed or blurred paths, normalized: each reaches every validator with an input path overlapping it */
-  readonly paths: ReadonlySet<FieldPath>;
-  /** Fields an edit named, normalized: each reaches every validator whose input path is it or contains it */
-  readonly named: ReadonlySet<FieldPath>;
-};
+export type EventRecord = { readonly [K in keyof CheckReach]-?: ReadonlySet<FieldPath> };
 
 /** The events of one form. */
 export type CheckEvents = {
   /**
-   * Runs `body` as an event, or as part of the event already running, with that event's requests. When the outermost
-   * body returns, `pass` runs once with what the event recorded, if any request was made. A body that throws drops
-   * the record and runs no pass. A throw from `pass` reaches the caller. A nested call's `pass` is ignored. The pass
-   * runs once the event has ended, so a call made from inside it is an event of its own.
+   * Runs `body` as an event, or as part of the event already running, taking that event's check requests. When the
+   * outermost body returns, `pass` runs once with what the event recorded, if any request was made. A body that throws
+   * drops the record and runs no pass. A throw from `pass` reaches the caller. A nested call's `pass` is ignored. The
+   * pass runs once the event has ended, so a call made from inside it is an event of its own.
    */
-  run: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
+  run: (body: (requestCheck: RequestCheck) => void, pass: (record: EventRecord) => void) => void;
   /**
    * An event with no caller. It never joins a running event, nor runs inside a pass: one that starts while any event's
    * body or pass runs, that of a call made from inside a pass included, waits until the outermost event has ended, its
    * pass included (and even when its body or pass threw). Then it runs as its own, after those that started before it.
    * A throw from its body or pass goes to `report`, before the events that started inside it run.
    */
-  runUncalled: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
+  runUncalled: (body: (requestCheck: RequestCheck) => void, pass: (record: EventRecord) => void) => void;
 };
 
 /**
@@ -62,8 +53,8 @@ export type CheckEvents = {
  * @returns The form's events
  */
 export const createCheckEvents = (report: (error: unknown) => void): CheckEvents => {
-  // The requests of the event whose body runs, if one does
-  let running: EventRequests | undefined;
+  // How the event whose body runs, if one does, takes a check request
+  let running: RequestCheck | undefined;
   // How many events are active, body or pass: the outermost, each call made from inside a pass, and each waiting one
   // while it runs
   let active = 0;
@@ -97,20 +88,18 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
   };
 
   // Runs `body` as an event of its own, then its pass
-  const runAlone = (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void): void => {
+  const runAlone = (body: (requestCheck: RequestCheck) => void, pass: (record: EventRecord) => void): void => {
     const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>() };
     // Whether any request was made, so the pass runs
     let requested = false;
-    const requests: EventRequests = {
-      check: ({ paths = [], named = [] } = {}) => {
-        requested = true;
-        for (const path of paths) record.paths.add(path);
-        for (const field of named) record.named.add(field);
-      },
+    const requestCheck: RequestCheck = ({ paths = [], named = [] } = {}) => {
+      requested = true;
+      for (const path of paths) record.paths.add(path);
+      for (const field of named) record.named.add(field);
     };
-    running = requests;
+    running = requestCheck;
     try {
-      body(requests);
+      body(requestCheck);
     } finally {
       // A throw ends the event too, so the next call starts its own
       running = undefined;

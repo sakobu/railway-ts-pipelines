@@ -21,7 +21,7 @@ import {
 
 import { createArrayHelpers } from './arrayHelpersFactory';
 import { createAutoSave } from './autoSave';
-import { createCheckEvents, type EventRecord, type EventRequests } from './checkEvents';
+import { createCheckEvents, type EventRecord, type RequestCheck } from './checkEvents';
 import {
   createNativeCheckboxProps,
   createNativeSelectFieldProps,
@@ -1046,10 +1046,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * Runs `body` as an event, or as part of the event already running, and once the outermost call returns, checks what
    * the event asked for ({@link checkRecorded}). A sync throw from the check reaches the outermost call.
    *
-   * @param body - What the event asks to check, through its requests
+   * @param body - What the event asks to check, through its check requestCheck
    */
   const runEvent = useCallback(
-    (body: (requests: EventRequests) => void): void => events.run(body, checkRecorded),
+    (body: (requestCheck: RequestCheck) => void): void => events.run(body, checkRecorded),
     [events, checkRecorded],
   );
 
@@ -1061,10 +1061,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * inside `onFieldChange` commits does, waits until the outermost call's event has ended, its pass included, then
    * runs as its own, after those that started before it. A sync throw is logged, since nothing could catch it.
    *
-   * @param body - What the event asks to check, through its requests
+   * @param body - What the event asks to check, through its check requestCheck
    */
   const runUncalled = useCallback(
-    (body: (requests: EventRequests) => void): void => events.runUncalled(body, checkRecorded),
+    (body: (requestCheck: RequestCheck) => void): void => events.runUncalled(body, checkRecorded),
     [events, checkRecorded],
   );
 
@@ -1072,11 +1072,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * What `mount` mode does on mount and on a reset: asks its event for a schema check, and marks every field touched at
    * once, nested and array items included, so the errors show.
    *
-   * @param requests - The event's requests
+   * @param requestCheck - Asks the event for a check
    */
   const recordMountCheck = useCallback(
-    (requests: EventRequests): void => {
-      requests.check();
+    (requestCheck: RequestCheck): void => {
+      requestCheck();
       dispatch({ type: 'MARK_ALL_TOUCHED', fields: collectFieldPaths(store.getState().values) });
     },
     [store, dispatch],
@@ -1139,13 +1139,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * an `<Activity>` runs no layout effect, so the follows made while it's hidden run once it shows again, merged into
    * one. The checks run on the values the form holds then.
    *
-   * @param requests - The event's requests
+   * @param requestCheck - Asks the event for a check
    * @param follow - What the follow asks to check
    */
   const recordFollow = useCallback(
-    (requests: EventRequests, follow: FollowChecks): void => {
-      if (follow.check) requests.check({ paths: follow.paths });
-      if (validateOnMount) recordMountCheck(requests);
+    (requestCheck: RequestCheck, follow: FollowChecks): void => {
+      if (follow.check) requestCheck({ paths: follow.paths });
+      if (validateOnMount) recordMountCheck(requestCheck);
     },
     [recordMountCheck, validateOnMount],
   );
@@ -1206,7 +1206,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     syncedRef.current = undefined;
     const follow = synced?.follow;
     if (follow) {
-      runUncalled((requests) => recordFollow(requests, follow));
+      runUncalled((requestCheck) => recordFollow(requestCheck, follow));
     } else if (synced?.restarted && validateOnMount) {
       runUncalled(recordMountCheck);
     }
@@ -1241,17 +1241,17 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * later call in the event leaves them, and a validator both reach runs once.
    *
    * @param action - The edit
-   * @param requests - The event's requests
+   * @param requestCheck - Asks the event for a check
    * @param checkNamed - The fields the edit names, normalized: its check reaches the validators at each one or above
    *   it, even when its value is equal. None for the changed paths only, or undefined when the edit asks for no check.
    */
   const applyEdit = useCallback(
-    (action: FormAction<TValues>, requests: EventRequests, checkNamed: readonly FieldPath[] | undefined): void => {
+    (action: FormAction<TValues>, requestCheck: RequestCheck, checkNamed: readonly FieldPath[] | undefined): void => {
       const prev = store.getState();
       dispatch(action);
       const next = store.getState();
-      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requests, followChecksOf(prev, next));
-      if (checkNamed) requests.check({ paths: changedPaths(prev.values, next.values), named: checkNamed });
+      if (next.baselineEpoch !== prev.baselineEpoch) recordFollow(requestCheck, followChecksOf(prev, next));
+      if (checkNamed) requestCheck({ paths: changedPaths(prev.values, next.values), named: checkNamed });
     },
     [store, dispatch, recordFollow, followChecksOf],
   );
@@ -1292,11 +1292,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldValue = useCallback(
     <TValue>(field: FieldPath, value: TValue, shouldValidate = validateOnChange): void =>
-      runEvent((requests) => {
+      runEvent((requestCheck) => {
         const key = normalizePath(field);
         // Store the value first, so onFieldChange and any setFieldValue calls it makes build on it. The pass validates
         // the values as they are after any onFieldChange cascade.
-        applyEdit({ type: 'SET_FIELD_VALUE', field, value }, requests, shouldValidate ? [key] : undefined);
+        applyEdit({ type: 'SET_FIELD_VALUE', field, value }, requestCheck, shouldValidate ? [key] : undefined);
 
         onFieldChangeRef.current?.(field, value, store.getState().values);
 
@@ -1345,9 +1345,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setValues = useCallback(
     (newValues: DeepPartial<TValues>, shouldValidate = validateOnChange): void =>
-      runEvent((requests) => {
+      runEvent((requestCheck) => {
         // It names no field: its check reaches what it changed, and with nothing changed, it's a schema check only
-        applyEdit({ type: 'SET_VALUES', values: newValues }, requests, shouldValidate ? [] : undefined);
+        applyEdit({ type: 'SET_VALUES', values: newValues }, requestCheck, shouldValidate ? [] : undefined);
       }),
     [runEvent, applyEdit, validateOnChange],
   );
@@ -1383,7 +1383,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const setFieldTouched = useCallback(
     (field: FieldPath, isTouched = true, shouldValidate?: boolean): void =>
-      runEvent(({ check }) => {
+      runEvent((requestCheck) => {
         const key = normalizePath(field);
         const wasTouched = own(store.getState().touched, key);
         dispatch({
@@ -1394,11 +1394,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
         if (shouldValidate === undefined && validateOnChange) {
           // Live mode's default: typing already checked the field, so only its first touch checks, and only the schema
-          if (!wasTouched) check();
+          if (!wasTouched) requestCheck();
         } else if (shouldValidate === undefined ? validateOnBlur : shouldValidate) {
           // The schema, and the field validators the field reaches. A `null` from untyped code is off, as it is for
           // setFieldValue and setValues.
-          check({ paths: [key] });
+          requestCheck({ paths: [key] });
         }
       }),
     [store, dispatch, runEvent, validateOnBlur, validateOnChange],
@@ -1651,7 +1651,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             const after = store.getState();
             if (after.baselineEpoch !== before.baselineEpoch) {
               const follow = followChecksOf(before, after);
-              runUncalled((requests) => recordFollow(requests, follow));
+              runUncalled((requestCheck) => recordFollow(requestCheck, follow));
             }
           };
 
@@ -1841,13 +1841,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    */
   const resetForm = useCallback(
     (): void =>
-      runEvent((requests) => {
+      runEvent((requestCheck) => {
         dispatch({
           type: 'RESET_FORM',
         });
 
         // As on mount: validate, and mark every field touched so the errors show
-        if (validateOnMount) recordMountCheck(requests);
+        if (validateOnMount) recordMountCheck(requestCheck);
       }),
     [dispatch, runEvent, recordMountCheck, validateOnMount],
   );
@@ -1897,7 +1897,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     }));
 
     if (step === 'check') {
-      runUncalled((requests) => requests.check());
+      runUncalled((requestCheck) => requestCheck());
     } else if (step === 'submit') {
       // handleSubmit never rejects, and the scheduler's onIdle reports the settle
       void handleSubmit();
