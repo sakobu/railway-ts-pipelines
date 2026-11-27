@@ -224,6 +224,101 @@ test('a report that throws still lets the next event with no caller run', () => 
   expect(pass).toHaveBeenCalledTimes(1);
 });
 
+test("a report that throws neither stops the events waiting behind it nor hides the caller's throw", () => {
+  const failure = new Error('report failed');
+  const reported: unknown[] = [];
+  const events = createCheckEvents((error) => {
+    reported.push(error);
+    if (reported.length === 1) throw failure;
+  });
+  const order: string[] = [];
+  const first = new Error('first');
+  const callerBoom = new Error('caller');
+
+  expect(() =>
+    events.run(
+      (requests) => {
+        requests.check();
+        events.runUncalled(
+          (uncalled) => uncalled.check(),
+          () => {
+            order.push('first');
+            throw first;
+          },
+        );
+        events.runUncalled(
+          (uncalled) => uncalled.check(),
+          () => order.push('second'),
+        );
+      },
+      () => {
+        order.push('caller');
+        throw callerBoom;
+      },
+    ),
+  ).toThrow(callerBoom);
+
+  expect(order).toEqual(['caller', 'first', 'second']);
+  expect(reported).toEqual([first]);
+});
+
+test("with no throw of the caller's own, a report's first throw reaches the caller once every waiting event ran", () => {
+  const failures: Error[] = [];
+  const events = createCheckEvents(() => {
+    const failure = new Error(`report failed ${failures.length + 1}`);
+    failures.push(failure);
+    throw failure;
+  });
+  const order: string[] = [];
+  // An event with no caller whose pass throws
+  const startUncalled = (name: string): void =>
+    events.runUncalled(
+      (requests) => requests.check(),
+      () => {
+        order.push(name);
+        throw new Error(name);
+      },
+    );
+
+  expect(() =>
+    events.run(
+      (requests) => {
+        requests.check();
+        startUncalled('first');
+        startUncalled('second');
+      },
+      () => order.push('caller'),
+    ),
+  ).toThrow('report failed 1');
+
+  expect(order).toEqual(['caller', 'first', 'second']);
+  expect(failures).toHaveLength(2);
+});
+
+test('an event with no caller reports its own throw before those of the events that started inside it', () => {
+  const report = mock((_error: unknown) => {});
+  const events = createCheckEvents(report);
+  const outer = new Error('outer');
+  const inner = new Error('inner');
+
+  events.runUncalled(
+    (requests) => {
+      requests.check();
+      events.runUncalled(
+        (uncalled) => uncalled.check(),
+        () => {
+          throw inner;
+        },
+      );
+    },
+    () => {
+      throw outer;
+    },
+  );
+
+  expect(report.mock.calls).toEqual([[outer], [inner]]);
+});
+
 test("an event with no caller still runs when the caller's body throws, and its throw is reported", () => {
   const report = mock((_error: unknown) => {});
   const events = createCheckEvents(report);

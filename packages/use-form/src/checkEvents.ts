@@ -53,7 +53,7 @@ export type CheckEvents = {
    * An event with no caller. It never joins a running event, nor runs inside a pass: one that starts while any event's
    * body or pass runs, that of a call made from inside a pass included, waits until the outermost event has ended, its
    * pass included (and even when its body or pass threw). Then it runs as its own, after those that started before it.
-   * A throw from its body or pass goes to `report`.
+   * A throw from its body or pass goes to `report`, before the events that started inside it run.
    */
   runUncalled: (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void) => void;
 };
@@ -61,19 +61,45 @@ export type CheckEvents = {
 /**
  * Creates the events of one form, none running.
  *
- * @param report - Where a throw from an event with no caller goes, since nothing could catch it
+ * @param report - Where a throw from an event with no caller goes, since nothing could catch it. One that throws in
+ *   turn still lets every waiting event run, then reaches the outermost event's caller, unless that event threw its own.
  * @returns The form's events
  */
 export const createCheckEvents = (report: (error: unknown) => void): CheckEvents => {
   // The requests of the event whose body runs, if one does
   let running: EventRequests | undefined;
-  // How many events have their body or pass running: the outermost, and each call made from inside a pass
+  // How many events are active, body or pass: the outermost, each call made from inside a pass, and each waiting one
+  // while it runs
   let active = 0;
   // The events with no caller that started while one was active, in order
   const waiting: (() => void)[] = [];
 
-  // Runs `body` as an event of its own, then its pass. Once the outermost active event has ended, it runs the events
-  // with no caller that started meanwhile.
+  // Runs `event` as an active one. Once the outermost has ended, its pass included, whatever it threw, the waiting
+  // events run inside it, in order, whatever any of them or `report` throws. The outermost stays active meanwhile, so
+  // one that starts inside them waits behind them. Then the outermost's own throw reaches its caller, or else the first
+  // that escaped the waiting events, so none is lost. Nothing throws past its catch, so `active` is always restored.
+  const activate = (event: () => void): void => {
+    active += 1;
+    let thrown: { error: unknown } | undefined;
+    try {
+      event();
+    } catch (error) {
+      thrown = { error };
+    }
+    if (active === 1) {
+      for (let next = waiting.shift(); next; next = waiting.shift()) {
+        try {
+          next();
+        } catch (error) {
+          thrown ??= { error };
+        }
+      }
+    }
+    active -= 1;
+    if (thrown) throw thrown.error;
+  };
+
+  // Runs `body` as an event of its own, then its pass
   const runAlone = (body: (requests: EventRequests) => void, pass: (record: EventRecord) => void): void => {
     const record = { paths: new Set<FieldPath>(), named: new Set<FieldPath>(), validators: new Set<FieldPath>() };
     // Whether any request was made, so the pass runs
@@ -86,42 +112,31 @@ export const createCheckEvents = (report: (error: unknown) => void): CheckEvents
         for (const key of validators) record.validators.add(key);
       },
     };
-    active += 1;
     running = requests;
     try {
-      try {
-        body(requests);
-      } finally {
-        // A throw ends the event too, so the next call starts its own
-        running = undefined;
-      }
-      if (requested) pass(record);
+      body(requests);
     } finally {
-      try {
-        // Once the outermost has ended, its pass included, whatever either threw, the waiting ones run in order, each
-        // as an event of its own that reports its own throw before the next one runs. The outermost stays active
-        // meanwhile, so one that starts inside them waits behind them.
-        if (active === 1) for (let next = waiting.shift(); next; next = waiting.shift()) next();
-      } finally {
-        // Even when `report` throws, so the form's later events still run
-        active -= 1;
-      }
+      // A throw ends the event too, so the next call starts its own
+      running = undefined;
     }
+    if (requested) pass(record);
   };
 
   return {
     run: (body, pass) => {
       if (running) body(running);
-      else runAlone(body, pass);
+      else activate(() => runAlone(body, pass));
     },
     runUncalled: (body, pass) => {
-      const runOwn = (): void => {
-        try {
-          runAlone(body, pass);
-        } catch (error) {
-          report(error);
-        }
-      };
+      // Its throw goes to `report` as it ends, before the events that started inside it run
+      const runOwn = (): void =>
+        activate(() => {
+          try {
+            runAlone(body, pass);
+          } catch (error) {
+            report(error);
+          }
+        });
       if (active > 0) waiting.push(runOwn);
       else runOwn();
     },
