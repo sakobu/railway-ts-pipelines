@@ -1117,6 +1117,31 @@ describe('a waiting field check follows the newest schema check', () => {
     }
   });
 
+  test("a waiting validator that a call's own sync schema check moves on as it lands throws to that call", () => {
+    const boom = new Error('lookup failed');
+    const { gated } = createGatedValidator<PublishForm>();
+    // Sync once the status is published, async before
+    const mixed: S.MaybeAsyncValidator<unknown, PublishForm> = (values, path) =>
+      (values as PublishForm).status === 'published' ? publishValidator(values, path) : gated(values, path);
+    const { result } = renderHook(() =>
+      useForm(mixed, {
+        initialValues: draft,
+        validationMode: 'live',
+        fieldValidators: {
+          title: (title) => {
+            if (title === 'boom') throw boom;
+            return undefined;
+          },
+        },
+      }),
+    );
+    // title's check waits on an async schema check that never settles
+    act(() => result.current.setFieldValue('title', 'boom'));
+
+    // The status edit's schema check is sync, so it lands inside the call and moves title's check on
+    expect(() => act(() => result.current.setFieldValue('status', 'published'))).toThrow(boom);
+  });
+
   test('a landing check of values the form no longer holds leaves it waiting on its own result', async () => {
     const { pending, checkTitle, result } = renderLiveTitle('Taken');
     // The render's copy of the values, which the edit below leaves behind
