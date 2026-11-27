@@ -1748,6 +1748,11 @@ describe('an edit reaches a nested validator only when its values changed', () =
   });
   type AddressForm = S.InferSchemaType<typeof addressSchema>;
   const filled: AddressForm = { name: 'a', address: { city: 'Paris', zip: '75001' }, pair: ['a', 1] };
+  // The zip is optional, so no schema error at it holds its validator back: only the reach can skip it
+  const optionalZipSchema = S.object({
+    address: S.optional(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
+  });
+  type OptionalZipForm = S.InferSchemaType<typeof optionalZipSchema>;
 
   test('setting an object re-runs the validators of what it changed, and of the object', () => {
     const checkAddress = mock(() => undefined);
@@ -1836,41 +1841,29 @@ describe('an edit reaches a nested validator only when its values changed', () =
     expect(result.current.fieldErrors).toEqual({});
   });
 
-  test("typing into a field of a missing object doesn't re-run the validators of its other fields", () => {
-    const checkCity = mock((_city: string | undefined) => undefined);
-    const checkZip = mock((_zip: string | undefined) => undefined);
-    const { result } = renderHook(() =>
-      useForm(addressSchema, {
-        initialValues: { name: 'a', pair: ['a', 1] },
-        fieldValidators: { 'address.city': checkCity, 'address.zip': checkZip },
-      }),
-    );
+  const withoutAddress: [string, OptionalZipForm][] = [
+    ['missing', {}],
+    ['set to undefined', { address: undefined }],
+  ];
 
-    act(() => result.current.setFieldValue('address.city', 'Oslo'));
+  test.each(withoutAddress)(
+    "typing into a field of an object that is %s doesn't re-run the validators of its other fields",
+    (_, initialValues) => {
+      const checkCity = mock((_city: string | undefined) => undefined);
+      const checkZip = mock((_zip: string | undefined) => undefined);
+      const { result } = renderHook(() =>
+        useForm(optionalZipSchema, {
+          initialValues,
+          fieldValidators: { 'address.city': checkCity, 'address.zip': checkZip },
+        }),
+      );
 
-    expect(checkCity).toHaveBeenCalledWith('Oslo');
-    expect(checkZip).not.toHaveBeenCalled();
-  });
+      act(() => result.current.setFieldValue('address.city', 'Oslo'));
 
-  test("typing into a field of an object set to undefined doesn't re-run the validators of its other fields", () => {
-    // The zip is optional, so no schema error at it holds its validator back: only the reach can skip it
-    const optionalZip = S.object({
-      address: S.optional(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
-    });
-    const checkCity = mock((_city: string | undefined) => undefined);
-    const checkZip = mock((_zip: string | undefined) => undefined);
-    const { result } = renderHook(() =>
-      useForm(optionalZip, {
-        initialValues: { address: undefined },
-        fieldValidators: { 'address.city': checkCity, 'address.zip': checkZip },
-      }),
-    );
-
-    act(() => result.current.setFieldValue('address.city', 'Oslo'));
-
-    expect(checkCity).toHaveBeenCalledWith('Oslo');
-    expect(checkZip).not.toHaveBeenCalled();
-  });
+      expect(checkCity).toHaveBeenCalledWith('Oslo');
+      expect(checkZip).not.toHaveBeenCalled();
+    },
+  );
 
   test('setValues that adds a key holding undefined re-checks the validators it reaches', () => {
     const schema = S.object({
@@ -1928,17 +1921,23 @@ describe('every error shows only while the form holds the values it describes', 
     expect(result.current.isValid).toBe(true);
   });
 
-  test('in blur mode, a follow of new initialValues keeps the schema errors of the fields it left as they were', () => {
+  test('in blur mode, a follow of new initialValues keeps the schema errors of the fields it left as they were', async () => {
+    const { pending, gated } = createGatedValidator<PublishForm>();
     const { result, rerender } = renderHook(
-      ({ values }: { values: PublishForm }) =>
-        useForm(publishValidator, { initialValues: values, validationMode: 'blur' }),
+      ({ values }: { values: PublishForm }) => useForm(gated, { initialValues: values, validationMode: 'blur' }),
       { initialProps: { values: { ...draft, title: '' } } },
     );
     act(() => result.current.setFieldTouched('title'));
+    await act(async () => {
+      pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+      await nextTask();
+    });
     expect(result.current.errors.title).toBe('Title is required');
 
     rerender({ values: { ...draft, title: '', status: 'published' } });
 
+    // The follow's own schema check is still open, so the error shown is the one the follow kept
+    expect(pending).toHaveLength(2);
     expect(result.current.values.status).toBe('published');
     expect(result.current.errors.title).toBe('Title is required');
   });
