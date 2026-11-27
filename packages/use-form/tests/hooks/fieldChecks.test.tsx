@@ -1663,27 +1663,30 @@ describe('one call, one check pass (#57)', () => {
 
   test('an event with no caller that starts inside a called one runs as its own, and logs its throw', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
-    const boom = new Error('schema boom');
-    const throwsOnC: S.Validator<unknown, { title: string }> = (value) => {
-      if ((value as { title: string }).title === 'C') throw boom;
-      return ok(value as { title: string });
-    };
-    const { result } = renderHook(() => {
-      const [key, setKey] = useState(0);
-      return useForm(throwsOnC, {
-        initialValues: key === 0 ? { title: 'A' } : { title: 'C' },
-        resetKey: key,
-        validationMode: 'mount',
-        // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a commit inside onFieldChange is the case under test
-        onFieldChange: () => flushSync(() => setKey(1)),
+    try {
+      const boom = new Error('schema boom');
+      const throwsOnC: S.Validator<unknown, { title: string }> = (value) => {
+        if ((value as { title: string }).title === 'C') throw boom;
+        return ok(value as { title: string });
+      };
+      const { result } = renderHook(() => {
+        const [key, setKey] = useState(0);
+        return useForm(throwsOnC, {
+          initialValues: key === 0 ? { title: 'A' } : { title: 'C' },
+          resetKey: key,
+          validationMode: 'mount',
+          // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a commit inside onFieldChange is the case under test
+          onFieldChange: () => flushSync(() => setKey(1)),
+        });
       });
-    });
-    consoleError.mockClear();
+      consoleError.mockClear();
 
-    expect(() => act(() => result.current.setFieldValue('title', 'B', true))).toThrow(boom);
-    expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledWith('Form validation error:', boom);
-    consoleError.mockRestore();
+      expect(() => act(() => result.current.setFieldValue('title', 'B', true))).toThrow(boom);
+      expect(consoleError).toHaveBeenCalledTimes(1);
+      expect(consoleError).toHaveBeenCalledWith('Form validation error:', boom);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test('setValues clears the schema errors at the paths it changed while an async check runs', async () => {
