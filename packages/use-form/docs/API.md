@@ -309,8 +309,9 @@ outermost call. So a cascade runs each validator and the schema once.
 throw from `onFieldChange` itself ends the outermost call without validating,
 the re-check of a follow the edit caused included: the errors the edit outdated
 are already gone, but schema errors at the paths it left as they were stay
-shown until the next check. A `resetForm()` or `setValues()` made here can override the field that just
-changed. To reset the other fields when one changes, pass the new value along:
+shown until the next check. A `resetForm()` or `setValues()` made here can
+override the field that just changed. To reset the other fields when one
+changes, pass the new value along:
 
 ```typescript
 onFieldChange: (field, value) => {
