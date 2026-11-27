@@ -690,6 +690,13 @@ describe('deepEqual', () => {
     expect(deepEqual({ a: 1, b: 2 }, { a: 1 })).toBe(false);
   });
 
+  test('a non-enumerable own property counts as missing, as Object.keys lists keys', () => {
+    const hidden = Object.defineProperty({ a: 1 }, 'b', { value: 2, enumerable: false });
+    expect(deepEqual({ a: 1, b: 2 }, hidden)).toBe(false);
+    expect(deepEqual(hidden, { a: 1, b: 2 })).toBe(false);
+    expect(deepEqual(hidden, { a: 1 })).toBe(true);
+  });
+
   test('same reference returns true', () => {
     const obj = { a: 1 };
     expect(deepEqual(obj, obj)).toBe(true);

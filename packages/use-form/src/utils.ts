@@ -548,6 +548,12 @@ const leavesOf = (value: unknown, path: FieldPath): FieldPath[] => {
 };
 
 /**
+ * Whether a value has `key` as one of its own enumerable keys, the ones `Object.keys` lists, so the walk below treats a
+ * non-enumerable own property as missing, on both sides.
+ */
+const listsKey = (value: object, key: string): boolean => Object.prototype.propertyIsEnumerable.call(value, key);
+
+/**
  * Walks two values by {@link deepEqual}'s rules, calling `found` at each path where they part, until it returns
  * `false`. They part where the walk can't go on into both: at a key or item only one side has, at a value the form
  * looks inside (see {@link isBranch}) against one it doesn't, at an array against an object, and at two other values
@@ -593,10 +599,10 @@ const walkDifferences = (
     }
     // a's keys, then b's that a doesn't list, as a set of both would order them
     const keys = Object.keys(a);
-    for (const key of Object.keys(b)) if (!Object.prototype.propertyIsEnumerable.call(a, key)) keys.push(key);
+    for (const key of Object.keys(b)) if (!listsKey(a, key)) keys.push(key);
     for (const key of keys) {
-      const inA = Object.hasOwn(a, key);
-      const inB = Object.hasOwn(b, key);
+      const inA = listsKey(a, key);
+      const inB = listsKey(b, key);
       if (inA && inB && Object.is(a[key], b[key])) continue;
       const at = join(path, key);
       const walked =
