@@ -861,7 +861,8 @@ const schema = S.chain(
 The descendant scan uses a path-prefix check that guards against sibling
 collisions — `r2` does not match a touch on `r20`. `getFieldError` never
 aggregates _across_ paths: it only returns an error attached at the queried
-path, gated on touch of the path or any of its descendants, or, for a field-validator error, of a field its check read.
+path, gated on touch of the path or any of its descendants, or, for a
+field-validator error, of a field its check read.
 
 ### getFieldId
 

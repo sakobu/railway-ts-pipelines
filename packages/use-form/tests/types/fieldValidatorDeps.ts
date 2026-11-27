@@ -189,7 +189,7 @@ export function useBound() {
   useForm(validA, {
     initialValues: a,
     fieldValidators: {
-      // @ts-expect-error -- the list lives inside the brand, so a `deps` beside it is no property of a withDeps validator
+      // @ts-expect-error -- the list lives in the brand, so a `deps` beside it is no property of a withDeps validator
       slug: { ...withDeps(['workspaceId'], () => undefined), deps: ['slug'] as const },
     },
   });

@@ -97,8 +97,8 @@ export interface FormState<TValues extends Record<string, unknown>> {
 
   /**
    * Validation errors from server-side validation.
-   * These are set manually via setServerErrors() and are cleared when
-   * an edit changes the related field's value (an equal value keeps them). Server errors take precedence over client errors.
+   * These are set manually via setServerErrors() and are cleared when an edit changes the related field's value (an
+   * equal value keeps them). Server errors take precedence over client errors.
    * Holds per-path errors only; the submit error is kept apart in `submitError`.
    */
   serverErrors: Record<FieldPath, string>;
@@ -1489,11 +1489,16 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * Whether any async validation (form-level, a submission's, or field-level, including a submit's field checks) is
    * currently in progress. A field check counts from when it starts, while it waits for the schema's result too. A
    * newer schema check of the values the form held when it started moves it on with its result when it ends, so a
-   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true. A submit's field check stops counting once an edit, a follow or a reset changes the values it checks, though the submit still waits for it.
+   * schema call that never settles, such as one a debouncer dropped, doesn't keep this true. A submit's field check
+   * stops counting once an edit, a follow or a reset changes the values it checks, though the submit still waits for
+   * it.
    */
   isValidating: boolean;
 
-  /** Per-field async validation tracking. `true` when that field's async validator is running, including a submit's check of it, until an edit, a follow or a reset changes the values it checks. */
+  /**
+   * Per-field async validation tracking. `true` when that field's async validator is running, including a submit's
+   * check of it, until an edit, a follow or a reset changes the values it checks.
+   */
   validatingFields: Readonly<Record<FieldPath, boolean>>;
 
   /**
@@ -1558,7 +1563,8 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   // Server error management
 
   /**
-   * Sets server-side validation errors. These take precedence over client errors and are cleared when an edit changes the field's value (an equal value keeps them).
+   * Sets server-side validation errors. These take precedence over client errors and are cleared when an edit changes
+   * the field's value (an equal value keeps them).
    * An error at path `[]` becomes the submit error. Every other error's path is marked touched.
    *
    * @example

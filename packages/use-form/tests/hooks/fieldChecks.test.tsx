@@ -686,7 +686,7 @@ describe('a follow re-checks as an edit does', () => {
           fieldValidators: { title: checkTitle, status: checkStatus },
           onFieldChange: (changed) => {
             if (changed !== 'tags') return;
-            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed in a call is under test
             flushSync(() => setInitial(updated));
             result.current.setFieldValue(field, value, shouldValidate);
           },
@@ -726,7 +726,7 @@ describe('a follow re-checks as an edit does', () => {
           fieldValidators: { title: checkTitle },
           onFieldChange: (changed) => {
             if (changed !== 'tags') return;
-            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed in a call is under test
             flushSync(() => setInitial({ ...draft, status: 'published' }));
             result.current.setFieldValue('title', 'Edited');
           },
@@ -776,7 +776,7 @@ describe('a follow re-checks as an edit does', () => {
           validationMode: 'live',
           fieldValidators: { title: checkTitle, status: checkStatus },
           onFieldChange: (changed) => {
-            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed in a call is under test
             if (changed === 'tags') flushSync(() => setOwn(updated));
           },
         });
@@ -1971,7 +1971,7 @@ describe('one call, one check pass (#57)', () => {
           initialValues: key === 0 ? { title: 'A' } : { title: 'C' },
           resetKey: key,
           validationMode: 'mount',
-          // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a commit inside onFieldChange is the case under test
+          // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a commit inside onFieldChange is under test
           onFieldChange: () => flushSync(() => setKey(1)),
         });
       });

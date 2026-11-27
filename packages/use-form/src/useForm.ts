@@ -1256,8 +1256,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * @param action - The edit
    * @param requests - The event's requests
-   * @param checkNamed - The fields the edit names, normalized: its check reaches the validators at each one or above it,
-   *   even when its value is equal. None for the changed paths only, or undefined when the edit asks for no check.
+   * @param checkNamed - The fields the edit names, normalized: its check reaches the validators at each one or above
+   *   it, even when its value is equal. None for the changed paths only, or undefined when the edit asks for no check.
    */
   const applyEdit = useCallback(
     (action: FormAction<TValues>, requests: EventRequests, checkNamed: readonly FieldPath[] | undefined): void => {
