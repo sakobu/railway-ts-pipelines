@@ -971,6 +971,18 @@ describe('a follow re-checks as an edit does', () => {
       expect(checkStatus.mock.calls).toEqual([['published']]);
     });
 
+    test('a resetKey reset starts over, so the follows made before it re-check nothing once the form shows', () => {
+      const hidden = renderInActivity();
+      hidden.show('hidden', draft);
+      hidden.show('hidden', titled);
+      hidden.show('hidden', titled, 'b');
+
+      hidden.show('visible', titled, 'b');
+
+      expect(hidden.checkTitle).not.toHaveBeenCalled();
+      expect(hidden.latest.form?.isValidating).toBe(false);
+    });
+
     test('a follow made after a resetKey reset still re-checks what it changed, as it does while the form shows', () => {
       const hidden = renderInActivity();
       hidden.show('hidden', draft);
