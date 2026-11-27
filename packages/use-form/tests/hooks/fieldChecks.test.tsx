@@ -1680,6 +1680,28 @@ describe.each(['constructor', 'toString', 'hasOwnProperty'])('a field named %s',
   });
 });
 
+test('getFieldError keeps its identity through a field check that shows no error', async () => {
+  const { calls, gate } = createGatedFieldValidator();
+  const { result } = renderHook(() =>
+    useForm(publishValidator, {
+      initialValues: draft,
+      validationMode: 'live',
+      fieldValidators: { title: () => gate() },
+    }),
+  );
+  act(() => result.current.setFieldValue('title', 'Mine'));
+  const during = result.current.getFieldError;
+  expect(result.current.validatingFields).toEqual({ title: true });
+
+  await act(async () => {
+    calls[0]!.resolve(undefined);
+    await nextTask();
+  });
+
+  expect(result.current.validatingFields).toEqual({});
+  expect(result.current.getFieldError).toBe(during);
+});
+
 test('a fieldValidators with its own __proto__ key mounts and rerenders', () => {
   // Built from entries, an own key, as JSON.parse makes too. Not a field name the form supports, but it mustn't loop.
   const { result, rerender } = renderHook(() =>

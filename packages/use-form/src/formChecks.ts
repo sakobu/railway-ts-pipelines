@@ -183,12 +183,17 @@ export const fieldErrorsOf = (fields: Readonly<Record<FieldPath, FieldCheck>>): 
 };
 
 /**
- * The fields the check at `key` read, while it shows an error: the keys of its `inputs`. It's empty when the field has
- * no check or its check shows no error.
+ * The fields each check that shows an error read, by field: the keys of its `inputs`. A field whose check shows no
+ * error has no entry, so a form that shows none gets the shared empty record, and keeps its identity.
  */
-export const fieldsReadBy = (fields: Readonly<Record<FieldPath, FieldCheck>>, key: FieldPath): FieldPath[] => {
-  const check = own(fields, key);
-  return check?.error === undefined ? [] : Object.keys(check.inputs);
+export const fieldErrorReadsOf = (
+  fields: Readonly<Record<FieldPath, FieldCheck>>,
+): Readonly<Record<FieldPath, readonly FieldPath[]>> => {
+  const reads: [FieldPath, readonly FieldPath[]][] = [];
+  for (const [key, check] of Object.entries(fields)) {
+    if (check.error !== undefined) reads.push([key, Object.keys(check.inputs)]);
+  }
+  return withEntries(EMPTY, reads);
 };
 
 /** The fields whose validator is running now. */

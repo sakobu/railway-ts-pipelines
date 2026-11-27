@@ -35,7 +35,7 @@ import {
 import {
   NO_FOLLOW_CHECKS,
   fieldErrorsOf,
-  fieldsReadBy,
+  fieldErrorReadsOf,
   inputsHeld,
   mergeFollowChecks,
   validatingFieldsOf,
@@ -681,12 +681,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Computed State
   // ===========================================================================
 
-  // What the field checks show: the error each holds, and the fields whose validator runs
+  // What the field checks show: the error each holds, the fields each error's check read, and the fields whose
+  // validator runs. Each keeps its identity while it's empty, so a check that shows no error changes none of them.
   const fieldErrors = useMemo(() => fieldErrorsOf(formState.checks.fields), [formState.checks.fields]);
+  const fieldErrorReads = useMemo(() => fieldErrorReadsOf(formState.checks.fields), [formState.checks.fields]);
   const validatingFields = useMemo(() => validatingFieldsOf(formState.checks.fields), [formState.checks.fields]);
 
   // Combined errors: client, then field validators, then per-path server errors, then the submit error.
-  // Each later source wins.
+  // Each later source wins. shownError relies on this order: a field validator's error wins unless a server error does.
   const errors = useMemo(() => {
     const combined: Record<FieldPath, string> = {};
 
@@ -1947,13 +1949,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       const error = own(errors, key);
       if (!error) return undefined;
       const described =
-        own(formState.serverErrors, key) === undefined ? [key, ...fieldsReadBy(formState.checks.fields, key)] : [key];
+        own(formState.serverErrors, key) === undefined ? [key, ...(own(fieldErrorReads, key) ?? [])] : [key];
       for (const touchedKey in formState.touched) {
         if (formState.touched[touchedKey] && described.some((path) => isPathAffected(touchedKey, path))) return error;
       }
       return undefined;
     },
-    [formState.touched, formState.serverErrors, formState.checks.fields, errors],
+    [formState.touched, formState.serverErrors, fieldErrorReads, errors],
   );
 
   /**
