@@ -1208,13 +1208,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     const synced = syncedRef.current;
     syncedRef.current = undefined;
     if (synced) {
+      // Whether the sync reset or followed, and what a follow changed, are read from the sync's own states, not from
+      // the store's now: an earlier layout effect of the commit, a child's included, may have edited or reset since,
+      // and a `resetForm()` there is no follow
       const { from: prev, to: after } = synced;
-      const now = store.getState();
-      if (now.generation !== prev.generation) {
+      if (after.generation !== prev.generation) {
         if (validateOnMount) runUncalled(recordMountCheck);
-      } else if (now.baselineEpoch !== prev.baselineEpoch) {
-        // What the follow changed is read from the sync's own state, not from one that an earlier layout effect of
-        // the commit, a child's included, has edited since
+      } else if (after.baselineEpoch !== prev.baselineEpoch) {
         runUncalled((requests) => recordFollow(requests, prev, after));
       }
     }

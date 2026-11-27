@@ -804,6 +804,34 @@ describe('a follow re-checks as an edit does', () => {
       expect(form.checkTitle).toHaveBeenCalledWith('Updated');
     });
   });
+
+  test("a child's resetForm() in the commit of a version that only makes the form stale isn't taken for a follow", () => {
+    const untitled: PublishForm = { ...draft, title: '' };
+    const newer: PublishForm = { ...untitled, tags: ['a'] };
+    /** Resets the form in its layout effect once the form has the newer version. */
+    const ResetChild = ({ initial, resetForm }: { initial: PublishForm; resetForm: () => void }) => {
+      useLayoutEffect(() => {
+        if (initial === newer) resetForm();
+      }, [initial, resetForm]);
+      return null;
+    };
+    const latest: { form?: UseFormReturn<PublishForm> } = {};
+    const Probe = ({ initial }: { initial: PublishForm }) => {
+      const form = useForm(publishValidator, { initialValues: initial, validationMode: 'live' });
+      latest.form = form;
+      return <ResetChild initial={initial} resetForm={form.resetForm} />;
+    };
+    const { rerender } = render(<Probe initial={untitled} />);
+    act(() => latest.form?.setFieldValue('status', 'published'));
+    expect(latest.form?.errors).toEqual({ title: 'Title is required' });
+
+    // The edit makes the version stale, then the child's reset shows it
+    rerender(<Probe initial={newer} />);
+
+    expect(latest.form?.values).toEqual(newer);
+    expect(latest.form?.errors).toEqual({});
+    expect(latest.form?.isValid).toBe(true);
+  });
 });
 
 test('isValidating ends once the newest schema check moves on a field check that waited on a replaced one', async () => {
