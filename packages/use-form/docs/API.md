@@ -658,7 +658,7 @@ setValues(values: DeepPartial<TValues>, shouldValidate?: boolean): void
 - `values` - Deep-partial object with new values. A plain nested object merges into the object there, as `setFieldValue` on each of its keys would. Every other value, such as an array, `Date`, `File`, `Map`, `Set` or class instance, replaces the value before it and is stored as given. To merge a class instance that holds only some fields, such as a model from a PATCH response, spread it into a plain object: `setValues({ address: { ...patch } })`.
 - `shouldValidate` - Whether to validate after update (default: based on validation mode)
 
-When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. An edit drops the errors at, inside or above each path whose value it changed in every mode, a cleared or removed object counting as a change at its own path. Validation runs once, after the outermost call returns.
+When it validates, it runs the schema once and the field validators of the values it changed: each leaf path whose value differs, so a whole-record `setValues` doesn't re-run validators of unchanged fields. A validator runs if its field or a field it lists overlaps a changed path. An edit drops the schema and server errors at, inside or above each path whose value it changed in every mode, a cleared or removed object counting as a change at its own path, and each field-validator error whose field or listed field it changed. Validation runs once, after the outermost call returns.
 
 **Example:**
 

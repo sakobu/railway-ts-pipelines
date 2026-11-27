@@ -88,8 +88,9 @@ export interface FormState<TValues extends Record<string, unknown>> {
   touched: Record<FieldPath, boolean>;
 
   /**
-   * Validation errors from client-side validation.
-   * These are populated by the validator function and cleared when the field is re-validated.
+   * Validation errors from the schema. A schema check that lands replaces them, placing its errors only at the paths
+   * where the values it checked still match the form's. An edit drops those at, inside or above each path whose value
+   * it changed, and the whole-form error at `_root` on any change.
    * Key is the field path, value is the error message.
    */
   clientErrors: Record<FieldPath, string>;
