@@ -1135,8 +1135,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * isn't the follow's: one of the call the follow happened in, or one a layout effect of its commit made, a child's
    * included. It runs once its event runs: right after the follow when an edit or a save made it, after the commit's
    * earlier layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
-   * `onFieldChange`), once that call's event has ended, its pass included. The checks run on the values the form holds
-   * then, and a check the follow cut short re-runs only while its inputs still hold in them.
+   * `onFieldChange`), once that call's event has ended, its pass included. A commit made while the form is hidden in an
+   * `<Activity>` runs no layout effect, so its follow runs once the form shows again, in one event with the other
+   * follows made meanwhile. The checks run on the values the form holds then, and a check the follow cut short re-runs
+   * only while its inputs still hold in them.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
@@ -1172,9 +1174,11 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
-  // The state before this commit's sync and the state right after it, when the sync changed it. The layout effect
-  // below runs its side effects.
-  const syncedRef = useRef<{ from: FormState<TValues>; to: FormState<TValues> } | undefined>(undefined);
+  // The syncs that changed the state since the layout effect below last ran, oldest first, each with the state before
+  // it and the state right after it. The layout effect runs their side effects. Usually it's this commit's sync alone,
+  // but a commit inside a hidden `<Activity>` runs the insertion effect below and not the layout effect, so the syncs
+  // made while the form is hidden wait here until it shows again.
+  const syncedRef = useRef<{ from: FormState<TValues>; to: FormState<TValues> }[]>([]);
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
@@ -1189,7 +1193,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     store.dispatchQuietly({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
     const next = store.getState();
     if (next === prev) return;
-    syncedRef.current = { from: prev, to: next };
+    syncedRef.current.push({ from: prev, to: next });
     if (next.generation !== prev.generation) {
       // Started over. The old record's running submission and waiting follow-up still run as the old record's,
       // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
@@ -1199,28 +1203,30 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     }
   });
 
-  // Runs the side effects of a follow or a `resetKey` reset on the values the form now holds, once the store has
-  // notified of the state it caught up to. Each is an event with no caller, so a throw from its check is logged.
+  // Runs the side effects of the follows and `resetKey` resets synced since it last ran, on the values the form now
+  // holds, once the store has notified of the state it caught up to. They run as one event with no caller, so a
+  // validator two follows made while hidden both re-check runs once, and a throw from its check is logged.
   // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
   // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
   // resetKey are, so a commit whose sync changed the state always runs it.
   useLayoutEffect(() => {
     const synced = syncedRef.current;
-    syncedRef.current = undefined;
-    if (synced) {
-      // Whether the sync reset or followed, and what a follow changed, are read from the sync's own states, not from
-      // the store's now: an earlier layout effect of the commit, a child's included, may have edited or reset since,
-      // and a `resetForm()` there is no follow
-      const { from: prev, to: after } = synced;
-      if (after.generation !== prev.generation) {
-        if (validateOnMount) runUncalled(recordMountCheck);
-      } else if (after.baselineEpoch !== prev.baselineEpoch) {
-        runUncalled((requests) => recordFollow(requests, prev, after));
-      }
+    syncedRef.current = [];
+    // Whether a sync reset or followed, and what a follow changed, are read from the sync's own states, not from the
+    // store's now: an earlier layout effect of the commit, a child's included, may have edited or reset since, and a
+    // `resetForm()` there is no follow. A reset starts over, so only the follows after the last one count.
+    const restart = synced.findLastIndex(({ from, to }) => to.generation !== from.generation);
+    const follows = synced.slice(restart + 1).filter(({ from, to }) => to.baselineEpoch !== from.baselineEpoch);
+    const remount = restart !== -1 && validateOnMount;
+    if (remount || follows.length > 0) {
+      runUncalled((requests) => {
+        if (remount) recordMountCheck(requests);
+        for (const { from, to } of follows) recordFollow(requests, from, to);
+      });
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
     // A version equal to the values the render used came from the form's own state.
-    const changed = synced !== undefined;
+    const changed = synced.length > 0;
     const echo = changed && deepEqual(initialValues, storedState.values);
     if (stabilityCheck.record(storedState, changed, store.getState(), echo)) {
       console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);

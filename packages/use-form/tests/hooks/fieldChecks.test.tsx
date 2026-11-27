@@ -3,7 +3,7 @@ import { describe, test, expect, mock, spyOn } from 'bun:test';
 import { ok, err } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
 import { render, renderHook, act } from '@testing-library/react';
-import { StrictMode, useLayoutEffect, useState } from 'react';
+import { Activity, StrictMode, useLayoutEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useForm } from '../../src/useForm';
@@ -831,6 +831,104 @@ describe('a follow re-checks as an edit does', () => {
     expect(latest.form?.values).toEqual(newer);
     expect(latest.form?.errors).toEqual({});
     expect(latest.form?.isValid).toBe(true);
+  });
+
+  describe('follows made while the form is hidden in an <Activity>', () => {
+    const titled: PublishForm = { ...draft, title: 'Updated' };
+    const published: PublishForm = { ...titled, status: 'published' };
+
+    type Shown = { mode: 'visible' | 'hidden'; initial: PublishForm; resetKey: string };
+
+    /** A live form inside an `<Activity>`, on the version and resetKey `show` gives, whose validators are mocks. */
+    const renderInActivity = () => {
+      const checkTitle = mock((_title: string) => undefined);
+      const checkStatus = mock((_status: string) => undefined);
+      const Probe = ({ initial, resetKey }: Omit<Shown, 'mode'>) => {
+        useForm(publishValidator, {
+          initialValues: initial,
+          resetKey,
+          validationMode: 'live',
+          fieldValidators: { title: checkTitle, status: checkStatus },
+        });
+        return null;
+      };
+      const View = ({ mode, ...props }: Shown) => (
+        <Activity mode={mode}>
+          <Probe {...props} />
+        </Activity>
+      );
+      const { rerender } = render(<View mode="visible" initial={draft} resetKey="a" />);
+      const show = (mode: Shown['mode'], initial: PublishForm, resetKey = 'a') =>
+        rerender(<View mode={mode} initial={initial} resetKey={resetKey} />);
+      return { checkTitle, checkStatus, show };
+    };
+
+    test('each re-checks what it changed once the form shows again, as the same follows while it shows do', () => {
+      const hidden = renderInActivity();
+      hidden.show('hidden', draft);
+      hidden.show('hidden', titled);
+      hidden.show('hidden', published);
+      expect(hidden.checkTitle).not.toHaveBeenCalled();
+
+      hidden.show('visible', published);
+
+      expect(hidden.checkTitle.mock.calls).toEqual([['Updated']]);
+      expect(hidden.checkStatus.mock.calls).toEqual([['published']]);
+      const shown = renderInActivity();
+      shown.show('visible', titled);
+      shown.show('visible', published);
+      expect(shown.checkTitle.mock.calls).toEqual([['Updated']]);
+      expect(shown.checkStatus.mock.calls).toEqual([['published']]);
+    });
+
+    test('a check the first of them cut short re-runs once the form shows again, while its value holds', async () => {
+      const { pending, gated } = createGatedValidator<PublishForm>();
+      const checkTitle = mock((_title: string) => undefined);
+      const latest: { form?: UseFormReturn<PublishForm> } = {};
+      const Probe = ({ initial }: { initial: PublishForm }) => {
+        latest.form = useForm(gated, {
+          initialValues: initial,
+          validationMode: 'blur',
+          fieldValidators: { title: checkTitle },
+        });
+        return null;
+      };
+      const View = ({ mode, initial }: Omit<Shown, 'resetKey'>) => (
+        <Activity mode={mode}>
+          <Probe initial={initial} />
+        </Activity>
+      );
+      const tagged: PublishForm = { ...draft, status: 'published', tags: ['a'] };
+      const { rerender } = render(<View mode="visible" initial={draft} />);
+      // title's check waits on the blur's schema check when the first follow, which leaves title as it was, ends it
+      act(() => latest.form?.setFieldTouched('title'));
+      rerender(<View mode="hidden" initial={draft} />);
+      rerender(<View mode="hidden" initial={{ ...draft, status: 'published' }} />);
+      rerender(<View mode="hidden" initial={tagged} />);
+
+      rerender(<View mode="visible" initial={tagged} />);
+      await act(async () => {
+        for (const check of pending) check.resolve(ok(tagged));
+        await nextTask();
+      });
+
+      expect(checkTitle.mock.calls).toEqual([['Hello']]);
+    });
+
+    test('a follow made after a resetKey reset still re-checks what it changed, as it does while the form shows', () => {
+      const hidden = renderInActivity();
+      hidden.show('hidden', draft);
+      hidden.show('hidden', draft, 'b');
+      hidden.show('hidden', titled, 'b');
+
+      hidden.show('visible', titled, 'b');
+
+      expect(hidden.checkTitle.mock.calls).toEqual([['Updated']]);
+      const shown = renderInActivity();
+      shown.show('visible', draft, 'b');
+      shown.show('visible', titled, 'b');
+      expect(shown.checkTitle.mock.calls).toEqual([['Updated']]);
+    });
   });
 });
 
