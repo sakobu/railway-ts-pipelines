@@ -2,8 +2,8 @@ import { describe, test, expect, mock, spyOn } from 'bun:test';
 
 import { ok, err } from '@railway-ts/pipelines/result';
 import * as S from '@railway-ts/pipelines/schema';
-import { renderHook, act } from '@testing-library/react';
-import { StrictMode, useState } from 'react';
+import { render, renderHook, act } from '@testing-library/react';
+import { StrictMode, useLayoutEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useForm } from '../../src/useForm';
@@ -16,6 +16,8 @@ import {
   userWithAddressValidator,
   type PublishForm,
 } from '../fixtures/validators';
+
+import type { UseFormReturn } from '../../src/types';
 
 const draft: PublishForm = { title: 'Hello', status: 'draft', tags: [] };
 const user = { name: 'John', email: 'john@test.com', age: 25 };
@@ -732,6 +734,68 @@ describe('a follow re-checks as an edit does', () => {
 
       expect(result.current.values).toEqual({ ...draft, status: 'published', title: 'Edited' });
       expect(checkTitle).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("a child's layout effect that edits without a check, in the commit the form follows in", () => {
+    const updated: PublishForm = { ...draft, title: 'Updated' };
+
+    /** Sets status without a check in its layout effect, once the form has the updated version. */
+    const StatusChild = ({
+      initial,
+      setFieldValue,
+    }: {
+      initial: PublishForm;
+      setFieldValue: UseFormReturn<PublishForm>['setFieldValue'];
+    }) => {
+      useLayoutEffect(() => {
+        if (initial === updated) setFieldValue('status', 'published', false);
+      }, [initial, setFieldValue]);
+      return null;
+    };
+
+    /**
+     * A live form on `given`, or on `updated` once its `tags` edit commits that version inside `onFieldChange`, with
+     * the child that edits status.
+     */
+    const renderWithChild = () => {
+      const checkTitle = mock((_title: string) => undefined);
+      const checkStatus = mock((_status: string) => undefined);
+      const latest: { form?: UseFormReturn<PublishForm> } = {};
+      const Probe = ({ given }: { given: PublishForm }) => {
+        const [own, setOwn] = useState<PublishForm | undefined>(undefined);
+        const initial = own ?? given;
+        const form = useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { title: checkTitle, status: checkStatus },
+          onFieldChange: (changed) => {
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- a follow committed inside a call is the case under test
+            if (changed === 'tags') flushSync(() => setOwn(updated));
+          },
+        });
+        latest.form = form;
+        return <StatusChild initial={initial} setFieldValue={form.setFieldValue} />;
+      };
+      const { rerender } = render(<Probe given={draft} />);
+      return { checkTitle, checkStatus, latest, follow: () => rerender(<Probe given={updated} />) };
+    };
+
+    test.each([
+      ['a render with the new version', ({ follow }: ReturnType<typeof renderWithChild>) => follow()],
+      [
+        'a commit inside a call',
+        ({ latest }: ReturnType<typeof renderWithChild>) => act(() => latest.form?.setFieldValue('tags', draft.tags)),
+      ],
+    ])("after %s, the follow doesn't re-check what only the child's edit changed", (_, makeFollow) => {
+      const form = renderWithChild();
+
+      makeFollow(form);
+
+      expect(form.latest.form?.values).toEqual({ ...updated, status: 'published' });
+      expect(form.checkStatus).not.toHaveBeenCalled();
+      expect(form.checkTitle).toHaveBeenCalledTimes(1);
+      expect(form.checkTitle).toHaveBeenCalledWith('Updated');
     });
   });
 });

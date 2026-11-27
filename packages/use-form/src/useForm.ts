@@ -1128,10 +1128,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * touched at once.
    *
    * What the follow changed, it reads from the state before the follow and the state right after it, so a later edit
-   * of the call the follow happened in isn't the follow's. It runs once its event runs: right after the follow, or,
-   * when a commit inside a call made the follow (a `flushSync` inside `onFieldChange`), once that call's event has
-   * ended, its pass included. The checks run on the values the form holds then, and a check the follow cut short
-   * re-runs only while its inputs still hold in them.
+   * isn't the follow's: one of the call the follow happened in, or one a layout effect of its commit made, a child's
+   * included. It runs once its event runs: right after the follow, or, when a commit inside a call made the follow (a
+   * `flushSync` inside `onFieldChange`), once that call's event has ended, its pass included. The checks run on the
+   * values the form holds then, and a check the follow cut short re-runs only while its inputs still hold in them.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
@@ -1167,8 +1167,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
-  // The state before this commit's sync, when the sync changed it. The layout effect below runs its side effects.
-  const syncedFromRef = useRef<FormState<TValues> | undefined>(undefined);
+  // The state before this commit's sync and the state right after it, when the sync changed it. The layout effect
+  // below runs its side effects.
+  const syncedRef = useRef<{ from: FormState<TValues>; to: FormState<TValues> } | undefined>(undefined);
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
@@ -1183,7 +1184,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
     store.dispatchQuietly({ type: 'SYNC_INITIAL_VALUES', initialValues, resetKey });
     const next = store.getState();
     if (next === prev) return;
-    syncedFromRef.current = prev;
+    syncedRef.current = { from: prev, to: next };
     if (next.generation !== prev.generation) {
       // Started over. The old record's running submission and waiting follow-up still run as the old record's,
       // and the follow-up submits the values the form held. The new record's submits start on a fresh scheduler.
@@ -1199,19 +1200,22 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
   // resetKey are, so a commit whose sync changed the state always runs it.
   useLayoutEffect(() => {
-    const prev = syncedFromRef.current;
-    syncedFromRef.current = undefined;
-    if (prev) {
+    const synced = syncedRef.current;
+    syncedRef.current = undefined;
+    if (synced) {
+      const { from: prev, to: after } = synced;
       const now = store.getState();
       if (now.generation !== prev.generation) {
         if (validateOnMount) runUncalled(recordMountCheck);
       } else if (now.baselineEpoch !== prev.baselineEpoch) {
-        runUncalled((requests) => recordFollow(requests, prev, now));
+        // What the follow changed is read from the sync's own state, not from one that an earlier layout effect of
+        // the commit, a child's included, has edited since
+        runUncalled((requests) => recordFollow(requests, prev, after));
       }
     }
     // Reports, never throws: the check is a guess. React's own update-depth error still ends a true loop.
     // A version equal to the values the render used came from the form's own state.
-    const changed = prev !== undefined;
+    const changed = synced !== undefined;
     const echo = changed && deepEqual(initialValues, storedState.values);
     if (stabilityCheck.record(storedState, changed, store.getState(), echo)) {
       console.error(UNSTABLE_INITIAL_VALUES_MESSAGE);
