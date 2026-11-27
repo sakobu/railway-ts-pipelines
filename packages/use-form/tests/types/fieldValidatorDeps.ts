@@ -1,6 +1,14 @@
 import * as S from '@railway-ts/pipelines/schema';
 
-import { useForm, withDeps, type ExtractFieldPaths } from '../../src';
+import {
+  useForm,
+  withDeps,
+  type DepValues,
+  type ExtractFieldPaths,
+  type FieldTypeAtPath,
+  type FieldValidatorAnswer,
+  type FieldValidatorWithDeps,
+} from '../../src';
 
 import type { FormOptions } from '../../src/types';
 
@@ -163,3 +171,34 @@ const options: Partial<FormOptions<V>> = {
 export function useSpread() {
   return useForm(schema, { initialValues: init, ...options });
 }
+
+/** A validator built for one form doesn't fit another, and its list can't be replaced beside it. */
+type A = { workspaceId: number; slug: string };
+type B = { workspaceId: string; slug: string };
+declare const a: A;
+declare const b: B;
+declare const validA: S.Validator<unknown, A>;
+declare const validB: S.Validator<unknown, B>;
+const forA = withDeps<A, string, readonly ['workspaceId']>(['workspaceId'], (slug, { workspaceId }) =>
+  workspaceId.toFixed(0) === slug ? 'x' : undefined,
+);
+export function useBound() {
+  useForm(validA, { initialValues: a, fieldValidators: { slug: forA } });
+  // @ts-expect-error -- forA reads workspaceId as a number, B holds a string
+  useForm(validB, { initialValues: b, fieldValidators: { slug: forA } });
+  useForm(validA, {
+    initialValues: a,
+    fieldValidators: {
+      // @ts-expect-error -- the list lives inside the brand, so a `deps` beside it is no property of a withDeps validator
+      slug: { ...withDeps(['workspaceId'], () => undefined), deps: ['slug'] as const },
+    },
+  });
+}
+
+// Every type the documented signatures name can be imported
+export type Named = [
+  DepValues<V, readonly ['workspaceId']>,
+  FieldValidatorWithDeps<V, string>,
+  FieldValidatorAnswer,
+  FieldTypeAtPath<V, 'slug'>,
+];

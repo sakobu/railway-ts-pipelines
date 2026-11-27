@@ -1472,6 +1472,8 @@ function withDeps<
 ): FieldValidatorWithDeps<TValues, TValue>;
 ```
 
+`FieldValidatorWithDeps`, `DepValues`, `FieldValidatorAnswer` and `FieldTypeAtPath` all import from `@railway-ts/use-form`.
+
 **Parameters:**
 
 - `deps` - The other fields the validator reads, as field paths. Only the form's field paths compile.
@@ -1479,7 +1481,7 @@ function withDeps<
 
 When `deps` is a tuple, written inline or `as const`, each listed value has its exact type. When `deps` is held in a variable typed as an array, each listed value is optional (`T | undefined`), since which paths it holds is known only at runtime.
 
-Write `withDeps` inside the `fieldValidators` entry, where it takes the form's types. One stored in a variable outside it has no form to take them from, so it doesn't compile. An entry made any other way, such as a hand-written `{ deps, validate }`, is off.
+Write `withDeps` inside the `fieldValidators` entry, where it takes the form's types. One declared elsewhere gives its type arguments, `withDeps<Form, string, readonly ['workspaceId']>(…)`. Without them it has no form to take its types from, and one built for another form doesn't fit. An entry made any other way, such as a hand-written `{ deps, validate }`, is off.
 
 A `deps` list that changes between renders applies from the validator's next check. See [`fieldValidators`](#fieldvalidators) for what checks it again, the schema gate and the error rule.
 

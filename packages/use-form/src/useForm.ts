@@ -146,8 +146,10 @@ const isFieldValidatorFn = (entry: unknown): entry is FieldValidatorFn => typeof
 
 /** A `withDeps` validator as the form calls it, by paths it only knows as strings. Only `withDeps` sets the brand. */
 type DepsEntry = {
-  readonly deps: readonly FieldPath[];
-  readonly validate: (value: unknown, depValues: Readonly<Record<FieldPath, unknown>>) => FieldValidatorAnswer;
+  readonly [listsFields]: {
+    readonly deps: readonly FieldPath[];
+    readonly validate: (value: unknown, depValues: Readonly<Record<FieldPath, unknown>>) => FieldValidatorAnswer;
+  };
 };
 const isDepsEntry = (entry: unknown): entry is DepsEntry =>
   typeof entry === 'object' && entry !== null && Object.hasOwn(entry, listsFields);
@@ -202,9 +204,10 @@ const fieldCheckOf = <TValues extends Record<string, unknown>>(
     return { inputs: [key], check: (values) => mapAnswer(entry(getValueByPath(values, key)), errorOf) };
   }
   if (!isDepsEntry(entry)) return undefined;
+  const { deps, validate } = entry[listsFields];
   return {
-    inputs: [...new Set([key, ...entry.deps.map(normalizePath)])],
-    check: (values) => mapAnswer(entry.validate(getValueByPath(values, key), valuesAt(values, entry.deps)), errorOf),
+    inputs: [...new Set([key, ...deps.map(normalizePath)])],
+    check: (values) => mapAnswer(validate(getValueByPath(values, key), valuesAt(values, deps)), errorOf),
   };
 };
 
