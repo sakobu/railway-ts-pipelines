@@ -1154,12 +1154,13 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
   // What the syncs that changed the state since the layout effect below last ran did, for it to run their side effects:
-  // whether one was a `resetKey` reset, and what the follows since the last reset ask to check, each taken as it
-  // happened (followChecksOf) and merged (mergeFollowChecks), so its size is the form's, however many syncs there were.
-  // A sync that neither resets nor follows adds nothing to check. Usually it's this commit's sync alone, but a commit
-  // inside a hidden `<Activity>` runs the insertion effect below and not the layout effect, so the syncs made while
-  // the form is hidden gather here until it shows again.
-  const syncedRef = useRef<{ restarted: boolean; follow?: FollowChecks } | undefined>(undefined);
+  // what the follows since the last `resetKey` reset ask to check, each taken as it happened (followChecksOf) and
+  // merged (mergeFollowChecks), so its size is the form's, however many syncs there were, or with no follow since,
+  // whether one was a reset. A follow after a reset does in `mount` mode what the reset would (recordFollow). A sync
+  // that neither resets nor follows adds nothing to check. Usually it's this commit's sync alone, but a commit inside a
+  // hidden `<Activity>` runs the insertion effect below and not the layout effect, so the syncs made while the form is
+  // hidden gather here until it shows again.
+  const syncedRef = useRef<{ readonly follow: FollowChecks } | { readonly restarted: boolean } | undefined>(undefined);
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
   // child's included, so a child's write or submit acts on that state. Only the parts that run no app code are
@@ -1184,8 +1185,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       submitSchedulerRef.current = createSubmitScheduler(noteSettle);
     } else if (next.baselineEpoch !== prev.baselineEpoch) {
       const own = followChecksOf(prev, next);
-      const follow = gathered?.follow === undefined ? own : mergeFollowChecks(gathered.follow, own);
-      syncedRef.current = { restarted: gathered?.restarted ?? false, follow };
+      syncedRef.current = { follow: gathered && 'follow' in gathered ? mergeFollowChecks(gathered.follow, own) : own };
     } else {
       syncedRef.current = gathered ?? { restarted: false };
     }
@@ -1204,8 +1204,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   useLayoutEffect(() => {
     const synced = syncedRef.current;
     syncedRef.current = undefined;
-    const follow = synced?.follow;
-    if (follow) {
+    if (synced && 'follow' in synced) {
+      const { follow } = synced;
       runUncalled((requestCheck) => recordFollow(requestCheck, follow));
     } else if (synced?.restarted && validateOnMount) {
       runUncalled(recordMountCheck);
