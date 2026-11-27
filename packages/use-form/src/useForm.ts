@@ -1136,9 +1136,9 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * included. It runs once its event runs: right after the follow when an edit or a save made it, after the commit's
    * earlier layout effects when a commit made it, or, when that commit happened inside a call (a `flushSync` inside
    * `onFieldChange`), once that call's event has ended, its pass included. A commit made while the form is hidden in an
-   * `<Activity>` runs no layout effect, so the follows made while it's hidden run once it shows again, as one follow
-   * from the state before the first to the state right after the last. The checks run on the values the form holds
-   * then, and a check the follow cut short re-runs only while its inputs still hold in them.
+   * `<Activity>` runs no layout effect, so each follow made while it's hidden runs once it shows again, in one event
+   * with the others. The checks run on the values the form holds then, and a check the follow cut short re-runs only
+   * while its inputs still hold in them.
    *
    * @param requests - The event's requests
    * @param prev - The state before the follow
@@ -1174,14 +1174,14 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   // Tells whether initialValues changes on its own, from how its versions line up with the form's own updates
   const [stabilityCheck] = useState(createStabilityCheck<FormState<TValues>>);
 
-  // The syncs that changed the state since the layout effect below last ran, gathered into one, whose side effects the
-  // layout effect runs: whether one was a `resetKey` reset, and the follow they make, from the state before the first
-  // follow since the last reset to the state right after the last. A sync that neither resets nor follows leaves the
-  // follow as it was, so an edit made after the last follow isn't counted as the follow's. Usually it's this commit's
-  // sync alone, but a commit inside a hidden `<Activity>` runs the insertion effect below and not the layout effect, so
-  // the syncs made while the form is hidden gather here until it shows again.
+  // What the syncs that changed the state since the layout effect below last ran did, for it to run their side effects:
+  // whether one was a `resetKey` reset, and each follow since the last reset, oldest first, with the state before it
+  // and the state right after it. A sync that neither resets nor follows adds no follow, so an edit made after a follow
+  // isn't counted as the follow's. Usually it's this commit's sync alone, but a commit inside a hidden `<Activity>`
+  // runs the insertion effect below and not the layout effect, so the syncs made while the form is hidden gather here
+  // until it shows again.
   const syncedRef = useRef<
-    { restarted: boolean; follow?: { from: FormState<TValues>; to: FormState<TValues> } } | undefined
+    { restarted: boolean; follows: { from: FormState<TValues>; to: FormState<TValues> }[] } | undefined
   >(undefined);
 
   // The store catches up with the synced state this render showed before any layout effect of the commit runs, a
@@ -1202,33 +1202,36 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
       // Started over, so the follows before it no longer count. The old record's running submission and waiting
       // follow-up still run as the old record's, and the follow-up submits the values the form held. The new record's
       // submits start on a fresh scheduler.
-      syncedRef.current = { restarted: true };
+      syncedRef.current = { restarted: true, follows: [] };
       submitSchedulerRef.current.retire(prev.values);
       retiredSchedulerRef.current = submitSchedulerRef.current;
       submitSchedulerRef.current = createSubmitScheduler(noteSettle);
     } else if (next.baselineEpoch !== prev.baselineEpoch) {
-      const follow = { from: gathered?.follow?.from ?? prev, to: next };
-      syncedRef.current = { restarted: gathered?.restarted ?? false, follow };
+      const follows = [...(gathered?.follows ?? []), { from: prev, to: next }];
+      syncedRef.current = { restarted: gathered?.restarted ?? false, follows };
     } else {
-      syncedRef.current = gathered ?? { restarted: false };
+      syncedRef.current = gathered ?? { restarted: false, follows: [] };
     }
   });
 
-  // Runs the side effects of the follow and the `resetKey` reset the syncs since it last ran made (syncedRef, above),
-  // on the values the form now holds, once the store has notified of the state it caught up to. Each is an event with
-  // no caller, so a throw from its check is logged. A follow in `mount` mode does what the mount does, so a reset with
-  // a follow after it runs the follow's alone. Whether a sync reset or followed, and what a follow changed, come from
-  // the syncs' own states, not from the store's now: an earlier layout effect of the commit, a child's included, may
-  // have edited or reset since, and a `resetForm()` there is no follow.
+  // Runs the side effects of the follows and the `resetKey` reset the syncs since it last ran made (syncedRef, above),
+  // on the values the form now holds, once the store has notified of the state it caught up to. It's one event with no
+  // caller, so a validator two follows made while hidden both re-check runs once, and a throw from its check is
+  // logged. A follow in `mount` mode does what the mount does, so a reset with a follow after it runs the follow's
+  // alone. Whether a sync reset or followed, and what each follow changed, come from the syncs' own states, not from
+  // the store's now: an earlier layout effect of the commit, a child's included, may have edited or reset since, and a
+  // `resetForm()` there is no follow.
   // storedState is a dependency, so this runs at every change of the form's state as well as of the props:
   // that's how the stability check tells an outside render, a catch-up and a form update apart. initialValues and
   // resetKey are, so a commit whose sync changed the state always runs it.
   useLayoutEffect(() => {
     const synced = syncedRef.current;
     syncedRef.current = undefined;
-    const follow = synced?.follow;
-    if (follow) {
-      runUncalled((requests) => recordFollow(requests, follow.from, follow.to));
+    const follows = synced?.follows ?? [];
+    if (follows.length > 0) {
+      runUncalled((requests) => {
+        for (const { from, to } of follows) recordFollow(requests, from, to);
+      });
     } else if (synced?.restarted && validateOnMount) {
       runUncalled(recordMountCheck);
     }

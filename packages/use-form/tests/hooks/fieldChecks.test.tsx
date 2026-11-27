@@ -839,12 +839,16 @@ describe('a follow re-checks as an edit does', () => {
 
     type Shown = { mode: 'visible' | 'hidden'; initial: PublishForm; resetKey: string };
 
-    /** A live form inside an `<Activity>`, on the version and resetKey `show` gives, whose validators are mocks. */
-    const renderInActivity = () => {
-      const checkTitle = mock((_title: string) => undefined);
+    /**
+     * A live form inside an `<Activity>`, on the version and resetKey `show` gives, whose validators are mocks: title's
+     * answers as `answerTitle` does.
+     */
+    const renderInActivity = (answerTitle: (title: string) => string | undefined = () => undefined) => {
+      const checkTitle = mock(answerTitle);
       const checkStatus = mock((_status: string) => undefined);
+      const latest: { form?: UseFormReturn<PublishForm> } = {};
       const Probe = ({ initial, resetKey }: Omit<Shown, 'mode'>) => {
-        useForm(publishValidator, {
+        latest.form = useForm(publishValidator, {
           initialValues: initial,
           resetKey,
           validationMode: 'live',
@@ -860,7 +864,7 @@ describe('a follow re-checks as an edit does', () => {
       const { rerender } = render(<View mode="visible" initial={draft} resetKey="a" />);
       const show = (mode: Shown['mode'], initial: PublishForm, resetKey = 'a') =>
         rerender(<View mode={mode} initial={initial} resetKey={resetKey} />);
-      return { checkTitle, checkStatus, show };
+      return { checkTitle, checkStatus, show, latest };
     };
 
     test('each re-checks what it changed once the form shows again, as the same follows while it shows do', () => {
@@ -879,6 +883,27 @@ describe('a follow re-checks as an edit does', () => {
       shown.show('visible', published);
       expect(shown.checkTitle.mock.calls).toEqual([['Updated']]);
       expect(shown.checkStatus.mock.calls).toEqual([['published']]);
+    });
+
+    test('a value one of them changed and a later one put back is re-checked, as it is while the form shows', () => {
+      const taken = (title: string) => (title === draft.title ? 'Taken' : undefined);
+      const hidden = renderInActivity(taken);
+      // A check of the title as it is shows its error and leaves the form clean. The first follow drops it.
+      act(() => hidden.latest.form?.setFieldValue('title', draft.title, true));
+      expect(hidden.latest.form?.fieldErrors).toEqual({ title: 'Taken' });
+      hidden.show('hidden', draft);
+      hidden.show('hidden', titled);
+      hidden.show('hidden', draft);
+
+      hidden.show('visible', draft);
+
+      expect(hidden.checkTitle.mock.calls).toEqual([[draft.title], [draft.title]]);
+      expect(hidden.latest.form?.fieldErrors).toEqual({ title: 'Taken' });
+      const shown = renderInActivity(taken);
+      act(() => shown.latest.form?.setFieldValue('title', draft.title, true));
+      shown.show('visible', titled);
+      shown.show('visible', draft);
+      expect(shown.latest.form?.fieldErrors).toEqual({ title: 'Taken' });
     });
 
     test('a check the first of them cut short re-runs once the form shows again, while its value holds', async () => {
