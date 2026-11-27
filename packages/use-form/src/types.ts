@@ -1606,8 +1606,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
   resetForm: () => void;
 
   /**
-   * Runs the validator against the given values and returns a Railway `Result`. A validator that throws or rejects
-   * makes it throw or reject too, and leaves the errors as they were.
+   * Runs the validator against the given values and returns a Railway `Result`. The form shows the errors only at the
+   * paths where `values` match the values it holds; the returned result holds them all. A validator that throws or
+   * rejects makes it throw or reject too, and leaves the errors as they were.
    *
    * @example
    * const result = form.validateForm(currentValues);

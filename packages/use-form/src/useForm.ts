@@ -914,9 +914,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    *
    * Each call starts a schema check in the form state, which replaces the schema checks before it, even when it
    * finishes at once. Its errors land only while it is still the current check: a newer schema check, a follow of new
-   * `initialValues` or a reset ends it first, and drops its result. When they land and it checked the values the form
-   * held when it started, every field check that started before it and still waits on a schema result moves on with
-   * this one's.
+   * `initialValues` or a reset ends it first, and drops its result. They land only at the paths where `values` match
+   * the values the form holds then; the returned result holds them all. When they land and it checked the values the
+   * form held when it started, every field check that started before it and still waits on a schema result moves on
+   * with this one's.
    *
    * A validator that throws or rejects leaves the errors as they were, ends the check as a result would, and the
    * throw or rejection reaches the caller.

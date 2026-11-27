@@ -901,7 +901,7 @@ validateForm(values: TValues): Result<TValues, ValidationError[]> | Promise<Resu
 - `values` - Values to validate
 
 **Returns:**
-Railway Result type with validated data or errors. Returns a Promise when using an async validator. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
+Railway Result type with validated data or errors. Returns a Promise when using an async validator. The form shows the errors only at the paths where `values` match the values it holds; the returned result holds them all. A validator that throws or rejects makes `validateForm` throw or reject too, and leaves the errors as they were.
 
 **Example:**
 
