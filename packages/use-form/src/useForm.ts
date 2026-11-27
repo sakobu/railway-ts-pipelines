@@ -1953,7 +1953,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
   /**
    * Returns the error message for a field path, gated on user interaction.
    *
-   * - Leaf paths: returns the error iff the field itself has been touched.
+   * - Leaf paths: returns the error once the field itself has been touched.
    * - Group / parent paths: returns the error iff *any* descendant field has
    *   been touched. This makes cross-field validation errors that schemas
    *   attach to a non-leaf path (e.g. `S.refineAt("confirm", v => v.password

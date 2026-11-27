@@ -805,7 +805,7 @@ It resets to the `initialValues` passed in the latest render. In `mount` mode it
 
 Returns the error message for a field path, gated on user interaction.
 
-- **Leaf paths**: returns the error iff the field itself has been touched.
+- **Leaf paths**: returns the error once the field itself has been touched.
 - **Group / parent paths**: returns the error iff _any_ descendant field has been
   touched. Cross-field validation errors that schemas attach to a non-leaf path
   (e.g. `S.refineAt("confirm", v => v.password === v.confirm, …)` or
@@ -815,8 +815,8 @@ Returns the error message for a field path, gated on user interaction.
   check read is touched, its own or one it lists with `withDeps`. So picking a
   workspace shows that the slug is taken there. A schema or server error at the
   same path still needs a touch at or below that path. Only `getFieldError` and
-  the array helpers' `getFieldError` apply this: reading `touched.slug && errors.slug`
-  yourself doesn't.
+  the array helpers' `getFieldError` apply this: reading
+  `touched.slug && errors.slug` yourself doesn't.
 
 Eliminates the common `touched[field] ? errors[field] : undefined` boilerplate.
 

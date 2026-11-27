@@ -2589,13 +2589,16 @@ describe('withDeps', () => {
     test('a schema error on the untouched field stays hidden', () => {
       const { result } = renderHook(() =>
         useForm(nonEmptySlugSchema, {
-          initialValues: { workspaceId: 'w1', slug: '' },
-          fieldValidators: { slug: withDeps(['workspaceId'], () => 'Never') },
+          initialValues: { workspaceId: 'w1', slug: 'docs' },
+          validationMode: 'live',
+          fieldValidators: { slug: withDeps(['workspaceId'], () => undefined) },
         }),
       );
 
+      act(() => result.current.setValues({ slug: '' }));
       act(() => result.current.setFieldValue('workspaceId', 'w2'));
 
+      expect(result.current.touched).toEqual({ workspaceId: true });
       expect(result.current.errors.slug).toBe('Field must not be empty');
       expect(result.current.getFieldError('slug')).toBeUndefined();
     });
