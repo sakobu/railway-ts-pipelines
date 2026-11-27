@@ -853,43 +853,6 @@ export type NativeCheckboxGroupOptionProps = {
 };
 
 /**
- * Extracts all valid field paths from a type, including nested paths and discriminated unions.
- * This advanced utility type recursively traverses object structures to generate a union of
- * all possible dot-notation paths that can be used to access fields.
- *
- * Special handling for:
- * - Nested objects: Generates paths like "user.address.city"
- * - Arrays: Treated as terminal values (returns just "items", not "items[0]")
- * - Dates: Treated as terminal values
- * - Functions: Treated as terminal values
- * - Discriminated unions: Extracts paths from all union variants
- *
- * @template T - The type to extract field paths from
- *
- * @example
- * // Simple object
- * type User = { name: string; age: number };
- * type Paths = ExtractFieldPaths<User>; // "name" | "age"
- *
- * @example
- * // Nested object
- * type User = { name: string; address: { city: string; zip: string } };
- * type Paths = ExtractFieldPaths<User>; // "name" | "address" | "address.city" | "address.zip"
- *
- * @example
- * // With arrays (arrays are terminal)
- * type User = { name: string; tags: string[] };
- * type Paths = ExtractFieldPaths<User>; // "name" | "tags"
- *
- * @example
- * // Discriminated union
- * type Payment =
- *   | { type: "card"; cardNumber: string }
- *   | { type: "paypal"; email: string };
- * type Form = { payment: Payment };
- * type Paths = ExtractFieldPaths<Form>; // "payment" | "payment.type" | "payment.cardNumber" | "payment.email"
- */
-/**
  * Resolves the type at a dot-separated field path within a type.
  * Companion to ExtractFieldPaths — while ExtractFieldPaths extracts all valid paths,
  * FieldTypeAtPath resolves the value type at a given path.
@@ -928,6 +891,44 @@ type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false 
 type TupleIndexPaths<T extends readonly unknown[]> = Exclude<keyof T, keyof unknown[]> & `${number}`;
 // ───────────────────────────────────────────────────────────────────────────
 
+/**
+ * Extracts all valid field paths from a type, including nested paths and discriminated unions.
+ * This advanced utility type recursively traverses object structures to generate a union of
+ * all possible dot-notation paths that can be used to access fields.
+ *
+ * Special handling for:
+ * - Nested objects: Generates paths like "user.address.city"
+ * - Arrays: Treated as terminal values (returns just "items", not "items[0]"). A tuple also gets a path per item
+ *   ("pair.0" | "pair.1")
+ * - Dates: Treated as terminal values
+ * - Functions: Treated as terminal values
+ * - Discriminated unions: Extracts paths from all union variants
+ *
+ * @template T - The type to extract field paths from
+ *
+ * @example
+ * // Simple object
+ * type User = { name: string; age: number };
+ * type Paths = ExtractFieldPaths<User>; // "name" | "age"
+ *
+ * @example
+ * // Nested object
+ * type User = { name: string; address: { city: string; zip: string } };
+ * type Paths = ExtractFieldPaths<User>; // "name" | "address" | "address.city" | "address.zip"
+ *
+ * @example
+ * // With arrays (arrays are terminal)
+ * type User = { name: string; tags: string[] };
+ * type Paths = ExtractFieldPaths<User>; // "name" | "tags"
+ *
+ * @example
+ * // Discriminated union
+ * type Payment =
+ *   | { type: "card"; cardNumber: string }
+ *   | { type: "paypal"; email: string };
+ * type Form = { payment: Payment };
+ * type Paths = ExtractFieldPaths<Form>; // "payment" | "payment.type" | "payment.cardNumber" | "payment.email"
+ */
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
   ? never
   : T extends object
