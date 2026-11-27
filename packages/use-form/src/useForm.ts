@@ -65,7 +65,7 @@ import {
   valuesAt,
   withoutPaths,
 } from './utils';
-import { listsFields } from './withDeps';
+import { listedFieldsOf } from './withDeps';
 
 import type {
   ArrayHelpers,
@@ -142,16 +142,6 @@ type FieldValidatorFn = (value: unknown) => FieldValidatorAnswer;
 /** A plain `fieldValidators` function as the form calls it. */
 const isFieldValidatorFn = (entry: unknown): entry is FieldValidatorFn => typeof entry === 'function';
 
-/** A `withDeps` validator as the form calls it, by paths it only knows as strings. Only `withDeps` sets the brand. */
-type DepsEntry = {
-  readonly [listsFields]: {
-    readonly deps: readonly FieldPath[];
-    readonly validate: (value: unknown, depValues: Readonly<Record<FieldPath, unknown>>) => FieldValidatorAnswer;
-  };
-};
-const isDepsEntry = (entry: unknown): entry is DepsEntry =>
-  typeof entry === 'object' && entry !== null && Object.hasOwn(entry, listsFields);
-
 /**
  * A field validator as a check runs it: the paths it reads, and a call that answers with the error the field shows,
  * so an empty message has already become no error. {@link validatorsByPath} makes one from a `fieldValidators` entry.
@@ -201,8 +191,9 @@ const fieldCheckOf = <TValues extends Record<string, unknown>>(
   if (isFieldValidatorFn(entry)) {
     return { inputs: [key], check: (values) => mapAnswer(entry(getValueByPath(values, key)), errorOf) };
   }
-  if (!isDepsEntry(entry)) return undefined;
-  const { deps, validate } = entry[listsFields];
+  const listed = listedFieldsOf(entry);
+  if (!listed) return undefined;
+  const { deps, validate } = listed;
   return {
     inputs: [...new Set([key, ...deps.map(normalizePath)])],
     check: (values) => mapAnswer(validate(getValueByPath(values, key), valuesAt(values, deps)), errorOf),

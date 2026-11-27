@@ -1,4 +1,4 @@
-import type { ExtractFieldPaths, FieldTypeAtPath, FieldValidatorAnswer } from './types';
+import type { CheckInputs, ExtractFieldPaths, FieldPath, FieldTypeAtPath, FieldValidatorAnswer } from './types';
 
 /**
  * Marks a field validator made by {@link withDeps}, so the form tells it from a plain one. From the global registry, so
@@ -27,6 +27,26 @@ export interface FieldValidatorWithDeps<TValues, TValue> {
     readonly values?: (values: TValues) => TValues;
   };
 }
+
+/** A `withDeps` validator's list and `validate`, as the form calls them, by paths it only knows as strings. */
+type ListedFields = {
+  readonly deps: readonly FieldPath[];
+  readonly validate: (value: unknown, depValues: CheckInputs) => FieldValidatorAnswer;
+};
+
+/** Whether a `fieldValidators` entry carries the brand, which only {@link withDeps} sets. */
+const isListing = (entry: unknown): entry is { readonly [listsFields]: ListedFields } =>
+  typeof entry === 'object' && entry !== null && Object.hasOwn(entry, listsFields);
+
+/**
+ * The list and `validate` of a `fieldValidators` entry made by {@link withDeps}, or undefined for any other entry: a
+ * plain function, undefined, or a hand-written `{ deps, validate }` from untyped code.
+ *
+ * @param entry - The `fieldValidators` entry
+ * @returns What its brand holds, or undefined
+ */
+export const listedFieldsOf = (entry: unknown): ListedFields | undefined =>
+  isListing(entry) ? entry[listsFields] : undefined;
 
 /**
  * Makes a field validator that lists the other fields it reads. `validate` gets the field's value, then the values at
