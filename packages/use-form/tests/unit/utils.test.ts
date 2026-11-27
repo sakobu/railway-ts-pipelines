@@ -512,6 +512,16 @@ describe('changedPaths', () => {
     expect(changedPaths({ tags: ['a'] }, { tags: ['a', { v: 1 }] })).toEqual(['tags.1.v']);
   });
 
+  test('an object where the other side holds a leaf is a change at each leaf inside it, as a missing key is', () => {
+    expect(changedPaths({ address: undefined }, { address: { city: 'Oslo' } })).toEqual(['address.city']);
+    expect(changedPaths({ address: { city: 'x', zip: '1' } }, { address: undefined })).toEqual([
+      'address.city',
+      'address.zip',
+    ]);
+    expect(changedPaths({ address: null }, { address: { city: 'Oslo' } })).toEqual(['address.city']);
+    expect(changedPaths({ address: undefined }, { address: {} })).toEqual(['address']);
+  });
+
   test('a value that contains itself is walked once', () => {
     const a: Record<string, unknown> = { name: 'a' };
     a.self = a;
@@ -531,6 +541,7 @@ describe('changedPaths', () => {
       [[1], [1, 2]],
       [{ d: new Date(5) }, { d: new Date(5) }],
       [{ nested: { deep: [1, { x: 1 }] } }, { nested: { deep: [1, { x: 2 }] } }],
+      [{ a: undefined }, { a: { b: 1 } }],
       [Number.NaN, Number.NaN],
     ];
     for (const [a, b] of pairs) expect(changedPaths(a, b).length === 0).toBe(deepEqual(a, b));

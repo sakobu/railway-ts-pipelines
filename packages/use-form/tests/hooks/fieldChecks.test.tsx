@@ -1852,6 +1852,26 @@ describe('an edit reaches a nested validator only when its values changed', () =
     expect(checkZip).not.toHaveBeenCalled();
   });
 
+  test("typing into a field of an object set to undefined doesn't re-run the validators of its other fields", () => {
+    // The zip is optional, so no schema error at it holds its validator back: only the reach can skip it
+    const optionalZip = S.object({
+      address: S.optional(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
+    });
+    const checkCity = mock((_city: string | undefined) => undefined);
+    const checkZip = mock((_zip: string | undefined) => undefined);
+    const { result } = renderHook(() =>
+      useForm(optionalZip, {
+        initialValues: { address: undefined },
+        fieldValidators: { 'address.city': checkCity, 'address.zip': checkZip },
+      }),
+    );
+
+    act(() => result.current.setFieldValue('address.city', 'Oslo'));
+
+    expect(checkCity).toHaveBeenCalledWith('Oslo');
+    expect(checkZip).not.toHaveBeenCalled();
+  });
+
   test('setValues that adds a key holding undefined re-checks the validators it reaches', () => {
     const schema = S.object({
       address: S.required(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
