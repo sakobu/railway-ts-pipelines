@@ -221,6 +221,8 @@ Controls when validation occurs.
 Type: `{ [K in ExtractFieldPaths<TValues>]?: ((value: FieldTypeAtPath<TValues, K>) => string | undefined | Promise<string | undefined>) | FieldValidatorWithDeps<TValues, FieldTypeAtPath<TValues, K>> | undefined }`
 Optional
 
+A field under an optional or nullable object is typed `T | undefined`, here and in each value `withDeps` lists: the form holds `undefined` there while that object is missing, and a submit, or an edit that clears it, calls the validator with it. A tuple item's path is typed by index (`'pair.0'`), with its item's type.
+
 Per-field validator functions for field-level async validation. Run independently from the main schema validator. An entry is one of two forms:
 
 - A function of the field's value, `(value) => error`. The `value` parameter is typed from the field path, so no cast is needed. It reads no other field, and is called with that one argument.

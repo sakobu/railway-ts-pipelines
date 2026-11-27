@@ -483,6 +483,10 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * runs once a schema check of the values the form holds accepts its inputs, whichever field the fix was in.
    * On submit, once the schema passes, every one that is on runs.
    * Keys are dot paths, and bracket callers find them.
+   *
+   * A field under an optional or nullable object is typed `T | undefined`, here and in each value `withDeps` lists:
+   * the form holds `undefined` there while that object is missing, and a submit, or an edit that clears it, calls the
+   * validator with it. A tuple item's path is typed by index (`'pair.0'`), with its item's type.
    */
   fieldValidators?:
     | {
@@ -892,22 +896,31 @@ export type NativeCheckboxGroupOptionProps = {
  * type User = { name: string; address: { city: string; zip: number } };
  * type City = FieldTypeAtPath<User, "address.city">; // string
  * type Zip = FieldTypeAtPath<User, "address.zip">;   // number
+ *
+ * A path through an optional or nullable object can hold `undefined`, because the form reads a missing object's
+ * fields as missing, so the type adds it.
+ *
+ * @example
+ * type City = FieldTypeAtPath<{ address?: { city: string } }, "address.city">; // string | undefined
  */
 export type FieldTypeAtPath<T, P extends string> = P extends `${infer K}.${infer Rest}`
-  ? K extends keyof T
-    ? FieldTypeAtPath<NonNullable<T[K]>, Rest>
+  ? K extends keyof NonNullable<T>
+    ? FieldTypeAtPath<NonNullable<T>[K], Rest> | MissingParent<T>
     : unknown
-  : P extends keyof T
-    ? T[P]
+  : P extends keyof NonNullable<T>
+    ? NonNullable<T>[P] | MissingParent<T>
     : unknown;
+
+/** `undefined` when the object a path step reads from may be missing, so the value read through it may be too. */
+type MissingParent<T> = T extends null | undefined ? undefined : never;
 
 // ─── Tuple helpers ─────────────────────────────────────────────────────────
 // number["length"] is `number`; a tuple like [A,B,C]["length"] is literal 3.
 // `number extends T["length"]` is true only for variable-length arrays.
 type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false : true;
 
-// Extract<keyof [A,B,C], number> → 0 | 1 | 2; template-literalize → "0"|"1"|"2"
-type TupleIndexPaths<T extends readonly unknown[]> = `${Extract<keyof T, number>}`;
+// keyof a tuple holds its index keys ('0' | '1' | …) beside the array's own keys; removing those leaves the indices.
+type TupleIndexPaths<T extends readonly unknown[]> = Exclude<keyof T, keyof unknown[]> & `${number}`;
 // ───────────────────────────────────────────────────────────────────────────
 
 export type ExtractFieldPaths<T> = T extends readonly unknown[]
