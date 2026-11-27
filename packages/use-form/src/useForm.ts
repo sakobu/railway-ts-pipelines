@@ -64,7 +64,6 @@ import {
   overlapsAny,
   own,
   valuesAt,
-  withoutPaths,
 } from './utils';
 import { listedFieldsOf } from './withDeps';
 
@@ -362,26 +361,23 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
  * Places server errors on the form: an error at path `[]` becomes the submit error, and every other
  * error goes on its path, marked touched so it shows.
  *
- * @param send - Dispatches each write, or drops it when the errors no longer belong to the form's state
+ * @param send - Dispatches the write, or drops it when the errors no longer belong to the form's state
  * @param errors - Server validation errors, each with a `path` and a `message`
- * @param outdated - Whether the error at a path no longer describes the values shown ({@link outdatedBy}), so it
- *   doesn't land. Without it, every error lands. The submit error isn't at a path, and lands either way.
+ * @param describes - The values the errors describe, when the form may no longer hold them: an error at, inside or
+ *   above a path where the form's values part from them doesn't land ({@link outdatedBy}). Without them, every error
+ *   lands. The submit error isn't at a path, and lands either way.
  */
 const placeErrorsWith = <TValues extends Record<string, unknown>>(
   send: (action: FormAction<TValues>) => void,
   errors: ValidationError[],
-  outdated?: (path: FieldPath) => boolean,
+  describes?: TValues,
 ): void => {
-  const { [ROOT_ERROR_KEY]: submitError, ...all } = formatErrors(errors);
-  const perPath = outdated ? withoutPaths(all, outdated) : all;
+  const { [ROOT_ERROR_KEY]: submitError, ...perPath } = formatErrors(errors);
   send({
     type: 'SET_SERVER_ERRORS',
     errors: perPath,
+    ...(describes !== undefined && { describes }),
     ...(submitError !== undefined && { submitError }),
-  });
-  send({
-    type: 'MARK_ALL_TOUCHED',
-    fields: Object.keys(perPath),
   });
 };
 
@@ -1691,7 +1687,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
               // An error describes the submitted values, so it doesn't land at, inside or above what an edit during
               // the save changed, just as that edit after the save would drop it. The submit error is about the
               // attempt, and lands either way: the next edit that changes a value drops it.
-              placeErrorsWith(send, outcome.error, outdatedBy(values, store.getState().values));
+              placeErrorsWith(send, outcome.error, values);
             } else {
               // A follow or resetForm() replaced the submitted values, so the field errors would describe values no
               // longer shown. The submit error is about the attempt, and still shows.

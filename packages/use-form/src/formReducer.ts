@@ -192,6 +192,15 @@ const withoutErrorsChanged = <TValues extends Record<string, unknown>>(
   return { ...state, clientErrors: sharedWhenEmpty(clientErrors), serverErrors: sharedWhenEmpty(serverErrors) };
 };
 
+/** The touched map with each of `fields` marked touched, by normalized path. */
+const withTouched = (touched: Record<FieldPath, boolean>, fields: readonly FieldPath[]): Record<FieldPath, boolean> => {
+  const marked: Record<FieldPath, boolean> = {};
+  fields.forEach((path) => {
+    marked[normalizePath(path)] = true;
+  });
+  return { ...touched, ...marked };
+};
+
 /** Sets the checks. Checks a rule left unchanged keep the state itself, so the store skips notifying. */
 const withChecks = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
@@ -225,9 +234,14 @@ const reduce = <TValues extends Record<string, unknown>>(
 
     case 'SET_SERVER_ERRORS': {
       const { submitError: _submitError, ...rest } = state;
+      const errors = normalizePathKeys(action.errors);
+      // Errors of values the form may no longer hold land only where the values still match, as a schema check's do
+      const landed =
+        action.describes === undefined ? errors : withoutOutdated(errors, outdatedBy(action.describes, state.values));
       return {
         ...rest,
-        serverErrors: normalizePathKeys(action.errors),
+        serverErrors: landed,
+        touched: withTouched(state.touched, Object.keys(landed)),
         ...(action.submitError !== undefined && { submitError: action.submitError }),
       };
     }
@@ -377,20 +391,8 @@ const reduce = <TValues extends Record<string, unknown>>(
       return answeredBy(state, submitted);
     }
 
-    case 'MARK_ALL_TOUCHED': {
-      const allTouched: Record<FieldPath, boolean> = {};
-      action.fields.forEach((path) => {
-        allTouched[normalizePath(path)] = true;
-      });
-
-      return {
-        ...state,
-        touched: {
-          ...state.touched,
-          ...allTouched,
-        },
-      };
-    }
+    case 'MARK_ALL_TOUCHED':
+      return { ...state, touched: withTouched(state.touched, action.fields) };
 
     default:
       return state;

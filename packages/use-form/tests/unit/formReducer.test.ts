@@ -314,6 +314,34 @@ describe('formReducer', () => {
 
       expect(result.serverErrors).toEqual(newErrors);
     });
+
+    test('marks the path of each error touched, so it shows', () => {
+      const result = formReducer(
+        initialState,
+        { type: 'SET_SERVER_ERRORS', errors: { 'tags[0]': 'Bad', name: 'Taken' } },
+        initialValues,
+      );
+
+      expect(result.touched).toEqual({ 'tags.0': true, name: true });
+    });
+
+    test('with the values its errors describe, lands only the errors where the form still holds them', () => {
+      const saved = { ...initialValues, name: 'Saved' };
+      const edited: FormState<typeof initialValues> = {
+        ...initialState,
+        values: { ...saved, email: 'new@example.com' },
+      };
+
+      const result = formReducer(
+        edited,
+        { type: 'SET_SERVER_ERRORS', errors: { name: 'Taken', email: 'Invalid' }, describes: saved, submitError: 'No' },
+        initialValues,
+      );
+
+      expect(result.serverErrors).toEqual({ name: 'Taken' });
+      expect(result.touched).toEqual({ name: true });
+      expect(result.submitError).toBe('No');
+    });
   });
 
   describe('SET_SUBMIT_ERROR', () => {

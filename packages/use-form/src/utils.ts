@@ -660,8 +660,8 @@ export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
  * `before` to `after`. An error is outdated when it describes a path where the values part ({@link describesAny},
  * {@link replacedPaths}), so clearing or removing an object outdates every error inside it, at keys it lacked too, a
  * whole-form error goes with any change, and setting an equal value outdates none. The reducer applies it to the client
- * and server errors after every action that changes the values, and to a schema check's errors as they land, and a
- * failed save to the errors it places.
+ * and server errors after every action that changes the values, and to the errors of a schema check and of a failed
+ * save as they land.
  *
  * @param before - The values the errors describe
  * @param after - The values the form holds now

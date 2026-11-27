@@ -1413,10 +1413,18 @@ export type FormAction<TValues extends Record<string, unknown>> =
       isTouched: boolean;
     }
   | {
-      /** Sets server-side validation errors (manually set via setServerErrors) */
+      /**
+       * Sets server-side validation errors, from setServerErrors or a failed save, and marks each one's path touched,
+       * so it shows
+       */
       type: 'SET_SERVER_ERRORS';
       /** Map of field paths to error messages */
       errors: Record<FieldPath, string>;
+      /**
+       * The values the errors describe, when the form may no longer hold them, as after an edit during a save: an
+       * error at, inside or above a path where the form's values part from them doesn't land. Absent, every one lands.
+       */
+      describes?: TValues;
       /** The submit error (a server error at path `[]`); replaces any existing one, and absent clears it */
       submitError?: string;
     }
