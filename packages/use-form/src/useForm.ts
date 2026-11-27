@@ -33,7 +33,6 @@ import {
   createRadioGroupOptionProps,
 } from './fieldPropsFactory';
 import {
-  errorShownOrPending,
   fieldErrorsOf,
   fieldsCutShort,
   inputsHeld,
@@ -93,10 +92,7 @@ const SUBMIT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 const CHANGED_WHILE_SAVING_MESSAGE =
   'The record changed while saving, so nothing was saved. Review the latest version and save again.';
 
-/**
- * The default submit error for a submit whose checks failed on values that changed while they ran, so the form shows
- * none of the errors, or not all of them.
- */
+/** The default submit error for a submit whose checks failed on values the form no longer holds once it returns. */
 const CHANGED_WHILE_CHECKING_MESSAGE =
   'The values changed while they were checked, so nothing was saved. Review them and save again.';
 
@@ -131,11 +127,8 @@ type SchemaAnswer<TValues> = {
  */
 type SchemaOutcome<TValues> = SchemaAnswer<TValues> | { values: TValues; result: undefined; errors: undefined };
 
-/**
- * The errors a submit's check found, and whether the form shows every one. It doesn't once the values they describe
- * changed while the check ran, as an edit, a follow or a reset changes them.
- */
-type CheckedErrors = { errors: ValidationError[]; shown: boolean };
+/** The errors of a submit's field checks that count, and the values the failed ones read, by normalized path. */
+type CheckedErrors = { errors: ValidationError[]; read: Readonly<Record<FieldPath, unknown>> };
 
 /** A plain `fieldValidators` function: it gets its field's value only, at a path the form only knows as a string. */
 type FieldValidatorFn = (value: unknown) => FieldValidatorAnswer;
@@ -310,7 +303,7 @@ const settling = <T>(run: () => T | Promise<T>, onAnswer: (answer: T) => void, o
  * @param send - Dispatches the submission's writes
  * @param register - Whether the checks show while they run. Not once a follow or reset replaced the submitted values:
  *   they still run and count then, but describe values the form no longer shows.
- * @returns The errors of the checks that count, in the validators' order, and whether the form shows every one
+ * @returns The errors of the checks that count, in the validators' order, and the values the failed ones read
  * @throws What the first check that counts threw or rejected with: it fails the submission, as a throw anywhere does.
  *   Every one that doesn't count is logged instead, before the throw.
  */
@@ -360,7 +353,7 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
   // remount's would.
   const { checks, generation: now } = store.getState();
   const errors: ValidationError[] = [];
-  let shown = true;
+  const read: [FieldPath, unknown][] = [];
   let failed: PromiseRejectedResult | undefined;
   for (const [index, { key, validator, period }] of runs.entries()) {
     const outcome = settled[index]!;
@@ -371,15 +364,12 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
       failed ??= outcome;
     } else if (outcome.value !== undefined) {
       errors.push({ path: [key], message: outcome.value });
-      // The form shows an error on the values it checked: its own, until an edit of them ended its check, or that of
-      // another check of the same values, such as a blur's, which shows one or answers soon. Not once an edit, a follow
-      // or a reset changed those values, nor when its check never showed.
-      shown &&= errorShownOrPending(checks.fields, key, valuesAt(values, validator.inputs));
+      read.push(...Object.entries(valuesAt(values, validator.inputs)));
     }
   }
   // Thrown once the pass is over, so every check that doesn't count has been logged
   if (failed) throw failed.reason;
-  return { errors, shown };
+  return { errors, read: Object.fromEntries(read) };
 };
 
 /**
@@ -1555,25 +1545,29 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         // ends, doesn't end this one.
         send({ type: 'SET_SUBMIT_VALIDATING', isSubmitValidating: true });
 
-        // A check that failed returns its errors. When the form, still on the submission's record, doesn't show them all,
-        // since the values they describe changed while it ran, the submit error says so, so the failed submit doesn't
-        // look as if nothing happened. Not once a resetKey switch retired the record, since the form shows none of it,
-        // nor while auto-save is on, since it saves the changed values on its own.
-        const failedCheck = ({ errors, shown }: CheckedErrors): Result<TResult, ValidationError[]> => {
-          if (shown || store.getState().generation !== generation || autoSaver.isOn()) return err(errors);
+        // A check that failed returns its errors. Decided once, when the submit returns, from the values each failed
+        // check read: when a follow or reset replaced the values, or the form no longer holds what they read, the errors
+        // describe values it doesn't show, and the submit error says so, so the failed submit doesn't look as if nothing
+        // happened. The schema check read every value, a field check its inputs. Never from whether errors landed or what
+        // a check's status is. Not once a resetKey switch retired the record, since the form shows none of it, nor while
+        // auto-save can save the changed values on its own: on, and the form not stale.
+        const failedCheck = (
+          errors: ValidationError[],
+          read: Readonly<Record<FieldPath, unknown>> | undefined,
+        ): Result<TResult, ValidationError[]> => {
+          const now = store.getState();
+          const holds = isBaseline() && (read ? inputsHeld(read, now.values) : deepEqual(now.values, values));
+          if (holds || now.generation !== generation || (autoSaver.isOn() && !now.isStale)) return err(errors);
           send({ type: 'SET_SUBMIT_ERROR', submitError: changedWhileCheckingMessage });
           return err([...errors, { path: [], message: changedWhileCheckingMessage }]);
         };
 
         let validationResult: Result<TValues, ValidationError[]>;
-        // Whether the schema check landed, so its errors show. A newer check, a follow or a reset can replace it first.
-        let landed = false;
         try {
           // Starts and ends the schema check (await handles both sync and async validators). When it lands, the field
           // checks still waiting move on with it if the submission stops here: its schema failed, threw or rejected.
           // Otherwise its field step's checks replace them, so no validator runs twice.
           const answer = await checkSchema(send, checkId, values, (id, outcome, held) => {
-            landed = true;
             if (!outcome.result || isErr(outcome.result)) afterSchemaLands(id, outcome, held);
           });
           validationResult = answer.result;
@@ -1582,11 +1576,8 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
         }
 
         if (isErr(validationResult)) {
-          // No SET_SUBMITTING dispatch — isSubmitting was never set to true. Its errors show once it landed, and also
-          // once a newer check of the same values, such as a blur's, replaced it: that check shows the same errors. Not
-          // once an edit changed the values, or a follow or reset replaced them.
-          const sameValues = isBaseline() && deepEqual(store.getState().values, values);
-          return failedCheck({ errors: validationResult.error, shown: landed || sameValues });
+          // No SET_SUBMITTING dispatch — isSubmitting was never set to true. The schema read every value.
+          return failedCheck(validationResult.error, undefined);
         }
 
         const validData = validationResult.value;
@@ -1609,7 +1600,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             send,
             isBaseline(),
           );
-          if (checked.errors.length > 0) return failedCheck(checked);
+          if (checked.errors.length > 0) return failedCheck(checked.errors, checked.read);
 
           // A successful save settles the baseline. With savedValues, the save's answer is the version equal to what
           // it stored. Without, a version that arrived while it ran is the answer: the form follows it, or bases the

@@ -137,7 +137,7 @@ form.setServerErrors([{ path: [], message: 'Network error. Please try again.' }]
 
 If `onSubmit` throws instead, `handleSubmit` logs the error and sets the generic submit error, "Something went wrong. Please try again." [`messages.submitFailed`](./API.md#messages) replaces it.
 
-When the user edits while a submit's checks run, and a check of the old values fails, the form doesn't show that error, since it no longer holds those values. The submit error then says why nothing was saved: "The values changed while they were checked, so nothing was saved. Review them and save again." [`messages.changedWhileChecking`](./API.md#messages) replaces it. With auto-save on, the form saves the new values on its own instead.
+When the user edits while a submit's checks run, and a check of the old values fails, the form doesn't show that error, since it no longer holds those values. The submit error then says why nothing was saved: "The values changed while they were checked, so nothing was saved. Review them and save again." [`messages.changedWhileChecking`](./API.md#messages) replaces it. With auto-save on and the form not stale, auto-save saves the new values on its own instead, so no message shows.
 
 ---
 

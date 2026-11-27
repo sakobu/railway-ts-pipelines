@@ -576,9 +576,10 @@ export interface FormMessages {
   changedWhileSaving?: string | undefined;
 
   /**
-   * A submit's schema or field validators failed on values that changed while they ran, as an edit, a follow of new
-   * `initialValues` or a reset changes them, so the form doesn't show all their errors. `handleSubmit`'s `err` still
-   * holds them, with this message at path `[]`. Not while auto-save is on, which saves the changed values on its own.
+   * A submit's schema or field validators failed on values the form no longer holds once the submit returns, after an
+   * edit, a follow of new `initialValues` or a reset. `handleSubmit`'s `err` still holds their errors, with this
+   * message at path `[]`. Not while auto-save can save the changed values on its own: with auto-save on and the form
+   * not stale.
    * Default: "The values changed while they were checked, so nothing was saved. Review them and save again."
    */
   changedWhileChecking?: string | undefined;
@@ -1578,9 +1579,9 @@ export interface UseFormReturn<TValues extends Record<string, unknown>, TResult 
    * and never rejects:
    * - `ok` with `onSubmit`'s `ok` value, or with the values when `onSubmit` returns nothing or is absent. Without
    *   `onSubmit`, nothing is saved, so the values stay edits.
-   * - `err` with the validation errors, or with `onSubmit`'s `err`. When the values changed while they were checked,
-   *   so the form doesn't show all the errors, it also holds a submit error at path `[]`, which the form shows, unless
-   *   auto-save is on: `messages.changedWhileChecking` sets the text.
+   * - `err` with the validation errors, or with `onSubmit`'s `err`. When a failed check read values the form no
+   *   longer holds once the submit returns, it also holds a submit error at path `[]`, which the form shows, unless
+   *   auto-save can save the changed values on its own (auto-save on and the form not stale): `messages.changedWhileChecking` sets the text.
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error. `messages.submitFailed`
    *   replaces the text.

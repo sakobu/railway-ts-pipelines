@@ -126,19 +126,6 @@ export const endOutdatedChecks = (checks: ChecksState, values: Record<string, un
   return ended.length === 0 ? checks : { ...checks, fields: withEntries(checks.fields, ended) };
 };
 
-/**
- * Whether the field's current check checked `inputs` and is pending or shows an error: the form shows an error on them,
- * or soon answers for them. Not once an edit of them ended the check, or a check of other values replaced it.
- */
-export const errorShownOrPending = (
-  fields: Readonly<Record<FieldPath, FieldCheck>>,
-  key: FieldPath,
-  inputs: Readonly<Record<FieldPath, unknown>>,
-): boolean => {
-  const check = own(fields, key);
-  return check !== undefined && isPendingOrErroring(check) && deepEqual(check.inputs, inputs);
-};
-
 /** The field's check `id`, while it is the field's latest check and has not ended. */
 const currentFieldCheck = (checks: ChecksState, key: FieldPath, id: CheckId): FieldCheck | undefined => {
   const check = own(checks.fields, key);

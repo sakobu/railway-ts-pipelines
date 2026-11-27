@@ -2682,6 +2682,138 @@ describe('useForm', () => {
       });
     });
 
+    describe('a submit says the values changed exactly when the form no longer holds what a failed check read', () => {
+      const empty: PublishForm = { ...draft, title: '' };
+
+      test('a sync schema check followed by resetForm() in the same handler', async () => {
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: empty, validationMode: 'live' }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+          result.current.resetForm();
+        });
+        let outcome: Awaited<typeof submitting> | undefined;
+        await act(async () => {
+          outcome = await submitting;
+        });
+
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(outcome).toEqual(
+          err([
+            { path: ['title'], message: 'Title is required' },
+            { path: [], message: CHANGED_WHILE_CHECKING },
+          ]),
+        );
+      });
+
+      test('a sync schema check followed by an edit in the same handler', async () => {
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: empty, validationMode: 'live' }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+          result.current.setFieldValue('title', 'Filled');
+        });
+        await act(async () => {
+          await submitting;
+        });
+
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(result.current.errors.title).toBeUndefined();
+      });
+
+      test('in blur mode, an edit while an async schema check runs', async () => {
+        const { pending, gated } = createGatedValidator<PublishForm>();
+        const { result } = renderHook(() => useForm(gated, { initialValues: empty, validationMode: 'blur' }));
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        act(() => result.current.setFieldValue('title', 'Filled'));
+        let outcome: Awaited<typeof submitting> | undefined;
+        await act(async () => {
+          pending[0]!.resolve(err([{ path: ['title'], message: 'Title is required' }]));
+          outcome = await submitting;
+        });
+
+        expect(result.current.errors.title).toBeUndefined();
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+        expect(outcome).toEqual(
+          err([
+            { path: ['title'], message: 'Title is required' },
+            { path: [], message: CHANGED_WHILE_CHECKING },
+          ]),
+        );
+      });
+
+      test("not when a blur's re-check of the same values answered differently", async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result } = renderHook(() =>
+          useForm(publishValidator, { initialValues: draft, validationMode: 'blur', fieldValidators: { title: gate } }),
+        );
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          await nextTask();
+        });
+        act(() => result.current.setFieldTouched('title'));
+        await act(async () => {
+          calls[1]!.resolve(undefined);
+          await nextTask();
+        });
+        let outcome: Awaited<typeof submitting> | undefined;
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          outcome = await submitting;
+        });
+
+        expect(result.current.errors._root).toBeUndefined();
+        expect(outcome).toEqual(err([{ path: ['title'], message: 'Taken' }]));
+      });
+
+      test('with auto-save on, while the form is stale, so auto-save waits', async () => {
+        const { calls, gate } = createGatedFieldValidator();
+        const { result, rerender } = renderHook(
+          ({ values }: { values: PublishForm }) =>
+            useForm(publishValidator, {
+              initialValues: values,
+              validationMode: 'blur',
+              autoSave: { delay: 1000 },
+              onSubmit: () => {},
+              fieldValidators: { title: gate },
+            }),
+          { initialProps: { values: draft } },
+        );
+        act(() => result.current.setFieldValue('title', 'Mine'));
+        rerender({ values: { ...draft, status: 'published' } });
+        expect(result.current.isStale).toBe(true);
+
+        let submitting!: ReturnType<typeof result.current.handleSubmit>;
+        act(() => {
+          submitting = result.current.handleSubmit();
+        });
+        await act(async () => {
+          await nextTask();
+        });
+        act(() => result.current.setFieldValue('title', 'Mine2'));
+        await act(async () => {
+          calls[0]!.resolve('Taken');
+          await submitting;
+        });
+
+        expect(result.current.errors._root).toBe(CHANGED_WHILE_CHECKING);
+      });
+    });
+
     describe("a submission's validation keeps isValidating true until it ends", () => {
       test('through a check that finishes at once', async () => {
         const { pending, gated } = createGatedValidator<PublishForm>();
