@@ -915,6 +915,37 @@ describe('a follow re-checks as an edit does', () => {
       expect(checkTitle.mock.calls).toEqual([['Hello']]);
     });
 
+    test("an edit made after them isn't theirs, so they don't re-check what only it changed", () => {
+      const checkTitle = mock((_title: string) => undefined);
+      const checkStatus = mock((_status: string) => undefined);
+      const latest: { form?: UseFormReturn<PublishForm> } = {};
+      const Probe = ({ initial }: { initial: PublishForm }) => {
+        latest.form = useForm(publishValidator, {
+          initialValues: initial,
+          validationMode: 'live',
+          fieldValidators: { title: checkTitle, status: checkStatus },
+        });
+        return null;
+      };
+      const View = ({ mode, initial }: Omit<Shown, 'resetKey'>) => (
+        <Activity mode={mode}>
+          <Probe initial={initial} />
+        </Activity>
+      );
+      const tagged: PublishForm = { ...titled, tags: ['a'] };
+      const { rerender } = render(<View mode="visible" initial={draft} />);
+      rerender(<View mode="hidden" initial={draft} />);
+      rerender(<View mode="hidden" initial={titled} />);
+      // The edit checks status itself, and the next version only makes the form stale
+      act(() => latest.form?.setFieldValue('status', 'published'));
+      rerender(<View mode="hidden" initial={tagged} />);
+
+      rerender(<View mode="visible" initial={tagged} />);
+
+      expect(checkTitle.mock.calls).toEqual([['Updated']]);
+      expect(checkStatus.mock.calls).toEqual([['published']]);
+    });
+
     test('a follow made after a resetKey reset still re-checks what it changed, as it does while the form shows', () => {
       const hidden = renderInActivity();
       hidden.show('hidden', draft);
