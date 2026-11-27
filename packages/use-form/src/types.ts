@@ -339,8 +339,8 @@ export interface FormOptions<TValues extends Record<string, unknown>, TResult = 
    * - **Nothing:** `handleSubmit` resolves to `ok(values)`.
    * - **`ok(value)`:** `handleSubmit` resolves to `ok(value)`.
    * - **`err(errors)`:** each error is placed on its field, as `setServerErrors` does, and an error at
-   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`. An error for a field the
-   *   user changed during the save doesn't land: it's about the value they replaced.
+   *   path `[]` becomes the submit error. `handleSubmit` resolves to the same `err`. An error at, inside or above
+   *   a value the user changed during the save doesn't land: it's about the values they replaced.
    *
    * Without `onSubmit`, a submit only validates. Nothing is saved, so the values stay edits: a newer
    * `initialValues` raises `isStale` rather than replacing them.

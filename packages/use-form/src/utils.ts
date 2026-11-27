@@ -638,6 +638,31 @@ export const replacedPaths = (before: unknown, after: unknown): FieldPath[] =>
   collectParted(before, after, (path) => [path]);
 
 /**
+ * The form's error rule for a change of values: which errors no longer describe the values once they change from
+ * `before` to `after`. An error is outdated when it sits at, inside or above a path where the values part
+ * ({@link replacedPaths}), so clearing or removing an object outdates every error inside it, at keys it lacked too,
+ * and setting an equal value outdates none. The reducer applies it to the client and server errors after every action
+ * that changes the values, and to a schema check's errors as they land, and a failed save to the errors it places. A
+ * whole-form error isn't at a path: each caller says what a change does to it.
+ *
+ * @param before - The values the errors describe
+ * @param after - The values the form holds now
+ * @returns Whether the error at a path is outdated, or `undefined` when the values don't part, so none is
+ *
+ * @example
+ * const outdated = outdatedBy({ address: { city: "Oslo" } }, { address: undefined });
+ * outdated?.("address.zip"); // true: a key the cleared object lacked
+ * outdated?.("name"); // false
+ *
+ * @example
+ * outdatedBy({ tags: ["a"] }, { tags: ["a"] }); // undefined
+ */
+export const outdatedBy = (before: unknown, after: unknown): ((path: FieldPath) => boolean) | undefined => {
+  const replaced = replacedPaths(before, after);
+  return replaced.length === 0 ? undefined : (path) => overlapsAny(path, replaced);
+};
+
+/**
  * Each path where two values differ, by {@link deepEqual}'s rules, so an edit re-checks only the validators whose
  * values it changed. Where the values part ({@link replacedPaths}) and only one side there is a value the form looks
  * inside (see {@link isBranch}), each leaf inside that side changed, and elsewhere the path where they part did. A side

@@ -9,6 +9,7 @@ import {
   collectFieldPaths,
   changedPaths,
   replacedPaths,
+  outdatedBy,
   deepMerge,
   deepEqual,
   isPromiseLike,
@@ -590,6 +591,25 @@ describe('replacedPaths', () => {
         expect(replaced.some((path) => isPathAffected(changed, path))).toBe(true);
       }
     }
+  });
+});
+
+describe('outdatedBy', () => {
+  test('outdates the errors at, inside and above each path where the values part, at keys a cleared object lacked too', () => {
+    const outdated = outdatedBy({ name: 'a', address: { city: 'Oslo' } }, { name: 'a', address: undefined });
+    expect(outdated?.('address')).toBe(true);
+    expect(outdated?.('address.city')).toBe(true);
+    expect(outdated?.('address.zip')).toBe(true);
+    expect(outdated?.('name')).toBe(false);
+
+    const edited = outdatedBy({ address: { city: 'Oslo', zip: '1' } }, { address: { city: 'Bergen', zip: '1' } });
+    expect(edited?.('address')).toBe(true);
+    expect(edited?.('address.zip')).toBe(false);
+  });
+
+  test('is undefined for values equal by content, so it outdates no error', () => {
+    expect(outdatedBy({ tags: ['a'] }, { tags: ['a'] })).toBeUndefined();
+    expect(outdatedBy({ when: new Date(5) }, { when: new Date(5) })).toBeUndefined();
   });
 });
 

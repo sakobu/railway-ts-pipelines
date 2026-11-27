@@ -8,7 +8,13 @@ import { flushSync } from 'react-dom';
 
 import { useForm } from '../../src/useForm';
 import { withDeps } from '../../src/withDeps';
-import { createGatedFieldValidator, createGatedValidator, nextTask, thenableOf } from '../fixtures/gates';
+import {
+  createGatedFieldValidator,
+  createGatedOnSubmit,
+  createGatedValidator,
+  nextTask,
+  thenableOf,
+} from '../fixtures/gates';
 import {
   alwaysValidValidator,
   publishValidator,
@@ -2122,6 +2128,31 @@ describe('every error shows only while the form holds the values it describes', 
     act(() => result.current.setFieldValue('address', undefined));
 
     expect(result.current.clientErrors).toEqual({});
+    expect(result.current.isValid).toBe(true);
+  });
+
+  test("in blur mode, a failed save's error doesn't land inside an object cleared during the save, at keys it lacked too", async () => {
+    const schema = S.object({
+      address: S.optional(S.object({ city: S.required(S.string()), zip: S.optional(S.string()) })),
+    });
+    const { onSubmit, saves } = createGatedOnSubmit<S.InferSchemaType<typeof schema>>();
+    const { result } = renderHook(() =>
+      useForm(schema, { initialValues: { address: { city: 'Oslo' } }, validationMode: 'blur', onSubmit }),
+    );
+    let submitting!: Promise<unknown>;
+    await act(async () => {
+      submitting = result.current.handleSubmit();
+      await nextTask();
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.setFieldValue('address', undefined));
+    await act(async () => {
+      saves[0]!.resolve(err([{ path: ['address', 'zip'], message: 'Unknown zip' }]));
+      await submitting;
+    });
+
+    expect(result.current.errors['address.zip']).toBeUndefined();
     expect(result.current.isValid).toBe(true);
   });
 

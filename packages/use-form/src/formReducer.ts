@@ -20,8 +20,7 @@ import {
   getValueByPath,
   normalizePath,
   normalizePathKeys,
-  overlapsAny,
-  replacedPaths,
+  outdatedBy,
   setValueByPath,
   withoutPaths,
 } from './utils';
@@ -166,25 +165,24 @@ const withClientErrors = <TValues extends Record<string, unknown>>(
 ): FormState<TValues> => ({ ...state, clientErrors: sharedWhenEmpty(normalizePathKeys(errors)) });
 
 /**
- * The errors that still describe the values once those at `changed` changed: without each error at, inside or above a
- * changed path, and without a root error ({@link ROOT_ERROR_KEY}) once anything changed, since it describes every
- * field. Errors that lose none keep their identity.
+ * The errors that still describe the values once they changed: without each error the change outdates
+ * ({@link outdatedBy}), and without a root error ({@link ROOT_ERROR_KEY}) once anything changed, since it describes
+ * every field. Errors that lose none keep their identity.
  *
  * @param errors - The errors, by path
- * @param changed - The paths whose value was replaced ({@link replacedPaths}), so a cleared or removed object counts as
- *   a change at its own path and takes every error inside it, at keys it lacked too
+ * @param outdated - The change's test of which errors it outdates, or `undefined` when the values didn't part
  */
-const withoutErrorsAt = (
+const withoutOutdated = (
   errors: Readonly<Record<FieldPath, string>>,
-  changed: readonly FieldPath[],
+  outdated: ((path: FieldPath) => boolean) | undefined,
 ): Readonly<Record<FieldPath, string>> =>
-  changed.length === 0
+  outdated === undefined
     ? errors
-    : withoutPaths(errors, (errorPath) => errorPath === ROOT_ERROR_KEY || overlapsAny(errorPath, changed));
+    : withoutPaths(errors, (errorPath) => errorPath === ROOT_ERROR_KEY || outdated(errorPath));
 
 /**
  * The state without the client and server errors that stopped describing its values when they changed from `before`
- * ({@link withoutErrorsAt}). A map left empty is the shared {@link EMPTY}.
+ * ({@link withoutOutdated}). A map left empty is the shared {@link EMPTY}.
  *
  * @param state - The state after an action that changed the values
  * @param before - The values before it
@@ -195,9 +193,9 @@ const withoutErrorsChanged = <TValues extends Record<string, unknown>>(
 ): FormState<TValues> => {
   // A form that shows no client or server error has none to drop, so it skips comparing the values
   if (Object.keys(state.clientErrors).length === 0 && Object.keys(state.serverErrors).length === 0) return state;
-  const changed = replacedPaths(before, state.values);
-  const clientErrors = withoutErrorsAt(state.clientErrors, changed);
-  const serverErrors = withoutErrorsAt(state.serverErrors, changed);
+  const outdated = outdatedBy(before, state.values);
+  const clientErrors = withoutOutdated(state.clientErrors, outdated);
+  const serverErrors = withoutOutdated(state.serverErrors, outdated);
   if (clientErrors === state.clientErrors && serverErrors === state.serverErrors) return state;
   return { ...state, clientErrors: sharedWhenEmpty(clientErrors), serverErrors: sharedWhenEmpty(serverErrors) };
 };
@@ -280,7 +278,7 @@ const reduce = <TValues extends Record<string, unknown>>(
       if (ended === state || action.answer === undefined) return ended;
       const { values, passed, errors } = action.answer;
       // Its errors describe the values it checked: those at the paths edited since it started no longer apply
-      const landed = withoutErrorsAt(errors, replacedPaths(values, state.values));
+      const landed = withoutOutdated(errors, outdatedBy(values, state.values));
       return { ...withClientErrors(ended, landed), verdict: { values, passed } };
     }
 

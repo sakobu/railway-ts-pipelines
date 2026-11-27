@@ -58,9 +58,11 @@ import {
   isPromiseLike,
   mapAnswer,
   normalizePath,
+  outdatedBy,
   overlapsAny,
   own,
   valuesAt,
+  withoutPaths,
 } from './utils';
 import { listsFields } from './withDeps';
 
@@ -379,15 +381,16 @@ const checkFieldsForSubmit = async <TValues extends Record<string, unknown>>(
  *
  * @param send - Dispatches each write, or drops it when the errors no longer belong to the form's state
  * @param errors - Server validation errors, each with a `path` and a `message`
- * @param lands - Whether the error at a path still describes the value shown there. Without it, every error lands.
+ * @param outdated - Whether the error at a path no longer describes the values shown ({@link outdatedBy}), so it
+ *   doesn't land. Without it, every error lands. The submit error isn't at a path, and lands either way.
  */
 const placeErrorsWith = <TValues extends Record<string, unknown>>(
   send: (action: FormAction<TValues>) => void,
   errors: ValidationError[],
-  lands: (path: FieldPath) => boolean = () => true,
+  outdated?: (path: FieldPath) => boolean,
 ): void => {
   const { [ROOT_ERROR_KEY]: submitError, ...all } = formatErrors(errors);
-  const perPath = Object.fromEntries(Object.entries(all).filter(([path]) => lands(path)));
+  const perPath = outdated ? withoutPaths(all, outdated) : all;
   send({
     type: 'SET_SERVER_ERRORS',
     errors: perPath,
@@ -1689,12 +1692,10 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
 
           if (isErr(outcome)) {
             if (isBaseline()) {
-              // An error describes the submitted value, so it doesn't land on a field edited during the save, just
-              // as an edit after the save clears it
-              const shown = store.getState().values;
-              placeErrorsWith(send, outcome.error, (path) =>
-                deepEqual(getValueByPath(shown, path), getValueByPath(values, path)),
-              );
+              // An error describes the submitted values, so it doesn't land at, inside or above what an edit during
+              // the save changed, just as that edit after the save would drop it. The submit error is about the
+              // attempt, and lands either way: the next edit drops it.
+              placeErrorsWith(send, outcome.error, outdatedBy(values, store.getState().values));
             } else {
               // A follow or resetForm() replaced the submitted values, so the field errors would describe values no
               // longer shown. The submit error is about the attempt, and still shows.
@@ -1746,7 +1747,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
    * - `ok` with `onSubmit`'s `ok` value, or with the validated data when `onSubmit` returns nothing or is absent.
    *   Without `onSubmit`, nothing is saved, so the values stay edits.
    * - `err` with the validation errors, or with `onSubmit`'s `err`, whose errors are placed on their fields, except
-   *   on fields changed during the save
+   *   at, inside or above a value changed during the save
    * - `err([{ path: [], message: "Something went wrong. Please try again." }])` when the submission throws,
    *   or `onSubmit` returns neither a `Result` nor nothing. This becomes the submit error, and the original
    *   error is logged with `console.error`.
