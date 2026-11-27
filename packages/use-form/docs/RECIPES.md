@@ -1155,7 +1155,7 @@ const form = useForm(schema, {
 
 **When each layer gets cleared:**
 
-- `clientErrors` -- replaced when a schema check lands, except at paths edited since it started. An edit drops those at, inside or above the paths it changed, in every mode, and a root error on any edit
+- `clientErrors` -- replaced when a schema check lands, except at paths edited since it started. An edit drops those at, inside or above the paths it changed, in every mode, and a root error on any change
 - `fieldErrors` -- replaced when the field's validator answers. Cleared at once when an edit changes the field or a field its validator lists (in every mode). It also goes when its validator is switched off, and on `resetForm()` and a `resetKey` change. A re-check also clears it when the schema has an error at, inside or above any of the validator's inputs: the gate holds the check back, with no error, until the schema accepts them. So a schema error that appears through an edit of an unlisted field doesn't clear it until that re-check. A check of an unchanged value keeps the error until it answers, and a validator that throws or rejects leaves it as it was
 - `serverErrors` -- dropped when an edit changes the value at, inside or above its path (setting an equal value keeps it); bulk-cleared on `clearServerErrors()`, a new `handleSubmit`, a follow of new `initialValues`, `resetForm()` and a `resetKey` change
 - the submit error (`_root`) -- cleared by any value change, `clearServerErrors()`, a follow of new `initialValues`, `resetForm()`, a `resetKey` change, and at the start of each submit
