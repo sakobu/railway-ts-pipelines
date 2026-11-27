@@ -132,17 +132,19 @@ const answeredBy = <TValues extends Record<string, unknown>>(
 };
 
 /**
- * The state after an edit set `values`. The edit clears the submit error. Values that come to equal the latest
- * version end `isStale`, and count as clean when {@link latestIsSettled} allows. Values that come back to the clean
- * values leave no unsaved edits, so the form follows the latest version then, as a form with no edits does. The
- * comparisons only run once a version arrived under edits, so most forms pay nothing for them.
+ * The state after an edit set `values`. An edit that changes a value clears the submit error, and one that changes
+ * none keeps it, as it keeps every error. Values that come to equal the latest version end `isStale`, and count as
+ * clean when {@link latestIsSettled} allows. Values that come back to the clean values leave no unsaved edits, so the
+ * form follows the latest version then, as a form with no edits does. The comparisons only run once a version arrived
+ * under edits, or while a submit error shows, so most forms pay nothing for them.
  */
 const withEdit = <TValues extends Record<string, unknown>>(
   state: FormState<TValues>,
   values: TValues,
 ): FormState<TValues> => {
   const { submitError: _submitError, ...rest } = state;
-  const next = { ...rest, values };
+  const unchanged = state.submitError !== undefined && deepEqual(values, state.values);
+  const next = unchanged ? { ...state, values } : { ...rest, values };
   if (state.cleanValues === state.lastVersion) return next;
   if (deepEqual(values, state.lastVersion)) {
     return latestIsSettled(next) ? settleOnLatest(next) : { ...next, isStale: false };

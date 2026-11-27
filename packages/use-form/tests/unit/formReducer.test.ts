@@ -159,6 +159,14 @@ describe('formReducer', () => {
       expect(result.submitError).toBeUndefined();
     });
 
+    test('SET_VALUES that changes no value keeps the submit error', () => {
+      const state: FormState<typeof initialValues> = { ...initialState, submitError: 'Down' };
+
+      const result = formReducer(state, { type: 'SET_VALUES', values: { ...initialValues } }, initialValues);
+
+      expect(result.submitError).toBe('Down');
+    });
+
     test('updates multiple values', () => {
       const result = formReducer(
         initialState,

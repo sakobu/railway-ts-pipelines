@@ -1711,7 +1711,7 @@ export const useForm = <TValues extends Record<string, unknown>, TResult = TValu
             if (isBaseline()) {
               // An error describes the submitted values, so it doesn't land at, inside or above what an edit during
               // the save changed, just as that edit after the save would drop it. The submit error is about the
-              // attempt, and lands either way: the next edit drops it.
+              // attempt, and lands either way: the next edit that changes a value drops it.
               placeErrorsWith(send, outcome.error, outdatedBy(values, store.getState().values));
             } else {
               // A follow or resetForm() replaced the submitted values, so the field errors would describe values no

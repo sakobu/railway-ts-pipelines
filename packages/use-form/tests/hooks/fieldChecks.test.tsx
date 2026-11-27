@@ -2394,6 +2394,19 @@ describe('every error shows only while the form holds the values it describes', 
     act(() => result.current.setFieldValue('tags', ['a', 'b']));
     expect(result.current.errors.tags).toBeUndefined();
   });
+
+  test('an edit that changes no value keeps the submit error, and one that changes a value drops it', () => {
+    const { result } = renderHook(() => useForm(publishValidator, { initialValues: { ...draft, tags: ['a'] } }));
+    act(() => result.current.setServerErrors([{ path: [], message: 'Down' }]));
+
+    act(() => result.current.setValues({ ...draft, tags: ['a'] }));
+    act(() => result.current.setFieldValue('tags', ['a']));
+    act(() => result.current.arrayHelpers('tags').replace(0, 'a'));
+    expect(result.current.errors._root).toBe('Down');
+
+    act(() => result.current.arrayHelpers('tags').replace(0, 'b'));
+    expect(result.current.errors._root).toBeUndefined();
+  });
 });
 
 describe('withDeps', () => {
